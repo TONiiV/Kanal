@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Kanal</title>
+<style>
+:root{
+  --paper:#E9EDF0;--card:#FFF;--ink:#111A21;--ink2:#4C5C68;--ink3:#7A8791;
+  --rule:#C6D0D7;--warn:#8B2F2F;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.6}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--rule);
+  display:flex;align-items:center;gap:10px;padding:10px 14px}
+header b{font-size:16px}
+header select{margin-left:auto;font-size:15px;padding:6px 8px;border:1px solid var(--rule);
+  border-radius:4px;background:#fff;color:var(--ink)}
+#status{display:none;background:#FBF3F2;color:var(--warn);border-bottom:1px solid var(--warn);
+  padding:6px 14px;font-size:13px}
+#status.show{display:block}
+#feed{padding:12px 12px 40px;max-width:640px;margin:0 auto}
+.bubble{background:#fff;border-left:3px solid var(--ink3);border-radius:3px;
+  padding:8px 10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(17,26,33,.06)}
+.bubble .who{font-size:11px;font-weight:600;margin-bottom:2px}
+.bubble .txt{font-size:15px}
+.bubble.partial .txt{color:var(--ink3)}
+.bubble .src{font-size:12px;color:var(--ink3);margin-top:3px;border-top:1px dashed var(--rule);padding-top:3px}
+.bubble.codeswitch .txt::after{content:" ⚑";color:var(--warn)}
+</style>
+</head>
+<body>
+<header>
+  <b>Kanal</b>
+  <span id="room" style="color:var(--ink3);font-size:12px"></span>
+  <select id="lang"></select>
+</header>
+<div id="status"></div>
+<div id="feed"></div>
+
+<script>
+/* Kanal read-only mobile client.
+ *
+ * Wire protocol: RelayJson messages from the host (camelCase, "type" discriminator):
+ *   utterance.upsert  — replace bubble in place by utterance.id
+ *   translation.upsert — merge if sourceRevision is current
+ *   speaker.upsert    — re-resolve names/colors of ALL history bubbles (rename + merge)
+ *   room.snapshot     — full state; requested on join and after reconnect
+ *   room.config       — language list for the dropdown
+ *
+ * Transports:
+ *   ?demo=1                       — scripted demo, no network
+ *   ?room=<id>&key=<ably-key>     — Ably subscribe on channel "kanal-<id>" (host publisher lands in M0-D7)
+ */
+"use strict";
+
+const CACHE_LIMIT = 50; // survive lock-screen reconnects without a blank page
+const params = new URLSearchParams(location.search);
+
+const state = {
+  lang: localStorage.getItem("kanal.lang") || "",
+  languages: [],
+  speakers: new Map(),   // tag -> {tag, displayName, mergedFrom, color}
+  aliases: new Map(),    // merged tag -> canonical tag
+  utterances: new Map(), // id -> utterance (insertion-ordered)
+};
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text) {
+  const el = $("status");
+  el.textContent = text || "";
+  el.classList.toggle("show", !!text);
+}
+
+function resolveSpeaker(tag) {
+  const canonical = state.aliases.get(tag) || tag;
+  const s = state.speakers.get(canonical);
+  return s ? { name: s.displayName || s.tag, color: s.color } : { name: tag, color: "#4C5C68" };
+}
+
+function applySpeaker(s) {
+  state.speakers.set(s.tag, s);
+  for (const merged of s.mergedFrom || []) {
+    state.aliases.set(merged, s.tag);
+    state.speakers.delete(merged);
+  }
+  renderAll(); // renames and merges rewrite history bubbles
+}
+
+function applyUtterance(u) {
+  state.utterances.set(u.id, u);
+  renderBubble(u);
+  saveCache();
+}
+
+function applyTranslation(m) {
+  const u = state.utterances.get(m.utteranceId);
+  if (!u || m.sourceRevision < u.revision) return; // stale — drop
+  u.translations = Object.assign({}, u.translations, m.translations);
+  renderBubble(u);
+  saveCache();
+}
+
+function applyConfig(config) {
+  state.languages = config.languages || [];
+  const sel = $("lang");
+  sel.innerHTML = "";
+  for (const lang of state.languages) {
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = lang;
+    sel.appendChild(opt);
+  }
+  if (!state.languages.includes(state.lang)) state.lang = state.languages[0] || "";
+  sel.value = state.lang;
+}
+
+function applySnapshot(snap) {
+  applyConfig(snap.config);
+  state.speakers.clear(); state.aliases.clear(); state.utterances.clear();
+  for (const s of snap.speakers) applySpeaker(s);
+  for (const u of snap.utterances) state.utterances.set(u.id, u);
+  renderAll();
+  saveCache();
+}
+
+function handle(msg) {
+  switch (msg.type) {
+    case "utterance.upsert": applyUtterance(msg.utterance); break;
+    case "translation.upsert": applyTranslation(msg); break;
+    case "speaker.upsert": applySpeaker(msg.speaker); break;
+    case "room.snapshot": applySnapshot(msg.snapshot); break;
+    case "room.config": applyConfig(msg.config); break;
+  }
+}
+
+/* ---------- rendering: one column, chosen language on top, source below ---------- */
+
+function bubbleContent(u) {
+  const own = u.srcLang === state.lang;
+  const translation = (u.translations || {})[state.lang];
+  return {
+    text: own ? u.srcText : (translation ?? u.srcText),
+    src: own || translation == null ? "" : u.srcText,
+  };
+}
+
+function renderBubble(u) {
+  let el = document.getElementById("u-" + u.id);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "u-" + u.id;
+    el.className = "bubble";
+    el.innerHTML = '<div class="who"></div><div class="txt"></div><div class="src"></div>';
+    $("feed").appendChild(el);
+    el.scrollIntoView({ block: "end" });
+  }
+  const speaker = resolveSpeaker(u.speakerTag);
+  const { text, src } = bubbleContent(u);
+  el.classList.toggle("partial", u.state === "partial");
+  el.classList.toggle("codeswitch", !!u.codeSwitch);
+  el.style.borderLeftColor = speaker.color;
+  el.querySelector(".who").textContent = speaker.name;
+  el.querySelector(".who").style.color = speaker.color;
+  el.querySelector(".txt").textContent = text;
+  el.querySelector(".src").textContent = src;
+  el.querySelector(".src").style.display = src ? "" : "none";
+}
+
+function renderAll() {
+  $("feed").innerHTML = "";
+  for (const u of state.utterances.values()) renderBubble(u);
+}
+
+$("lang").addEventListener("change", (e) => {
+  // pure client-side filter: every language is already in the push stream
+  state.lang = e.target.value;
+  localStorage.setItem("kanal.lang", state.lang);
+  renderAll();
+});
+
+/* ---------- local cache (offline / reconnect) ---------- */
+
+function saveCache() {
+  const utterances = [...state.utterances.values()].slice(-CACHE_LIMIT);
+  localStorage.setItem("kanal.cache", JSON.stringify({
+    languages: state.languages,
+    speakers: [...state.speakers.values()],
+    utterances,
+  }));
+}
+
+function loadCache() {
+  try {
+    const cache = JSON.parse(localStorage.getItem("kanal.cache") || "null");
+    if (!cache) return;
+    applyConfig({ languages: cache.languages });
+    for (const s of cache.speakers) applySpeaker(s);
+    for (const u of cache.utterances) state.utterances.set(u.id, u);
+    renderAll();
+  } catch { /* corrupt cache — start empty */ }
+}
+
+/* ---------- transports ---------- */
+
+function startDemo() {
+  $("room").textContent = "demo";
+  const script = [
+    ["S01", "zh", "这批支架的料号是 KX-4402，表面处理按上次的标准做。",
+      { de: "Die Teilenummer dieser Halterungen ist KX-4402, Oberflächenbehandlung nach dem letzten Standard.",
+        pl: "Numer części tych wsporników to KX-4402, obróbka powierzchni według poprzedniego standardu." }],
+    ["S02", "pl", "Musimy potwierdzić termin dostawy przed końcem sierpnia.",
+      { zh: "我们必须在八月底前确认交货期。", de: "Wir müssen den Liefertermin vor Ende August bestätigen." }],
+    ["S03", "de", "Die Toleranzen im Zeichnungssatz sind noch nicht freigegeben.",
+      { zh: "图纸中的公差还没有放行。", pl: "Tolerancje w zestawie rysunków nie zostały jeszcze zatwierdzone." }],
+  ];
+  applyConfig({ languages: ["zh", "de", "pl"] });
+  const colors = { S01: "#B23A2E", S02: "#9A6B10", S03: "#1C6B58" };
+  let i = 0;
+  (function next() {
+    const [tag, lang, text, translations] = script[i % script.length];
+    const id = "demo-" + i;
+    if (!state.speakers.has(tag))
+      applySpeaker({ tag, displayName: null, mergedFrom: [], color: colors[tag] });
+    let shown = 0;
+    const step = Math.ceil(text.length / 4);
+    const timer = setInterval(() => {
+      shown += step;
+      const done = shown >= text.length;
+      handle({ type: "utterance.upsert", utterance: {
+        id, speakerTag: tag, tStartMs: 0, tEndMs: done ? 1 : null, srcLang: lang,
+        srcText: text.slice(0, shown), revision: Math.ceil(shown / step),
+        state: done ? "final" : "partial", codeSwitch: false, speakerConfidence: 0.9,
+        translations: done ? translations : {},
+      }});
+      if (done) { clearInterval(timer); i++; setTimeout(next, 1200); }
+    }, 400);
+  })();
+}
+
+async function startAbly(room, key) {
+  $("room").textContent = room;
+  setStatus("连接中… / Łączenie… / Verbinde…");
+  await new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.ably.com/lib/ably.min-2.js";
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Ably SDK load failed"));
+    document.head.appendChild(script);
+  });
+  const ably = new Ably.Realtime({ key });
+  ably.connection.on("connected", () => setStatus(""));
+  ably.connection.on("disconnected", () => setStatus("连接断开，重连中…"));
+  const channel = ably.channels.get("kanal-" + room);
+  await channel.subscribe("kanal", (msg) =>
+    handle(typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data));
+  // late join / reconnect: history first, host also republishes snapshots periodically
+  const history = await channel.history({ limit: 100 });
+  for (const item of history.items.reverse())
+    handle(typeof item.data === "string" ? JSON.parse(item.data) : item.data);
+}
+
+loadCache();
+if (params.get("demo")) {
+  startDemo();
+} else if (params.get("room") && params.get("key")) {
+  startAbly(params.get("room"), params.get("key")).catch((e) => setStatus("连接失败: " + e.message));
+} else {
+  setStatus("缺少参数：用主机端二维码打开，或加 ?demo=1 预览。");
+}
+</script>
+</body>
+</html>

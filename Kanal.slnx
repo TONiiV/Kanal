@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Kanal.Audio/Kanal.Audio.csproj" />
+    <Project Path="src/Kanal.Core/Kanal.Core.csproj" />
+    <Project Path="src/Kanal.Host/Kanal.Host.csproj" />
+    <Project Path="src/Kanal.Providers.Gladia/Kanal.Providers.Gladia.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kanal.Tests/Kanal.Tests.csproj" />
+  </Folder>
+</Solution>

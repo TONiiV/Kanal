@@ -1,0 +1,128 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
+        x:Class="Kanal.Host.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Kanal — 频道"
+        Width="1280" Height="760"
+        Background="#E9EDF0">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <DockPanel>
+        <!-- toolbar -->
+        <Border DockPanel.Dock="Top" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="0,0,0,1" Padding="12,8">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="Kanal" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" Width="150"
+                          IsEnabled="{Binding !IsRunning}" />
+                <TextBlock Text="Languages" VerticalAlignment="Center" Foreground="#7A8791" />
+                <TextBox Text="{Binding LanguagesInput}" Width="160" PlaceholderText="zh, de, pl, en"
+                         IsEnabled="{Binding !IsRunning}" />
+                <TextBox Text="{Binding GladiaApiKey}" Width="220" PlaceholderText="Gladia API key"
+                         PasswordChar="•" IsVisible="{Binding IsGladiaMode}"
+                         IsEnabled="{Binding !IsRunning}" />
+                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" Width="220"
+                          IsVisible="{Binding IsGladiaMode}" IsEnabled="{Binding !IsRunning}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Content="Start" Command="{Binding StartCommand}" Classes="accent" />
+                <Button Content="Stop" Command="{Binding StopCommand}" />
+                <Button Content="Export .md" Command="{Binding ExportMarkdownCommand}" />
+            </StackPanel>
+        </Border>
+
+        <!-- status bar -->
+        <Border DockPanel.Dock="Bottom" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="0,1,0,0" Padding="12,4">
+            <TextBlock Text="{Binding Status}" Foreground="#4C5C68" FontSize="12" />
+        </Border>
+
+        <!-- speakers panel -->
+        <Border DockPanel.Dock="Right" Width="230" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="1,0,0,0" Padding="10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Speakers" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0">
+                    <TextBlock Text="Merge speakers" FontSize="12" Foreground="#7A8791" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBox Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="60" />
+                        <TextBlock Text="→" VerticalAlignment="Center" />
+                        <TextBox Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="60" />
+                        <Button Content="Merge" Command="{Binding MergeSpeakersCommand}" />
+                    </StackPanel>
+                </StackPanel>
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Speakers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SpeakerItemViewModel">
+                                <Border BorderBrush="{Binding Color}" BorderThickness="0,0,0,0" Padding="0,4">
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Ellipse Width="10" Height="10" Fill="{Binding Color}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Tag}" FontFamily="Consolas,monospace" FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding MergedFromLabel}" FontSize="11" Foreground="#7A8791" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBox Text="{Binding Name}" PlaceholderText="display name" Width="130" FontSize="12" />
+                                            <Button Content="✓" FontSize="12" Padding="6,2"
+                                                    Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).RenameSpeakerCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- language columns -->
+        <ItemsControl ItemsSource="{Binding Columns}" Margin="8">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ColumnViewModel">
+                    <Border Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="1" CornerRadius="4" Margin="4">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" BorderBrush="#111A21" BorderThickness="0,0,0,2" Padding="10,6">
+                                <TextBlock Text="{Binding Language}" FontWeight="Bold" FontSize="15" />
+                            </Border>
+                            <ScrollViewer>
+                                <ItemsControl ItemsSource="{Binding Bubbles}" Margin="8">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BubbleViewModel">
+                                            <Border BorderBrush="{Binding SpeakerColor}" BorderThickness="3,0,0,0"
+                                                    Background="#F5F7F9" CornerRadius="2" Padding="8,6" Margin="0,0,0,8">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock Text="{Binding SpeakerName}" FontSize="11"
+                                                               Foreground="{Binding SpeakerColor}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"
+                                                               Foreground="{Binding TextColor}" />
+                                                    <TextBlock Text="{Binding SourceText}" TextWrapping="Wrap" FontSize="11.5"
+                                                               Foreground="#7A8791" IsVisible="{Binding HasSource}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </DockPanel>
+</Window>
