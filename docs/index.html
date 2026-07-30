@@ -1,63 +1,226 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FCFCFD" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1216" media="(prefers-color-scheme: dark)">
 <title>Kanal</title>
 <style>
+/* Swiss editorial: hairline rules as structure, size contrast as hierarchy,
+   colour reserved entirely for speaker identity. See .impeccable.md. */
 :root{
-  --paper:#E9EDF0;--card:#FFF;--ink:#111A21;--ink2:#4C5C68;--ink3:#7A8791;
-  --rule:#C6D0D7;--warn:#8B2F2F;
+  color-scheme: light dark;
+
+  /* Latin first so Polish diacritics come from the grotesque, CJK from the fallback. */
+  --sans:"Helvetica Neue",Helvetica,"Segoe UI",Arial,"PingFang SC","Hiragino Sans GB",
+         "Microsoft YaHei","Noto Sans SC",sans-serif;
+
+  --sheet:#FCFCFD;
+  --ink:#111A21;
+  --ink-2:#4A5862;
+  --ink-3:#7C8A93;
+  --rule:#D5DCE1;
+  --rule-faint:#E7EBEE;
+  --alarm:#8B2F2F;
+  --alarm-wash:#FAF2F1;
+
+  --measure:38rem;
 }
+@media (prefers-color-scheme: dark){
+  :root{
+    --sheet:#0E151A;
+    --ink:#E9EDEF;
+    --ink-2:#A6B2B9;
+    --ink-3:#76848C;
+    --rule:#28333B;
+    --rule-faint:#1B242A;
+    --alarm:#E28A83;
+    --alarm-wash:#1E1416;
+  }
+}
+
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);
-  font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.6}
-header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--rule);
-  display:flex;align-items:center;gap:10px;padding:10px 14px}
-header b{font-size:16px}
-header select{margin-left:auto;font-size:15px;padding:6px 8px;border:1px solid var(--rule);
-  border-radius:4px;background:#fff;color:var(--ink)}
-#status{display:none;background:#FBF3F2;color:var(--warn);border-bottom:1px solid var(--warn);
-  padding:6px 14px;font-size:13px}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--sheet);color:var(--ink);
+  font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- masthead ---------- */
+
+header{
+  position:sticky;top:0;z-index:10;background:var(--sheet);
+  border-bottom:2px solid var(--ink);
+  padding-top:env(safe-area-inset-top);
+}
+.mast{
+  max-width:var(--measure);margin:0 auto;
+  display:flex;align-items:center;gap:.75rem;
+  padding:.6875rem 1.25rem;
+}
+.mark{
+  font-size:.8125rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+}
+.room{
+  font-size:.6875rem;letter-spacing:.08em;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* Native <select> kept for the platform picker and a11y; painted over, not replaced. */
+.pick{position:relative;margin-left:auto;display:flex;align-items:baseline;gap:.4375rem}
+.pick__code{font-size:1.125rem;font-weight:700;letter-spacing:.04em}
+.pick__name{font-size:.75rem;color:var(--ink-3)}
+.pick__chev{width:.5rem;height:.5rem;flex:none;align-self:center;stroke:var(--ink-2);
+  stroke-width:2;fill:none}
+.pick select{
+  position:absolute;inset:-.5rem -.25rem;width:calc(100% + .5rem);height:calc(100% + 1rem);
+  opacity:0;appearance:none;-webkit-appearance:none;border:0;font-size:16px;
+}
+.pick:focus-within{outline:2px solid var(--ink);outline-offset:.375rem;border-radius:1px}
+
+/* ---------- connection strip ---------- */
+
+#status{display:none;background:var(--alarm-wash);border-bottom:1px solid var(--rule)}
 #status.show{display:block}
-#feed{padding:12px 12px 40px;max-width:640px;margin:0 auto}
-.bubble{background:#fff;border-left:3px solid var(--ink3);border-radius:3px;
-  padding:8px 10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(17,26,33,.06)}
-.bubble .who{font-size:11px;font-weight:600;margin-bottom:2px}
-.bubble .txt{font-size:15px}
-.bubble.partial .txt{color:var(--ink3)}
-.bubble .src{font-size:12px;color:var(--ink3);margin-top:3px;border-top:1px dashed var(--rule);padding-top:3px}
-.bubble.codeswitch .txt::after{content:" ⚑";color:var(--warn)}
+#status p{
+  max-width:var(--measure);margin:0 auto;padding:.5rem 1.25rem;
+  color:var(--alarm);font-size:.8125rem;letter-spacing:.01em;
+}
+
+/* ---------- feed ---------- */
+
+main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
+
+.rec{
+  --speaker:#4C5C68;
+  border-top:1px solid var(--rule);
+  padding-top:.8125rem;margin-bottom:1.75rem;
+  animation:enter .42s cubic-bezier(.22,1,.36,1) both;
+}
+.rec__meta{
+  display:flex;align-items:center;gap:.5rem;
+  font-size:.6875rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+  margin-bottom:.375rem;
+}
+.rec__who{color:var(--speaker)}
+.rec__lang{color:var(--ink-3);font-weight:400;letter-spacing:.14em}
+.rec__cs{color:var(--ink-3);font-weight:400;letter-spacing:0}
+.rec__cs[hidden]{display:none}
+
+.rec__text{
+  margin:0;
+  font-size:clamp(1.0625rem,1rem + .4vw,1.25rem);
+  line-height:1.62;
+}
+.rec.partial .rec__text{color:var(--ink-3)}
+
+.rec__src{
+  margin:.625rem 0 0;padding-left:.875rem;border-left:1px solid var(--rule-faint);
+  color:var(--ink-3);font-size:.875rem;line-height:1.6;
+}
+.rec__src[hidden]{display:none}
+
+/* The newest utterance: a heavier rule in the speaker's colour, more air above it,
+   and a larger setting. Colour still says "who"; size says "now". */
+.rec--live{
+  border-top:3px solid var(--speaker);
+  margin-top:2.5rem;padding-top:1rem;
+}
+.rec--live:first-child{margin-top:0}
+.rec--live .rec__meta{font-size:.75rem;margin-bottom:.5rem}
+.rec--live .rec__text{
+  font-size:clamp(1.375rem,1.15rem + 1.1vw,1.875rem);
+  line-height:1.44;letter-spacing:-.008em;
+}
+.rec--live .rec__src{font-size:.9375rem}
+
+/* Still being recognised — the only moving thing on the page. */
+.rec--live.partial .rec__meta::after{
+  content:"";width:.4375rem;height:.4375rem;background:var(--speaker);
+  animation:breathe 1.7s ease-in-out infinite;
+}
+
+@keyframes enter{from{opacity:0;transform:translateY(.625rem)}to{opacity:1;transform:none}}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.22}}
+
+/* ---------- empty state ---------- */
+
+.empty{padding:3.5rem 0 0;max-width:26rem}
+.empty__title{
+  margin:0 0 .625rem;font-size:1.5rem;font-weight:400;color:var(--ink-2);letter-spacing:-.01em;
+}
+.empty__hint{margin:0;font-size:.9375rem;color:var(--ink-3);line-height:1.7}
+
+@media (prefers-color-scheme: dark){
+  /* Speaker hues are picked for paper; lift them off the dark sheet. */
+  .rec__who{color:color-mix(in oklab,var(--speaker),#FFF 40%)}
+  .rec--live{border-top-color:color-mix(in oklab,var(--speaker),#FFF 40%)}
+  .rec--live.partial .rec__meta::after{background:color-mix(in oklab,var(--speaker),#FFF 40%)}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
 </style>
 </head>
 <body>
 <header>
-  <b>Kanal</b>
-  <span id="room" style="color:var(--ink3);font-size:12px"></span>
-  <select id="lang"></select>
+  <div class="mast">
+    <span class="mark">Kanal</span>
+    <span class="room" id="room"></span>
+    <label class="pick">
+      <span class="pick__code" id="langCode"></span>
+      <span class="pick__name" id="langName"></span>
+      <svg class="pick__chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3.5 5 7.5 9 3.5"/></svg>
+      <select id="lang"></select>
+    </label>
+  </div>
 </header>
-<div id="status"></div>
-<div id="feed"></div>
+<div id="status" role="status" aria-live="polite"><p></p></div>
+<main id="feed" aria-live="polite" aria-atomic="false"></main>
 
 <script>
 /* Kanal read-only mobile client.
  *
  * Wire protocol: RelayJson messages from the host (camelCase, "type" discriminator):
- *   utterance.upsert  — replace bubble in place by utterance.id
+ *   utterance.upsert  — replace record in place by utterance.id
  *   translation.upsert — merge if sourceRevision is current
- *   speaker.upsert    — re-resolve names/colors of ALL history bubbles (rename + merge)
+ *   speaker.upsert    — re-resolve names/colors of ALL history records (rename + merge)
  *   room.snapshot     — full state; requested on join and after reconnect
- *   room.config       — language list for the dropdown
+ *   room.config       — language list for the picker
  *
  * Transports:
  *   ?demo=1                              — scripted demo, no network
  *   ?room=<id>&sbref=<ref>&key=<anon>    — Supabase Realtime broadcast, channel = room id
  *                                          (the host QR code encodes exactly this URL)
+ *
+ * No external CSS or fonts: Google Fonts is blocked in mainland China and the Chinese
+ * supplier is a primary reader. The Supabase SDK is the only runtime import.
  */
 "use strict";
 
 const CACHE_LIMIT = 50; // survive lock-screen reconnects without a blank page
+const STICK_SLOP = 160; // px from the bottom that still counts as "following along"
 const params = new URLSearchParams(location.search);
+
+/* Chrome follows the reader's chosen language — a Polish contractor should not have to
+   read a Chinese error string. Falls back to English for any other ISO code. */
+const UI = {
+  zh:{name:"中文",waiting:"等待发言",hint:"发言会实时出现在这里，译文在上、原文在下。右上角可切换语言。",
+      connecting:"连接中…",reconnecting:"连接已断开，正在重连…",failed:"连接失败",
+      missing:"缺少参数。请扫描主机端的二维码打开此页面。",codeswitch:"混合语种"},
+  de:{name:"Deutsch",waiting:"Warten auf Redebeiträge",hint:"Beiträge erscheinen hier in Echtzeit — Übersetzung oben, Original darunter. Sprache oben rechts.",
+      connecting:"Verbinde…",reconnecting:"Verbindung getrennt, neuer Versuch…",failed:"Verbindung fehlgeschlagen",
+      missing:"Parameter fehlen. Bitte den QR-Code des Hosts scannen.",codeswitch:"Gemischte Sprache"},
+  pl:{name:"Polski",waiting:"Oczekiwanie na wypowiedzi",hint:"Wypowiedzi pojawią się tu na żywo — tłumaczenie u góry, oryginał poniżej. Język w prawym górnym rogu.",
+      connecting:"Łączenie…",reconnecting:"Rozłączono, ponawianie…",failed:"Połączenie nieudane",
+      missing:"Brak parametrów. Zeskanuj kod QR z komputera prowadzącego.",codeswitch:"Mieszany język"},
+  en:{name:"English",waiting:"Waiting for speech",hint:"Utterances appear here live — translation on top, original below. Language at top right.",
+      connecting:"Connecting…",reconnecting:"Disconnected, reconnecting…",failed:"Connection failed",
+      missing:"Missing parameters. Scan the QR code on the host to open this page.",codeswitch:"Mixed language"},
+};
 
 const state = {
   lang: localStorage.getItem("kanal.lang") || "",
@@ -65,14 +228,17 @@ const state = {
   speakers: new Map(),   // tag -> {tag, displayName, mergedFrom, color}
   aliases: new Map(),    // merged tag -> canonical tag
   utterances: new Map(), // id -> utterance (insertion-ordered)
+  statusKey: "",         // UI key, re-rendered when the language changes
 };
 
 const $ = (id) => document.getElementById(id);
+const t = (key) => (UI[state.lang] || UI.en)[key];
 
-function setStatus(text) {
+function setStatus(key) {
+  state.statusKey = key || "";
   const el = $("status");
-  el.textContent = text || "";
-  el.classList.toggle("show", !!text);
+  el.querySelector("p").textContent = state.statusKey ? t(state.statusKey) : "";
+  el.classList.toggle("show", !!state.statusKey);
 }
 
 function resolveSpeaker(tag) {
@@ -87,12 +253,12 @@ function applySpeaker(s) {
     state.aliases.set(merged, s.tag);
     state.speakers.delete(merged);
   }
-  renderAll(); // renames and merges rewrite history bubbles
+  renderAll(); // renames and merges rewrite history records
 }
 
 function applyUtterance(u) {
   state.utterances.set(u.id, u);
-  renderBubble(u);
+  renderRecord(u);
   saveCache();
 }
 
@@ -100,7 +266,7 @@ function applyTranslation(m) {
   const u = state.utterances.get(m.utteranceId);
   if (!u || m.sourceRevision < u.revision) return; // stale — drop
   u.translations = Object.assign({}, u.translations, m.translations);
-  renderBubble(u);
+  renderRecord(u);
   saveCache();
 }
 
@@ -110,11 +276,13 @@ function applyConfig(config) {
   sel.innerHTML = "";
   for (const lang of state.languages) {
     const opt = document.createElement("option");
-    opt.value = opt.textContent = lang;
+    opt.value = lang;
+    opt.textContent = (UI[lang] || {}).name || lang.toUpperCase();
     sel.appendChild(opt);
   }
   if (!state.languages.includes(state.lang)) state.lang = state.languages[0] || "";
   sel.value = state.lang;
+  setLanguage(state.lang, false);
 }
 
 function applySnapshot(snap) {
@@ -138,7 +306,7 @@ function handle(msg) {
 
 /* ---------- rendering: one column, chosen language on top, source below ---------- */
 
-function bubbleContent(u) {
+function recordContent(u) {
   const own = u.srcLang === state.lang;
   const translation = (u.translations || {})[state.lang];
   return {
@@ -147,38 +315,90 @@ function bubbleContent(u) {
   };
 }
 
-function renderBubble(u) {
+/** True while the reader is at the bottom; scrolling up to re-read must not be hijacked. */
+function isFollowing() {
+  return window.innerHeight + window.scrollY >= document.body.scrollHeight - STICK_SLOP;
+}
+
+/** Only the last record is "live" — it carries the weight, everything above it settles. */
+function markLive() {
+  const feed = $("feed");
+  const last = feed.querySelector(".rec:last-of-type");
+  for (const el of feed.querySelectorAll(".rec--live"))
+    if (el !== last) el.classList.remove("rec--live");
+  if (last) last.classList.add("rec--live");
+}
+
+function renderRecord(u) {
+  const feed = $("feed");
   let el = document.getElementById("u-" + u.id);
-  if (!el) {
-    el = document.createElement("div");
+  const isNew = !el;
+  const following = isNew ? isFollowing() : false;
+
+  if (isNew) {
+    const empty = feed.querySelector(".empty");
+    if (empty) empty.remove();
+    el = document.createElement("article");
     el.id = "u-" + u.id;
-    el.className = "bubble";
-    el.innerHTML = '<div class="who"></div><div class="txt"></div><div class="src"></div>';
-    $("feed").appendChild(el);
-    el.scrollIntoView({ block: "end" });
+    el.className = "rec";
+    el.innerHTML =
+      '<div class="rec__meta"><span class="rec__who"></span><span class="rec__lang"></span>' +
+      '<span class="rec__cs" hidden>⇄</span></div>' +
+      '<p class="rec__text"></p><p class="rec__src" hidden></p>';
+    feed.appendChild(el);
   }
+
   const speaker = resolveSpeaker(u.speakerTag);
-  const { text, src } = bubbleContent(u);
+  const { text, src } = recordContent(u);
+  el.style.setProperty("--speaker", speaker.color);
   el.classList.toggle("partial", u.state === "partial");
-  el.classList.toggle("codeswitch", !!u.codeSwitch);
-  el.style.borderLeftColor = speaker.color;
-  el.querySelector(".who").textContent = speaker.name;
-  el.querySelector(".who").style.color = speaker.color;
-  el.querySelector(".txt").textContent = text;
-  el.querySelector(".src").textContent = src;
-  el.querySelector(".src").style.display = src ? "" : "none";
+  el.querySelector(".rec__who").textContent = speaker.name;
+  el.querySelector(".rec__lang").textContent = (u.srcLang || "").toUpperCase();
+  const cs = el.querySelector(".rec__cs");
+  cs.hidden = !u.codeSwitch;
+  cs.title = t("codeswitch");
+  el.querySelector(".rec__text").textContent = text;
+  const srcEl = el.querySelector(".rec__src");
+  srcEl.textContent = src;
+  srcEl.hidden = !src;
+
+  if (isNew) {
+    markLive();
+    if (following) window.scrollTo({ top: document.body.scrollHeight });
+  }
+}
+
+function renderEmpty() {
+  const feed = $("feed");
+  if (feed.querySelector(".empty")) return;
+  const el = document.createElement("div");
+  el.className = "empty";
+  el.innerHTML = '<p class="empty__title"></p><p class="empty__hint"></p>';
+  el.querySelector(".empty__title").textContent = t("waiting");
+  el.querySelector(".empty__hint").textContent = t("hint");
+  feed.appendChild(el);
 }
 
 function renderAll() {
   $("feed").innerHTML = "";
-  for (const u of state.utterances.values()) renderBubble(u);
+  if (state.utterances.size === 0) { renderEmpty(); return; }
+  for (const u of state.utterances.values()) renderRecord(u);
+  markLive();
+}
+
+function setLanguage(lang, persist) {
+  state.lang = lang;
+  if (persist) localStorage.setItem("kanal.lang", lang);
+  document.documentElement.lang = lang || "en";
+  $("langCode").textContent = (lang || "").toUpperCase();
+  $("langName").textContent = (UI[lang] || {}).name || "";
+  if (state.statusKey) setStatus(state.statusKey); // re-render chrome in the new language
+  renderAll();
 }
 
 $("lang").addEventListener("change", (e) => {
   // pure client-side filter: every language is already in the push stream
-  state.lang = e.target.value;
-  localStorage.setItem("kanal.lang", state.lang);
-  renderAll();
+  setLanguage(e.target.value, true);
 });
 
 /* ---------- local cache (offline / reconnect) ---------- */
@@ -252,7 +472,7 @@ function loadScript(src) {
 
 async function startSupabase(room, sbref, key) {
   $("room").textContent = room;
-  setStatus("连接中… / Łączenie… / Verbinde…");
+  setStatus("connecting");
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js");
   const client = window.supabase.createClient("https://" + sbref + ".supabase.co", key);
   const channel = client.channel(room, { config: { broadcast: { self: false } } });
@@ -260,19 +480,20 @@ async function startSupabase(room, sbref, key) {
   channel.subscribe((status) => {
     // late join and reconnect recover via the host's periodic room.snapshot
     if (status === "SUBSCRIBED") setStatus("");
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
-      setStatus("连接断开，重连中… / Ponowne łączenie… / Verbinde neu…");
+    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setStatus("reconnecting");
   });
 }
 
+setLanguage(state.lang || "zh", false);
 loadCache();
+if (state.utterances.size === 0) renderEmpty();
 if (params.get("demo")) {
   startDemo();
 } else if (params.get("room") && params.get("sbref") && params.get("key")) {
   startSupabase(params.get("room"), params.get("sbref"), params.get("key"))
-    .catch((e) => setStatus("连接失败: " + e.message));
+    .catch(() => setStatus("failed"));
 } else {
-  setStatus("缺少参数：用主机端二维码打开，或加 ?demo=1 预览。");
+  setStatus("missing");
 }
 </script>
 </body>
