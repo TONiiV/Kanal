@@ -14,6 +14,9 @@ namespace Kanal.Providers.Gladia;
 internal sealed class GladiaWire
 {
     private readonly Dictionary<string, AsrEvent.Transcript> _transcripts = new();
+    // transcript ids look like "00_00000003" (channel_sequence); translation messages
+    // reference the same utterance as utterance_id "3" + channel — map between the two
+    private readonly Dictionary<(int Channel, long Seq), string> _idBySeq = new();
 
     public IEnumerable<AsrEvent> Parse(string json)
     {
@@ -80,6 +83,11 @@ internal sealed class GladiaWire
             id, speakerTag, text, lang, startMs, isFinal ? endMs : null, isFinal,
             CodeSwitch: false, confidence, Translations: null);
         _transcripts[id] = transcript;
+
+        var parts = id.Split('_');
+        if (parts.Length == 2 && int.TryParse(parts[0], out var ch) && long.TryParse(parts[1], out var seq))
+            _idBySeq[(ch, seq)] = id;
+
         return transcript;
     }
 
@@ -88,18 +96,30 @@ internal sealed class GladiaWire
         if (!root.TryGetProperty("data", out var data))
             return null;
 
-        var id = GetString(data, "id")
-                 ?? GetStringAt(data, "utterance", "id")
-                 ?? GetStringAt(data, "original_utterance", "id");
         var targetLang = GetString(data, "target_language")
                          ?? GetStringAt(data, "translated_utterance", "language");
         var translated = GetStringAt(data, "translated_utterance", "text")
                          ?? GetString(data, "translation")
                          ?? GetString(data, "text");
-
-        if (id is null || targetLang is null || translated is null)
+        if (targetLang is null || translated is null)
             return null;
-        if (!_transcripts.TryGetValue(id, out var known))
+
+        // Gladia "translates" the source language into itself with garbage output — drop
+        var originalLang = GetString(data, "original_language") ?? GetStringAt(data, "utterance", "language");
+        if (string.Equals(targetLang, originalLang, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var id = GetString(data, "id")
+                 ?? GetStringAt(data, "utterance", "id")
+                 ?? GetStringAt(data, "original_utterance", "id");
+        if (id is null &&
+            GetString(data, "utterance_id") is { } seqText && long.TryParse(seqText, out var seq))
+        {
+            var channel = GetIntAt(data, "utterance", "channel") ?? 0;
+            _idBySeq.TryGetValue((channel, seq), out id);
+        }
+
+        if (id is null || !_transcripts.TryGetValue(id, out var known))
             return null; // translation for an utterance we never saw — drop
 
         var translations = known.Translations is null
@@ -134,6 +154,14 @@ internal sealed class GladiaWire
         element.ValueKind == JsonValueKind.Object &&
         element.TryGetProperty(objectName, out var nested)
             ? GetString(nested, name)
+            : null;
+
+    private static int? GetIntAt(JsonElement element, string objectName, string name) =>
+        element.ValueKind == JsonValueKind.Object &&
+        element.TryGetProperty(objectName, out var nested) &&
+        nested.ValueKind == JsonValueKind.Object &&
+        nested.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.Number
+            ? prop.GetInt32()
             : null;
 
     private static double? GetDouble(JsonElement element, string name) =>

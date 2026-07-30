@@ -25,6 +25,9 @@ public sealed class GladiaAsrSession : IAsrSession
 
     public IAsyncEnumerable<AsrEvent> Events => ReadEventsAsync();
 
+    /// <summary>Raw JSON messages as received — diagnostics only (Kanal.Doctor).</summary>
+    public event Action<string>? RawMessageReceived;
+
     internal async Task ConnectAsync(CancellationToken ct)
     {
         _socket = await OpenSocketAsync(ct);
@@ -86,6 +89,7 @@ public sealed class GladiaAsrSession : IAsrSession
 
                 var json = Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
                 message.SetLength(0);
+                RawMessageReceived?.Invoke(json);
 
                 foreach (var e in _wire.Parse(json))
                     await _events.Writer.WriteAsync(e, ct);

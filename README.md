@@ -31,6 +31,8 @@ Start in **Demo (scripted)** mode — no keys needed; a fake trilingual meeting 
 dotnet test
 ```
 
+**Pipeline diagnostics** (`tools/Kanal.Doctor`): `dotnet run --project tools/Kanal.Doctor -- mic 5` records five seconds and reports levels (writes `mic-check.wav`); `-- gladia <wav>` streams a WAV to a live Gladia session and dumps raw + normalized messages — use it whenever "nothing shows up" and you need to know which leg is broken.
+
 ## Architecture invariants
 
 - **The host is the single authority.** Clients are projections; late join and reconnect are served by `room.snapshot`.

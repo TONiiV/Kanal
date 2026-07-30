@@ -93,7 +93,15 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private bool _isRunning;
+
+    /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
+    private double _micLevel;
+
+    public bool ShowMicLevel => IsRunning && IsGladiaMode;
 
     [ObservableProperty]
     private string _mergeFromTag = "";
@@ -115,7 +123,11 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsGladiaMode => SelectedMode.StartsWith("Gladia", StringComparison.Ordinal);
 
-    partial void OnSelectedModeChanged(string value) => OnPropertyChanged(nameof(IsGladiaMode));
+    partial void OnSelectedModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsGladiaMode));
+        OnPropertyChanged(nameof(ShowMicLevel));
+    }
 
     public void RefreshKeyStatus()
     {
@@ -276,8 +288,19 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var capture = new WasapiAudioCapture();
+            var framesSinceMeter = 0;
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
+            {
                 await session.PushAudioAsync(frame, ct);
+
+                // input level meter ~4×/s — "is the mic alive" must be visible at a glance
+                if (++framesSinceMeter >= 3)
+                {
+                    framesSinceMeter = 0;
+                    var peak = FramePeak(frame.Span);
+                    Dispatcher.UIThread.Post(() => MicLevel = peak);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -286,6 +309,19 @@ public partial class MainViewModel : ViewModelBase
         {
             Dispatcher.UIThread.Post(() => Status = $"Audio capture failed: {ex.Message}");
         }
+        finally
+        {
+            Dispatcher.UIThread.Post(() => MicLevel = 0);
+        }
+    }
+
+    private static double FramePeak(ReadOnlySpan<byte> pcm16)
+    {
+        var samples = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(pcm16);
+        var peak = 0;
+        foreach (var s in samples)
+            peak = Math.Max(peak, Math.Abs((int)s));
+        return peak / (double)short.MaxValue * 100.0;
     }
 
     private void ApplyRename(SpeakerItemViewModel item)

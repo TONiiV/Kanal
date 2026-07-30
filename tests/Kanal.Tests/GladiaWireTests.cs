@@ -46,6 +46,49 @@ public class GladiaWireTests
     }
 
     [Fact]
+    public void RealWireTranslationMapsUtteranceIdAndChannelToTranscriptId()
+    {
+        // exact shape observed live 2026-07-30: translation carries utterance_id "3",
+        // while the transcript id is "00_00000003" (channel_sequence)
+        var wire = new GladiaWire();
+        wire.Parse("""
+            {"type":"transcript","data":{"id":"00_00000003","is_final":true,
+             "utterance":{"text":"料号确认","language":"zh","start":0,"end":1.0,"channel":0}}}
+            """).ToList();
+
+        var events = wire.Parse("""
+            {"type":"translation","data":{"utterance_id":"3",
+             "utterance":{"text":"料号确认","language":"zh","start":0,"end":1.0,"channel":0},
+             "original_language":"zh","target_language":"de",
+             "translated_utterance":{"text":"Teilenummer bestätigt","language":"de","channel":0}}}
+            """).ToList();
+
+        var t = Assert.IsType<AsrEvent.Transcript>(Assert.Single(events));
+        Assert.Equal("00_00000003", t.UtteranceId);
+        Assert.Equal("Teilenummer bestätigt", t.Translations!["de"]);
+    }
+
+    [Fact]
+    public void SourceLanguageSelfTranslationIsDropped()
+    {
+        // Gladia "translates" zh→zh with garbage output when the source is in target_languages
+        var wire = new GladiaWire();
+        wire.Parse("""
+            {"type":"transcript","data":{"id":"00_00000000","is_final":true,
+             "utterance":{"text":"料号确认","language":"zh","start":0,"end":1.0,"channel":0}}}
+            """).ToList();
+
+        var events = wire.Parse("""
+            {"type":"translation","data":{"utterance_id":"0",
+             "utterance":{"text":"料号确认","language":"zh","channel":0},
+             "original_language":"zh","target_language":"zh",
+             "translated_utterance":{"text":"料 号 确 认 确认。","language":"zh","channel":0}}}
+            """).ToList();
+
+        Assert.Empty(events);
+    }
+
+    [Fact]
     public void TranslationForUnknownUtteranceIsDropped()
     {
         var wire = new GladiaWire();

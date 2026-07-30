@@ -48,6 +48,12 @@ public sealed class GladiaAsrProvider : IAsrProvider, IDisposable
                 ["languages"] = new JsonArray(options.ExpectedLanguages.Select(l => (JsonNode)l).ToArray()),
                 ["code_switching"] = true,
             },
+            // without this Gladia only delivers finals — the UI needs partials for live gray text
+            ["messages_config"] = new JsonObject
+            {
+                ["receive_partial_transcripts"] = true,
+                ["receive_final_transcripts"] = true,
+            },
             ["realtime_processing"] = new JsonObject
             {
                 ["translation"] = true,
