@@ -21,7 +21,11 @@ See [docs/PRD-v0.3.md](docs/PRD-v0.3.md) for the full requirements (Chinese).
 dotnet run --project src/Kanal.Host
 ```
 
-Start in **Demo (scripted)** mode — no keys needed; a fake trilingual meeting flows through the real orchestrator (ASR without translation → `IMtProvider` routing). Switch to **Gladia (live)** with an API key to stream the microphone (Windows capture only for now).
+Start in **Demo (scripted)** mode — no keys needed; a fake trilingual meeting flows through the real orchestrator (ASR without translation → `IMtProvider` routing). Switch to **Gladia (live)** to stream the microphone (Windows capture only for now).
+
+**API keys**: manage multiple named Gladia keys in ⚙ Settings (stored in `%APPDATA%/Kanal/settings.json`, one active at a time); the `GLADIA_API_KEY` env var (any scope) is the fallback when no stored key exists.
+
+**Mobile clients**: on Start, the host publishes every room message to Supabase Realtime (broadcast channel = room id) and shows a **join QR code** encoding the mobile page URL with room + connection params. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog. Endpoint overrides: `KANAL_SUPABASE_URL`, `KANAL_SUPABASE_ANON_KEY`, `KANAL_WEB_URL`.
 
 ```bash
 dotnet test
@@ -40,12 +44,18 @@ dotnet test
 - [x] Solution skeleton, provider contracts, RoomState + orchestrator (+tests)
 - [x] Audio pipeline: resampler, WAV replay, WASAPI capture (Windows)
 - [x] GladiaAsrProvider (wire format **needs live verification during D0-B** — adjust `GladiaWire`/`GladiaOptions.ExtraConfig`, nothing else)
-- [x] Host UI: 4 columns, rename/merge, demo mode, md export
-- [x] Mobile web client skeleton with demo transport
+- [x] Host UI: 4 columns (language chips), rename/merge (✓ or Enter; covered by headless UI tests), demo mode, md export, settings dialog for API keys
+- [x] M0-D7: relay publisher (`SupabaseRelayPublisher`, REST broadcast — verified end to end) + join QR code in host + periodic snapshot for late join
+- [x] Mobile web client: Supabase transport + demo mode (`web/index.html`, copy in `docs/` for GitHub Pages)
+- [ ] Hosting for `web/index.html` — pending: enable GitHub Pages (repo Settings → Pages → main `/docs`) or grant the Vercel integration project-create permission
 - [ ] D0-A: **macOS** audio capture backend (`IAudioCaptureService` impl)
 - [ ] D0-B: zh↔pl terminology quality check with real part numbers — **go/no-go gate**
-- [ ] M0-D7: relay publisher implementation (Ably C# SDK) + QR code in host
 - [ ] M0-D10: code-switch degradation experiment, rehearsal
+- [ ] M2: local model providers — NVIDIA **Nemotron** streaming ASR + Sortformer diarization + Qwen MT via Python sidecar (`NemotronAsrProvider` slot already in the caps table)
+
+## Relay notes
+
+The shared Supabase project `muwffgozlmjafsoykqfr` (eu-central-1) carries broadcast-only channels named `kanal-*`; nothing is written to its database. The anon key is public by design (it ships in every join QR). Moving to a dedicated Supabase project = changing `KANAL_SUPABASE_URL`/`KANAL_SUPABASE_ANON_KEY`.
 
 ## Open decisions / risks
 

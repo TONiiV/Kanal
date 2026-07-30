@@ -7,7 +7,7 @@
         x:Class="Kanal.Host.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Kanal — 频道"
+        Title="Kanal"
         Width="1280" Height="760"
         Background="#E9EDF0">
 
@@ -18,17 +18,32 @@
     <DockPanel>
         <!-- toolbar -->
         <Border DockPanel.Dock="Top" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="0,0,0,1" Padding="12,8">
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <WrapPanel ItemSpacing="10" LineSpacing="6" VerticalAlignment="Center">
                 <TextBlock Text="Kanal" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" Width="150"
                           IsEnabled="{Binding !IsRunning}" />
-                <TextBlock Text="Languages" VerticalAlignment="Center" Foreground="#7A8791" />
-                <TextBox Text="{Binding LanguagesInput}" Width="160" PlaceholderText="zh, de, pl, en"
+                <ItemsControl ItemsSource="{Binding LanguageOptions}" IsEnabled="{Binding !IsRunning}"
+                              VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LanguageOption">
+                            <ToggleButton IsChecked="{Binding IsSelected}" Padding="10,5" FontSize="13">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Label}" Opacity="0.75" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBox Text="{Binding ExtraLanguagesInput}" Width="80" PlaceholderText="+ codes"
+                         ToolTip.Tip="Extra ISO codes, comma separated (e.g. fr, es)"
                          IsEnabled="{Binding !IsRunning}" />
-                <TextBox Text="{Binding GladiaApiKey}" Width="220" PlaceholderText="Gladia API key"
-                         PasswordChar="•" IsVisible="{Binding IsGladiaMode}"
-                         IsEnabled="{Binding !IsRunning}" />
-                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" Width="220"
+                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" Width="200"
                           IsVisible="{Binding IsGladiaMode}" IsEnabled="{Binding !IsRunning}">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
@@ -39,7 +54,9 @@
                 <Button Content="Start" Command="{Binding StartCommand}" Classes="accent" />
                 <Button Content="Stop" Command="{Binding StopCommand}" />
                 <Button Content="Export .md" Command="{Binding ExportMarkdownCommand}" />
-            </StackPanel>
+                <Button Content="⚙ Settings" Click="OnSettingsClick" />
+                <TextBlock Text="{Binding KeyStatus}" FontSize="11" Foreground="#7A8791" VerticalAlignment="Center" />
+            </WrapPanel>
         </Border>
 
         <!-- status bar -->
@@ -47,42 +64,55 @@
             <TextBlock Text="{Binding Status}" Foreground="#4C5C68" FontSize="12" />
         </Border>
 
-        <!-- speakers panel -->
-        <Border DockPanel.Dock="Right" Width="230" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="1,0,0,0" Padding="10">
+        <!-- right panel: join QR + speakers -->
+        <Border DockPanel.Dock="Right" Width="240" Background="#FFFFFF" BorderBrush="#C6D0D7" BorderThickness="1,0,0,0" Padding="10">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Speakers" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <StackPanel DockPanel.Dock="Top" Spacing="6" IsVisible="{Binding HasJoinInfo}" Margin="0,0,0,10">
+                    <TextBlock Text="Scan to join" FontWeight="SemiBold" />
+                    <Image Source="{Binding QrImage}" Width="180" Height="180"
+                           HorizontalAlignment="Center" RenderOptions.BitmapInterpolationMode="None" />
+                    <TextBox Text="{Binding JoinUrl}" IsReadOnly="True" FontSize="10" Height="46"
+                             TextWrapping="Wrap" AcceptsReturn="True" />
+                </StackPanel>
+
                 <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0">
                     <TextBlock Text="Merge speakers" FontSize="12" Foreground="#7A8791" />
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBox Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="60" />
+                        <TextBox Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="56" />
                         <TextBlock Text="→" VerticalAlignment="Center" />
-                        <TextBox Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="60" />
+                        <TextBox Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="56" />
                         <Button Content="Merge" Command="{Binding MergeSpeakersCommand}" />
                     </StackPanel>
                 </StackPanel>
-                <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding Speakers}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SpeakerItemViewModel">
-                                <Border BorderBrush="{Binding Color}" BorderThickness="0,0,0,0" Padding="0,4">
-                                    <StackPanel Spacing="2">
+
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Speakers" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Speakers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SpeakerItemViewModel">
+                                    <StackPanel Spacing="2" Margin="0,4">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <Ellipse Width="10" Height="10" Fill="{Binding Color}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding Tag}" FontFamily="Consolas,monospace" FontSize="12" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding MergedFromLabel}" FontSize="11" Foreground="#7A8791" VerticalAlignment="Center" />
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <TextBox Text="{Binding Name}" PlaceholderText="display name" Width="130" FontSize="12" />
-                                            <Button Content="✓" FontSize="12" Padding="6,2"
-                                                    Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).RenameSpeakerCommand}"
-                                                    CommandParameter="{Binding}" />
+                                            <TextBox Text="{Binding Name}" PlaceholderText="display name" Width="140" FontSize="12">
+                                                <TextBox.KeyBindings>
+                                                    <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
+                                                </TextBox.KeyBindings>
+                                            </TextBox>
+                                            <Button Content="✓" FontSize="12" Padding="8,4"
+                                                    Command="{Binding RenameCommand}"
+                                                    ToolTip.Tip="Apply name (or press Enter)" />
                                         </StackPanel>
                                     </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
             </DockPanel>
         </Border>
 

@@ -2,8 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Kanal.Host.App"
              xmlns:local="using:Kanal.Host"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
+    <!-- The window chrome is designed on a fixed light palette; following the OS
+         dark theme made control foregrounds invisible on the light surfaces. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />

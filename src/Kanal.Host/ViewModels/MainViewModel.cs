@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,7 +16,9 @@ using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
 using Kanal.Core.Relay;
 using Kanal.Core.Room;
+using Kanal.Host.Services;
 using Kanal.Providers.Gladia;
+using QRCoder;
 
 namespace Kanal.Host.ViewModels;
 
@@ -23,12 +26,16 @@ public partial class MainViewModel : ViewModelBase
 {
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
+    private readonly DispatcherTimer _snapshotTimer;
     private MeetingSession? _session;
     private CancellationTokenSource? _captureCts;
     private GladiaAsrProvider? _gladiaProvider;
 
     public MainViewModel()
     {
+        _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _snapshotTimer.Tick += async (_, _) => await PublishSnapshotSafeAsync();
+
         if (OperatingSystem.IsWindows())
         {
             try
@@ -42,6 +49,8 @@ public partial class MainViewModel : ViewModelBase
                 // no capture devices — demo mode still works
             }
         }
+
+        RefreshKeyStatus();
     }
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
@@ -50,22 +59,34 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
+    public ObservableCollection<LanguageOption> LanguageOptions { get; } = new()
+    {
+        new LanguageOption { Code = "zh", Label = "中文", IsSelected = true },
+        new LanguageOption { Code = "de", Label = "Deutsch", IsSelected = true },
+        new LanguageOption { Code = "pl", Label = "Polski", IsSelected = true },
+        new LanguageOption { Code = "en", Label = "English", IsSelected = false },
+    };
+
     public string[] Modes { get; } = ["Demo (scripted)", "Gladia (live)"];
+
+    /// <summary>Relay can be disabled (tests, fully offline use); QR is only shown when enabled.</summary>
+    public bool RelayEnabled { get; set; } = true;
 
     [ObservableProperty]
     private string _selectedMode = "Demo (scripted)";
 
+    /// <summary>Extra ISO codes beyond the chips, e.g. "fr, es".</summary>
     [ObservableProperty]
-    private string _languagesInput = "zh, de, pl, en";
-
-    [ObservableProperty]
-    private string _gladiaApiKey = "";
+    private string _extraLanguagesInput = "";
 
     [ObservableProperty]
     private AudioDeviceInfo? _selectedDevice;
 
     [ObservableProperty]
     private string _status = "Idle.";
+
+    [ObservableProperty]
+    private string _keyStatus = "";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
@@ -78,9 +99,26 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _mergeIntoTag = "";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
+    private string _joinUrl = "";
+
+    [ObservableProperty]
+    private Bitmap? _qrImage;
+
+    public bool HasJoinInfo => JoinUrl.Length > 0;
+
     public bool IsGladiaMode => SelectedMode.StartsWith("Gladia", StringComparison.Ordinal);
 
     partial void OnSelectedModeChanged(string value) => OnPropertyChanged(nameof(IsGladiaMode));
+
+    public void RefreshKeyStatus()
+    {
+        var resolved = SettingsStore.ResolveGladiaKey(SettingsStore.Load());
+        KeyStatus = resolved is null
+            ? "Gladia key: none — open Settings"
+            : $"Gladia key: {resolved.Value.Source}";
+    }
 
     private bool CanStart() => !IsRunning;
 
@@ -89,15 +127,21 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
-        var languages = LanguagesInput
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var languages = LanguageOptions.Where(o => o.IsSelected).Select(o => o.Code)
+            .Concat(ExtraLanguagesInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Select(l => l.ToLowerInvariant())
             .Distinct()
             .ToList();
         if (languages.Count == 0)
         {
-            Status = "Enter at least one language code (e.g. zh, de, pl).";
+            Status = "Select at least one language.";
             return;
+        }
+
+        if (_session is not null)
+        {
+            await _session.DisposeAsync();
+            _session = null;
         }
 
         Columns.Clear();
@@ -112,13 +156,14 @@ public partial class MainViewModel : ViewModelBase
         IMtProvider? mt;
         if (IsGladiaMode)
         {
-            if (string.IsNullOrWhiteSpace(GladiaApiKey))
+            var resolved = SettingsStore.ResolveGladiaKey(SettingsStore.Load());
+            if (resolved is null)
             {
-                Status = "Gladia mode needs an API key.";
+                Status = "No Gladia API key. Add one in Settings or set GLADIA_API_KEY.";
                 return;
             }
 
-            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions { ApiKey = GladiaApiKey.Trim() });
+            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions { ApiKey = resolved.Value.Key });
             asr = _gladiaProvider;
             mt = null; // Gladia caps declare end-to-end translation
         }
@@ -129,7 +174,12 @@ public partial class MainViewModel : ViewModelBase
         }
 
         var config = new RoomConfig($"kanal-{DateTime.Now:HHmmss}", languages);
-        var session = new MeetingSession(asr, mt, new NullRelayPublisher(), config);
+        var relaySettings = RelaySettings.FromEnvironment();
+        IRelayPublisher relay = RelayEnabled
+            ? new SupabaseRelayPublisher(relaySettings.SupabaseUrl, relaySettings.AnonKey, config.RoomId)
+            : new NullRelayPublisher();
+
+        var session = new MeetingSession(asr, mt, relay, config);
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
         session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
@@ -154,10 +204,59 @@ public partial class MainViewModel : ViewModelBase
         IsRunning = true;
         Status = IsGladiaMode ? "Live — streaming microphone to Gladia." : "Demo running.";
 
+        if (RelayEnabled)
+        {
+            ShowJoinInfo(relaySettings.BuildJoinUrl(config.RoomId));
+            _snapshotTimer.Start();
+        }
+
         if (IsGladiaMode)
         {
             _captureCts = new CancellationTokenSource();
             _ = PumpMicrophoneAsync(session, SelectedDevice?.Id, _captureCts.Token);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStop))]
+    private async Task StopAsync()
+    {
+        _snapshotTimer.Stop();
+        _captureCts?.Cancel();
+        _captureCts = null;
+
+        if (_session is not null)
+        {
+            await PublishSnapshotSafeAsync(); // leave a final full state on the channel
+            await _session.DisposeAsync();    // session object stays for rename/merge/export
+        }
+
+        _gladiaProvider?.Dispose();
+        _gladiaProvider = null;
+        JoinUrl = "";
+        QrImage = null;
+        IsRunning = false;
+        Status = "Stopped. Rename, merge and export still work on the last room.";
+    }
+
+    private void ShowJoinInfo(string url)
+    {
+        JoinUrl = url;
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);
+        var png = new PngByteQRCode(data).GetGraphic(pixelsPerModule: 5);
+        QrImage = new Bitmap(new MemoryStream(png));
+    }
+
+    private async Task PublishSnapshotSafeAsync()
+    {
+        try
+        {
+            if (_session is not null)
+                await _session.PublishSnapshotAsync();
+        }
+        catch (Exception ex)
+        {
+            Status = $"Warning: snapshot publish failed: {ex.Message}";
         }
     }
 
@@ -184,29 +283,12 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanStop))]
-    private async Task StopAsync()
+    private void ApplyRename(SpeakerItemViewModel item)
     {
-        _captureCts?.Cancel();
-        _captureCts = null;
-
-        if (_session is not null)
-        {
-            await _session.DisposeAsync();
-            _session = null;
-        }
-
-        _gladiaProvider?.Dispose();
-        _gladiaProvider = null;
-        IsRunning = false;
-        Status = "Stopped.";
-    }
-
-    [RelayCommand]
-    private void RenameSpeaker(SpeakerItemViewModel item)
-    {
+        if (_session is null)
+            return;
         var name = string.IsNullOrWhiteSpace(item.Name) ? null : item.Name.Trim();
-        _session?.RenameSpeaker(item.Tag, name);
+        _session.RenameSpeaker(item.Tag, name);
     }
 
     [RelayCommand]
@@ -249,6 +331,8 @@ public partial class MainViewModel : ViewModelBase
         Status = $"Exported to {path}";
     }
 
+    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
+
     private void ApplyUtterance(Utterance u)
     {
         var (speakerName, speakerColor) = ResolveSpeaker(u.SpeakerTag);
@@ -286,7 +370,7 @@ public partial class MainViewModel : ViewModelBase
         var item = Speakers.FirstOrDefault(s => s.Tag == speaker.Tag);
         if (item is null)
         {
-            item = new SpeakerItemViewModel { Tag = speaker.Tag };
+            item = CreateSpeakerItem(speaker.Tag);
             Speakers.Add(item);
         }
 
