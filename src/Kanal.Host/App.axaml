@@ -4,13 +4,144 @@
              xmlns:local="using:Kanal.Host"
              RequestedThemeVariant="Light">
     <!-- The window chrome is designed on a fixed light palette; following the OS
-         dark theme made control foregrounds invisible on the light surfaces. -->
+         dark theme made control foregrounds invisible on the light surfaces.
+         Every colour below is therefore explicit — see .impeccable.md. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Ink and paper only. Colour is reserved for speaker identity. -->
+            <SolidColorBrush x:Key="Sheet" Color="#FCFCFD" />
+            <SolidColorBrush x:Key="Paper" Color="#F1F3F5" />
+            <SolidColorBrush x:Key="Ink" Color="#111A21" />
+            <SolidColorBrush x:Key="Ink2" Color="#4A5862" />
+            <SolidColorBrush x:Key="Ink3" Color="#7C8A93" />
+            <SolidColorBrush x:Key="Rule" Color="#D5DCE1" />
+            <SolidColorBrush x:Key="RuleFaint" Color="#E7EBEE" />
+            <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
+
+            <!-- Latin first so Polish diacritics come from the grotesque, CJK from the fallback.
+                 No embedded font: a Latin-only face would clash with the CJK fallback it sits next to. -->
+            <FontFamily x:Key="Sans">Helvetica Neue, Helvetica, Segoe UI Variable Text, Segoe UI, Arial, Microsoft YaHei, PingFang SC</FontFamily>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+
+        <!-- Swiss editorial: square corners, hairline rules, type doing the work. -->
+
+        <!-- Ink is set once per window via TextElement.Foreground and inherited from there.
+             A global TextBlock.Foreground setter would out-rank the inherited value that
+             filled controls hand their content, painting checked chips black on black. -->
+
+        <!-- Tiny letterspaced caps used as form labels and section heads. -->
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="1.6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="Button">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink2}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink3}" />
+        </Style>
+
+        <!-- The one filled control on screen: whatever starts the meeting. -->
+        <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink2}" />
+        </Style>
+        <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Rule}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+
+        <!-- Quiet secondary actions: no box until you reach for them. -->
+        <Style Selector="Button.ghost">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource Ink2}" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
+
+        <Style Selector="ToggleButton">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="11,5" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+        <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Ink2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink2}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Sheet}" />
+        </Style>
+        <Style Selector="ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="TextBox /template/ Border#PART_BorderElement">
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+
+        <Style Selector="ComboBox">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
     </Application.Styles>
 </Application>

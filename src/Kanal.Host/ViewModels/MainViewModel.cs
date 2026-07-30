@@ -33,6 +33,8 @@ public partial class MainViewModel : ViewModelBase
 
     public MainViewModel()
     {
+        Columns.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasColumns));
+
         _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _snapshotTimer.Tick += async (_, _) => await PublishSnapshotSafeAsync();
 
@@ -107,6 +109,9 @@ public partial class MainViewModel : ViewModelBase
     private Bitmap? _qrImage;
 
     public bool HasJoinInfo => JoinUrl.Length > 0;
+
+    /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
+    public bool HasColumns => Columns.Count > 0;
 
     public bool IsGladiaMode => SelectedMode.StartsWith("Gladia", StringComparison.Ordinal);
 
@@ -345,6 +350,7 @@ public partial class MainViewModel : ViewModelBase
             bubble.SpeakerTag = u.SpeakerTag;
             bubble.SpeakerName = speakerName;
             bubble.SpeakerColor = speakerColor;
+            bubble.SourceLang = u.SrcLang.ToUpperInvariant();
             bubble.IsPartial = u.State == UtteranceState.Partial;
             bubble.CodeSwitch = u.CodeSwitch;
             // translation on top, source below as the trust anchor; before the
