@@ -3,6 +3,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Host.Services;
+using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.ViewModels;
 
@@ -19,14 +20,19 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 }
 
 /// <summary>
-/// Manages the stored Gladia API keys. Multiple keys, one active; the env var
-/// GLADIA_API_KEY stays as the fallback when no stored key exists.
+/// Manages the stored Gladia API keys and the active translation model.
+/// Multiple keys, one active; the env var GLADIA_API_KEY stays as the fallback
+/// when no stored key exists.
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
     public SettingsViewModel()
+        : this(SettingsStore.Load())
     {
-        var settings = SettingsStore.Load();
+    }
+
+    public SettingsViewModel(AppSettings settings)
+    {
         foreach (var entry in settings.ApiKeys.Where(k => k.Provider == "gladia"))
         {
             Keys.Add(new ApiKeyItemViewModel
@@ -43,9 +49,21 @@ public partial class SettingsViewModel : ViewModelBase
         EnvFallback = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null
             ? $"Fallback: {SettingsStore.GladiaEnvVar} env var is set."
             : $"Fallback: {SettingsStore.GladiaEnvVar} env var is not set.";
+
+        var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
+        TranslationModels.Add(new TranslationModelItemViewModel());
+        foreach (var model in LocalModelCatalog.Models)
+            TranslationModels.Add(new TranslationModelItemViewModel(model, downloads));
+
+        var active = TranslationModels.FirstOrDefault(
+                         m => m.IsLocal && m.ModelId == settings.ActiveTranslationModelId)
+                     ?? TranslationModels[0];
+        active.IsActive = true;
     }
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
+
+    public ObservableCollection<TranslationModelItemViewModel> TranslationModels { get; } = new();
 
     public string EnvFallback { get; }
 
@@ -91,11 +109,19 @@ public partial class SettingsViewModel : ViewModelBase
     public void Save()
     {
         var settings = SettingsStore.Load();
+        ApplyTo(settings);
+        SettingsStore.Save(settings);
+    }
+
+    /// <summary>Write the edited state onto <paramref name="settings"/> (separated from disk IO for tests).</summary>
+    public void ApplyTo(AppSettings settings)
+    {
         settings.ApiKeys.RemoveAll(k => k.Provider == "gladia");
         settings.ApiKeys.AddRange(Keys
             .Where(k => !string.IsNullOrWhiteSpace(k.Name) && !string.IsNullOrWhiteSpace(k.Key))
             .Select(k => new ApiKeyEntry(k.Name.Trim(), "gladia", k.Key.Trim())));
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
-        SettingsStore.Save(settings);
+        settings.ActiveTranslationModelId =
+            TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
     }
 }

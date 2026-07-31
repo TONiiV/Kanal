@@ -31,5 +31,6 @@
     <ProjectReference Include="..\Kanal.Core\Kanal.Core.csproj" />
     <ProjectReference Include="..\Kanal.Audio\Kanal.Audio.csproj" />
     <ProjectReference Include="..\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
+    <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
 </Project>
