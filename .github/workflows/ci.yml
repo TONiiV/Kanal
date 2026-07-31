@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      # repo invariant: the GitHub Pages copy must be byte-identical to web/
+      - name: web/ and docs/ pages are byte-identical
+        run: cmp web/index.html docs/index.html
+
+      - name: Build
+        run: dotnet build Kanal.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test tests/Kanal.Tests/Kanal.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
