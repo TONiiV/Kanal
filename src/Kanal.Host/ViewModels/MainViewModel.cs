@@ -28,6 +28,8 @@ public partial class MainViewModel : ViewModelBase
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;
     private MeetingSession? _session;
+    /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
+    private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
     private GladiaAsrProvider? _gladiaProvider;
 
@@ -126,6 +128,9 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Relay can be disabled (tests, fully offline use); QR is only shown when enabled.</summary>
     public bool RelayEnabled { get; set; } = true;
+
+    /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
+    public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
 
     [ObservableProperty]
     private string _selectedMode = "Demo (scripted)";
@@ -243,9 +248,17 @@ public partial class MainViewModel : ViewModelBase
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
-        IRelayPublisher relay = RelayEnabled
-            ? new SupabaseRelayPublisher(relaySettings.SupabaseUrl, relaySettings.AnonKey, config.RoomId)
-            : new NullRelayPublisher();
+        var relay = CreateRelay(config.RoomId, relaySettings);
+
+        // Phones hold the channel they scanned into, so the previous room has to be told
+        // where the meeting went — otherwise a restart strands everyone until they rescan.
+        if (_relay is not null)
+        {
+            await PublishSafeAsync(_relay, new RoomMovedMessage(config.RoomId));
+            await _relay.DisposeAsync();
+        }
+
+        _relay = relay;
 
         var session = new MeetingSession(asr, mt, relay, config);
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
@@ -295,6 +308,7 @@ public partial class MainViewModel : ViewModelBase
         if (_session is not null)
         {
             await PublishSnapshotSafeAsync(); // leave a final full state on the channel
+            await PublishClosedSafeAsync();   // …and say the meeting is over, so phones stop waiting
             await _session.DisposeAsync();    // session object stays for rename/merge/export
         }
 
@@ -326,6 +340,39 @@ public partial class MainViewModel : ViewModelBase
         {
             Status = $"Warning: snapshot publish failed: {ex.Message}";
         }
+    }
+
+    private async Task PublishClosedSafeAsync()
+    {
+        try
+        {
+            if (_session is not null)
+                await _session.PublishClosedAsync();
+        }
+        catch (Exception ex)
+        {
+            Status = $"Warning: close notice failed: {ex.Message}";
+        }
+    }
+
+    private async Task PublishSafeAsync(IRelayPublisher relay, RelayMessage message)
+    {
+        try
+        {
+            await relay.PublishAsync(message);
+        }
+        catch (Exception ex)
+        {
+            Status = $"Warning: relay publish failed: {ex.Message}";
+        }
+    }
+
+    private IRelayPublisher CreateRelay(string roomId, RelaySettings settings)
+    {
+        if (!RelayEnabled)
+            return new NullRelayPublisher();
+        return RelayPublisherFactory?.Invoke(roomId)
+               ?? new SupabaseRelayPublisher(settings.SupabaseUrl, settings.AnonKey, roomId);
     }
 
     private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)

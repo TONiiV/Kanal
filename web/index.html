@@ -212,29 +212,36 @@ const params = new URLSearchParams(location.search);
 // scripted demo content is never persisted as if it were meeting record. On join, other
 // rooms' caches (and the pre-room-scoped "kanal.cache" key) are dropped so old meetings
 // don't accumulate in localStorage.
-const CACHE_KEY = !params.get("demo") && params.get("room")
+let CACHE_KEY = !params.get("demo") && params.get("room")
   ? "kanal.cache::" + params.get("room") : null;
-if (CACHE_KEY) {
+
+function pruneOtherCaches() {
+  if (!CACHE_KEY) return;
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith("kanal.cache") && k !== CACHE_KEY) localStorage.removeItem(k);
   }
 }
+pruneOtherCaches();
 
 /* Chrome follows the reader's chosen language — a Polish contractor should not have to
    read a Chinese error string. Falls back to English for any other ISO code. */
 const UI = {
   zh:{name:"中文",waiting:"等待发言",hint:"发言会实时出现在这里，译文在上、原文在下。右上角可切换语言。",
       connecting:"连接中…",reconnecting:"连接已断开，正在重连…",failed:"连接失败",
-      missing:"缺少参数。请扫描主机端的二维码打开此页面。",codeswitch:"混合语种",original:"原文"},
+      missing:"缺少参数。请扫描主机端的二维码打开此页面。",codeswitch:"混合语种",original:"原文",
+      ended:"会议已结束。记录保留在此页面。",moved:"会议已重新开始，正在切换…"},
   de:{name:"Deutsch",waiting:"Warten auf Redebeiträge",hint:"Beiträge erscheinen hier in Echtzeit — Übersetzung oben, Original darunter. Sprache oben rechts.",
       connecting:"Verbinde…",reconnecting:"Verbindung getrennt, neuer Versuch…",failed:"Verbindung fehlgeschlagen",
-      missing:"Parameter fehlen. Bitte den QR-Code des Hosts scannen.",codeswitch:"Gemischte Sprache",original:"Original"},
+      missing:"Parameter fehlen. Bitte den QR-Code des Hosts scannen.",codeswitch:"Gemischte Sprache",original:"Original",
+      ended:"Besprechung beendet. Das Protokoll bleibt hier stehen.",moved:"Besprechung neu gestartet — wechsle…"},
   pl:{name:"Polski",waiting:"Oczekiwanie na wypowiedzi",hint:"Wypowiedzi pojawią się tu na żywo — tłumaczenie u góry, oryginał poniżej. Język w prawym górnym rogu.",
       connecting:"Łączenie…",reconnecting:"Rozłączono, ponawianie…",failed:"Połączenie nieudane",
-      missing:"Brak parametrów. Zeskanuj kod QR z komputera prowadzącego.",codeswitch:"Mieszany język",original:"oryginał"},
+      missing:"Brak parametrów. Zeskanuj kod QR z komputera prowadzącego.",codeswitch:"Mieszany język",original:"oryginał",
+      ended:"Spotkanie zakończone. Zapis pozostaje na tej stronie.",moved:"Spotkanie uruchomione ponownie — przełączam…"},
   en:{name:"English",waiting:"Waiting for speech",hint:"Utterances appear here live — translation on top, original below. Language at top right.",
       connecting:"Connecting…",reconnecting:"Disconnected, reconnecting…",failed:"Connection failed",
-      missing:"Missing parameters. Scan the QR code on the host to open this page.",codeswitch:"Mixed language",original:"original"},
+      missing:"Missing parameters. Scan the QR code on the host to open this page.",codeswitch:"Mixed language",original:"original",
+      ended:"Meeting ended. The record stays on this page.",moved:"Meeting restarted — switching over…"},
 };
 
 const state = {
@@ -244,6 +251,7 @@ const state = {
   aliases: new Map(),    // merged tag -> canonical tag
   utterances: new Map(), // id -> utterance (insertion-ordered)
   statusKey: "",         // UI key, re-rendered when the language changes
+  closed: false,         // host stopped this room; survives reload via the cache
 };
 
 const $ = (id) => document.getElementById(id);
@@ -316,7 +324,17 @@ function handle(msg) {
     case "speaker.upsert": applySpeaker(msg.speaker); break;
     case "room.snapshot": applySnapshot(msg.snapshot); break;
     case "room.config": applyConfig(msg.config); break;
+    case "room.closed": applyClosed(); break;
+    case "room.moved": moveToRoom(msg.newRoomId); break;
   }
+}
+
+/* The room is over but the page stays useful: the transcript remains, and the channel stays
+   subscribed because a restart announces itself here as room.moved. */
+function applyClosed() {
+  state.closed = true;
+  setStatus("ended");
+  saveCache();
 }
 
 /* ---------- rendering: one column, chosen language on top, source below ---------- */
@@ -431,6 +449,7 @@ function saveCache() {
     languages: state.languages,
     speakers: [...state.speakers.values()],
     utterances,
+    closed: state.closed,
   }));
 }
 
@@ -442,6 +461,7 @@ function loadCache() {
     applyConfig({ languages: cache.languages });
     for (const s of cache.speakers) applySpeaker(s);
     for (const u of cache.utterances) state.utterances.set(u.id, u);
+    state.closed = !!cache.closed; // a reload of a finished room must not look live
     renderAll();
   } catch { /* corrupt cache — start empty */ }
 }
@@ -493,18 +513,57 @@ function loadScript(src) {
   });
 }
 
+let sb = null; // { client, channel, room } — kept so a restart can re-point the subscription
+
 async function startSupabase(room, sbref, key) {
-  $("room").textContent = room;
   setStatus("connecting");
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js");
-  const client = window.supabase.createClient("https://" + sbref + ".supabase.co", key);
-  const channel = client.channel(room, { config: { broadcast: { self: false } } });
+  sb = {
+    client: window.supabase.createClient("https://" + sbref + ".supabase.co", key),
+    channel: null,
+    room: null,
+  };
+  subscribeRoom(room);
+}
+
+function subscribeRoom(room) {
+  sb.room = room;
+  $("room").textContent = room;
+  const channel = sb.client.channel(room, { config: { broadcast: { self: false } } });
   channel.on("broadcast", { event: "kanal" }, (msg) => handle(msg.payload));
   channel.subscribe((status) => {
     // late join and reconnect recover via the host's periodic room.snapshot
-    if (status === "SUBSCRIBED") setStatus("");
+    if (status === "SUBSCRIBED") setStatus(state.closed ? "ended" : "");
     else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setStatus("reconnecting");
   });
+  sb.channel = channel;
+}
+
+/* The operator restarted: the meeting continues on a new channel. Follow it rather than
+   making 3-8 people rescan a QR code. The previous room's records are dropped, not merged —
+   it is a different meeting, and ASR utterance ids restart at zero. */
+function moveToRoom(newRoomId) {
+  if (!sb || !newRoomId || newRoomId === sb.room) return;
+  setStatus("moved");
+
+  if (sb.channel) sb.client.removeChannel(sb.channel);
+  sb.channel = null;
+
+  state.speakers.clear();
+  state.aliases.clear();
+  state.utterances.clear();
+  state.closed = false;
+  renderAll();
+
+  CACHE_KEY = "kanal.cache::" + newRoomId;
+  pruneOtherCaches();
+
+  // a pull-to-refresh must land in the new room, not the dead one
+  const url = new URL(location.href);
+  url.searchParams.set("room", newRoomId);
+  history.replaceState(null, "", url);
+
+  subscribeRoom(newRoomId);
 }
 
 setLanguage(state.lang || "zh", false);

@@ -14,6 +14,8 @@ namespace Kanal.Core.Relay;
 [JsonDerivedType(typeof(SpeakerUpsert), "speaker.upsert")]
 [JsonDerivedType(typeof(RoomSnapshotMessage), "room.snapshot")]
 [JsonDerivedType(typeof(RoomConfigMessage), "room.config")]
+[JsonDerivedType(typeof(RoomClosedMessage), "room.closed")]
+[JsonDerivedType(typeof(RoomMovedMessage), "room.moved")]
 public abstract record RelayMessage;
 
 /// <summary>Partial and final share one message; clients replace in place by Utterance.Id.</summary>
@@ -31,6 +33,20 @@ public sealed record SpeakerUpsert(Speaker Speaker) : RelayMessage;
 public sealed record RoomSnapshotMessage(RoomSnapshot Snapshot) : RelayMessage;
 
 public sealed record RoomConfigMessage(RoomConfig Config) : RelayMessage;
+
+/// <summary>
+/// The meeting on this channel is over. Clients keep the transcript readable but stop
+/// presenting themselves as live — a phone left on a dead channel otherwise looks connected.
+/// </summary>
+public sealed record RoomClosedMessage : RelayMessage;
+
+/// <summary>
+/// The operator restarted: a new room id (and channel) has taken over. Published on the
+/// OLD channel so phones already holding a QR-scanned URL follow along without rescanning.
+/// A fresh room id per Start is deliberate — ASR utterance ids restart at zero, so reusing
+/// the channel would let a new meeting overwrite the previous one's records by id.
+/// </summary>
+public sealed record RoomMovedMessage(string NewRoomId) : RelayMessage;
 
 public sealed record RoomSnapshot(
     RoomConfig Config,
