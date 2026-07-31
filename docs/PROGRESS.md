@@ -139,6 +139,29 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    speech API with no text-only translation endpoint, so that row is unavailable for two reasons
    at once and says both.
 
+7. **The four-column limit is enforced where it is chosen** (PR for #15). `.impeccable.md` freezes
+   the host at four columns and `StartAsync` truncated with `Take(4)`, but the *selection* was
+   unbounded: six ticked languages silently became four columns while all six were still requested
+   as translation targets — and Gladia processes targets **sequentially**, so the two invisible
+   ones cost latency on every final. The cap now lives in one place, `MainViewModel.MaxLanguages`,
+   read by both the selection and the column loop, so `Take(…)` cannot drift from the picker.
+   At the cap the remaining catalog rows are disabled and recede in contrast, the add-by-ISO-code
+   row refuses and keeps what was typed, and the reason — *four columns maximum — deselect one to
+   add another* — is printed between the two, because a click that does nothing and says nothing
+   is exactly the failure this replaces. The refusal is enforced on `LanguageOption.IsSelected`
+   itself rather than in the view, so a fifth cannot arrive by any other route; nothing persists a
+   language list today, and a future restore path hits the same rule.
+
+   *Consequence worth naming*: capping the selection also caps what phones can choose. The mobile
+   page renders one column from a dropdown and could until now offer a fifth language that the host
+   never displayed. That is a real reduction in reach, taken deliberately — a language the operator
+   cannot see is a language nobody can correct — and it buys latency back on every final.
+
+   *Fixed in passing*: a language typed as an ISO code reached the catalog but never
+   `SelectedLanguages`, because the option arrived already selected and its `PropertyChanged`
+   handler was attached afterwards. The flag stack, the summary and the room config all missed it
+   until some other checkbox was toggled.
+
 ### Fixes in review (PR #7)
 
 - **Native use-after-free on Stop.** `LlamaSharpTextGenerator.Dispose()` freed the llama.cpp

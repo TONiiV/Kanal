@@ -18,8 +18,10 @@
         <ItemsControl ItemsSource="{Binding LanguageOptions}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:LanguageOption">
-                    <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1">
-                        <CheckBox IsChecked="{Binding IsSelected}" HorizontalAlignment="Stretch"
+                    <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1"
+                            Opacity="{Binding RowOpacity}">
+                        <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}"
+                                  HorizontalAlignment="Stretch"
                                   Padding="10,0,0,0" MinHeight="42">
                             <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
                                 <controls:FlagIcon Code="{Binding Code}" Width="24" Height="24" />
@@ -34,6 +36,11 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
+        <!-- The cap, stated where it bites: the rows above are disabled and Add refuses. -->
+        <TextBlock Text="{Binding LanguageLimitNotice}" IsVisible="{Binding IsAtLanguageLimit}"
+                   Margin="0,13,0,0" TextWrapping="Wrap" FontSize="11.5" LineHeight="18"
+                   Foreground="{StaticResource Ink2}" />
+
         <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
             <TextBox Grid.Column="0" Text="{Binding NewLanguageInput}" PlaceholderText="Other ISO codes — tr, nl"
                      Margin="0,0,8,0">
@@ -41,12 +48,13 @@
                     <KeyBinding Gesture="Enter" Command="{Binding AddLanguageCommand}" />
                 </TextBox.KeyBindings>
             </TextBox>
-            <Button Grid.Column="1" Content="Add" Command="{Binding AddLanguageCommand}" />
+            <Button Grid.Column="1" Content="Add" Command="{Binding AddLanguageCommand}"
+                    IsEnabled="{Binding !IsAtLanguageLimit}" />
         </Grid>
 
         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="11.5" LineHeight="18"
                    Foreground="{StaticResource Ink3}"
-                   Text="The first four selected languages become columns on this screen. Every selected language is translated and sent to phones." />
+                   Text="Up to four languages. Each one is a column on this screen, translated, and a choice on the phones." />
 
         <Button Content="Done" Classes="accent" HorizontalAlignment="Right" Margin="0,16,0,0"
                 Click="OnDoneClick" />
