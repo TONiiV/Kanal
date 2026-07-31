@@ -52,26 +52,34 @@
   </Fragment>
 
   <Fragment>
-    <StandardDirectory Id="ProgramMenuFolder">
-      <ComponentGroup Id="KanalShortcuts">
-        <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
-          <Shortcut Id="KanalStartMenuShortcut"
-                    Name="Kanal"
-                    Description="Meeting transcription and translation"
-                    Target="[INSTALLFOLDER]Kanal.Host.exe"
-                    WorkingDirectory="INSTALLFOLDER"
-                    Icon="KanalIcon" />
-          <RemoveFolder Id="RemoveStartMenuShortcut" On="uninstall" />
-          <!-- A per-user component needs a per-user keypath, and HKCU is the conventional one. -->
-          <RegistryValue Root="HKCU"
-                         Key="Software\Kanal"
-                         Name="installed"
-                         Type="integer"
-                         Value="1"
-                         KeyPath="yes" />
-        </Component>
-      </ComponentGroup>
-    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!--
+      The ComponentGroup sits beside StandardDirectory rather than inside it - a StandardDirectory
+      takes Directory and Component children, not ComponentGroup - and the Component points back at
+      it by id.
+
+      The shortcut goes straight into the start menu root, so there is no installer-created folder
+      to clean up and deliberately no RemoveFolder: pointing one at ProgramMenuFolder asks Windows
+      to remove the user's entire start menu directory on uninstall.
+    -->
+    <ComponentGroup Id="KanalShortcuts">
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+        <Shortcut Id="KanalStartMenuShortcut"
+                  Name="Kanal"
+                  Description="Meeting transcription and translation"
+                  Target="[INSTALLFOLDER]Kanal.Host.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="KanalIcon" />
+        <!-- A per-user component needs a per-user keypath, and HKCU is the conventional one. -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\Kanal"
+                       Name="installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
   </Fragment>
 
 </Wix>

@@ -40,10 +40,16 @@ Measured: unsigned `PackDmg` takes ~25 s and yields an 88 MB dmg. The bundle car
 (LLamaSharp plus the .NET runtime), which is why `sign.sh` finds Mach-O binaries with `file(1)`
 instead of trusting a list of extensions — missing one makes the notary service reject everything.
 
+**WiX is pinned to 5.0.2 for licensing reasons.** Taking the newest version instead fails the build
+with `WIX7015: You must accept the Open Source Maintenance Fee (OSMF) EULA` — WiX introduced a paid
+EULA for commercial use in v6, and an internal tool counts. 5.0.2 is the last release before it, on
+the same schema. Do not let a dependency bump carry this past 5.x without deciding to pay.
+
 Unrun so far, stated rather than discovered later: the whole signing/notarisation path (needs a
 `Developer ID Application` certificate — the only local identity is an `Apple Development` one,
-which notarisation rejects), the MSI (WiX refuses to run off Windows, so CI is its first exercise),
-and the release job (fires only on a tag).
+which notarisation rejects), the MSI itself (WiX refuses to run off Windows, so CI is its first
+exercise — schema validation does work cross-platform and caught one illegal nesting), and the
+release job (fires only on a tag).
 
 ---
 

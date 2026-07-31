@@ -143,16 +143,32 @@ password: it is revocable on its own, tied to no individual's account, and unaff
 
 ## Windows MSI
 
-WiX **7.0.0**, pinned in `.config/dotnet-tools.json` and invoked as a local tool from the `PackMsi`
+WiX **5.0.2**, pinned in `.config/dotnet-tools.json` and invoked as a local tool from the `PackMsi`
 target, over the `win-x64` self-contained publish. A local tool rather than a separate `.wixproj`
 keeps the whole chain inside one project file. Per-user install under `LocalAppDataFolder` so no UAC
 prompt is needed — an operator setting up a laptop before a meeting should not need admin rights.
 Start-menu shortcut, Add/Remove Programs entry, clean uninstall. The several hundred files of a
 self-contained publish are harvested by `Files/@Include` rather than enumerated.
 
+**Pinned to 5.0.2 for licensing, not compatibility.** `dotnet tool install wix` takes the newest
+version, which is 7.0.0, and that fails the build outright:
+
+```
+error WIX7015: You must accept the Open Source Maintenance Fee (OSMF) EULA to use WiX Toolset v7
+```
+
+WiX introduced the Open Source Maintenance Fee in v6 — commercial use, which an internal tool is,
+requires accepting a paid EULA. 5.0.2 is the last release before it and is unaffected. The schema is
+the same (`.../schemas/v4/wxs`), so nothing in `Kanal.wxs` changed for the downgrade. **Do not let a
+dependency update bump this past 5.x** without deciding to pay.
+
 **WiX runs on Windows only.** It says so itself on any other host ("All behavior after this point is
-undefined"), so `Kanal.wxs` cannot be validated on the development Mac at all — the `windows-latest`
-CI job is its only exercise. This is the concrete reason the PR gear of the release workflow exists.
+undefined"), so `Kanal.wxs` cannot be fully validated on the development Mac — the `windows-latest`
+CI job is its only real exercise. Schema validation does run cross-platform though, and it earned
+its keep: it caught a `ComponentGroup` nested inside `StandardDirectory`, which is not a legal child.
+One diagnostic does not survive the port — `WIX0389: 'Kanal' is not a relative path` on a plain
+`Directory/@Name`, which is the most ordinary construct in the language and is treated as a
+platform artefact.
 
 **`UpgradeCode` is fixed for the lifetime of the product:** `49907851-1726-470B-A773-9F62E492913F`.
 Changing or regenerating it makes new versions install *alongside* old ones instead of upgrading them.
@@ -240,8 +256,9 @@ Stated plainly rather than discovered at release time:
 2. **The signing/notarisation chain is unrun code** until someone executes it. Apple only reports
    failures after submission, and getting a clean pass typically takes two or three rounds. Planned
    mitigation: a local `-p:SignBuild=true` run, which needs no GitHub secrets.
-3. **The MSI is entirely unrun.** WiX refuses to work off Windows, so nothing in `Kanal.wxs` —
-   the `Files/@Include` harvest, `Scope="perUser"`, the shortcut component — has been executed even
-   once. First real evidence will be the `windows-latest` job on this PR.
+3. **The MSI has never been produced.** Schema validation passes off-Windows, but the actual build —
+   the `Files/@Include` harvest over several hundred files, `Scope="perUser"`, the shortcut
+   component, and whether `WIX0389` really was a platform artefact — is only ever exercised by the
+   `windows-latest` job.
 4. **The release job is unrun.** It only fires on a tag, so artefact collection and `gh release
    create` stay untested until the first real version tag.
