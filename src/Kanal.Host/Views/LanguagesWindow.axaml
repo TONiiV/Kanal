@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:controls="using:Kanal.Host.Controls"
+        x:Class="Kanal.Host.Views.LanguagesWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Room languages"
+        Width="400" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <StackPanel Margin="26,20,26,18" Spacing="0">
+        <TextBlock Text="ROOM LANGUAGES" Classes="label" />
+        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,2" />
+
+        <ItemsControl ItemsSource="{Binding LanguageOptions}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LanguageOption">
+                    <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1">
+                        <CheckBox IsChecked="{Binding IsSelected}" HorizontalAlignment="Stretch"
+                                  Padding="10,0,0,0" MinHeight="42">
+                            <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
+                                <controls:FlagIcon Code="{Binding Code}" Width="24" Height="24" />
+                                <TextBlock Text="{Binding CodeUpper}" FontWeight="Bold" LetterSpacing="1"
+                                           FontSize="12.5" VerticalAlignment="Center" Width="30" />
+                                <TextBlock Text="{Binding Label}" FontSize="12.5"
+                                           Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </CheckBox>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <TextBox Grid.Column="0" Text="{Binding NewLanguageInput}" PlaceholderText="Other ISO codes — tr, nl"
+                     Margin="0,0,8,0">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding AddLanguageCommand}" />
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1" Content="Add" Command="{Binding AddLanguageCommand}" />
+        </Grid>
+
+        <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="11.5" LineHeight="18"
+                   Foreground="{StaticResource Ink3}"
+                   Text="The first four selected languages become columns on this screen. Every selected language is translated and sent to phones." />
+
+        <Button Content="Done" Classes="accent" HorizontalAlignment="Right" Margin="0,16,0,0"
+                Click="OnDoneClick" />
+    </StackPanel>
+</Window>
