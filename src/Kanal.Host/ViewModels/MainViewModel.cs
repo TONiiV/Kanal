@@ -18,6 +18,7 @@ using Kanal.Core.Relay;
 using Kanal.Core.Room;
 using Kanal.Host.Services;
 using Kanal.Providers.Gladia;
+using Kanal.Providers.LocalMt;
 using QRCoder;
 
 namespace Kanal.Host.ViewModels;
@@ -32,6 +33,7 @@ public partial class MainViewModel : ViewModelBase
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
     private GladiaAsrProvider? _gladiaProvider;
+    private IDisposable? _localMt;
 
     public MainViewModel()
     {
@@ -225,26 +227,44 @@ public partial class MainViewModel : ViewModelBase
         foreach (var lang in languages.Take(4))
             Columns.Add(new ColumnViewModel(lang));
 
+        var settings = SettingsStore.Load();
+        var plan = TranslationPlanner.Plan(settings, new ModelDownloadManager(SettingsStore.ModelsPath));
+
         IAsrProvider asr;
         IMtProvider? mt;
         if (IsGladiaMode)
         {
-            var resolved = SettingsStore.ResolveGladiaKey(SettingsStore.Load());
+            var resolved = SettingsStore.ResolveGladiaKey(settings);
             if (resolved is null)
             {
                 Status = "No Gladia API key. Add one in Settings or set GLADIA_API_KEY.";
                 return;
             }
 
-            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions { ApiKey = resolved.Value.Key });
+            if (plan.Error is not null)
+            {
+                Status = plan.Error;
+                return;
+            }
+
+            // with a local model active, Gladia's caps drop Translation and the
+            // orchestrator routes finals through the local provider — no special casing
+            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions
+            {
+                ApiKey = resolved.Value.Key,
+                EnableTranslation = plan.CloudTranslation,
+            });
             asr = _gladiaProvider;
-            mt = null; // Gladia caps declare end-to-end translation
+            mt = plan.Mt;
         }
         else
         {
+            // demo must always run: a missing local model falls back to the fake translator
             asr = new FakeAsrProvider(loop: true);
-            mt = new FakeMtProvider();
+            mt = plan.Mt ?? new FakeMtProvider();
         }
+
+        _localMt = mt as IDisposable;
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
@@ -278,6 +298,8 @@ public partial class MainViewModel : ViewModelBase
             await session.DisposeAsync();
             _gladiaProvider?.Dispose();
             _gladiaProvider = null;
+            _localMt?.Dispose();
+            _localMt = null;
             return;
         }
 
@@ -314,6 +336,8 @@ public partial class MainViewModel : ViewModelBase
 
         _gladiaProvider?.Dispose();
         _gladiaProvider = null;
+        _localMt?.Dispose();
+        _localMt = null;
         JoinUrl = "";
         QrImage = null;
         IsRunning = false;
