@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kanal">
+  <rect width="512" height="512" rx="114.534" fill="#F5F0E6"/>
+  <rect x="148" y="106" width="52" height="96" rx="26" fill="#111A21"/>
+  <rect x="230" y="70" width="52" height="168" rx="26" fill="#111A21"/>
+  <rect x="312" y="94" width="52" height="120" rx="26" fill="#111A21"/>
+  <rect x="132" y="276" width="248" height="38" rx="19" fill="#B23A2E"/>
+  <rect x="166" y="340" width="180" height="38" rx="19" fill="#9A6B10"/>
+  <rect x="148" y="404" width="216" height="38" rx="19" fill="#1C6B58"/>
+</svg>

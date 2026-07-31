@@ -7,7 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="1320" d:DesignHeight="820"
         x:Class="Kanal.Host.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/kanal.ico"
         Title="Kanal"
         Width="1320" Height="820"
         FontFamily="{StaticResource Sans}"

@@ -14,3 +14,6 @@ appsettings.local.json
 
 # git worktrees (CLAUDE.md workflow)
 .worktrees/
+
+# .icns build intermediate; regenerate with design/kanal-icon.py
+design/Kanal.iconset/

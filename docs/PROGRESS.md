@@ -70,6 +70,22 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    only colour on screen is people": flags are confined to the masthead tool area and the ISO
    codes are always printed beside them, so colour never carries meaning alone.
 3. **TDD + PR discipline** written into `CLAUDE.md` (this PR).
+4. **App icon** (PR #10): a level meter over three lines of translation — sound in, three languages
+   out. The host shipped Avalonia's template logo and the mobile page had no favicon, so every phone
+   that scanned the QR also fired a 404 at `/favicon.ico`. `design/kanal-icon.py` is the single
+   source of truth: SVG, `.icns`, `.ico`, the 1024 px PNG and the inlined favicon are all generated
+   from one geometry table, and the script now rewrites the `<link rel="icon">` line in both
+   `web/index.html` and `docs/index.html` itself rather than printing a "paste this" instruction —
+   CI's byte-identity check compares the two pages to each other, so it cannot see them go stale
+   together. *Deliberate deviations* from `.impeccable.md`: rust/ochre/pine are spent on the three
+   languages (in a Dock there is no speaker to confuse them with, and there are exactly three), and
+   the tile is warm paper `#F5F0E6` rather than the interface's `#FCFCFD`, which reads cold among a
+   row of colourful icons. Below 64 px the five meter bars smear into one grey block, so small sizes
+   switch to a three-bar geometry — the 3-against-3 reading is what has to survive, not the bar count.
+   `<ApplicationIcon>` carries the mark into Explorer, pinned shortcuts and Alt-Tab; the window icon
+   alone does not. The ICO container is hand-written, so a test parses its directory table
+   byte-for-byte: headless Avalonia has no image codec, and its `Icon` property is a
+   `HeadlessBitmapStub` that a truncated file would satisfy.
 
 ### Plan
 
@@ -77,6 +93,7 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] Local ASR/MT feasibility research + benchmarks
 - [x] Column rendering fix — PR #2
 - [x] Flag language picker — PR #3
+- [x] App icon + mobile favicon — PR #10
 - [ ] **Local translation LLM support** — `LLamaSharpMtProvider` (in-process llama.cpp, no
       ollama/Python dependency) + Settings section to download/select a translation model
       (catalog: Qwen3.5-4B first, plus alternatives of similar size, A/B-tested); TDD; own PR.
