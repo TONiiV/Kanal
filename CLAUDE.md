@@ -13,6 +13,19 @@ dotnet build Kanal.slnx
 dotnet test
 ```
 
+(If only .NET 10 is installed, tests need `DOTNET_ROLL_FORWARD=Major dotnet test`.)
+
+## Working practices
+
+- **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
+  behaviour change lands with tests in the same PR; no PR merges with a red suite. UI behaviour is
+  tested headless (`Avalonia.Headless.XUnit`, see `tests/Kanal.Tests/HostUiTests.cs`); logic that
+  touches external services is tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
+- **One PR per concern.** Independent changesets get independent branches and PRs, built in
+  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff.
+- **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
+  update it in the same PR as the work it describes.
+
 ## Architecture invariants
 
 - The host is the single authority; clients are projections. Late join and reconnect are served by

@@ -11,3 +11,6 @@ artifacts/
 # local secrets (Gladia / relay keys)
 appsettings.local.json
 .env
+
+# git worktrees (CLAUDE.md workflow)
+.worktrees/
