@@ -42,8 +42,16 @@ public partial class SettingsViewModel : ViewModelBase
     /// Test seam, like <c>MainViewModel</c>'s: headless runs must not enumerate or open the
     /// developer's real microphone.
     /// </param>
-    public SettingsViewModel(AppSettings settings, Func<IAudioCaptureService?>? captureFactory = null)
+    /// <param name="isMacOs">
+    /// Test seam for the advice wording: the tests pin a platform so their assertions hold on
+    /// whatever OS CI happens to run.
+    /// </param>
+    public SettingsViewModel(
+        AppSettings settings,
+        Func<IAudioCaptureService?>? captureFactory = null,
+        bool? isMacOs = null)
     {
+        _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         try
         {
@@ -174,12 +182,20 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>Test seam: headless tests feed generated audio instead of opening a device.</summary>
     public Func<IAudioCaptureService?> CaptureFactory { get; }
 
+    private readonly bool _isMac;
     private CancellationTokenSource? _testCts;
     private LevelMeter _meter = new();
 
     /// <summary>False until the first test touches the verdict — the only state in which a
     /// language change may rewrite it wholesale rather than recompute or preserve it.</summary>
     private bool _verdictTouched;
+
+    /// <summary>
+    /// Where the input level actually lives on this machine — the advice points there. Localised
+    /// like everything else, and read fresh so it follows a language change mid-dialog.
+    /// </summary>
+    private string SoundSettings =>
+        Localizer.Instance[_isMac ? "settings.sound.mac" : "settings.sound.win"];
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
@@ -210,11 +226,12 @@ public partial class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// The honest answer to "what noise suppression does this have": none of its own. Whatever
-    /// the device and Windows do to the signal happens before Kanal sees a sample, so the useful
-    /// thing this panel can offer is a measurement of the result rather than a control that
-    /// pretends to change it.
+    /// the device and the operating system do to the signal happens before Kanal sees a sample,
+    /// so the useful thing this panel can offer is a measurement of the result rather than a
+    /// control that pretends to change it.
     /// </summary>
-    public string ProcessingNote => Localizer.Instance["settings.input.note"];
+    public string ProcessingNote =>
+        Localizer.Instance.Format("settings.input.note", SoundSettings);
 
     private bool CanStartTest() => !IsTesting;
 
@@ -232,31 +249,44 @@ public partial class SettingsViewModel : ViewModelBase
             return;
         }
 
-        _meter = new LevelMeter();
+        var meter = new LevelMeter();
+        _meter = meter;
         _testCts = new CancellationTokenSource();
         IsTesting = true;
         VerdictLabel = Localizer.Instance["mic.listening"];
         VerdictDetail = Localizer.Instance["mic.listening.detail"];
-        _ = RunTestAsync(capture, TestDevice?.Id, _testCts.Token);
+        _ = RunTestAsync(capture, meter, TestDevice?.Id, _testCts.Token);
     }
 
     [RelayCommand(CanExecute = nameof(CanStopTest))]
     private void StopTest()
     {
         _testCts?.Cancel();
+        _testCts?.Dispose();
         _testCts = null;
         IsTesting = false;
         LevelScale = 0;
     }
 
-    private async Task RunTestAsync(IAudioCaptureService capture, string? deviceId, CancellationToken ct)
+    /// <summary>
+    /// The loop writes into the meter it was started with, never the field: Stop-then-Test
+    /// swaps the field immediately, but a frame the old capture already had in flight must land
+    /// in the old session, not condemn the new device's fresh meter. Every state update checks
+    /// it still speaks for the current session before touching the UI.
+    /// </summary>
+    private async Task RunTestAsync(
+        IAudioCaptureService capture, LevelMeter meter, string? deviceId, CancellationToken ct)
     {
         try
         {
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
-                _meter.Add(frame.Span);
-                Dispatcher.UIThread.Post(Publish);
+                meter.Add(frame.Span);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(meter, _meter))
+                        Publish();
+                });
             }
         }
         catch (OperationCanceledException)
@@ -266,6 +296,8 @@ public partial class SettingsViewModel : ViewModelBase
         {
             Dispatcher.UIThread.Post(() =>
             {
+                if (!ReferenceEquals(meter, _meter))
+                    return;
                 VerdictLabel = Localizer.Instance["mic.failed"];
                 VerdictDetail = ex.Message;
                 IsTesting = false;
@@ -273,7 +305,11 @@ public partial class SettingsViewModel : ViewModelBase
         }
         finally
         {
-            Dispatcher.UIThread.Post(() => LevelScale = 0);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(meter, _meter))
+                    LevelScale = 0;
+            });
         }
     }
 
@@ -291,9 +327,14 @@ public partial class SettingsViewModel : ViewModelBase
 
         (VerdictLabel, VerdictDetail) = _meter.Verdict switch
         {
-            InputVerdict.Silent => (l["mic.silent"], l["mic.silent.detail"]),
-            InputVerdict.TooQuiet => (l["mic.quiet"], l["mic.quiet.detail"]),
-            InputVerdict.Clipping => (l["mic.clipping"], l["mic.clipping.detail"]),
+            // On macOS a denied microphone permission delivers exactly what a dead device
+            // delivers — zeros — so the permission has to be named or it is undiagnosable.
+            InputVerdict.Silent => (
+                l["mic.silent"],
+                l[_isMac ? "mic.silent.detail.mac" : "mic.silent.detail"]),
+            InputVerdict.TooQuiet => (l["mic.quiet"], l.Format("mic.quiet.detail", SoundSettings)),
+            InputVerdict.Clipping => (
+                l["mic.clipping"], l.Format("mic.clipping.detail", SoundSettings)),
             InputVerdict.Noisy => (
                 l["mic.noisy"], l.Format("mic.noisy.detail", $"{_meter.MarginDb:0}")),
             _ => (

@@ -49,8 +49,9 @@ public sealed class LevelMeter
     private readonly int _history;
 
     /// <param name="history">
-    /// How many recent frames the noise floor is drawn from. At the capture layer's frame size
-    /// the default is a few seconds — long enough to contain a gap between sentences.
+    /// How many recent frames the noise floor is drawn from. Both capture backends deliver
+    /// 100 ms frames, so the default keeps roughly the last 40 seconds — comfortably enough
+    /// gaps between sentences for the 10th percentile to be a real between-speech floor.
     /// </param>
     public LevelMeter(int history = 400) => _history = history;
 

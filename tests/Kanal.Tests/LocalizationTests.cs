@@ -277,12 +277,15 @@ public class AppLanguageTests
         try
         {
             Localizer.Instance.Current = "en";
-            var vm = new SettingsViewModel(new AppSettings(), () => null);
+            // the platform is pinned: the note names the sound-settings panel this machine has
+            var vm = new SettingsViewModel(new AppSettings(), () => null, isMacOs: false);
 
             vm.AppLanguage = Localizer.Available.First(l => l.Code == "de");
 
             var de = Strings.Tables["de"];
-            Assert.Equal(de["settings.input.note"], vm.ProcessingNote);
+            Assert.Equal(
+                string.Format(de["settings.input.note"], de["settings.sound.win"]),
+                vm.ProcessingNote);
             Assert.Equal(de["mic.untested"], vm.VerdictLabel);
             Assert.Equal(de["mic.untested.detail"], vm.VerdictDetail);
             Assert.StartsWith("Ersatzweise:", vm.EnvFallback);

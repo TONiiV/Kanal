@@ -170,6 +170,16 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   anything real. Digital silence between sentences means a device delivering zeros or gating
   hard, not a very quiet room, and it is now reported as such.
 
+  Review fixes, after the fact. Every piece of advice named Windows, on a tool whose development
+  machine is a Mac — and macOS answers a denied microphone permission with exactly what a dead
+  device answers, zeros, so the one actionable cause was the one cause never mentioned. The
+  wording now follows the platform and names Privacy & Security where it applies. A second fix:
+  the capture loop wrote into the meter *field*, so a frame the old device still had in flight
+  when the operator pressed Stop landed in the next test's meter — one full-scale straggler and
+  a perfectly good second microphone was condemned as clipping until yet another restart. The
+  loop now writes only into the meter it was started with, and every update back to the UI
+  checks it still speaks for the current session.
+
 - **The host speaks four languages.** Chrome, messages and mode descriptions in English, 简体中文,
   Deutsch and Polski, chosen in Settings and remembered. Separate from the room's languages by
   design: the person driving the laptop is often not one of the people the meeting is being
@@ -209,6 +219,13 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   and the model rows were still hard-coded English besides. All of it now follows the change,
   the two file dialogs use the keys that already existed for them, and the "same word in the
   target language" exemptions are per language, so a Chinese 开始 reverted to "Start" fails.
+
+  Merging the two brought out a conflict worth naming: the microphone panel had just been made
+  platform-aware in English while this branch was turning the same strings into keys, so taking
+  either side alone would have silently reverted the macOS permission advice. The platform
+  difference lives in the language tables now — `settings.sound.mac` / `settings.sound.win` fill
+  a placeholder in the three sentences that name a settings panel, and the silent verdict has a
+  macOS detail of its own, because a denied permission there sounds exactly like a dead device.
 
 ### Design changes
 
