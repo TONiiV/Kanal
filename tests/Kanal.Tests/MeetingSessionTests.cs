@@ -145,6 +145,34 @@ public class MeetingSessionTests
     }
 
     /// <summary>
+    /// The recorder hangs off this tap rather than off the capture loop, so "paused means it is
+    /// not being recorded" is structurally true instead of remembered in a second place.
+    /// </summary>
+    [Fact]
+    public async Task AudioAcceptedFiresForWhatWasTakenAndNothingElse()
+    {
+        var asr = new AudioCountingAsr();
+        var taken = 0;
+        await using var session = new MeetingSession(
+            asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
+        session.AudioAccepted += _ => Interlocked.Increment(ref taken);
+        await session.StartAsync();
+
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, taken);
+
+        await session.SetPausedAsync(true);
+        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, taken);
+
+        await session.SetPausedAsync(false);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(2, taken);
+        Assert.Equal(taken, asr.Pushes.Frames); // the tap and the wire see exactly the same audio
+    }
+
+    /// <summary>
     /// Pause is a privacy control before it is a convenience one: in a supplier negotiation the
     /// operator steps out of the meeting to talk to their own side, and nothing said in that
     /// minute may be transcribed, translated, published to the phones in the room, or — in a

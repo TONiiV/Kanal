@@ -49,6 +49,14 @@ public sealed class MeetingSession : IAsyncDisposable
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
 
+    /// <summary>
+    /// Raised for audio the session actually accepted — so never while paused. The recorder
+    /// hangs off this rather than off the capture loop: pause is a promise that nothing said in
+    /// that minute is kept, and a second copy of the pause check somewhere else is a second
+    /// place for that promise to quietly stop being true.
+    /// </summary>
+    public event Action<ReadOnlyMemory<byte>>? AudioAccepted;
+
     public async Task StartAsync(CancellationToken ct = default)
     {
         if (_session is not null)
@@ -92,6 +100,7 @@ public sealed class MeetingSession : IAsyncDisposable
         if (IsPaused)
             return ValueTask.CompletedTask;
 
+        AudioAccepted?.Invoke(pcm16);
         return session.PushAudioAsync(pcm16, ct);
     }
 

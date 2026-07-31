@@ -101,6 +101,39 @@
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                            Margin="0,14,0,0"
                            Text="Cloud provider — none yet. Cloud translation runs inside the cloud transcription session, so it needs no key of its own." />
+
+                <!-- Where a meeting's two artefacts land. These are the operator's files, not
+                     the application's: a transcript gets mailed to a supplier, so it has to be
+                     somewhere findable without knowing where an app hides things. -->
+                <TextBlock Text="FILES" Classes="label" Margin="0,28,0,0" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="Where meetings are saved" FontSize="12.5" FontWeight="SemiBold"
+                           Margin="0,0,0,4" />
+                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                           Text="The export dialog opens on the transcript folder; the file name and place can still be changed there every time." />
+                <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
+
+                <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="TRANSCRIPTS" Classes="label"
+                               VerticalAlignment="Center" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TranscriptFolder}"
+                             PlaceholderText="default" Margin="0,0,8,0" />
+                    <Button Grid.Row="0" Grid.Column="2" Content="Browse…" Click="OnBrowseTranscriptsClick" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="AUDIO" Classes="label"
+                               VerticalAlignment="Center" Margin="0,9,0,0" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AudioFolder}"
+                             PlaceholderText="default" Margin="0,9,8,0" />
+                    <Button Grid.Row="1" Grid.Column="2" Content="Browse…" Margin="0,9,0,0"
+                            Click="OnBrowseAudioClick" />
+                </Grid>
+
+                <CheckBox IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
+                          Content="Record the room to disk while a meeting runs" />
+                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                           Margin="0,2,0,0"
+                           Text="One file per meeting, named after the room. About 115 MB an hour. The recording never leaves this machine and is not written while the meeting is paused." />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

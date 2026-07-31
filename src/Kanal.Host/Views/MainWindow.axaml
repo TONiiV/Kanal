@@ -290,6 +290,23 @@
                                  Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
                                  CornerRadius="0" />
                 </StackPanel>
+
+                <!-- The room is being written to disk. Stated because it is being done, not
+                     because it is interesting: the file outlives the meeting, and nobody should
+                     find out afterwards. Goes quiet the moment the meeting is paused. -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="7"
+                            Margin="0,0,22,0" VerticalAlignment="Center"
+                            IsVisible="{Binding IsRecording}"
+                            ToolTip.Tip="{Binding RecordingPath}">
+                    <Path Data="{StaticResource GlyphStop}" Width="7" Height="7" Stretch="Uniform"
+                          VerticalAlignment="Center"
+                          Fill="{StaticResource Ink}" IsVisible="{Binding !IsPaused}" />
+                    <Path Data="{StaticResource GlyphSquareHollow}" Width="7" Height="7" Stretch="Uniform"
+                          VerticalAlignment="Center"
+                          Fill="{StaticResource Ink3}" IsVisible="{Binding IsPaused}" />
+                    <TextBlock Text="RECORDING" Classes="label" IsVisible="{Binding !IsPaused}" />
+                    <TextBlock Text="RECORDING HELD" Classes="label" IsVisible="{Binding IsPaused}" />
+                </StackPanel>
                 <TextBlock Text="{Binding Status}" Foreground="{StaticResource Ink2}" FontSize="12" />
             </DockPanel>
         </Border>

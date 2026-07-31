@@ -127,6 +127,26 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
   of the window. Both are now set explicitly, as with every other Fluent default here.
 
+- **A meeting now produces both artefacts, where the operator chose.** Export wrote to
+  `Documents\<roomid>.md` and printed the path in a status line nobody was looking at. It now
+  opens a save dialog on the configured transcript folder with the room id as the name — both
+  only suggestions. A cancelled dialog writes nothing; a failed write (read-only folder, full
+  disk) is reported rather than thrown out of a command nothing awaits, because losing the
+  transcript at the last step is the worst possible moment for that.
+
+  The room's audio is written to disk as the meeting runs (`WavWriter`, one file per meeting
+  named after the room, ~115 MB an hour). Streamed rather than assembled at the end — an hour in
+  memory means a crash costs all of it — and the RIFF lengths are patched every ~2 s, so a host
+  that dies mid-meeting still leaves a file that plays. A WAV with zero lengths is not a
+  truncated recording; it is one most players refuse to open.
+
+  **Recording hangs off `MeetingSession.AudioAccepted`, a tap that only fires for audio the
+  session actually took.** Reading `IsPaused` a second time in the capture loop would have worked
+  today and given the pause promise a second place to quietly stop being true. Pause says nothing
+  said in that minute is kept; that is now structural. The status bar states `RECORDING` while it
+  runs and `RECORDING HELD` while paused — the file outlives the meeting, and nobody should find
+  out about it afterwards. Settings carries both folders and an off switch.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

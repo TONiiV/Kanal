@@ -30,6 +30,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
+    private WavWriter? _recorder;
     private IAsrProvider? _asr;
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
@@ -488,6 +489,12 @@ public partial class MainViewModel : ViewModelBase
         _relay = relay;
 
         var session = new MeetingSession(asr, mt, relay, config);
+
+        // Hung off the session's own tap, not the capture loop: pause promises that nothing said
+        // in that minute is kept, and a second pause check here would be a second place for that
+        // promise to quietly stop being true.
+        StartRecording(session, mode, settings, config.RoomId);
+
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
         session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
@@ -545,11 +552,14 @@ public partial class MainViewModel : ViewModelBase
             }
 
             await DisposeProvidersAsync();
+            StopRecording();
             JoinUrl = "";
             QrImage = null;
             IsRunning = false;
             IsPaused = false;
-            Status = "Stopped. Rename, merge and export still work on the last room.";
+            Status = _lastRecording.Length > 0
+                ? $"Stopped. Audio saved to {_lastRecording}. Rename, merge and export still work."
+                : "Stopped. Rename, merge and export still work on the last room.";
         }
         finally
         {
@@ -709,8 +719,81 @@ public partial class MainViewModel : ViewModelBase
         MergeIntoTag = "";
     }
 
+    /// <summary>
+    /// Where a meeting's audio is written, or null when it is not being recorded — scripted
+    /// modes have no audio, and the operator can turn it off. Decided in one place so the
+    /// indicator on screen and the file on disk cannot disagree.
+    /// </summary>
+    public static string? RecordingPathFor(PipelineMode mode, AppSettings settings, string roomId) =>
+        mode.NeedsMicrophone && settings.RecordAudio
+            ? Path.Combine(SettingsStore.ResolveAudioFolder(settings), $"{roomId}.wav")
+            : null;
+
+    private void StartRecording(MeetingSession session, PipelineMode mode, AppSettings settings, string roomId)
+    {
+        _lastRecording = ""; // a scripted run after a recorded one must not report the old file
+        var path = RecordingPathFor(mode, settings, roomId);
+        if (path is null)
+            return;
+
+        try
+        {
+            var writer = new WavWriter(path);
+            _recorder = writer;
+            RecordingPath = path;
+            session.AudioAccepted += frame =>
+            {
+                try
+                {
+                    writer.Write(frame.Span);
+                }
+                catch (Exception ex)
+                {
+                    StopRecording();
+                    Dispatcher.UIThread.Post(() => Status = $"Recording stopped: {ex.Message}");
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            // A meeting that cannot be recorded is still a meeting worth holding — an
+            // unwritable folder must not stop Start.
+            Status = $"Not recording: {ex.Message}";
+        }
+    }
+
+    private void StopRecording()
+    {
+        var recorder = _recorder;
+        _recorder = null;
+        if (recorder is not null)
+        {
+            recorder.Dispose();
+            _lastRecording = recorder.Path;
+        }
+
+        RecordingPath = "";
+    }
+
+    /// <summary>The finished recording, named in the Stop message so it can actually be found.</summary>
+    private string _lastRecording = "";
+
+    /// <summary>The file the meeting is being written to; empty when nothing is being recorded.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRecording))]
+    private string _recordingPath = "";
+
+    public bool IsRecording => RecordingPath.Length > 0;
+
+    /// <summary>
+    /// Asks the operator where the transcript goes, given a suggested folder and file name.
+    /// Returns null if they cancelled. Set by the view; without it — headless, tests — export
+    /// falls back to the configured folder rather than opening a dialog that cannot exist.
+    /// </summary>
+    public Func<string, string, Task<string?>>? ChooseExportPath { get; set; }
+
     [RelayCommand]
-    private void ExportMarkdown()
+    private async Task ExportMarkdownAsync()
     {
         if (_session is null)
         {
@@ -719,23 +802,50 @@ public partial class MainViewModel : ViewModelBase
         }
 
         var snapshot = _session.Room.Snapshot();
+        var folder = SettingsStore.ResolveTranscriptFolder(_loadSettings());
+        var name = $"{snapshot.Config.RoomId}.md";
+
+        var path = ChooseExportPath is null
+            ? Path.Combine(folder, name)
+            : await ChooseExportPath(folder, name);
+        if (path is null)
+        {
+            Status = "Export cancelled.";
+            return;
+        }
+
         var sb = new StringBuilder();
         sb.AppendLine($"# Kanal — {snapshot.Config.RoomId}");
         sb.AppendLine();
         foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
         {
-            var (name, _) = ResolveSpeaker(u.SpeakerTag);
-            sb.AppendLine($"**{name}** ({u.SrcLang}): {u.SrcText}");
+            var (speaker, _) = ResolveSpeaker(u.SpeakerTag);
+            sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");
             sb.AppendLine();
         }
 
-        var path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            $"{snapshot.Config.RoomId}.md");
-        File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
-        Status = $"Exported to {path}";
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+            await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
+
+            // A meeting has two artefacts and one of them was never chosen in a dialog; naming
+            // both here is the only moment the operator is told where the recording went.
+            var audio = _recorder?.Path ?? (_lastRecording.Length > 0 ? _lastRecording : null);
+            Status = audio is null
+                ? $"Exported to {path}"
+                : $"Exported to {path} · audio: {audio}";
+        }
+        catch (Exception ex)
+        {
+            // Losing the transcript at the last step is the worst possible moment for a throw
+            // out of a command nothing is awaiting: read-only folder, full disk, revoked rights.
+            Status = $"Export failed: {ex.Message}";
+        }
     }
 
     internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
