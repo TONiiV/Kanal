@@ -4,6 +4,49 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-01
+
+### Installers
+
+The host now ships as a double-clickable install on both platforms, driven by
+`installers/Kanal.Installers.csproj`. Design and rationale in
+[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+
+**No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
+advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is
+notarised. The audience is a meeting operator, not a developer, and homebrew-core does not take
+internal tools, so it would mean a private tap and a hand-updated `sha256` per release. Revisit only
+if Developer ID turns out to be unavailable.
+
+**One machine cannot build both artefacts.** `codesign`/`notarytool` are macOS-only and WiX is
+Windows-only, so the csproj packages for whichever OS it runs on and `release.yml` fans out over a
+two-entry matrix. Signing is a switch (`-p:SignBuild=true`), never a branch: an unsigned build must
+always succeed, or fork PRs — which cannot read secrets — could not exercise the chain at all.
+
+Three things that only fail once the app is a real bundle, and so are covered by
+`InstallerLayoutTests` rather than left to a rehearsal:
+
+- `NSMicrophoneUsageDescription` missing → macOS denies the microphone with no prompt and no error,
+  and the host captures silence. `dotnet run` inherits the terminal's permission, so it never shows.
+- `com.apple.security.cs.allow-jit` missing → the .NET JIT cannot map executable pages under the
+  hardened runtime (which notarisation requires) and the app dies at startup.
+- `CFBundleExecutable` not matching the apphost filename → the bundle does not launch at all.
+
+The bundle and the dmg are **both** notarised and stapled. Stapling only the dmg leaves the `.app`
+without its own ticket, so its first launch needs a network round-trip to Apple — unacceptable for a
+tool whose premise is running a meeting on local models with no connectivity.
+
+Measured: unsigned `PackDmg` takes ~25 s and yields an 88 MB dmg. The bundle carries **36 dylibs**
+(LLamaSharp plus the .NET runtime), which is why `sign.sh` finds Mach-O binaries with `file(1)`
+instead of trusting a list of extensions — missing one makes the notary service reject everything.
+
+Unrun so far, stated rather than discovered later: the whole signing/notarisation path (needs a
+`Developer ID Application` certificate — the only local identity is an `Apple Development` one,
+which notarisation rejects), the MSI (WiX refuses to run off Windows, so CI is its first exercise),
+and the release job (fires only on a tag).
+
+---
+
 ## 2026-07-31
 
 ### Findings

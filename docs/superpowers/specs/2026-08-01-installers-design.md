@@ -59,15 +59,24 @@ Intel Macs and Windows-on-ARM are out of scope (confirmed with the operator).
 | Target | Platform | Signing needed |
 |---|---|---|
 | `PublishHost` | any | no |
-| `StageMacApp` | any — **pure file operations** | no |
+| `StageMacAppLayout` | any — **pure file operations** | no |
+| `StageMacApp` | any | no |
 | `SignMacApp` | macOS | yes |
 | `NotarizeMacApp` | macOS | yes |
 | `PackDmg` | macOS | no |
-| `PackMsi` | Windows | no (stub for later) |
+| `PackMsi` | Windows only | no (unsigned until a certificate exists) |
+| `PackInstaller` | dispatches on host OS | — |
 
-The `StageMacApp` / `SignMacApp` split is deliberate: assembling a `.app` is copying files into a
-directory layout and writing two XML files, which works on any OS and is therefore **testable in the
-Linux CI job**. Only the steps that shell out to Apple tooling are platform-bound and untestable.
+Staging is split in two, and the seam is what makes any of this testable. `StageMacAppLayout` writes
+the directory structure, the icon and Info.plist — pure file manipulation, no Apple tooling, and
+crucially **no dependency on the publish output**, so it runs in seconds on any OS. `StageMacApp`
+then copies the self-contained binaries on top. Tests drive the layout target alone; if they drove
+the full one, every test run would trigger a multi-minute self-contained publish and nobody would
+run them.
+
+`PublishHost` shells out to `dotnet publish` rather than invoking the `Publish` target through the
+`MSBuild` task. Publishing for a RID the host project was not restored for fails with `NETSDK1047`,
+and restore does not compose reliably inside an existing build.
 
 Signing is gated on `-p:SignBuild=true`. Without it, `SignMacApp` and `NotarizeMacApp` no-op and the
 build still yields a working (unsigned) `.app` and `.dmg`.
@@ -134,9 +143,16 @@ password: it is revocable on its own, tied to no individual's account, and unaff
 
 ## Windows MSI
 
-WiX (`.wixproj`, an MSBuild SDK project) over the `win-x64` self-contained publish. Per-user install
-by default so no UAC prompt is needed. Start-menu shortcut, Add/Remove Programs entry, clean
-uninstall.
+WiX **7.0.0**, pinned in `.config/dotnet-tools.json` and invoked as a local tool from the `PackMsi`
+target, over the `win-x64` self-contained publish. A local tool rather than a separate `.wixproj`
+keeps the whole chain inside one project file. Per-user install under `LocalAppDataFolder` so no UAC
+prompt is needed — an operator setting up a laptop before a meeting should not need admin rights.
+Start-menu shortcut, Add/Remove Programs entry, clean uninstall. The several hundred files of a
+self-contained publish are harvested by `Files/@Include` rather than enumerated.
+
+**WiX runs on Windows only.** It says so itself on any other host ("All behavior after this point is
+undefined"), so `Kanal.wxs` cannot be validated on the development Mac at all — the `windows-latest`
+CI job is its only exercise. This is the concrete reason the PR gear of the release workflow exists.
 
 **`UpgradeCode` is fixed for the lifetime of the product:** `49907851-1726-470B-A773-9F62E492913F`.
 Changing or regenerating it makes new versions install *alongside* old ones instead of upgrading them.
@@ -182,7 +198,8 @@ the job times out, with nothing useful in the log.
 Per CLAUDE.md, behaviour lands with tests. What is genuinely testable is the staging layer, and the
 target split exists to maximise that surface.
 
-`tests/Kanal.Tests/InstallerLayoutTests.cs` — runs `StageMacApp` into a temp directory and asserts:
+`tests/Kanal.Tests/InstallerLayoutTests.cs` — runs `StageMacAppLayout` into a temp directory and
+asserts:
 
 - `Contents/MacOS`, `Contents/Resources`, `Contents/Info.plist` exist
 - the apphost is present at `Contents/MacOS/Kanal.Host` and is executable
@@ -196,6 +213,20 @@ These are file assertions with no Apple tooling involved, so they run in the exi
 Signing and notarisation are **not unit-testable** — they depend on a certificate and Apple's
 service. Coverage for them is the tag-triggered CI run plus one local signed build.
 
+## Verified
+
+Actually executed on the development Mac, not assumed:
+
+- `PackDmg` unsigned end to end in ~25 s, producing an 88 MB `Kanal-0.0.0-osx-arm64.dmg`.
+- The mounted image contains `Kanal.app` plus the `/Applications` symlink that makes the window a
+  drag-and-drop target.
+- `Contents/MacOS/Kanal.Host` is a `Mach-O 64-bit executable arm64`, and `__VERSION__` and the
+  microphone string are substituted correctly in the staged Info.plist.
+- The bundle carries **36 dylibs**, which is the concrete justification for `sign.sh` discovering
+  Mach-O binaries with `file(1)` rather than trusting a list of extensions.
+- Building with only the .NET 10 SDK works — the `net9.0` runtime pack restores from NuGet.
+- All 161 tests pass, and `dotnet build Kanal.slnx` stays clean with the new project in the solution.
+
 ## Known unverified
 
 Stated plainly rather than discovered at release time:
@@ -204,10 +235,13 @@ Stated plainly rather than discovered at release time:
    `Apple Development: Yandong Wang (LM9F46L6Q8)`. Developer ID distribution needs a
    `Developer ID Application:` certificate, which a free Apple ID cannot issue. If the account is a
    paid Developer Program membership this is a five-minute fix on developer.apple.com; if not, the
-   Homebrew decision above must be revisited.
+   Homebrew decision above must be revisited. `sign.sh` refuses to start on a non-Developer-ID
+   identity, because signing succeeds and notarisation then rejects it — a slow way to find out.
 2. **The signing/notarisation chain is unrun code** until someone executes it. Apple only reports
    failures after submission, and getting a clean pass typically takes two or three rounds. Planned
    mitigation: a local `-p:SignBuild=true` run, which needs no GitHub secrets.
-3. **This machine has only the .NET 10 SDK** (10.0.101), no 9.0. Self-contained `net9.0` publish
-   pulls `Microsoft.NETCore.App.Runtime.osx-arm64` 9.0.x from NuGet; expected to work, unconfirmed.
-4. **WiX major version** is pinned at implementation time against what actually restores.
+3. **The MSI is entirely unrun.** WiX refuses to work off Windows, so nothing in `Kanal.wxs` —
+   the `Files/@Include` harvest, `Scope="perUser"`, the shortcut component — has been executed even
+   once. First real evidence will be the `windows-latest` job on this PR.
+4. **The release job is unrun.** It only fires on a tag, so artefact collection and `gh release
+   create` stay untested until the first real version tag.
