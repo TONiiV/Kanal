@@ -143,15 +143,17 @@ public class LlamaSharpTextGeneratorTests
         public Task Started => _started.Task;
         public int Loads;
         public string? LoadedPath;
+        public string? LoadedPrefill;
         public bool Freed;
         public bool FreedUnderARunningDecode;
 
         public void Resume() => _resume.TrySetResult();
 
-        public Task LoadAsync(string modelPath, CancellationToken ct)
+        public Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct)
         {
             Interlocked.Increment(ref Loads);
             LoadedPath = modelPath;
+            LoadedPrefill = assistantPrefill;
             return Task.CompletedTask;
         }
 
@@ -274,6 +276,36 @@ public class LlamaSharpTextGeneratorTests
         Assert.Equal("qwen.gguf", backend.LoadedPath);
         generator.Dispose();
     }
+
+    /// <summary>
+    /// How a reasoning model is stopped from reasoning: the prefill is data carried by the
+    /// catalog entry, so a new model family declares its own and nothing branches on a vendor.
+    /// </summary>
+    [Fact]
+    public async Task ForwardsTheModelsAssistantPrefillToTheBackend()
+    {
+        var backend = new FakeBackend();
+        backend.Resume();
+        var generator = new LlamaSharpTextGenerator("qwen.gguf", "<think>\n\n</think>\n\n", backend);
+
+        await generator.GenerateAsync("a", CancellationToken.None);
+
+        Assert.Equal("<think>\n\n</think>\n\n", backend.LoadedPrefill);
+        generator.Dispose();
+    }
+
+    [Fact]
+    public async Task ModelWithoutAPrefillPassesNone()
+    {
+        var backend = new FakeBackend();
+        backend.Resume();
+        var generator = new LlamaSharpTextGenerator("gemma.gguf", backend);
+
+        await generator.GenerateAsync("a", CancellationToken.None);
+
+        Assert.Null(backend.LoadedPrefill);
+        generator.Dispose();
+    }
 }
 
 public class LlamaSharpMtProviderTests
@@ -354,6 +386,38 @@ public class LlamaSharpMtProviderTests
 
         Assert.Single(result);
         Assert.Equal("Wsporniki.", result["pl"]);
+    }
+
+    /// <summary>
+    /// Nothing coming back from every target is a broken translator, and it used to look
+    /// exactly like a slow one: the columns sat on "…" for the whole meeting with no message
+    /// anywhere. A partial result stays silent — the languages that worked are worth more than
+    /// a warning about the one that did not — but a total failure has to reach the operator.
+    /// </summary>
+    [Fact]
+    public async Task ReportsWhenNoTargetProducedAnything()
+    {
+        var generator = new FakeTextGenerator { Respond = _ => "<think>still reasoning" };
+        var provider = new LlamaSharpMtProvider(generator);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.TranslateAsync("支架。", "zh", ["de", "pl"], NoContext, CancellationToken.None));
+
+        Assert.Contains("de", ex.Message);
+        Assert.Contains("pl", ex.Message);
+    }
+
+    /// <summary>A room whose only target is the source language asked for no work; that is not
+    /// a failure and must not be reported as one.</summary>
+    [Fact]
+    public async Task NoTargetsToTranslateIsNotAFailure()
+    {
+        var provider = new LlamaSharpMtProvider(new FakeTextGenerator());
+
+        var result = await provider.TranslateAsync(
+            "text", "zh", ["zh"], NoContext, CancellationToken.None);
+
+        Assert.Empty(result);
     }
 
     [Fact]

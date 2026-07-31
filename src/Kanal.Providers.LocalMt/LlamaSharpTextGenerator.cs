@@ -9,20 +9,28 @@ namespace Kanal.Providers.LocalMt;
 public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable, IAsyncDisposable
 {
     private readonly string _modelPath;
+    private readonly string? _assistantPrefill;
     private readonly ILlamaBackend _backend;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _loaded;
     private bool _disposed;
 
-    public LlamaSharpTextGenerator(string modelPath)
-        : this(modelPath, new LlamaCppBackend())
+    public LlamaSharpTextGenerator(string modelPath, string? assistantPrefill = null)
+        : this(modelPath, assistantPrefill, new LlamaCppBackend())
     {
     }
 
     /// <summary>Test seam: a fake backend stands in for llama.cpp and the model file.</summary>
     public LlamaSharpTextGenerator(string modelPath, ILlamaBackend backend)
+        : this(modelPath, null, backend)
+    {
+    }
+
+    /// <inheritdoc cref="LlamaSharpTextGenerator(string, ILlamaBackend)"/>
+    public LlamaSharpTextGenerator(string modelPath, string? assistantPrefill, ILlamaBackend backend)
     {
         _modelPath = modelPath;
+        _assistantPrefill = assistantPrefill;
         _backend = backend;
     }
 
@@ -34,7 +42,7 @@ public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable, IAsyn
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (!_loaded)
             {
-                await _backend.LoadAsync(_modelPath, ct);
+                await _backend.LoadAsync(_modelPath, _assistantPrefill, ct);
                 _loaded = true;
             }
 

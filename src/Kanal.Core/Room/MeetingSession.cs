@@ -17,15 +17,25 @@ public sealed class MeetingSession : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly List<Task> _pendingTranslations = new();
     private readonly object _gate = new();
+    private readonly TimeSpan _translationGrace;
     private IAsrSession? _session;
     private Task? _pump;
     private int _disposed;
 
-    public MeetingSession(IAsrProvider asr, IMtProvider? mt, IRelayPublisher relay, RoomConfig config)
+    /// <summary>How long shutdown waits for translations already in flight before cancelling them.</summary>
+    public static readonly TimeSpan DefaultTranslationGrace = TimeSpan.FromSeconds(2);
+
+    public MeetingSession(
+        IAsrProvider asr,
+        IMtProvider? mt,
+        IRelayPublisher relay,
+        RoomConfig config,
+        TimeSpan? translationGrace = null)
     {
         _asr = asr;
         _mt = mt;
         _relay = relay;
+        _translationGrace = translationGrace ?? DefaultTranslationGrace;
         Room = new RoomState(config);
 
         if (!asr.Caps.Translation && mt is null)
@@ -92,7 +102,7 @@ public sealed class MeetingSession : IAsyncDisposable
                         var utterance = Room.ApplyTranscript(t);
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)
-                            TrackTranslation(TranslateAsync(utterance, ct));
+                            TrackTranslation(() => TranslateAsync(utterance, ct));
                         break;
 
                     case AsrEvent.Error error:
@@ -143,12 +153,40 @@ public sealed class MeetingSession : IAsyncDisposable
         }
     }
 
-    private void TrackTranslation(Task task)
+    /// <summary>
+    /// Registers a translation as pending <em>before</em> starting it. Handing
+    /// <c>TranslateAsync(…)</c> straight to a tracking method looked equivalent and was not: the
+    /// call runs synchronously into the provider before the returned task is ever added to the
+    /// list, so a shutdown landing in that window saw no pending work and dropped a translation
+    /// that had in fact already begun.
+    /// </summary>
+    private void TrackTranslation(Func<Task> work)
     {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
             _pendingTranslations.RemoveAll(t => t.IsCompleted);
-            _pendingTranslations.Add(task);
+            _pendingTranslations.Add(completion.Task);
+        }
+
+        _ = RunAsync();
+        return;
+
+        async Task RunAsync()
+        {
+            try
+            {
+                await work();
+            }
+            catch
+            {
+                // TranslateAsync already reports through ErrorOccurred; nothing observes this
+                // task, so a fault escaping here would surface as an unobserved exception
+            }
+            finally
+            {
+                completion.TrySetResult();
+            }
         }
     }
 
@@ -172,8 +210,9 @@ public sealed class MeetingSession : IAsyncDisposable
         if (Interlocked.Exchange(ref _disposed, 1) == 1)
             return;
 
-        // stop the event source first, then let in-flight translations land,
-        // then cancel as a backstop so the pump is guaranteed to exit
+        // stop the event source first, then give in-flight translations a bounded moment to
+        // land, then cancel — which both unblocks whatever is still decoding and guarantees
+        // the pump exits
         if (_session is not null)
             await _session.DisposeAsync();
 
@@ -183,9 +222,18 @@ public sealed class MeetingSession : IAsyncDisposable
             pending = _pendingTranslations.ToArray();
         }
 
+        var landed = Task.WhenAll(pending);
         try
         {
-            await Task.WhenAll(pending);
+            // The grace is for a translation that is nearly done. Waiting on it unconditionally
+            // — which is what this did — hands the operator's Stop button to the translator:
+            // one local decode is seconds, and a model that spends its whole token budget
+            // reasoning held Stop for twenty of them with the window frozen.
+            if (_translationGrace > TimeSpan.Zero)
+                await landed.WaitAsync(_translationGrace);
+        }
+        catch (TimeoutException)
+        {
         }
         catch
         {
@@ -193,6 +241,15 @@ public sealed class MeetingSession : IAsyncDisposable
         }
 
         _cts.Cancel();
+
+        try
+        {
+            await landed; // cancelled ones unwind here; nothing is left running behind us
+        }
+        catch
+        {
+        }
+
         if (_pump is not null)
             await _pump;
         _cts.Dispose();

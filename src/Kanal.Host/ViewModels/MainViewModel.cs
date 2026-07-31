@@ -383,9 +383,19 @@ public partial class MainViewModel : ViewModelBase
         TranslationStatus = status.TranslationLabel;
     }
 
-    private bool CanStart() => !IsRunning;
+    /// <summary>
+    /// Set for the length of <see cref="StopAsync"/>. Stopping publishes a final snapshot, says
+    /// the room is closed and lets whatever is still translating land — a second or two during
+    /// which both buttons would otherwise be live and a second press would race the first.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    private bool _isStopping;
 
-    private bool CanStop() => IsRunning;
+    private bool CanStart() => !IsRunning && !IsStopping;
+
+    private bool CanStop() => IsRunning && !IsStopping;
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
@@ -490,22 +500,33 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()
     {
+        IsStopping = true;
+        Status = "Stopping…";
         _snapshotTimer.Stop();
         _captureCts?.Cancel();
         _captureCts = null;
 
-        if (_session is not null)
+        try
         {
-            await PublishSnapshotSafeAsync(); // leave a final full state on the channel
-            await PublishClosedSafeAsync();   // …and say the meeting is over, so phones stop waiting
-            await _session.DisposeAsync();    // session object stays for rename/merge/export
-        }
+            if (_session is not null)
+            {
+                await PublishSnapshotSafeAsync(); // leave a final full state on the channel
+                await PublishClosedSafeAsync();   // …and say the meeting is over, so phones stop waiting
+                await _session.DisposeAsync();    // session object stays for rename/merge/export
+            }
 
-        await DisposeProvidersAsync();
-        JoinUrl = "";
-        QrImage = null;
-        IsRunning = false;
-        Status = "Stopped. Rename, merge and export still work on the last room.";
+            await DisposeProvidersAsync();
+            JoinUrl = "";
+            QrImage = null;
+            IsRunning = false;
+            Status = "Stopped. Rename, merge and export still work on the last room.";
+        }
+        finally
+        {
+            // whatever went wrong above, the operator gets their buttons back — a host stuck
+            // with Start and Stop both greyed out cannot be recovered without a restart
+            IsStopping = false;
+        }
     }
 
     /// <summary>

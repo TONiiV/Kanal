@@ -41,6 +41,35 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 
 ### Fixes
 
+- **Local translation produced nothing at all, and Stop took twenty seconds.** Both were the same
+  cause. Qwen3.5 reasons by default; given the 512-token budget a translation needs, the whole
+  budget went to `<think>` and the block never closed, so `MtOutputCleaner` correctly found no
+  translation in it and every column sat on `…` for the whole meeting with nothing printed
+  anywhere. Measured against the 2B on this machine: **40 s per call, empty string out.**
+  Prefilling an already-closed think block skips the reasoning turn: **1 s per call, and a usable
+  sentence.** (Qwen's documented `/no_think` marker was tried first and did not work — the model
+  reasoned anyway.) The prefill is data on the catalog entry (`LocalModelInfo.AssistantPrefill`),
+  not a switch, so a new model family declares its own convention and nothing branches on a
+  vendor. End-to-end through the shipping path afterwards: **2.0–5.3 s per utterance for two
+  target languages**, part numbers (`KX-4402`) and standards (`ISO 7599`) preserved.
+
+  Stop was slow because those 40-second decodes were exactly what shutdown waited for:
+  `MeetingSession.DisposeAsync` awaited every pending translation with no cancellation at all, so
+  the operator's Stop button belonged to the translator. There is now a bounded grace
+  (`DefaultTranslationGrace`, 2 s) for a translation that is nearly done, after which the token
+  is cancelled and the decode unwinds — measured cancel-and-dispose: **0.7 s**. The masthead says
+  `Stopping…` for the duration and both transport buttons are refused, since a second press used
+  to race the first.
+
+  Two further defects surfaced while fixing this. Translations were registered as pending *after*
+  the call had already entered the provider, so a shutdown landing in that window saw no pending
+  work and abandoned a translation that had in fact begun; registration now happens before the
+  work starts. And a translator returning nothing for *every* target was silent — indistinguishable
+  on screen from a slow one — which is what made this a rehearsal-length mystery rather than a
+  warning line; total failure is now reported through the existing non-fatal error path. Partial
+  failure stays quiet on purpose: the languages that worked are worth more than a warning about
+  the one that did not.
+
 - **Multi-room isolation.** Two hosts starting in the same second used to land on the same
   broadcast channel (room id was `kanal-HHmmss`); ids now carry a random 4-char suffix
   (`RoomIds.New`, e.g. `kanal-093005-x7kq`). The mobile page's localStorage cache is now keyed

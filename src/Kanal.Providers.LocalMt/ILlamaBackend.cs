@@ -12,7 +12,7 @@ namespace Kanal.Providers.LocalMt;
 /// </remarks>
 public interface ILlamaBackend : IDisposable
 {
-    Task LoadAsync(string modelPath, CancellationToken ct);
+    Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct);
 
     Task<string> InferAsync(string prompt, CancellationToken ct);
 }
