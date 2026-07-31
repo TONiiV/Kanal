@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -7,6 +8,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
+using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
 
@@ -68,8 +70,8 @@ public partial class SettingsViewModel : ViewModelBase
             Keys[0].IsActive = true;
 
         EnvFallback = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null
-            ? $"Fallback: {SettingsStore.GladiaEnvVar} env var is set."
-            : $"Fallback: {SettingsStore.GladiaEnvVar} env var is not set.";
+            ? Localizer.Instance.Format("settings.env.set", SettingsStore.GladiaEnvVar)
+            : Localizer.Instance.Format("settings.env.unset", SettingsStore.GladiaEnvVar);
 
         var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
         TranslationModels.Add(new TranslationModelItemViewModel());
@@ -84,6 +86,12 @@ public partial class SettingsViewModel : ViewModelBase
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _audioFolder = settings.AudioFolder ?? "";
         _recordAudio = settings.RecordAudio;
+        // What this settings object says, or — when nothing has been chosen — whatever the
+        // application resolved to at launch. Reading only the live localizer would have shown
+        // the wrong row for a settings file that had not been applied yet.
+        var chosen = settings.AppLanguage ?? Localizer.Instance.Current;
+        _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
+                       ?? Localizer.Available[0];
     }
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
@@ -107,6 +115,22 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>Whether the room is written to disk while a meeting runs.</summary>
     [ObservableProperty]
     private bool _recordAudio = true;
+
+    public IReadOnlyList<AppLanguage> AppLanguages => Localizer.Available;
+
+    /// <summary>
+    /// The language of this application's own labels. Applied the moment it is chosen rather
+    /// than on Save: an operator who cannot read the current language cannot be expected to
+    /// find the Save button to prove their choice worked.
+    /// </summary>
+    [ObservableProperty]
+    private AppLanguage? _appLanguage;
+
+    partial void OnAppLanguageChanged(AppLanguage? value)
+    {
+        if (value is not null)
+            Localizer.Instance.Current = value.Code;
+    }
 
     // ---- microphone test -------------------------------------------------------------------
 
@@ -138,11 +162,10 @@ public partial class SettingsViewModel : ViewModelBase
     private string _levelReadout = "";
 
     [ObservableProperty]
-    private string _verdictLabel = "Not tested";
+    private string _verdictLabel = Localizer.Instance["mic.untested"];
 
     [ObservableProperty]
-    private string _verdictDetail =
-        "Start the test and speak from where people will actually sit.";
+    private string _verdictDetail = Localizer.Instance["mic.untested.detail"];
 
     /// <summary>
     /// The honest answer to "what noise suppression does this have": none of its own. Whatever
@@ -150,10 +173,7 @@ public partial class SettingsViewModel : ViewModelBase
     /// thing this panel can offer is a measurement of the result rather than a control that
     /// pretends to change it.
     /// </summary>
-    public string ProcessingNote =>
-        "Kanal applies no noise suppression, echo cancellation or automatic gain of its own. "
-        + "Whatever the microphone and Windows do to the signal happens before Kanal sees it, and "
-        + "is configured per device in Windows sound settings — this test measures the result.";
+    public string ProcessingNote => Localizer.Instance["settings.input.note"];
 
     private bool CanStartTest() => !IsTesting;
 
@@ -165,16 +185,16 @@ public partial class SettingsViewModel : ViewModelBase
         var capture = CaptureFactory();
         if (capture is null)
         {
-            VerdictLabel = "No audio backend";
-            VerdictDetail = "This platform has no capture support built in yet.";
+            VerdictLabel = Localizer.Instance["mic.nobackend"];
+            VerdictDetail = Localizer.Instance["mic.nobackend.detail"];
             return;
         }
 
         _meter = new LevelMeter();
         _testCts = new CancellationTokenSource();
         IsTesting = true;
-        VerdictLabel = "Listening…";
-        VerdictDetail = "Speak from where people will actually sit, then leave a few seconds of quiet.";
+        VerdictLabel = Localizer.Instance["mic.listening"];
+        VerdictDetail = Localizer.Instance["mic.listening.detail"];
         _ = RunTestAsync(capture, TestDevice?.Id, _testCts.Token);
     }
 
@@ -204,7 +224,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             Dispatcher.UIThread.Post(() =>
             {
-                VerdictLabel = "Could not open the microphone";
+                VerdictLabel = Localizer.Instance["mic.failed"];
                 VerdictDetail = ex.Message;
                 IsTesting = false;
             });
@@ -220,39 +240,31 @@ public partial class SettingsViewModel : ViewModelBase
     {
         LevelScale = LevelMeter.ToScale(_meter.CurrentDb);
         PeakScale = LevelMeter.ToScale(_meter.PeakDb);
+        var l = Localizer.Instance;
         LevelReadout = _meter.Frames == 0
             ? ""
             : _meter.HasMeasurableNoise
-                ? $"peak {_meter.PeakDb:0} dB · room {_meter.NoiseFloorDb:0} dB · margin {_meter.MarginDb:0} dB"
-                : $"peak {_meter.PeakDb:0} dB · room silent";
+                ? l.Format("mic.readout", $"{_meter.PeakDb:0}", $"{_meter.NoiseFloorDb:0}", $"{_meter.MarginDb:0}")
+                : l.Format("mic.readout.silentroom", $"{_meter.PeakDb:0}");
 
         (VerdictLabel, VerdictDetail) = _meter.Verdict switch
         {
-            InputVerdict.Silent => (
-                "Nothing is arriving",
-                "Check that this is the right device and that Windows has not muted or disabled it."),
-            InputVerdict.TooQuiet => (
-                "Too quiet",
-                "Raise the input level in Windows sound settings, or put the microphone nearer the table."),
-            InputVerdict.Clipping => (
-                "Clipping",
-                "Lower the input level in Windows sound settings. A clipped consonant is gone for good — "
-                + "no transcriber recovers it."),
+            InputVerdict.Silent => (l["mic.silent"], l["mic.silent.detail"]),
+            InputVerdict.TooQuiet => (l["mic.quiet"], l["mic.quiet.detail"]),
+            InputVerdict.Clipping => (l["mic.clipping"], l["mic.clipping.detail"]),
             InputVerdict.Noisy => (
-                "The room is nearly as loud as the speaker",
-                $"Speech is only {_meter.MarginDb:0} dB above the room. Move the microphone closer to the "
-                + "talkers, or turn off whatever is making the noise."),
+                l["mic.noisy"], l.Format("mic.noisy.detail", $"{_meter.MarginDb:0}")),
             _ => (
-                "Good",
+                l["mic.good"],
                 _meter.HasMeasurableNoise
-                    ? $"Speech sits {_meter.MarginDb:0} dB above the room."
-                    : $"Speech peaks at {_meter.PeakDb:0} dB and the gaps are completely silent — "
-                      + "either a very quiet room, or the device is gating the signal."),
+                    ? l.Format("mic.good.detail", $"{_meter.MarginDb:0}")
+                    : l.Format("mic.good.silentroom", $"{_meter.PeakDb:0}")),
         };
     }
 
     /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
-    public string DefaultFolderNote => $"Empty means {SettingsStore.DefaultOutputFolder}";
+    public string DefaultFolderNote =>
+        Localizer.Instance.Format("settings.files.default", SettingsStore.DefaultOutputFolder);
 
     [ObservableProperty]
     private string _newName = "";
@@ -328,6 +340,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.AudioFolder = Folder(AudioFolder);
         settings.RecordAudio = RecordAudio;
+        settings.AppLanguage = AppLanguage?.Code;
     }
 
     /// <summary>Whitespace is stored as "unset", so the resolver's fallback is the only default.</summary>

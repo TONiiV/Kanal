@@ -170,6 +170,37 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   anything real. Digital silence between sentences means a device delivering zeros or gating
   hard, not a very quiet room, and it is now reported as such.
 
+- **The host speaks four languages.** Chrome, messages and mode descriptions in English, 简体中文,
+  Deutsch and Polski, chosen in Settings and remembered. Separate from the room's languages by
+  design: the person driving the laptop is often not one of the people the meeting is being
+  translated for, and a German buyer running a session between a Chinese supplier and a Polish
+  contractor should not have to read English labels to do it.
+
+  A `Localizer` singleton with an indexer, reached from XAML through an `{l:T key}` markup
+  extension that produces a *binding* rather than a value. Switching therefore reaches windows
+  that are already open — mid-meeting, without restarting a room. Modes carry keys rather than
+  text for the same reason: built once at construction, they would otherwise have stayed in
+  whatever language the application started in. Missing keys fall back to English and then to the
+  key itself, so a gap shows up as a visible identifier rather than as a blank control.
+
+  Three tests keep it honest: the other three languages must carry **exactly** the English key
+  set, no string may still be the English one (bar a handful that genuinely are the same word —
+  "Start" and "Pause" are ordinary German), and `{0}` placeholders must survive translation, since
+  a format string that loses one drops the path or the decibel figure it was carrying and
+  `string.Format` says nothing. The unbranded rule is now checked in all four languages.
+
+  Two defects this turned up. A `Strings.Tables` map declared **above** the dictionaries it
+  indexes was built out of four nulls — static initialisers run in declaration order — so every
+  lookup threw instead of falling back. And a test that switched the language never put it back:
+  the language is a global singleton, as it must be for a desktop application, so a leak changed
+  what every other test's window said, and xunit's parallel classes turned that into failures that
+  moved between runs. Parallelisation is now off for the assembly, with the reason recorded.
+
+  Rendering all four caught the layout defect i18n always produces: `Merge` is one short word in
+  English and `Zusammenführen` in German, and on one row the German ran off the edge of the
+  speakers panel. The button now sits under the two tags, which fits any language rather than the
+  four that exist today.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.
