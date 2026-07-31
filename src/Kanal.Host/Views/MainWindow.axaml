@@ -53,9 +53,18 @@
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Grid.Column="0" Text="KANAL" FontSize="15" FontWeight="Bold"
                                LetterSpacing="3.4" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{Binding KeyStatus}" FontSize="11"
-                               Foreground="{StaticResource Ink3}" VerticalAlignment="Center"
-                               HorizontalAlignment="Right" Margin="0,0,20,0" />
+                    <!-- What this machine is actually wired to, in the operator's line of sight
+                         before Start: which engine translates, and which Gladia key is in use. -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                VerticalAlignment="Center" HorizontalAlignment="Right"
+                                Margin="0,0,20,0">
+                        <TextBlock Text="{Binding TranslationStatus}" FontSize="11"
+                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
+                        <Rectangle Width="1" Height="11" Fill="{StaticResource Rule}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding KeyStatus}" FontSize="11"
+                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
+                    </StackPanel>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
                         <Button Content="Start" Command="{Binding StartCommand}" Classes="accent" />
                         <Button Content="Stop" Command="{Binding StopCommand}" />

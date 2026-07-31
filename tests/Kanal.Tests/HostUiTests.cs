@@ -41,7 +41,7 @@ public class HostUiTests
     [AvaloniaFact]
     public async Task RenameSpeakerUpdatesRoomAndHistoryBubbles()
     {
-        var vm = new MainViewModel { RelayEnabled = false };
+        var vm = TestViewModels.Hermetic();
         vm.SelectedMode = "Demo (scripted)"; // never touch the network in tests
         var window = new MainWindow { DataContext = vm };
         window.Show();
@@ -72,7 +72,7 @@ public class HostUiTests
     [AvaloniaFact]
     public async Task RenameStillWorksAfterStop()
     {
-        var vm = new MainViewModel { RelayEnabled = false };
+        var vm = TestViewModels.Hermetic();
         vm.SelectedMode = "Demo (scripted)";
         var window = new MainWindow { DataContext = vm };
         window.Show();
@@ -96,7 +96,7 @@ public class HostUiTests
     [AvaloniaFact]
     public async Task StartStopStartYieldsFreshRoom()
     {
-        var vm = new MainViewModel { RelayEnabled = false };
+        var vm = TestViewModels.Hermetic();
         vm.SelectedMode = "Demo (scripted)";
         var window = new MainWindow { DataContext = vm };
         window.Show();
@@ -116,7 +116,7 @@ public class HostUiTests
     [AvaloniaFact]
     public void MicrophoneListFillsOnAnySupportedPlatform()
     {
-        var vm = new MainViewModel { RelayEnabled = false };
+        var vm = TestViewModels.Hermetic();
 
         if (!Kanal.Audio.AudioCaptureFactory.IsSupported)
             return;

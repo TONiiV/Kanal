@@ -48,6 +48,48 @@ public class TranslationPlannerTests
         Assert.Null(plan.Mt);
     }
 
+    /// <summary>
+    /// The masthead label. Nothing else on the main screen says which engine will translate,
+    /// so every branch — including the ones that fall back — has to name itself.
+    /// </summary>
+    [Fact]
+    public void DescribeNamesTheEngineForEveryOutcome()
+    {
+        var (downloads, dir) = TempDownloads();
+        var model = LocalModelCatalog.Models[0];
+
+        Assert.Equal("Translation: Gladia (cloud)",
+            TranslationPlanner.Describe(new AppSettings(), downloads));
+
+        Assert.Equal($"Translation: {model.DisplayName} — not downloaded",
+            TranslationPlanner.Describe(
+                new AppSettings { ActiveTranslationModelId = model.Id }, downloads));
+
+        Assert.Equal("Translation: unknown model \"gone-model\"",
+            TranslationPlanner.Describe(
+                new AppSettings { ActiveTranslationModelId = "gone-model" }, downloads));
+
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(downloads.GetPath(model), [0x47, 0x47, 0x55, 0x46]);
+        Assert.Equal($"Translation: {model.DisplayName} (local)",
+            TranslationPlanner.Describe(
+                new AppSettings { ActiveTranslationModelId = model.Id }, downloads));
+
+        Directory.Delete(dir, recursive: true);
+    }
+
+    /// <summary>Describe must not build a provider — the main window calls it before Start,
+    /// and constructing one is a step towards loading a multi-gigabyte model.</summary>
+    [Fact]
+    public void PlanCarriesTheSameDescription()
+    {
+        var (downloads, _) = TempDownloads();
+        var settings = new AppSettings();
+
+        Assert.Equal(TranslationPlanner.Describe(settings, downloads),
+            TranslationPlanner.Plan(settings, downloads).Description);
+    }
+
     [Fact]
     public void DownloadedModelYieldsLocalProviderAndDisablesCloudTranslation()
     {
