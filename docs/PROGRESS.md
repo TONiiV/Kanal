@@ -86,6 +86,58 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    alone does not. The ICO container is hand-written, so a test parses its directory table
    byte-for-byte: headless Avalonia has no image codec, and its `Icon` property is a
    `HeadlessBitmapStub` that a truncated file would satisfy.
+5. **The active translation engine is named on the main screen** (PR #7): a persistent
+   `Translation: Gladia (cloud)` / `Translation: Qwen3.5 4B (local)` label sits beside `KeyStatus`
+   in the masthead, separated by a hairline rule, refreshed by `RefreshKeyStatus()` and after the
+   Settings dialog closes. Nothing previously distinguished the two paths before Start — the
+   engine was inferable only from latency. It also names the two failure shapes
+   (`— not downloaded`, `unknown model "…"`), which closes a quieter hole: demo mode discarded
+   `plan.Error` and substituted `FakeMtProvider`, so an operator who selected a model they had
+   never downloaded read plausible scripted translations with no hint their choice was inactive.
+   Demo mode now says so in the status line as well. The mode dropdown deliberately still offers
+   only Demo and Gladia: mode is the *audio* source, Settings is the translation engine, and a
+   "Local" mode entry would reintroduce the vendor branching the capability model exists to
+   avoid — plus there is no fully-local path to select until `WhisperCppAsrProvider` exists.
+
+### Fixes in review (PR #7)
+
+- **Native use-after-free on Stop.** `LlamaSharpTextGenerator.Dispose()` freed the llama.cpp
+  weights without synchronising against an in-flight `GenerateAsync`. A translation tracked after
+  `MeetingSession.DisposeAsync` snapshots `_pendingTranslations` can still be decoding when
+  `MainViewModel.StopAsync` disposes the provider — freeing native memory under a live decode is
+  an AccessViolationException and process death mid-meeting, with the transcript unexported.
+  Disposal now acquires the same gate the decode holds and sets `_disposed` under it, and a
+  `DisposeAsync` path keeps that wait off the UI thread. The `SemaphoreSlim` is deliberately never
+  disposed: a caller parked in `WaitAsync` has to resume into a clean `ObjectDisposedException`,
+  not a disposed-semaphore failure inside `Release()` that reaches the operator as "Translation
+  failed". To make the lifetime rules testable at all, llama.cpp moved behind `ILlamaBackend`
+  (`LlamaCppBackend`), so the generator's load-once/one-at-a-time/never-free-under-a-decode
+  discipline is exercised by a fake instead of requiring a multi-gigabyte model.
+
+- **A second download deleted the first one's file.** `ModelDownloadManager` derived its `.part`
+  path from the model id alone and deleted it unconditionally in `finally`, so a second
+  `DownloadAsync` for the same model destroyed the part file a still-running first download owned
+  — the first then died at `File.Move` after however many gigabytes had transferred (on Windows
+  the delete itself failed with a sharing violation and masked the original error). Each call now
+  streams into its own `<file>.<guid>.part` and only removes the one it created; `Delete` sweeps
+  any leftovers. The reachable trigger is fixed too: `SettingsWindow.OnClosed` cancels outstanding
+  downloads, since MainWindow builds a fresh window and view model each time Settings opens, and a
+  download left running behind a closed dialog was invisible, uncancellable, and collided with the
+  Download button the next dialog offered.
+
+- **`MtOutputCleaner` mangled two quoted spans.** A quote at each end is not the same as a quoted
+  line: `"ISO 7599" gilt auch für "KX-4402"` came out as `ISO 7599" gilt auch für "KX-4402`,
+  rewriting exactly the standard and part numbers the class promises to leave alone. Stripping now
+  requires that nothing between the ends closes the span first.
+
+- **Hermetic UI tests.** Demo-mode tests reached the developer's real
+  `%APPDATA%\Kanal\settings.json` through `TranslationPlanner.Plan`, so a developer with a model
+  downloaded had headless tests load a multi-gigabyte LLM. `MainViewModel` now takes settings and
+  a `ModelDownloadManager` as constructor seams, in the shape of `RelayPublisherFactory`.
+  `ModelDownloadManagerTests.CancelRemovesPartialFile` was also vacuous — it cancelled before the
+  response existed, so `GetAsync` threw and the mid-stream cleanup path it claimed to cover never
+  ran; it now cancels from inside the response body. `MainViewModel` also no longer leaks
+  `plan.Mt` when Start returns early on a missing Gladia key.
 
 ### Plan
 
