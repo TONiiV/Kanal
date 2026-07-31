@@ -72,6 +72,31 @@ public class MtOutputCleanerTests
         Assert.Equal(text, MtOutputCleaner.Clean(text));
     }
 
+    /// <summary>
+    /// Two quoted spans put a quote at both ends of the line without the line being quoted.
+    /// Stripping them would silently rewrite exactly the content this class promises to leave
+    /// alone — a standard number and a part number.
+    /// </summary>
+    [Theory]
+    [InlineData("\"ISO 7599\" gilt auch für \"KX-4402\"")]
+    [InlineData("„ISO 7599“ gilt auch für „KX-4402“")]
+    [InlineData("«ISO 7599» dotyczy również «KX-4402»")]
+    [InlineData("「ISO 7599」也适用于「KX-4402」")]
+    public void KeepsTwoSeparateQuotedSpans(string text)
+    {
+        Assert.Equal(text, MtOutputCleaner.Clean(text));
+    }
+
+    /// <summary>A genuinely wrapped line still loses its quotes — including when it quotes
+    /// something inside itself with a different pair.</summary>
+    [Fact]
+    public void StillStripsAWrappedLineThatQuotesSomethingElseInside()
+    {
+        Assert.Equal(
+            "Die Norm «ISO 7599» gilt.",
+            MtOutputCleaner.Clean("\"Die Norm «ISO 7599» gilt.\""));
+    }
+
     [Theory]
     [InlineData("Translation: Musimy potwierdzić termin dostawy.")]
     [InlineData("translation： Musimy potwierdzić termin dostawy.")]

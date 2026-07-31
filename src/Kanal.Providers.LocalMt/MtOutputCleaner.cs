@@ -43,7 +43,14 @@ public static partial class MtOutputCleaner
 
         foreach (var (open, close) in QuotePairs)
         {
-            if (text.Length >= 2 && text[0] == open && text[^1] == close)
+            // A quote at each end is not the same as a quoted line: «ISO 7599» dotyczy
+            // «KX-4402» opens and closes twice. Only strip when nothing between the ends
+            // closes the span first — otherwise the standard and the part number, the two
+            // things this class exists to leave alone, come out with a quote welded on.
+            if (text.Length >= 2 &&
+                text[0] == open &&
+                text[^1] == close &&
+                text.IndexOf(close, 1) == text.Length - 1)
             {
                 text = text[1..^1].Trim();
                 break;
