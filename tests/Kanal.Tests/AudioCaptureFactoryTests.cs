@@ -82,7 +82,11 @@ public class AudioCaptureFactoryTests
             {
                 Assert.Equal(0, frame.Length % 2);
                 if (!sw.IsRunning)
+                {
                     sw.Start();
+                    // full measurement window even when device start ate most of the 6 s
+                    cts.CancelAfter(TimeSpan.FromSeconds(2));
+                }
                 bytes += frame.Length;
                 if (sw.ElapsedMilliseconds >= 700)
                     break;
@@ -93,8 +97,9 @@ public class AudioCaptureFactoryTests
             // device never produced a frame within the overall timeout
         }
 
-        // ~700 ms at 16 kHz mono PCM16 is 22 400 bytes; the upper bound catches a
-        // stream that was never resampled down to 16 kHz.
-        Assert.InRange(bytes, 8_000, 45_000);
+        // ~700 ms at 16 kHz mono PCM16 is 22 400 bytes plus at most one trailing buffer.
+        // The upper bound must stay below 2× rate (44 800) so an un-downmixed stereo or
+        // un-resampled 32 kHz stream still fails.
+        Assert.InRange(bytes, 8_000, 32_000);
     }
 }
