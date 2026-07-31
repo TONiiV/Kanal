@@ -44,13 +44,13 @@ dotnet test
 ## Status vs. PRD milestones
 
 - [x] Solution skeleton, provider contracts, RoomState + orchestrator (+tests)
-- [x] Audio pipeline: resampler, WAV replay, WASAPI capture (Windows)
+- [x] Audio pipeline: resampler, WAV replay, WASAPI capture (Windows), CoreAudio capture (macOS)
 - [x] GladiaAsrProvider (wire format **needs live verification during D0-B** — adjust `GladiaWire`/`GladiaOptions.ExtraConfig`, nothing else)
 - [x] Host UI: 4 columns (language chips), rename/merge (✓ or Enter; covered by headless UI tests), demo mode, md export, settings dialog for API keys
 - [x] M0-D7: relay publisher (`SupabaseRelayPublisher`, REST broadcast — verified end to end) + join QR code in host + periodic snapshot for late join
 - [x] Mobile web client: Supabase transport + demo mode (`web/index.html`, copy in `docs/` for GitHub Pages)
 - [ ] Hosting for `web/index.html` — pending: enable GitHub Pages (repo Settings → Pages → main `/docs`) or grant the Vercel integration project-create permission
-- [ ] D0-A: **macOS** audio capture backend (`IAudioCaptureService` impl)
+- [x] D0-A: **macOS** audio capture backend (`CoreAudioCapture`, AudioQueue — verified end to end with `doctor mic`)
 - [ ] D0-B: zh↔pl terminology quality check with real part numbers — **go/no-go gate**
 - [ ] M0-D10: code-switch degradation experiment, rehearsal
 - [ ] M2: local model providers — NVIDIA **Nemotron** streaming ASR + Sortformer diarization + Qwen MT via Python sidecar (`NemotronAsrProvider` slot already in the caps table)
@@ -61,4 +61,4 @@ The shared Supabase project `muwffgozlmjafsoykqfr` (eu-central-1) carries broadc
 
 ## Open decisions / risks
 
-Tracked in [PRD §07](docs/PRD-v0.3.md#07--风险). The two unverified killers: zh↔pl terminology quality (D0-B) and cross-platform audio capture (D0-A, macOS side).
+Tracked in [PRD §07](docs/PRD-v0.3.md#07--风险). The remaining unverified killer is zh↔pl terminology quality (D0-B). Cross-platform capture (D0-A) is closed: macOS runs on AudioQueue with no third-party native dependency, so the PortAudio / OpenAL / SoundFlow fallbacks the PRD listed are moot.

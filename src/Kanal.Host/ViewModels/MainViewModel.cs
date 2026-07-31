@@ -47,18 +47,15 @@ public partial class MainViewModel : ViewModelBase
         _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _snapshotTimer.Tick += async (_, _) => await PublishSnapshotSafeAsync();
 
-        if (OperatingSystem.IsWindows())
+        try
         {
-            try
-            {
-                foreach (var device in new WasapiAudioCapture().GetDevices())
-                    Devices.Add(device);
-                SelectedDevice = Devices.FirstOrDefault();
-            }
-            catch
-            {
-                // no capture devices — demo mode still works
-            }
+            foreach (var device in AudioCaptureFactory.Create().GetDevices())
+                Devices.Add(device);
+            SelectedDevice = Devices.FirstOrDefault();
+        }
+        catch
+        {
+            // no capture backend or no devices — demo mode still works
         }
 
         RefreshKeyStatus();
@@ -333,15 +330,15 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)
     {
-        if (!OperatingSystem.IsWindows())
+        var capture = AudioCaptureFactory.TryCreate();
+        if (capture is null)
         {
-            Dispatcher.UIThread.Post(() => Status = "Live capture is Windows-only for now (macOS backend is the open D0-A item).");
+            Dispatcher.UIThread.Post(() => Status = "No audio capture backend on this platform.");
             return;
         }
 
         try
         {
-            var capture = new WasapiAudioCapture();
             var framesSinceMeter = 0;
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {

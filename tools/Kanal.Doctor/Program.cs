@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Kanal.Audio;
 using Kanal.Core.Providers;
 using Kanal.Providers.Gladia;
@@ -30,20 +31,20 @@ static int Help()
 
 static async Task<int> MicCheckAsync(int seconds, int deviceIndex)
 {
-    if (!OperatingSystem.IsWindows())
+    var capture = AudioCaptureFactory.TryCreate();
+    if (capture is null)
     {
-        Console.WriteLine("mic check is Windows-only for now (macOS backend is the open D0-A item).");
+        Console.WriteLine($"no capture backend for this platform ({RuntimeInformation.OSDescription}).");
         return 1;
     }
 
-    var capture = new WasapiAudioCapture();
     var devices = capture.GetDevices();
     Console.WriteLine($"Capture devices ({devices.Count}):");
     for (var i = 0; i < devices.Count; i++)
         Console.WriteLine($"  [{i}] {devices[i].Name}");
     if (devices.Count == 0)
     {
-        Console.WriteLine("NO capture devices found — check Windows sound settings / privacy permissions.");
+        Console.WriteLine("NO capture devices found — check the OS sound settings / microphone privacy permissions.");
         return 2;
     }
 
@@ -99,7 +100,7 @@ static async Task<int> MicCheckAsync(int seconds, int deviceIndex)
     Console.WriteLine($"peak: {peak} ({peak / (double)short.MaxValue:P0}), RMS: {rmsDb:F1} dBFS");
     Console.WriteLine($"WAV written: {path}  — play it back to verify.");
     Console.WriteLine(peak < 100
-        ? "VERDICT: essentially SILENCE — wrong device, muted mic, or Windows mic privacy setting."
+        ? "VERDICT: essentially SILENCE — wrong device, muted mic, or the OS withheld microphone permission."
         : "VERDICT: audio captured OK.");
     return peak < 100 ? 3 : 0;
 }
