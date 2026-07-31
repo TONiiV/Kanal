@@ -94,9 +94,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] Column rendering fix — PR #2
 - [x] Flag language picker — PR #3
 - [x] App icon + mobile favicon — PR #10
-- [ ] **Local translation LLM support** — `LLamaSharpMtProvider` (in-process llama.cpp, no
+- [x] **Local translation LLM support** — `LlamaSharpMtProvider` (in-process llama.cpp, no
       ollama/Python dependency) + Settings section to download/select a translation model
-      (catalog: Qwen3.5-4B first, plus alternatives of similar size, A/B-tested); TDD; own PR.
+      (catalog: Qwen3.5-4B default, Qwen3.5-2B, Gemma 3 4B with licence note; A/B-tested); TDD.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).
