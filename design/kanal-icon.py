@@ -7,6 +7,12 @@ between platforms. Re-run after editing:
 
     python3 design/kanal-icon.py
 
+That includes the favicon inlined into web/index.html and docs/index.html —
+this script rewrites both pages in place, so there is nothing to paste by hand.
+Only the .icns needs macOS (iconutil); every other artefact is emitted on any
+platform, because a run that stopped early would reintroduce exactly the drift
+this file exists to prevent.
+
 No third-party dependencies: this box has no rsvg/inkscape/ImageMagick/PIL,
 and the icon is nothing but capsules, so it is cheaper to rasterise them
 directly than to take on a toolchain.
@@ -19,6 +25,7 @@ already shared by host and mobile client (.impeccable.md).
 
 import math
 import os
+import re
 import struct
 import subprocess
 import zlib
@@ -274,6 +281,44 @@ def favicon_data_uri(shapes):
     return "data:image/svg+xml," + encoded
 
 
+# --- HTML ------------------------------------------------------------------
+
+# Matched and rewritten in place, on bytes: the two pages are checked out with
+# CRLF on Windows but stored with LF, and they must stay byte-identical to each
+# other. Touching only the characters inside the line leaves every terminator —
+# and every other byte of the file — exactly as it was found.
+FAVICON_LINK = re.compile(rb'<link rel="icon" href="data:image/svg\+xml,[^"]*">')
+
+# The pages the favicon must be kept in step with. docs/ is the GitHub Pages
+# copy of web/ and CI asserts the two are byte-identical, so both are rewritten
+# from the same string in the same run rather than copied by hand.
+HTML_PAGES = [("web", "index.html"), ("docs", "index.html")]
+
+
+def write_favicon_into_pages(uri, log):
+    """Replace the inlined favicon in every page. Raises if one has drifted."""
+    link = ('<link rel="icon" href="%s">' % uri).encode()
+    for parts in HTML_PAGES:
+        path = os.path.join(ROOT, *parts)
+        with open(path, "rb") as fh:
+            before = fh.read()
+        after, n = FAVICON_LINK.subn(link, before)
+        if n != 1:
+            # Never leave one page stale while the other is current: a silent
+            # skip here is the exact failure CI's byte-identity check cannot see,
+            # because it compares the two pages to each other, not to this file.
+            raise SystemExit(
+                "%s: expected exactly 1 <link rel=\"icon\"> to rewrite, found %d"
+                % (os.path.relpath(path, ROOT), n)
+            )
+        if after == before:
+            log("  %-52s unchanged" % os.path.relpath(path, ROOT))
+            continue
+        with open(path, "wb") as fh:
+            fh.write(after)
+        log("  %-52s updated" % os.path.relpath(path, ROOT))
+
+
 # --- outputs ---------------------------------------------------------------
 
 
@@ -324,10 +369,19 @@ def main():
     # packaging artefact, so it stays in design/ — Assets/ is embedded into the
     # binary by <AvaloniaResource>, and Avalonia only ever reads the .ico.
     icns = os.path.join(design, "kanal.icns")
-    if subprocess.call(["iconutil", "-c", "icns", iconset, "-o", icns]) == 0:
+    try:
+        rc = subprocess.call(["iconutil", "-c", "icns", iconset, "-o", icns])
+    except (FileNotFoundError, OSError):
+        # Off macOS iconutil is not merely absent from PATH — spawning it raises
+        # rather than returning non-zero. Letting that escape would abort the run
+        # after the SVGs and the iconset were rewritten but before the .ico, so
+        # Windows and the web would silently keep the previous geometry: exactly
+        # the platform drift this file exists to prevent.
+        rc = -1
+    if rc == 0:
         print("  %-52s %6d B" % (os.path.relpath(icns, ROOT), os.path.getsize(icns)))
     else:
-        print("  iconutil failed — .icns not rebuilt (macOS only)")
+        print("  iconutil unavailable — .icns not rebuilt (macOS only)")
 
     print("\n.ico + PNG")
     ico = ico_bytes([(s, rgba(s)) for s in (16, 24, 32, 48, 64, 128, 256)])
@@ -338,9 +392,10 @@ def main():
     # inlined rather than fetched (.impeccable.md: no external assets at load).
     # COMPACT, not FULL: a tab favicon is only ever rasterised at 16–32 px, and
     # the five-bar meter smears at that size even as vector art.
-    print("\ninline favicon (paste into web/index.html and docs/index.html)")
+    print("\ninline favicon")
     uri = favicon_data_uri(COMPACT)
     write(os.path.join(design, "favicon-datauri.txt"), (uri + "\n").encode())
+    write_favicon_into_pages(uri, print)
 
 
 if __name__ == "__main__":
