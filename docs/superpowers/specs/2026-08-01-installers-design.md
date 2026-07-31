@@ -251,6 +251,14 @@ Actually executed on the development Mac, not assumed:
 - Building with only the .NET 10 SDK works — the `net9.0` runtime pack restores from NuGet.
 - All 161 tests pass, and `dotnet build Kanal.slnx` stays clean with the new project in the solution.
 
+And on CI, which is the only place the Windows half can run at all:
+
+- `windows-latest` produces `Kanal-0.0.0-win-x64.msi` in 2m03s — a real `Composite Document File V2
+  / MSI Installer`, `Template: x64`, built by `WiX Toolset (5.0.2.0)`, 75 MB. The `Files/@Include`
+  harvest over the whole self-contained publish works.
+- `macos-latest` produces the dmg in 54s.
+- Both artefacts upload. The matrix fan-out does what it was designed to do.
+
 ## Known unverified
 
 Stated plainly rather than discovered at release time:
@@ -264,9 +272,9 @@ Stated plainly rather than discovered at release time:
 2. **The signing/notarisation chain is unrun code** until someone executes it. Apple only reports
    failures after submission, and getting a clean pass typically takes two or three rounds. Planned
    mitigation: a local `-p:SignBuild=true` run, which needs no GitHub secrets.
-3. **The MSI has never been produced.** Schema validation passes off-Windows, but the actual build —
-   the `Files/@Include` harvest over several hundred files, `Scope="perUser"`, the shortcut
-   component, and whether `WIX0389` really was a platform artefact — is only ever exercised by the
-   `windows-latest` job.
+3. **The MSI builds but has never been installed.** CI produces a well-formed MSI, which says
+   nothing about what it does when run: whether the per-user install lands in the right place,
+   whether the start-menu shortcut resolves, whether uninstall is clean, and whether the app
+   actually launches from an installed copy. That needs a Windows machine and five minutes.
 4. **The release job is unrun.** It only fires on a tag, so artefact collection and `gh release
    create` stay untested until the first real version tag.

@@ -45,11 +45,19 @@ with `WIX7015: You must accept the Open Source Maintenance Fee (OSMF) EULA` — 
 EULA for commercial use in v6, and an internal tool counts. 5.0.2 is the last release before it, on
 the same schema. Do not let a dependency bump carry this past 5.x without deciding to pay.
 
-Unrun so far, stated rather than discovered later: the whole signing/notarisation path (needs a
+CI green on both platforms: 54 s for the dmg, 2m03 s for a well-formed 75 MB MSI (`Template: x64`,
+`WiX Toolset (5.0.2.0)`). Getting there took two red runs, and both failures were the kind that
+*only* show up on a real Windows runner — the OSMF licence gate, and an icon `SourceFile` whose
+relative path resolved against the wix process's working directory rather than the `.wxs` file, so
+it pointed outside the repository. All paths are now passed in absolute via `-d`. One diagnostic to
+ignore off Windows: `WIX0389` on a plain `Directory/@Name` is a platform artefact and does not
+appear on the runner.
+
+Unrun so far, stated rather than discovered later: the signing/notarisation path (needs a
 `Developer ID Application` certificate — the only local identity is an `Apple Development` one,
-which notarisation rejects), the MSI itself (WiX refuses to run off Windows, so CI is its first
-exercise — schema validation does work cross-platform and caught one illegal nesting), and the
-release job (fires only on a tag).
+which notarisation rejects), what the MSI does when actually *run* (per-user install location,
+shortcut, uninstall, launching from an installed copy — CI proves it builds, not that it works),
+and the release job (fires only on a tag).
 
 ---
 
