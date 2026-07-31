@@ -23,29 +23,30 @@ public sealed class GladiaAsrProvider : IAsrProvider, IDisposable
         _options = options;
         _ownsHttp = http is null;
         _http = http ?? new HttpClient();
+        Caps = new AsrCapabilities(
+            Streaming: true,
+            Diarization: true,
+            Translation: options.EnableTranslation,
+            AutoLanguageDetect: true,
+            Languages: new HashSet<string> { "zh", "de", "pl", "en", "fr", "es", "it", "pt", "ja", "ko" },
+            Latency: LatencyClass.Realtime);
     }
 
     public string Id => "gladia";
 
-    public AsrCapabilities Caps { get; } = new(
-        Streaming: true,
-        Diarization: true,
-        Translation: true,
-        AutoLanguageDetect: true,
-        Languages: new HashSet<string> { "zh", "de", "pl", "en", "fr", "es", "it", "pt", "ja", "ko" },
-        Latency: LatencyClass.Realtime);
+    public AsrCapabilities Caps { get; }
 
-    public async Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct)
+    internal static JsonObject BuildInitBody(GladiaOptions options, AsrSessionOptions session)
     {
         var body = new JsonObject
         {
             ["encoding"] = "wav/pcm",
-            ["sample_rate"] = options.SampleRateHz,
+            ["sample_rate"] = session.SampleRateHz,
             ["bit_depth"] = 16,
             ["channels"] = 1,
             ["language_config"] = new JsonObject
             {
-                ["languages"] = new JsonArray(options.ExpectedLanguages.Select(l => (JsonNode)l).ToArray()),
+                ["languages"] = new JsonArray(session.ExpectedLanguages.Select(l => (JsonNode)l).ToArray()),
                 ["code_switching"] = true,
             },
             // without this Gladia only delivers finals — the UI needs partials for live gray text
@@ -54,22 +55,33 @@ public sealed class GladiaAsrProvider : IAsrProvider, IDisposable
                 ["receive_partial_transcripts"] = true,
                 ["receive_final_transcripts"] = true,
             },
-            ["realtime_processing"] = new JsonObject
+        };
+        if (options.EnableTranslation)
+        {
+            body["realtime_processing"] = new JsonObject
             {
                 ["translation"] = true,
                 ["translation_config"] = new JsonObject
                 {
-                    ["target_languages"] = new JsonArray(options.TargetLanguages.Select(l => (JsonNode)l).ToArray()),
+                    ["target_languages"] = new JsonArray(session.TargetLanguages.Select(l => (JsonNode)l).ToArray()),
                 },
-            },
-        };
-        if (_options.Model is not null)
-            body["model"] = _options.Model;
-        if (_options.ExtraConfig is not null)
+            };
+        }
+
+        if (options.Model is not null)
+            body["model"] = options.Model;
+        if (options.ExtraConfig is not null)
         {
-            foreach (var (key, value) in _options.ExtraConfig)
+            foreach (var (key, value) in options.ExtraConfig)
                 body[key] = value?.DeepClone();
         }
+
+        return body;
+    }
+
+    public async Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct)
+    {
+        var body = BuildInitBody(_options, options);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/v2/live")
         {

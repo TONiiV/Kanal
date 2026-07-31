@@ -14,6 +14,12 @@ public sealed class AppSettings
 
     /// <summary>Name of the key to use for Gladia; null falls back to the first Gladia entry, then the env var.</summary>
     public string? ActiveGladiaKeyName { get; set; }
+
+    /// <summary>
+    /// Catalog id of the local translation model to run in-process, or null for
+    /// the default: translation by the cloud ASR provider (Gladia).
+    /// </summary>
+    public string? ActiveTranslationModelId { get; set; }
 }
 
 /// <summary>
@@ -30,6 +36,10 @@ public static class SettingsStore
 
     public static string SettingsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "settings.json");
+
+    /// <summary>Where downloaded GGUF translation models live.</summary>
+    public static string ModelsPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
 
     public static AppSettings Load()
     {

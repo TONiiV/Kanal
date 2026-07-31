@@ -18,6 +18,7 @@ using Kanal.Core.Relay;
 using Kanal.Core.Room;
 using Kanal.Host.Services;
 using Kanal.Providers.Gladia;
+using Kanal.Providers.LocalMt;
 using QRCoder;
 
 namespace Kanal.Host.ViewModels;
@@ -32,9 +33,26 @@ public partial class MainViewModel : ViewModelBase
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
     private GladiaAsrProvider? _gladiaProvider;
+    private IMtProvider? _localMt;
+    private readonly Func<AppSettings> _loadSettings;
+    private readonly Func<ModelDownloadManager> _downloads;
 
     public MainViewModel()
+        : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath))
     {
+    }
+
+    /// <summary>
+    /// Test seam, in the shape of <see cref="RelayPublisherFactory"/>: both halves of "what does
+    /// this machine translate with" are injected. Headless runs must not read the developer's
+    /// real %APPDATA%\Kanal\settings.json — on a machine with a model downloaded, that made a
+    /// UI test load a multi-gigabyte LLM and behave differently per developer.
+    /// </summary>
+    public MainViewModel(Func<AppSettings> loadSettings, Func<ModelDownloadManager> downloads)
+    {
+        _loadSettings = loadSettings;
+        _downloads = downloads;
+
         foreach (var (code, name) in LanguageCatalog.Known)
             AttachLanguageOption(new LanguageOption
             {
@@ -148,6 +166,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _keyStatus = "";
 
+    /// <summary>Which engine will translate, named before Start rather than inferred from latency.</summary>
+    [ObservableProperty]
+    private string _translationStatus = "";
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
@@ -187,12 +209,16 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowMicLevel));
     }
 
+    /// <summary>Re-reads the two things the masthead reports: the Gladia key and the
+    /// translation engine. Called at construction and after the Settings dialog closes.</summary>
     public void RefreshKeyStatus()
     {
-        var resolved = SettingsStore.ResolveGladiaKey(SettingsStore.Load());
+        var settings = _loadSettings();
+        var resolved = SettingsStore.ResolveGladiaKey(settings);
         KeyStatus = resolved is null
             ? "Gladia key: none — open Settings"
             : $"Gladia key: {resolved.Value.Source}";
+        TranslationStatus = TranslationPlanner.Describe(settings, _downloads());
     }
 
     private bool CanStart() => !IsRunning;
@@ -225,26 +251,52 @@ public partial class MainViewModel : ViewModelBase
         foreach (var lang in languages.Take(4))
             Columns.Add(new ColumnViewModel(lang));
 
+        var settings = _loadSettings();
+        var plan = TranslationPlanner.Plan(settings, _downloads());
+        TranslationStatus = plan.Description;
+
         IAsrProvider asr;
         IMtProvider? mt;
+        var substitution = "";
         if (IsGladiaMode)
         {
-            var resolved = SettingsStore.ResolveGladiaKey(SettingsStore.Load());
+            var resolved = SettingsStore.ResolveGladiaKey(settings);
             if (resolved is null)
             {
                 Status = "No Gladia API key. Add one in Settings or set GLADIA_API_KEY.";
+                await DisposeMtAsync(plan.Mt); // nothing started, so nothing else will free it
                 return;
             }
 
-            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions { ApiKey = resolved.Value.Key });
+            if (plan.Error is not null)
+            {
+                Status = plan.Error;
+                await DisposeMtAsync(plan.Mt);
+                return;
+            }
+
+            // with a local model active, Gladia's caps drop Translation and the
+            // orchestrator routes finals through the local provider — no special casing
+            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions
+            {
+                ApiKey = resolved.Value.Key,
+                EnableTranslation = plan.CloudTranslation,
+            });
             asr = _gladiaProvider;
-            mt = null; // Gladia caps declare end-to-end translation
+            mt = plan.Mt;
         }
         else
         {
+            // Demo must always run, so a missing local model falls back to the fake translator —
+            // but never silently. Plausible scripted translations under a model the operator
+            // thinks is live are worse than no translations at all.
             asr = new FakeAsrProvider(loop: true);
-            mt = new FakeMtProvider();
+            mt = plan.Mt ?? new FakeMtProvider();
+            if (plan.Mt is null && plan.Error is not null)
+                substitution = $" {plan.Error} Using scripted translations.";
         }
+
+        _localMt = mt;
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
@@ -278,12 +330,14 @@ public partial class MainViewModel : ViewModelBase
             await session.DisposeAsync();
             _gladiaProvider?.Dispose();
             _gladiaProvider = null;
+            await DisposeLocalMtAsync();
             return;
         }
 
         _session = session;
         IsRunning = true;
-        Status = IsGladiaMode ? "Live — streaming microphone to Gladia." : "Demo running.";
+        Status = (IsGladiaMode ? "Live — streaming microphone to Gladia." : "Demo running.")
+                 + substitution;
 
         if (RelayEnabled)
         {
@@ -314,10 +368,36 @@ public partial class MainViewModel : ViewModelBase
 
         _gladiaProvider?.Dispose();
         _gladiaProvider = null;
+        await DisposeLocalMtAsync();
         JoinUrl = "";
         QrImage = null;
         IsRunning = false;
         Status = "Stopped. Rename, merge and export still work on the last room.";
+    }
+
+    private async Task DisposeLocalMtAsync()
+    {
+        var mt = _localMt;
+        _localMt = null;
+        await DisposeMtAsync(mt);
+    }
+
+    /// <summary>
+    /// Prefers the async path: the local provider frees llama.cpp weights, and it waits for an
+    /// in-flight decode before doing so rather than freeing memory out from under it. That wait
+    /// belongs off the UI thread.
+    /// </summary>
+    private static async Task DisposeMtAsync(IMtProvider? mt)
+    {
+        switch (mt)
+        {
+            case IAsyncDisposable async:
+                await async.DisposeAsync();
+                break;
+            case IDisposable sync:
+                sync.Dispose();
+                break;
+        }
     }
 
     private void ShowJoinInfo(string url)

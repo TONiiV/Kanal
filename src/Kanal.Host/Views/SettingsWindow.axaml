@@ -4,51 +4,90 @@
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Kanal — Settings"
-        Width="620" Height="470"
+        Width="620" Height="640"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
         Background="{StaticResource Sheet}">
 
     <DockPanel Margin="24,20,24,20">
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-            <TextBlock Text="GLADIA API KEYS" Classes="label" />
-            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-            <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
-                       Foreground="{StaticResource Ink3}" />
-        </StackPanel>
-
         <Button DockPanel.Dock="Bottom" Content="Save &amp; Close" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
-            <TextBlock Text="ADD A KEY" Classes="label" />
-            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBox Text="{Binding NewName}" PlaceholderText="name (e.g. work)" Width="152" />
-                <TextBox Text="{Binding NewKey}" PlaceholderText="API key" PasswordChar="•" Width="258" />
-                <Button Content="Add" Command="{Binding AddCommand}" />
-            </StackPanel>
-        </StackPanel>
-
         <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Keys}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ApiKeyItemViewModel">
-                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
-                            <Grid ColumnDefinitions="Auto,152,*,Auto">
-                                <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
-                                             VerticalAlignment="Center" ToolTip.Tip="Use this key" />
-                                <TextBox Grid.Column="1" Text="{Binding Name}" Margin="6,0" />
-                                <TextBox Grid.Column="2" Text="{Binding Key}" PasswordChar="•" Margin="6,0" />
-                                <Button Grid.Column="3" Content="✕" Classes="ghost" Padding="10,5"
-                                        Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveCommand}"
-                                        CommandParameter="{Binding}" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <StackPanel>
+                <TextBlock Text="GLADIA API KEYS" Classes="label" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+
+                <ItemsControl ItemsSource="{Binding Keys}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ApiKeyItemViewModel">
+                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
+                                <Grid ColumnDefinitions="Auto,152,*,Auto">
+                                    <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
+                                                 VerticalAlignment="Center" ToolTip.Tip="Use this key" />
+                                    <TextBox Grid.Column="1" Text="{Binding Name}" Margin="6,0" />
+                                    <TextBox Grid.Column="2" Text="{Binding Key}" PasswordChar="•" Margin="6,0" />
+                                    <Button Grid.Column="3" Content="✕" Classes="ghost" Padding="10,5"
+                                            Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="ADD A KEY" Classes="label" Margin="0,18,0,0" />
+                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Text="{Binding NewName}" PlaceholderText="name (e.g. work)" Width="152" />
+                    <TextBox Text="{Binding NewKey}" PlaceholderText="API key" PasswordChar="•" Width="258" />
+                    <Button Content="Add" Command="{Binding AddCommand}" />
+                </StackPanel>
+
+                <!-- Local translation models: downloaded once, then all translation
+                     text stays on this machine. One choice is always active. -->
+                <TextBlock Text="TRANSLATION MODEL" Classes="label" Margin="0,26,0,0" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+
+                <ItemsControl ItemsSource="{Binding TranslationModels}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TranslationModelItemViewModel">
+                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                    <RadioButton Grid.Column="0" GroupName="activeModel"
+                                                 IsChecked="{Binding IsActive}"
+                                                 VerticalAlignment="Top" Margin="0,1,0,0"
+                                                 ToolTip.Tip="Use for translation" />
+                                    <StackPanel Grid.Column="1" Margin="6,0,10,0">
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding MetaLabel}" FontSize="11"
+                                                   Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
+                                                   IsVisible="{Binding HasLicenseNote}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
+                                               Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
+                                               Margin="0,0,12,0" />
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                                VerticalAlignment="Center">
+                                        <Button Content="Download" Command="{Binding DownloadCommand}"
+                                                IsVisible="{Binding CanDownload}" />
+                                        <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                                                IsVisible="{Binding IsDownloading}" />
+                                        <Button Content="Delete" Classes="ghost"
+                                                Command="{Binding DeleteCommand}"
+                                                IsVisible="{Binding CanDelete}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
         </ScrollViewer>
     </DockPanel>
 </Window>
