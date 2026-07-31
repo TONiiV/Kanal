@@ -22,7 +22,10 @@ dotnet test
   tested headless (`Avalonia.Headless.XUnit`, see `tests/Kanal.Tests/HostUiTests.cs`); logic that
   touches external services is tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
-  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff.
+  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff. **Once the
+  branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
+  the branch; a leftover worktree keeps a merged branch checked out, which blocks
+  `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
 
