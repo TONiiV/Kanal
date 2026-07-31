@@ -7,6 +7,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Kanal.Host;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
 using Kanal.Tests;
@@ -42,7 +43,7 @@ public class HostUiTests
     public async Task RenameSpeakerUpdatesRoomAndHistoryBubbles()
     {
         var vm = TestViewModels.Hermetic();
-        vm.SelectedMode = "Demo (scripted)"; // never touch the network in tests
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo); // never touch the network
         var window = new MainWindow { DataContext = vm };
         window.Show();
 
@@ -73,7 +74,7 @@ public class HostUiTests
     public async Task RenameStillWorksAfterStop()
     {
         var vm = TestViewModels.Hermetic();
-        vm.SelectedMode = "Demo (scripted)";
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
         var window = new MainWindow { DataContext = vm };
         window.Show();
 
@@ -97,7 +98,7 @@ public class HostUiTests
     public async Task StartStopStartYieldsFreshRoom()
     {
         var vm = TestViewModels.Hermetic();
-        vm.SelectedMode = "Demo (scripted)";
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
         var window = new MainWindow { DataContext = vm };
         window.Show();
 

@@ -38,12 +38,15 @@ public class RoomLifecycleTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static MainViewModel BuildViewModel(ConcurrentQueue<(string Room, RelayMessage Message)> log) =>
-        new()
-        {
-            SelectedMode = "Demo (scripted)",
-            RelayPublisherFactory = room => new RecordingRelayPublisher(room, log),
-        };
+    /// <summary>Relay stays on (this is what is being observed) but settings do not: the real
+    /// %APPDATA% file would load whatever translation model the developer has downloaded.</summary>
+    private static MainViewModel BuildViewModel(ConcurrentQueue<(string Room, RelayMessage Message)> log)
+    {
+        var vm = TestViewModels.Demo();
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = room => new RecordingRelayPublisher(room, log);
+        return vm;
+    }
 
     [AvaloniaFact]
     public async Task StopAnnouncesTheRoomIsClosed()

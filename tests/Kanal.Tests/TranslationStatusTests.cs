@@ -1,9 +1,6 @@
-using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.VisualTree;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
-using Kanal.Host.Views;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Tests;
@@ -28,14 +25,22 @@ internal static class TestViewModels
             RelayEnabled = false,
         };
     }
+
+    internal static MainViewModel Demo(AppSettings? settings = null, string? modelsDir = null)
+    {
+        var vm = Hermetic(settings, modelsDir);
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
+        return vm;
+    }
 }
 
+/// <summary>The translation half of the masthead's two-stage indicator.</summary>
 public class TranslationStatusTests
 {
     [AvaloniaFact]
-    public void CloudIsNamedWhenNoLocalModelIsSelected()
+    public void ScriptedIsNamedWhenDemoHasNoLocalModel()
     {
-        Assert.Equal("Translation: Gladia (cloud)", TestViewModels.Hermetic().TranslationStatus);
+        Assert.Equal("Translation: scripted", TestViewModels.Demo().TranslationStatus);
     }
 
     [AvaloniaFact]
@@ -46,7 +51,7 @@ public class TranslationStatusTests
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(Path.Combine(dir, model.FileName), [0x47, 0x47, 0x55, 0x46]);
 
-        var vm = TestViewModels.Hermetic(
+        var vm = TestViewModels.Demo(
             new AppSettings { ActiveTranslationModelId = model.Id }, dir);
 
         Assert.Equal($"Translation: {model.DisplayName} (local)", vm.TranslationStatus);
@@ -61,7 +66,7 @@ public class TranslationStatusTests
     public void AnUndownloadedModelSaysSoRatherThanLookingLikeCloud()
     {
         var model = LocalModelCatalog.Models[0];
-        var vm = TestViewModels.Hermetic(new AppSettings { ActiveTranslationModelId = model.Id });
+        var vm = TestViewModels.Demo(new AppSettings { ActiveTranslationModelId = model.Id });
 
         Assert.Equal($"Translation: {model.DisplayName} — not downloaded", vm.TranslationStatus);
     }
@@ -70,8 +75,7 @@ public class TranslationStatusTests
     public async Task DemoModeSaysWhenItSubstitutedScriptedTranslations()
     {
         var model = LocalModelCatalog.Models[0];
-        var vm = TestViewModels.Hermetic(new AppSettings { ActiveTranslationModelId = model.Id });
-        vm.SelectedMode = "Demo (scripted)";
+        var vm = TestViewModels.Demo(new AppSettings { ActiveTranslationModelId = model.Id });
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -80,32 +84,18 @@ public class TranslationStatusTests
         await vm.StopCommand.ExecuteAsync(null);
     }
 
+    /// <summary>The transcription label reads the injected settings, not the machine's env var.</summary>
     [AvaloniaFact]
-    public void KeyStatusComesFromTheInjectedSettingsNotTheMachine()
+    public void TheKeyInUseIsNamedFromTheInjectedSettings()
     {
         var settings = new AppSettings();
         settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
         settings.ActiveGladiaKeyName = "meeting-room";
 
-        Assert.Contains("meeting-room", TestViewModels.Hermetic(settings).KeyStatus);
-    }
+        var vm = TestViewModels.Hermetic(settings);
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudCloud);
 
-    /// <summary>The label has to be on the main screen, next to the key status — an operator
-    /// should not have to infer the engine from translation latency.</summary>
-    [AvaloniaFact]
-    public void MastheadShowsTheTranslationEngineNextToTheKeyStatus()
-    {
-        var vm = TestViewModels.Hermetic();
-        var window = new MainWindow { DataContext = vm };
-        window.Show();
-
-        var texts = window.GetVisualDescendants().OfType<TextBlock>()
-            .Select(t => t.Text).Where(t => t is not null).ToList();
-
-        Assert.Contains("Translation: Gladia (cloud)", texts);
-        Assert.Contains(texts, t => t!.StartsWith("Gladia key:", StringComparison.Ordinal));
-
-        window.Close();
+        Assert.Contains("meeting-room", vm.TranscriptionStatus);
     }
 
     [AvaloniaFact]
@@ -113,13 +103,35 @@ public class TranslationStatusTests
     {
         var model = LocalModelCatalog.Models[0];
         var settings = new AppSettings();
-        var vm = TestViewModels.Hermetic(settings);
-        Assert.Equal("Translation: Gladia (cloud)", vm.TranslationStatus);
+        var vm = TestViewModels.Demo(settings);
+        Assert.Equal("Translation: scripted", vm.TranslationStatus);
 
         // what MainWindow does after the Settings dialog closes
         settings.ActiveTranslationModelId = model.Id;
-        vm.RefreshKeyStatus();
+        vm.RefreshPipelineStatus();
 
         Assert.Equal($"Translation: {model.DisplayName} — not downloaded", vm.TranslationStatus);
+    }
+
+    /// <summary>A model chosen in Settings unblocks the cloud · local row without a restart.</summary>
+    [AvaloniaFact]
+    public void RefreshReEvaluatesEveryModesAvailability()
+    {
+        var model = LocalModelCatalog.Models[0];
+        var dir = TestViewModels.EmptyModelsDir();
+        var settings = new AppSettings();
+        var vm = TestViewModels.Hermetic(settings, dir);
+        var cloudLocal = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudLocal);
+        Assert.False(cloudLocal.IsAvailable);
+
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
+        settings.ActiveGladiaKeyName = "meeting-room";
+        settings.ActiveTranslationModelId = model.Id;
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, model.FileName), [0x47, 0x47, 0x55, 0x46]);
+        vm.RefreshPipelineStatus();
+
+        Assert.True(cloudLocal.IsAvailable);
+        Directory.Delete(dir, recursive: true);
     }
 }

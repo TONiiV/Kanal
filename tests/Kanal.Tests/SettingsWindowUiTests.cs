@@ -12,7 +12,7 @@ namespace Kanal.Tests;
 public class SettingsWindowUiTests
 {
     [AvaloniaFact]
-    public void TranslationModelSectionListsCloudAndCatalog()
+    public void TranslationSectionListsTheLocalModelCatalogAndANoneRow()
     {
         var window = new SettingsWindow
         {
@@ -22,8 +22,8 @@ public class SettingsWindowUiTests
 
         var texts = window.GetVisualDescendants().OfType<TextBlock>()
             .Select(t => t.Text).Where(t => t is not null).ToList();
-        Assert.Contains("TRANSLATION MODEL", texts);
-        Assert.Contains("Gladia cloud", texts);
+        Assert.Contains("TRANSLATION", texts);
+        Assert.Contains("None", texts);
         foreach (var model in LocalModelCatalog.Models)
             Assert.Contains(model.DisplayName, texts);
 
@@ -47,7 +47,7 @@ public class SettingsWindowUiTests
 
         var downloadButtons = window.GetVisualDescendants().OfType<Button>()
             .Where(b => Equals(b.Content, "Download") && b.IsVisible).ToList();
-        // the cloud row never offers a download
+        // the "None" row never offers a download
         Assert.InRange(downloadButtons.Count, 0, LocalModelCatalog.Models.Count);
         Assert.All(downloadButtons, b =>
             Assert.True(((TranslationModelItemViewModel)b.DataContext!).IsLocal));

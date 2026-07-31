@@ -13,11 +13,9 @@ using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
-using Kanal.Core.Providers.Testing;
 using Kanal.Core.Relay;
 using Kanal.Core.Room;
 using Kanal.Host.Services;
-using Kanal.Providers.Gladia;
 using Kanal.Providers.LocalMt;
 using QRCoder;
 
@@ -32,8 +30,8 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
-    private GladiaAsrProvider? _gladiaProvider;
-    private IMtProvider? _localMt;
+    private IAsrProvider? _asr;
+    private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
     private readonly Func<ModelDownloadManager> _downloads;
 
@@ -52,6 +50,10 @@ public partial class MainViewModel : ViewModelBase
     {
         _loadSettings = loadSettings;
         _downloads = downloads;
+
+        foreach (var mode in PipelineMode.All)
+            Modes.Add(new PipelineModeOption(mode, unavailable: null));
+        _selectedMode = Modes[0];
 
         foreach (var (code, name) in LanguageCatalog.Known)
             AttachLanguageOption(new LanguageOption
@@ -78,7 +80,7 @@ public partial class MainViewModel : ViewModelBase
             // no capture backend or no devices — demo mode still works
         }
 
-        RefreshKeyStatus();
+        RefreshPipelineStatus();
     }
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
@@ -142,7 +144,8 @@ public partial class MainViewModel : ViewModelBase
         NewLanguageInput = "";
     }
 
-    public string[] Modes { get; } = ["Demo (scripted)", "Gladia (live)"];
+    /// <summary>The five pipelines, in order. Unavailable ones stay in the list, disabled.</summary>
+    public ObservableCollection<PipelineModeOption> Modes { get; } = new();
 
     /// <summary>Relay can be disabled (tests, fully offline use); QR is only shown when enabled.</summary>
     public bool RelayEnabled { get; set; } = true;
@@ -151,7 +154,7 @@ public partial class MainViewModel : ViewModelBase
     public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
 
     [ObservableProperty]
-    private string _selectedMode = "Demo (scripted)";
+    private PipelineModeOption _selectedMode;
 
     /// <summary>ISO codes typed into the edit dialog's add row, e.g. "tr, nl".</summary>
     [ObservableProperty]
@@ -163,8 +166,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _status = "Idle.";
 
+    /// <summary>Where the selected mode transcribes, named before Start rather than guessed.</summary>
     [ObservableProperty]
-    private string _keyStatus = "";
+    private string _transcriptionStatus = "";
 
     /// <summary>Which engine will translate, named before Start rather than inferred from latency.</summary>
     [ObservableProperty]
@@ -181,7 +185,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private double _micLevel;
 
-    public bool ShowMicLevel => IsRunning && IsGladiaMode;
+    public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
     [ObservableProperty]
     private string _mergeFromTag = "";
@@ -201,24 +205,33 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
     public bool HasColumns => Columns.Count > 0;
 
-    public bool IsGladiaMode => SelectedMode.StartsWith("Gladia", StringComparison.Ordinal);
+    /// <summary>An input device and a level meter only mean something for captured audio.</summary>
+    public bool NeedsMicrophone => SelectedMode.Mode.NeedsMicrophone;
 
-    partial void OnSelectedModeChanged(string value)
+    partial void OnSelectedModeChanged(PipelineModeOption value)
     {
-        OnPropertyChanged(nameof(IsGladiaMode));
+        OnPropertyChanged(nameof(NeedsMicrophone));
         OnPropertyChanged(nameof(ShowMicLevel));
+        RefreshPipelineStatus();
     }
 
-    /// <summary>Re-reads the two things the masthead reports: the Gladia key and the
-    /// translation engine. Called at construction and after the Settings dialog closes.</summary>
-    public void RefreshKeyStatus()
+    /// <summary>
+    /// Re-resolves every mode against the current settings: the two stage labels for the selected
+    /// one, and the availability reason on all five. Called at construction, when the mode
+    /// changes, and after the Settings dialog closes.
+    /// </summary>
+    public void RefreshPipelineStatus()
     {
         var settings = _loadSettings();
-        var resolved = SettingsStore.ResolveGladiaKey(settings);
-        KeyStatus = resolved is null
-            ? "Gladia key: none — open Settings"
-            : $"Gladia key: {resolved.Value.Source}";
-        TranslationStatus = TranslationPlanner.Describe(settings, _downloads());
+        var downloads = _downloads();
+
+        foreach (var option in Modes)
+            option.Unavailable = PipelinePlanner
+                .Describe(option.Mode, settings, downloads).Unavailable;
+
+        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads);
+        TranscriptionStatus = status.TranscriptionLabel;
+        TranslationStatus = status.TranslationLabel;
     }
 
     private bool CanStart() => !IsRunning;
@@ -251,52 +264,25 @@ public partial class MainViewModel : ViewModelBase
         foreach (var lang in languages.Take(4))
             Columns.Add(new ColumnViewModel(lang));
 
+        var mode = SelectedMode.Mode;
         var settings = _loadSettings();
-        var plan = TranslationPlanner.Plan(settings, _downloads());
-        TranslationStatus = plan.Description;
+        var plan = PipelinePlanner.Plan(mode, settings, _downloads());
+        TranscriptionStatus = plan.Status.TranscriptionLabel;
+        TranslationStatus = plan.Status.TranslationLabel;
 
-        IAsrProvider asr;
-        IMtProvider? mt;
-        var substitution = "";
-        if (IsGladiaMode)
+        // A disabled row can still be reached programmatically, and settings can go stale
+        // between opening the dropdown and pressing Start.
+        if (plan.Status.Unavailable is not null)
         {
-            var resolved = SettingsStore.ResolveGladiaKey(settings);
-            if (resolved is null)
-            {
-                Status = "No Gladia API key. Add one in Settings or set GLADIA_API_KEY.";
-                await DisposeMtAsync(plan.Mt); // nothing started, so nothing else will free it
-                return;
-            }
-
-            if (plan.Error is not null)
-            {
-                Status = plan.Error;
-                await DisposeMtAsync(plan.Mt);
-                return;
-            }
-
-            // with a local model active, Gladia's caps drop Translation and the
-            // orchestrator routes finals through the local provider — no special casing
-            _gladiaProvider = new GladiaAsrProvider(new GladiaOptions
-            {
-                ApiKey = resolved.Value.Key,
-                EnableTranslation = plan.CloudTranslation,
-            });
-            asr = _gladiaProvider;
-            mt = plan.Mt;
-        }
-        else
-        {
-            // Demo must always run, so a missing local model falls back to the fake translator —
-            // but never silently. Plausible scripted translations under a model the operator
-            // thinks is live are worse than no translations at all.
-            asr = new FakeAsrProvider(loop: true);
-            mt = plan.Mt ?? new FakeMtProvider();
-            if (plan.Mt is null && plan.Error is not null)
-                substitution = $" {plan.Error} Using scripted translations.";
+            SelectedMode.Unavailable = plan.Status.Unavailable;
+            Status = plan.Status.Unavailable;
+            return;
         }
 
-        _localMt = mt;
+        var asr = plan.Asr!;
+        var mt = plan.Mt;
+        _asr = asr;
+        _mt = mt;
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
@@ -328,16 +314,15 @@ public partial class MainViewModel : ViewModelBase
         {
             Status = $"Start failed: {ex.Message}";
             await session.DisposeAsync();
-            _gladiaProvider?.Dispose();
-            _gladiaProvider = null;
-            await DisposeLocalMtAsync();
+            await DisposeProvidersAsync();
             return;
         }
 
         _session = session;
         IsRunning = true;
-        Status = (IsGladiaMode ? "Live — streaming microphone to Gladia." : "Demo running.")
-                 + substitution;
+        Status = mode.Id == PipelineModeId.Demo
+            ? "Demo running." + (plan.Substitution is null ? "" : $" {plan.Substitution}")
+            : $"Live — {mode.Leaves}.";
 
         if (RelayEnabled)
         {
@@ -345,7 +330,7 @@ public partial class MainViewModel : ViewModelBase
             _snapshotTimer.Start();
         }
 
-        if (IsGladiaMode)
+        if (mode.NeedsMicrophone)
         {
             _captureCts = new CancellationTokenSource();
             _ = PumpMicrophoneAsync(session, SelectedDevice?.Id, _captureCts.Token);
@@ -366,30 +351,32 @@ public partial class MainViewModel : ViewModelBase
             await _session.DisposeAsync();    // session object stays for rename/merge/export
         }
 
-        _gladiaProvider?.Dispose();
-        _gladiaProvider = null;
-        await DisposeLocalMtAsync();
+        await DisposeProvidersAsync();
         JoinUrl = "";
         QrImage = null;
         IsRunning = false;
         Status = "Stopped. Rename, merge and export still work on the last room.";
     }
 
-    private async Task DisposeLocalMtAsync()
+    /// <summary>
+    /// Frees whichever pair the mode resolved to, without naming either — the view model has no
+    /// vendor-typed field left. Prefers the async path: the local translator frees llama.cpp
+    /// weights, and it waits for an in-flight decode before doing so rather than freeing memory
+    /// out from under it. That wait belongs off the UI thread.
+    /// </summary>
+    private async Task DisposeProvidersAsync()
     {
-        var mt = _localMt;
-        _localMt = null;
-        await DisposeMtAsync(mt);
+        var asr = _asr;
+        var mt = _mt;
+        _asr = null;
+        _mt = null;
+        await DisposeAnyAsync(mt);
+        await DisposeAnyAsync(asr);
     }
 
-    /// <summary>
-    /// Prefers the async path: the local provider frees llama.cpp weights, and it waits for an
-    /// in-flight decode before doing so rather than freeing memory out from under it. That wait
-    /// belongs off the UI thread.
-    /// </summary>
-    private static async Task DisposeMtAsync(IMtProvider? mt)
+    private static async Task DisposeAnyAsync(object? provider)
     {
-        switch (mt)
+        switch (provider)
         {
             case IAsyncDisposable async:
                 await async.DisposeAsync();
