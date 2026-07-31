@@ -244,7 +244,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
         try
         {
-            await landed; // cancelled ones unwind here; nothing is left running behind us
+            await landed; // cancelled ones unwind here
         }
         catch
         {
@@ -252,6 +252,26 @@ public sealed class MeetingSession : IAsyncDisposable
 
         if (_pump is not null)
             await _pump;
+
+        // The snapshot above was taken while the pump could still be draining finals buffered
+        // before shutdown, and anything it tracked since is cancelled now but absent from
+        // `landed`. The pump has exited, so the list is final: wait for the stragglers too, or
+        // disposal returns with a decode still unwinding behind it and a _cts about to be
+        // disposed under whoever touches it next.
+        Task[] stragglers;
+        lock (_gate)
+        {
+            stragglers = _pendingTranslations.ToArray();
+        }
+
+        try
+        {
+            await Task.WhenAll(stragglers);
+        }
+        catch
+        {
+        }
+
         _cts.Dispose();
     }
 }

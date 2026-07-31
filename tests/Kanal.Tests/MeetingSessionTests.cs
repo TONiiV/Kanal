@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
@@ -92,6 +94,95 @@ public class MeetingSessionTests
             return to.ToDictionary(l => l, l => $"{l}:{text}");
         }
     }
+
+    /// <summary>
+    /// ASR whose event channel outlives its session's disposal — the real drain window: finals
+    /// buffered before Stop are still handed to the pump after the session object is gone.
+    /// </summary>
+    private sealed class DrainingAsr : IAsrProvider
+    {
+        public readonly Channel<AsrEvent> Events = Channel.CreateUnbounded<AsrEvent>();
+
+        public string Id => "draining";
+
+        public AsrCapabilities Caps { get; } = new(
+            Streaming: true, Diarization: true, Translation: false,
+            AutoLanguageDetect: true, new HashSet<string> { "zh", "de" }, LatencyClass.Realtime);
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            Task.FromResult<IAsrSession>(new Session(Events));
+
+        private sealed class Session(Channel<AsrEvent> events) : IAsrSession
+        {
+            public IAsyncEnumerable<AsrEvent> Events => ReadAsync();
+
+            public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default) =>
+                ValueTask.CompletedTask;
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask; // the channel drains on
+
+            private async IAsyncEnumerable<AsrEvent> ReadAsync(
+                [EnumeratorCancellation] CancellationToken ct = default)
+            {
+                await foreach (var e in events.Reader.ReadAllAsync(ct))
+                    yield return e;
+            }
+        }
+    }
+
+    /// <summary>
+    /// First call: a decode the test holds open and releases, so the grace window is open for
+    /// exactly as long as the test needs. Second call: a decode caught by the cancel, which —
+    /// like a native one — takes a moment to unwind after the token fires.
+    /// </summary>
+    private sealed class DrainWindowMt : IMtProvider
+    {
+        private int _calls;
+        private readonly TaskCompletionSource _firstStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _firstRelease =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task FirstStarted => _firstStarted.Task;
+        public Task SecondStarted => _secondStarted.Task;
+        public volatile bool LateUnwound;
+
+        public void ReleaseFirst() => _firstRelease.TrySetResult();
+
+        public string Id => "drain-window";
+
+        public async Task<IReadOnlyDictionary<string, string>> TranslateAsync(
+            string text, string from, IReadOnlyList<string> to,
+            IReadOnlyList<Utterance> context, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                _firstStarted.TrySetResult();
+                await _firstRelease.Task;
+                return to.ToDictionary(l => l, l => $"{l}:{text}");
+            }
+
+            _secondStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), CancellationToken.None);
+                LateUnwound = true;
+                throw;
+            }
+
+            return new Dictionary<string, string>();
+        }
+    }
+
+    private static AsrEvent.Transcript Final(string id, string text) => new(
+        id, "S01", text, "zh", 0, 10, IsFinal: true, CodeSwitch: false,
+        SpeakerConfidence: 0.9, Translations: null);
 
     private static readonly FakeAsrProvider.Line[] OneLineScript =
     [
@@ -211,5 +302,39 @@ public class MeetingSessionTests
         await session.DisposeAsync();
 
         Assert.NotEmpty(relay.OfType<TranslationUpsert>());
+    }
+
+    /// <summary>
+    /// The pending snapshot is taken while the pump may still be draining finals that were
+    /// buffered before Stop. A translation tracked in that window is cancelled with the rest
+    /// but is absent from the snapshot, so disposal could return — and the caller free the
+    /// native weights — while that decode was still unwinding, with the disposed _cts firing
+    /// spurious errors behind it. Disposal must not return until every tracked translation,
+    /// however late it was tracked, has finished unwinding.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAwaitsATranslationTrackedWhileThePumpWasStillDraining()
+    {
+        var asr = new DrainingAsr();
+        var mt = new DrainWindowMt();
+        var session = new MeetingSession(
+            asr, mt, new RecordingRelay(), new RoomConfig("t", ["zh", "de"]),
+            translationGrace: TimeSpan.FromSeconds(5));
+
+        await session.StartAsync();
+        await asr.Events.Writer.WriteAsync(Final("u1", "第一句。"));
+        await mt.FirstStarted.WaitAsync(TimeSpan.FromSeconds(10)); // …is pending at the snapshot
+
+        // Disposal runs synchronously up to the grace wait, so once we regain control the
+        // pending set has been snapshotted — anything the pump tracks from here on is late.
+        var disposing = session.DisposeAsync().AsTask();
+        await asr.Events.Writer.WriteAsync(Final("u2", "第二句。"));
+        await mt.SecondStarted.WaitAsync(TimeSpan.FromSeconds(10));
+
+        mt.ReleaseFirst(); // first lands inside the grace; the cancel follows and catches u2
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(mt.LateUnwound,
+            "disposal returned while a late-tracked translation was still unwinding.");
     }
 }

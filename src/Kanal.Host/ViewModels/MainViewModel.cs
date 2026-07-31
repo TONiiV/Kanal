@@ -502,12 +502,16 @@ public partial class MainViewModel : ViewModelBase
     {
         IsStopping = true;
         Status = "Stopping…";
-        _snapshotTimer.Stop();
-        _captureCts?.Cancel();
-        _captureCts = null;
 
         try
         {
+            // Inside the try on purpose: Cancel() runs the token's callbacks synchronously and
+            // rethrows what they throw, and anything escaping before the finally would leave
+            // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
+            _snapshotTimer.Stop();
+            _captureCts?.Cancel();
+            _captureCts = null;
+
             if (_session is not null)
             {
                 await PublishSnapshotSafeAsync(); // leave a final full state on the channel
