@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Kanal.Host.ViewModels;
 
@@ -24,6 +25,18 @@ public partial class ColumnViewModel : ViewModelBase
     public string NativeName { get; }
 
     public ObservableCollection<BubbleViewModel> Bubbles { get; } = new();
+
+    /// <summary>
+    /// Drop indication while a column is being dragged: a rule down the edge the dragged column
+    /// would land against. Structure, not highlight — the same vocabulary as every other rule on
+    /// screen, and readable from a metre away without spending a colour.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDropBefore;
+
+    /// <inheritdoc cref="IsDropBefore"/>
+    [ObservableProperty]
+    private bool _isDropAfter;
 
     public BubbleViewModel GetOrAdd(string utteranceId)
     {

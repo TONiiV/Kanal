@@ -162,6 +162,35 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    handler was attached afterwards. The flag stack, the summary and the room config all missed it
    until some other checkbox was toggled.
 
+8. **Columns can be moved, mid-meeting** (PR for #15). The operator drags a column head to put the
+   language they are actually reading where they are looking; the head is the grab handle, so the
+   transcript under it stays scrollable. `MoveColumn` moves the `ColumnViewModel` itself, so every
+   utterance already rendered travels with it — nothing is rebuilt, nothing re-resolved, and
+   `ApplyUtterance` addresses columns by language, never by index, so a move during a live
+   utterance cannot misroute it. One order is authoritative: a private list of codes that both the
+   columns and the flag stack read, so the two can never disagree; a language selected after a
+   reorder joins at the end, and the order survives Stop/Start.
+
+   **Nothing goes on the wire.** `RoomConfig` carries the language *set*, phones render a single
+   column chosen from a dropdown, and column order is host-local presentation — no `room.config`
+   republish, no snapshot change, no client-visible effect at all.
+
+   *Design.* The drop target is a 3 px ink rule standing in the gutter the column would be
+   inserted into — the same rule vocabulary as the live record, not a coloured highlight, and no
+   drag ghost. It overlays rather than occupying layout, so marking a target never reflows text
+   under the operator's eye. Keyboard focus on a head is marked the same way (a rule down its
+   left), after a first attempt using a `Paper` fill turned out to be invisible against `Sheet` in
+   a headless render — a 4 % lightness step is not a signal at a metre.
+
+   *Deliberate addition.* Alt+← / Alt+→ on a focused head performs the same move. Drag stays the
+   primary gesture, but a modal OLE drag on a trackpad mid-meeting is a poor single route, and it
+   is unverifiable here: Avalonia's headless platform registers no `IPlatformDragSource`, so
+   `DoDragDropAsync` returns `None` and a real drag cannot be simulated. The keyboard route is the
+   one path a headless test drives end to end (real key event → handler → view model → order); the
+   pointer handler is covered by a smoke test proving the gesture is harmless without a drag
+   source, and the drop geometry is tested through `BeginColumnDrag`/`UpdateColumnDropTarget`/
+   `DropColumn`, which is all the handler computes.
+
 ### Fixes in review (PR #7)
 
 - **Native use-after-free on Stop.** `LlamaSharpTextGenerator.Dispose()` freed the llama.cpp
@@ -215,6 +244,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Modes describe the pipeline, not the vendor** — five modes over both stages,
       `PipelinePlanner` resolving mode → provider pair, unavailable modes shown/disabled with the
       reason and the privacy consequence in place, Settings grouped by stage (#14).
+- [x] **Operator control over the language columns** — selection capped at four with the reason
+      stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
+      order host-local (#15).
 - [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
       second blocker on `local · cloud`, buildable independently of the local ASR work.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.

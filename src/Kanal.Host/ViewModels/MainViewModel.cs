@@ -35,6 +35,17 @@ public partial class MainViewModel : ViewModelBase
     private readonly Func<AppSettings> _loadSettings;
     private readonly Func<ModelDownloadManager> _downloads;
 
+    /// <summary>
+    /// Presentation order of the language codes, seeded from <see cref="LanguageCatalog"/> and
+    /// rewritten when the operator drags a column. The flag stack and the columns both read it,
+    /// so they cannot disagree. Host-local: <see cref="RoomConfig"/> carries the language *set*,
+    /// phones render one column chosen from a dropdown, and nothing about order goes on the wire.
+    /// </summary>
+    private readonly List<string> _columnOrder = new();
+
+    /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
+    private int _dragSource = -1;
+
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath))
     {
@@ -126,6 +137,9 @@ public partial class MainViewModel : ViewModelBase
         if (option.IsSelected && IsAtLanguageLimit)
             option.IsSelected = false;
 
+        if (!_columnOrder.Any(c => string.Equals(c, option.Code, StringComparison.OrdinalIgnoreCase)))
+            _columnOrder.Add(option.Code); // a language the operator adds joins at the end
+
         option.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(LanguageOption.IsSelected))
@@ -151,7 +165,7 @@ public partial class MainViewModel : ViewModelBase
     private void RefreshSelectedLanguages()
     {
         SelectedLanguages.Clear();
-        foreach (var option in LanguageOptions.Where(o => o.IsSelected))
+        foreach (var option in LanguageOptions.Where(o => o.IsSelected).OrderBy(ColumnOrderIndex))
             SelectedLanguages.Add(option);
 
         var full = SelectedLanguages.Count >= MaxLanguages;
@@ -200,6 +214,83 @@ public partial class MainViewModel : ViewModelBase
 
         // what was refused stays in the box: retyping it after deselecting is not the operator's job
         NewLanguageInput = string.Join(", ", refused);
+    }
+
+    private int ColumnOrderIndex(LanguageOption option)
+    {
+        var index = _columnOrder.FindIndex(c =>
+            string.Equals(c, option.Code, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? int.MaxValue : index;
+    }
+
+    /// <summary>
+    /// Moves a column to a new position, mid-meeting — the operator puts the language they are
+    /// reading where they are looking. The <see cref="ColumnViewModel"/> moves with it, so every
+    /// utterance already rendered comes along untouched; the selected-language order is rewritten
+    /// to match, so the flag stack never disagrees with the screen. Nothing is republished:
+    /// order is host-local presentation.
+    /// </summary>
+    public void MoveColumn(int from, int to)
+    {
+        if (from == to || from < 0 || to < 0 || from >= Columns.Count || to >= Columns.Count)
+            return;
+
+        Columns.Move(from, to);
+
+        // rewrite only the slots the columns occupy — a selected language without a column, and
+        // every unselected one, keeps its place in the catalog's order
+        var slots = new List<int>();
+        for (var i = 0; i < _columnOrder.Count; i++)
+        {
+            if (Columns.Any(c => string.Equals(c.Language, _columnOrder[i], StringComparison.OrdinalIgnoreCase)))
+                slots.Add(i);
+        }
+
+        for (var s = 0; s < slots.Count && s < Columns.Count; s++)
+            _columnOrder[slots[s]] = Columns[s].Language;
+
+        RefreshSelectedLanguages();
+    }
+
+    /// <summary>Records which column was picked up; the drop is resolved against it.</summary>
+    public void BeginColumnDrag(int index) =>
+        _dragSource = index >= 0 && index < Columns.Count ? index : -1;
+
+    /// <summary>Marks one edge of one column with the drop rule, and clears every other.</summary>
+    public void UpdateColumnDropTarget(int hoveredIndex, bool before)
+    {
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            var hit = _dragSource >= 0 && i == hoveredIndex;
+            Columns[i].IsDropBefore = hit && before;
+            Columns[i].IsDropAfter = hit && !before;
+        }
+    }
+
+    /// <summary>Drag abandoned: no rule left on screen, no order changed.</summary>
+    public void CancelColumnDrag()
+    {
+        _dragSource = -1;
+        foreach (var column in Columns)
+        {
+            column.IsDropBefore = false;
+            column.IsDropAfter = false;
+        }
+    }
+
+    /// <summary>Commits the drag: the picked-up column lands on the marked edge.</summary>
+    public void DropColumn(int hoveredIndex, bool before)
+    {
+        var from = _dragSource;
+        CancelColumnDrag();
+        if (from < 0 || hoveredIndex < 0 || hoveredIndex >= Columns.Count)
+            return;
+
+        var target = before ? hoveredIndex : hoveredIndex + 1;
+        if (target > from)
+            target--; // the column vacates its own slot before it lands
+
+        MoveColumn(from, Math.Clamp(target, 0, Columns.Count - 1));
     }
 
     /// <summary>The five pipelines, in order. Unavailable ones stay in the list, disabled.</summary>
