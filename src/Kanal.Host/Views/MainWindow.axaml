@@ -75,11 +75,50 @@
                         <TextBlock Text="{Binding TranslationStatus}" FontSize="11"
                                    Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
                     </StackPanel>
+                    <!-- Transport, then a rule, then the things that are not transport. The icons
+                         carry the shape at a glance from a metre; the words carry which of the
+                         three it is, since ▶ and ❚❚ differ by very little at that distance. -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                        <Button Content="Start" Command="{Binding StartCommand}" Classes="accent" />
-                        <Button Content="Stop" Command="{Binding StopCommand}" />
+                        <Button Command="{Binding StartCommand}" Classes="accent">
+                            <StackPanel Orientation="Horizontal" Spacing="9">
+                                <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
+                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                                <TextBlock Text="Start" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- One button, both directions: mid-meeting the operator should not have
+                             to find a second control to undo the first. -->
+                        <Button Command="{Binding PauseCommand}"
+                                ToolTip.Tip="Take the room off the record — nothing transcribed, translated or sent. The room, the QR and the transcript all stay.">
+                            <StackPanel Orientation="Horizontal" Spacing="9">
+                                <Path Classes="glyph" Data="{StaticResource GlyphPause}"
+                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
+                                      IsVisible="{Binding !IsPaused}" />
+                                <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
+                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
+                                      IsVisible="{Binding IsPaused}" />
+                                <TextBlock Text="{Binding PauseLabel}" VerticalAlignment="Center" Width="50" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Command="{Binding StopCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="9">
+                                <Path Classes="glyph" Data="{StaticResource GlyphStop}"
+                                      Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
+                                <TextBlock Text="Stop" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
+                                   VerticalAlignment="Center" Margin="4,0" />
+
                         <Button Content="Export .md" Command="{Binding ExportMarkdownCommand}" Classes="ghost" />
-                        <Button Content="Settings" Click="OnSettingsClick" Classes="ghost" />
+                        <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
+                                ToolTip.Tip="Settings">
+                            <Path Classes="glyph" Data="{StaticResource GlyphSettings}"
+                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -153,6 +192,21 @@
                         </ComboBox>
                     </StackPanel>
                 </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Paused has to be unmissable from a metre. Columns that have simply stopped look
+             exactly like a room where nobody is talking, and "am I being recorded" is the one
+             question that must never be answered by inference. Inverted ink — the heaviest
+             statement available without spending colour, which belongs to speakers. -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding IsPaused}"
+                Background="{StaticResource Ink}" Padding="24,10">
+            <StackPanel Orientation="Horizontal" Spacing="13">
+                <Path Data="{StaticResource GlyphPause}" Fill="{StaticResource Sheet}"
+                      Width="9" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
+                <TextBlock Text="PAUSED — NOTHING IS BEING TRANSCRIBED, TRANSLATED OR SENT"
+                           FontSize="11.5" FontWeight="Bold" LetterSpacing="1.7"
+                           Foreground="{StaticResource Sheet}" VerticalAlignment="Center" />
             </StackPanel>
         </Border>
 

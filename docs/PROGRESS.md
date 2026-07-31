@@ -87,6 +87,31 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   Start stays deliberate — ASR utterance ids restart at zero, so reusing a channel would let a
   new meeting overwrite the old one's records by id.
 
+- **Transport: Start · Pause/Resume · Stop, with icons.** The host had two buttons and no way to
+  take the room off the record without ending the meeting. Pause is designed as a **privacy
+  control** first — in a negotiation the operator steps out to talk to their own side — so it
+  stops the audio at the door (`MeetingSession.PushAudioAsync` returns early while paused) rather
+  than hiding the transcript afterwards. Dropping the transcript while still streaming the room to
+  a cloud transcriber would mean the private conversation left the building and only the record of
+  it was hidden, which is worse than offering no pause at all. A provider that generates its own
+  audio (the scripted one) is handled at the other end too: nothing it says while paused is
+  recorded.
+
+  Pausing is announced to the room (`room.paused`) and carried in `room.snapshot`, so a phone
+  joining mid-pause lands in the same state as everyone else. A column that simply stops is
+  indistinguishable from a broken connection, and "is my next sentence being recorded" is not a
+  question to answer by inference. On the host the same state is an inverted ink band across the
+  full width — the heaviest statement available without spending colour, which belongs to
+  speakers. The bottom status line alone was not enough: at a metre it is easy to miss, on exactly
+  the state where being wrong is expensive.
+
+  Icons are drawn as geometry rather than set as characters (▶ ❚❚ ■). The font stack here is
+  chosen to carry three scripts at once, and which face ends up supplying a symbol out of it is
+  not worth leaving to chance on the one row of controls used mid-meeting. Settings is three
+  sliders rather than a gear, drawn from the same rules-and-blocks vocabulary as the rest of the
+  screen. A glyph is not text and does not inherit `TextElement.Foreground`, so every button state
+  states what its icon is painted with — an icon left ink-on-ink during a hover fill disappears.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

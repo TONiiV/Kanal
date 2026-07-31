@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
@@ -77,6 +78,153 @@ public class MeetingSessionTests
 
             return new Dictionary<string, string>();
         }
+    }
+
+    /// <summary>Records what actually reached the wire, so "nothing left the machine" is testable.</summary>
+    private sealed class AudioCountingAsr : IAsrProvider
+    {
+        public readonly Session Pushes = new();
+
+        public string Id => "audio-counting";
+
+        public AsrCapabilities Caps { get; } = new(
+            Streaming: true, Diarization: false, Translation: true,
+            AutoLanguageDetect: true, new HashSet<string> { "zh" }, LatencyClass.Realtime);
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            Task.FromResult<IAsrSession>(Pushes);
+
+        internal sealed class Session : IAsrSession
+        {
+            private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
+
+            public int Frames;
+
+            public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default)
+            {
+                Interlocked.Increment(ref Frames);
+                return ValueTask.CompletedTask;
+            }
+
+            /// <summary>Says nothing until disposed — this fake exists to count audio, not to speak.</summary>
+            public IAsyncEnumerable<AsrEvent> Events => _events.Reader.ReadAllAsync();
+
+            public ValueTask DisposeAsync()
+            {
+                _events.Writer.TryComplete();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The half that makes pause a privacy control rather than a display one. Dropping
+    /// transcripts while still streaming the room to a cloud transcriber would mean the audio
+    /// of the private conversation left the building and only the transcript of it was hidden —
+    /// worse than not offering pause at all. A paused session accepts no audio.
+    /// </summary>
+    [Fact]
+    public async Task APausedSessionAcceptsNoAudio()
+    {
+        var asr = new AudioCountingAsr();
+        await using var session = new MeetingSession(
+            asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
+        await session.StartAsync();
+
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, asr.Pushes.Frames);
+
+        await session.SetPausedAsync(true);
+        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, asr.Pushes.Frames);
+
+        await session.SetPausedAsync(false);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(2, asr.Pushes.Frames);
+    }
+
+    /// <summary>
+    /// Pause is a privacy control before it is a convenience one: in a supplier negotiation the
+    /// operator steps out of the meeting to talk to their own side, and nothing said in that
+    /// minute may be transcribed, translated, published to the phones in the room, or — in a
+    /// cloud mode — sent off this machine at all.
+    /// </summary>
+    [Fact]
+    public async Task NothingSpokenWhilePausedIsRecordedOrPublished()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await RunToEndAsync(session);
+
+        Assert.Empty(relay.OfType<UtteranceUpsert>());
+        Assert.Empty(session.Room.Snapshot().Utterances);
+    }
+
+    [Fact]
+    public async Task ResumingRecordsAgain()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(false);
+        await RunToEndAsync(session);
+
+        Assert.NotEmpty(relay.OfType<UtteranceUpsert>());
+    }
+
+    /// <summary>
+    /// A phone whose column simply stops is indistinguishable from a phone whose connection
+    /// broke. The room is told, so the page can say "paused" rather than leaving the
+    /// participant to guess — the same reasoning as <c>room.closed</c>.
+    /// </summary>
+    [Fact]
+    public async Task PauseAndResumeAreAnnouncedToTheRoom()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(false);
+
+        var announced = relay.OfType<RoomPausedMessage>();
+        Assert.Equal([true, false], announced.Select(m => m.Paused));
+    }
+
+    /// <summary>Setting pause to what it already is says nothing — a repeated press must not
+    /// fill the channel with messages the clients would only re-apply.</summary>
+    [Fact]
+    public async Task SettingTheSamePauseStateTwiceIsNotAnnouncedTwice()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true);
+
+        Assert.Single(relay.OfType<RoomPausedMessage>());
+    }
+
+    /// <summary>A phone joining mid-pause has missed the announcement; the snapshot carries it,
+    /// so late join lands in the same state as everyone else — the room.snapshot invariant.</summary>
+    [Fact]
+    public async Task SnapshotCarriesThePausedState()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.PublishSnapshotAsync();
+
+        Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Paused);
     }
 
     /// <summary>Slow enough that shutdown always finds it in flight, quick enough to fit a grace.</summary>

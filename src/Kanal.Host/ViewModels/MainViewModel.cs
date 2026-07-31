@@ -326,6 +326,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private bool _isRunning;
 
@@ -391,11 +392,38 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     private bool _isStopping;
+
+    /// <summary>
+    /// The room is open but off the record. One button carries both directions — an operator
+    /// mid-meeting should not have to find a second control to undo the first.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PauseLabel))]
+    private bool _isPaused;
+
+    public string PauseLabel => IsPaused ? "Resume" : "Pause";
 
     private bool CanStart() => !IsRunning && !IsStopping;
 
     private bool CanStop() => IsRunning && !IsStopping;
+
+    private bool CanPause() => IsRunning && !IsStopping;
+
+    [RelayCommand(CanExecute = nameof(CanPause))]
+    private async Task PauseAsync()
+    {
+        if (_session is null)
+            return;
+
+        var paused = !IsPaused;
+        await _session.SetPausedAsync(paused);
+        IsPaused = paused;
+        Status = paused
+            ? "Paused — nothing is being transcribed, translated or sent. The room stays open."
+            : $"Live — {SelectedMode.Mode.Leaves}.";
+    }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
@@ -419,6 +447,7 @@ public partial class MainViewModel : ViewModelBase
         Speakers.Clear();
         _speakerModels.Clear();
         _tagToCanonical.Clear();
+        IsPaused = false; // a new room is never inheriting the last one's pause
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
@@ -519,6 +548,7 @@ public partial class MainViewModel : ViewModelBase
             JoinUrl = "";
             QrImage = null;
             IsRunning = false;
+            IsPaused = false;
             Status = "Stopped. Rename, merge and export still work on the last room.";
         }
         finally
