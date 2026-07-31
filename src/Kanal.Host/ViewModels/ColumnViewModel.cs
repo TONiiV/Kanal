@@ -6,23 +6,6 @@ namespace Kanal.Host.ViewModels;
 
 public partial class ColumnViewModel : ViewModelBase
 {
-    /// <summary>Column heads read as signage: the ISO code large, the language's own name beneath.</summary>
-    private static readonly Dictionary<string, string> NativeNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["zh"] = "中文",
-        ["de"] = "Deutsch",
-        ["pl"] = "Polski",
-        ["en"] = "English",
-        ["fr"] = "Français",
-        ["es"] = "Español",
-        ["it"] = "Italiano",
-        ["cs"] = "Čeština",
-        ["uk"] = "Українська",
-        ["ru"] = "Русский",
-        ["ja"] = "日本語",
-        ["ko"] = "한국어",
-    };
-
     private readonly Dictionary<string, BubbleViewModel> _byId = new();
     private BubbleViewModel? _live;
 
@@ -30,7 +13,8 @@ public partial class ColumnViewModel : ViewModelBase
     {
         Language = language;
         Code = language.ToUpperInvariant();
-        NativeName = NativeNames.TryGetValue(language, out var name) ? name : "";
+        // column heads read as signage: the ISO code large, the language's own name beneath
+        NativeName = LanguageCatalog.NativeName(language) ?? "";
     }
 
     public string Language { get; }

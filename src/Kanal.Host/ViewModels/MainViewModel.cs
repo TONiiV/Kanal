@@ -33,6 +33,15 @@ public partial class MainViewModel : ViewModelBase
 
     public MainViewModel()
     {
+        foreach (var (code, name) in LanguageCatalog.Known)
+            AttachLanguageOption(new LanguageOption
+            {
+                Code = code,
+                Label = name,
+                IsSelected = code is "zh" or "de" or "pl",
+            });
+        RefreshSelectedLanguages();
+
         Columns.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasColumns));
 
         _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
@@ -61,13 +70,60 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
-    public ObservableCollection<LanguageOption> LanguageOptions { get; } = new()
+    /// <summary>The full pickable catalog, shown in the edit dialog; custom ISO codes are appended.</summary>
+    public ObservableCollection<LanguageOption> LanguageOptions { get; } = new();
+
+    /// <summary>The selected subset, in catalog order — drives the flag stack and the room config.</summary>
+    public ObservableCollection<LanguageOption> SelectedLanguages { get; } = new();
+
+    /// <summary>Codes next to the flags: colour never carries meaning alone.</summary>
+    public string SelectedLanguageSummary => SelectedLanguages.Count == 0
+        ? "none — click to add"
+        : string.Join(" · ", SelectedLanguages.Select(o => o.Code.ToUpperInvariant()));
+
+    private void AttachLanguageOption(LanguageOption option)
     {
-        new LanguageOption { Code = "zh", Label = "中文", IsSelected = true },
-        new LanguageOption { Code = "de", Label = "Deutsch", IsSelected = true },
-        new LanguageOption { Code = "pl", Label = "Polski", IsSelected = true },
-        new LanguageOption { Code = "en", Label = "English", IsSelected = false },
-    };
+        option.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LanguageOption.IsSelected))
+                RefreshSelectedLanguages();
+        };
+        LanguageOptions.Add(option);
+    }
+
+    private void RefreshSelectedLanguages()
+    {
+        SelectedLanguages.Clear();
+        foreach (var option in LanguageOptions.Where(o => o.IsSelected))
+            SelectedLanguages.Add(option);
+        OnPropertyChanged(nameof(SelectedLanguageSummary));
+    }
+
+    /// <summary>Adds (or selects) languages typed as ISO codes in the edit dialog, e.g. "tr, nl".</summary>
+    [RelayCommand]
+    private void AddLanguage()
+    {
+        foreach (var raw in NewLanguageInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var code = raw.ToLowerInvariant();
+            if (code.Length is < 2 or > 3 || !code.All(char.IsAsciiLetterLower))
+                continue;
+
+            var existing = LanguageOptions.FirstOrDefault(o =>
+                string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+                existing.IsSelected = true;
+            else
+                AttachLanguageOption(new LanguageOption
+                {
+                    Code = code,
+                    Label = LanguageCatalog.NativeName(code) ?? code.ToUpperInvariant(),
+                    IsSelected = true,
+                });
+        }
+
+        NewLanguageInput = "";
+    }
 
     public string[] Modes { get; } = ["Demo (scripted)", "Gladia (live)"];
 
@@ -77,9 +133,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _selectedMode = "Demo (scripted)";
 
-    /// <summary>Extra ISO codes beyond the chips, e.g. "fr, es".</summary>
+    /// <summary>ISO codes typed into the edit dialog's add row, e.g. "tr, nl".</summary>
     [ObservableProperty]
-    private string _extraLanguagesInput = "";
+    private string _newLanguageInput = "";
 
     [ObservableProperty]
     private AudioDeviceInfo? _selectedDevice;
@@ -144,9 +200,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
-        var languages = LanguageOptions.Where(o => o.IsSelected).Select(o => o.Code)
-            .Concat(ExtraLanguagesInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Select(l => l.ToLowerInvariant())
+        var languages = SelectedLanguages.Select(o => o.Code.ToLowerInvariant())
             .Distinct()
             .ToList();
         if (languages.Count == 0)

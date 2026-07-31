@@ -23,6 +23,12 @@ public partial class MainWindow : Window
         (DataContext as MainViewModel)?.RefreshKeyStatus();
     }
 
+    private async void OnLanguagesClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new LanguagesWindow { DataContext = DataContext };
+        await dialog.ShowDialog(this);
+    }
+
     private void OnColumnScrollLoaded(object? sender, RoutedEventArgs e)
     {
         if (sender is not ScrollViewer scroller || _following.ContainsKey(scroller))
