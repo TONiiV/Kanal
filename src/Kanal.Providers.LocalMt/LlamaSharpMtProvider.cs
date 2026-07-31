@@ -8,7 +8,7 @@ namespace Kanal.Providers.LocalMt;
 /// <see cref="ITextGenerator"/>. Sequential on purpose — a local model shares
 /// one context and gains nothing from parallel requests.
 /// </summary>
-public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable
+public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable, IAsyncDisposable
 {
     private readonly ITextGenerator _generator;
 
@@ -37,6 +37,21 @@ public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable
         }
 
         return result;
+    }
+
+    /// <summary>Preferred over <see cref="Dispose"/>: the generator waits for an in-flight
+    /// decode before freeing native weights, and Stop should not block the UI thread on it.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        switch (_generator)
+        {
+            case IAsyncDisposable async:
+                await async.DisposeAsync();
+                break;
+            case IDisposable sync:
+                sync.Dispose();
+                break;
+        }
     }
 
     public void Dispose() => (_generator as IDisposable)?.Dispose();

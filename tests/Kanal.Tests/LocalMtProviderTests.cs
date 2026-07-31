@@ -99,6 +99,158 @@ public class MtOutputCleanerTests
     }
 }
 
+public class LlamaSharpTextGeneratorTests
+{
+    /// <summary>
+    /// Stands in for llama.cpp. <see cref="Dispose"/> records whether it was called while a
+    /// decode was running — in the real backend that is a native use-after-free, which arrives
+    /// as an AccessViolationException and takes the process down with the transcript unexported.
+    /// </summary>
+    private sealed class FakeBackend : ILlamaBackend
+    {
+        private readonly TaskCompletionSource _started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _resume =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private int _inFlight;
+
+        public Task Started => _started.Task;
+        public int Loads;
+        public string? LoadedPath;
+        public bool Freed;
+        public bool FreedUnderARunningDecode;
+
+        public void Resume() => _resume.TrySetResult();
+
+        public Task LoadAsync(string modelPath, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Loads);
+            LoadedPath = modelPath;
+            return Task.CompletedTask;
+        }
+
+        public async Task<string> InferAsync(string prompt, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _inFlight);
+            try
+            {
+                _started.TrySetResult();
+                await _resume.Task.WaitAsync(ct);
+                return "Wsporniki KX-4402.";
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _inFlight);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Volatile.Read(ref _inFlight) > 0)
+                FreedUnderARunningDecode = true;
+            Freed = true;
+        }
+    }
+
+    /// <summary>
+    /// A final tracked after MeetingSession snapshotted its pending translations can still be
+    /// decoding when Stop disposes the provider. Disposal has to wait for it: freeing the
+    /// weights under a live decode is a use-after-free, and tearing down the gate under a
+    /// parked caller surfaces to the operator as "Translation failed".
+    /// </summary>
+    [Fact]
+    public async Task DisposeWaitsForAnInFlightGeneration()
+    {
+        var backend = new FakeBackend();
+        var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
+
+        var generating = generator.GenerateAsync("prompt", CancellationToken.None);
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var disposing = Task.Run(generator.Dispose);
+
+        var finishedEarly = await Task.WhenAny(disposing, Task.Delay(250)) == disposing;
+        Assert.False(finishedEarly, "Dispose returned while a decode was still running.");
+        Assert.False(backend.FreedUnderARunningDecode, "the weights were freed under a live decode.");
+        Assert.False(backend.Freed);
+
+        backend.Resume();
+
+        // the decode completes normally — no ObjectDisposedException out of the released gate
+        Assert.Equal("Wsporniki KX-4402.", await generating.WaitAsync(TimeSpan.FromSeconds(10)));
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(backend.Freed);
+        Assert.False(backend.FreedUnderARunningDecode);
+    }
+
+    [Fact]
+    public async Task GenerateAfterDisposeThrowsObjectDisposed()
+    {
+        var backend = new FakeBackend();
+        backend.Resume();
+        var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
+        await generator.GenerateAsync("prompt", CancellationToken.None);
+
+        generator.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            generator.GenerateAsync("prompt", CancellationToken.None));
+    }
+
+    /// <summary>The path Stop actually takes — same guarantee, without blocking the UI thread.</summary>
+    [Fact]
+    public async Task DisposeAsyncWaitsForAnInFlightGeneration()
+    {
+        var backend = new FakeBackend();
+        var provider = new LlamaSharpMtProvider(new LlamaSharpTextGenerator("qwen.gguf", backend));
+
+        var translating = provider.TranslateAsync(
+            "这批支架。", "zh", ["pl"], Array.Empty<Utterance>(), CancellationToken.None);
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var disposing = provider.DisposeAsync().AsTask();
+        Assert.False(await Task.WhenAny(disposing, Task.Delay(250)) == disposing);
+        Assert.False(backend.FreedUnderARunningDecode);
+
+        backend.Resume();
+        var result = await translating.WaitAsync(TimeSpan.FromSeconds(10));
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("Wsporniki KX-4402.", result["pl"]);
+        Assert.True(backend.Freed);
+        Assert.False(backend.FreedUnderARunningDecode);
+    }
+
+    [Fact]
+    public void DisposeIsIdempotent()
+    {
+        var backend = new FakeBackend();
+        var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
+
+        generator.Dispose();
+        generator.Dispose();
+
+        Assert.True(backend.Freed);
+    }
+
+    [Fact]
+    public async Task WeightsLoadOnceLazilyAndFromTheGivenPath()
+    {
+        var backend = new FakeBackend();
+        backend.Resume();
+        var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
+        Assert.Equal(0, backend.Loads); // constructing must not block on a multi-gigabyte load
+
+        await generator.GenerateAsync("a", CancellationToken.None);
+        await generator.GenerateAsync("b", CancellationToken.None);
+
+        Assert.Equal(1, backend.Loads);
+        Assert.Equal("qwen.gguf", backend.LoadedPath);
+        generator.Dispose();
+    }
+}
+
 public class LlamaSharpMtProviderTests
 {
     private sealed class FakeTextGenerator : ITextGenerator

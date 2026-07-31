@@ -1,8 +1,3 @@
-using System.Text;
-using LLama;
-using LLama.Common;
-using LLama.Sampling;
-
 namespace Kanal.Providers.LocalMt;
 
 /// <summary>
@@ -11,15 +6,25 @@ namespace Kanal.Providers.LocalMt;
 /// requests are serialized because one local model context serves them all.
 /// Deliberately thin: everything testable lives in front of <see cref="ITextGenerator"/>.
 /// </summary>
-public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable
+public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable, IAsyncDisposable
 {
     private readonly string _modelPath;
+    private readonly ILlamaBackend _backend;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private ModelParams? _params;
-    private LLamaWeights? _weights;
+    private bool _loaded;
     private bool _disposed;
 
-    public LlamaSharpTextGenerator(string modelPath) => _modelPath = modelPath;
+    public LlamaSharpTextGenerator(string modelPath)
+        : this(modelPath, new LlamaCppBackend())
+    {
+    }
+
+    /// <summary>Test seam: a fake backend stands in for llama.cpp and the model file.</summary>
+    public LlamaSharpTextGenerator(string modelPath, ILlamaBackend backend)
+    {
+        _modelPath = modelPath;
+        _backend = backend;
+    }
 
     public async Task<string> GenerateAsync(string prompt, CancellationToken ct)
     {
@@ -27,27 +32,13 @@ public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable
         try
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_weights is null)
+            if (!_loaded)
             {
-                _params = new ModelParams(_modelPath)
-                {
-                    ContextSize = 4096,
-                    GpuLayerCount = 999, // offload everything the backend supports (Metal on mac)
-                };
-                _weights = await LLamaWeights.LoadFromFileAsync(_params, ct);
+                await _backend.LoadAsync(_modelPath, ct);
+                _loaded = true;
             }
 
-            var executor = new StatelessExecutor(_weights, _params!);
-            var inference = new InferenceParams
-            {
-                MaxTokens = 512,
-                SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0.2f },
-            };
-
-            var output = new StringBuilder();
-            await foreach (var piece in executor.InferAsync(ApplyChatTemplate(prompt), inference, ct))
-                output.Append(piece);
-            return output.ToString();
+            return await _backend.InferAsync(prompt, ct);
         }
         finally
         {
@@ -55,20 +46,51 @@ public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable
         }
     }
 
-    /// <summary>Wrap the prompt in the model's own chat template (ChatML for Qwen, Gemma format for Gemma…).</summary>
-    private string ApplyChatTemplate(string userMessage)
+    /// <summary>
+    /// Frees the weights, waiting for an in-flight decode first. Stop can reach here while a
+    /// final tracked after the session snapshotted its pending translations is still decoding,
+    /// and llama.cpp weights are freed natively: releasing them under a live decode is a
+    /// use-after-free that ends the process, not an exception the host could report.
+    /// </summary>
+    public async ValueTask DisposeAsync()
     {
-        var template = new LLamaTemplate(_weights!) { AddAssistant = true };
-        template.Add("user", userMessage);
-        return Encoding.UTF8.GetString(template.Apply());
+        await _gate.WaitAsync();
+        try
+        {
+            DisposeUnderGate();
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
+    /// <inheritdoc cref="DisposeAsync"/>
+    /// <remarks>Blocks the calling thread for the rest of the decode; prefer
+    /// <see cref="DisposeAsync"/> anywhere the UI thread is involved.</remarks>
     public void Dispose()
+    {
+        _gate.Wait();
+        try
+        {
+            DisposeUnderGate();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void DisposeUnderGate()
     {
         if (_disposed)
             return;
         _disposed = true;
-        _weights?.Dispose();
-        _gate.Dispose();
+        _backend.Dispose();
+
+        // _gate is deliberately not disposed. A caller parked in WaitAsync has to resume into
+        // the ObjectDisposedException above, not into a disposed semaphore inside Release() —
+        // which reaches the operator as "Translation failed" instead of a clear shutdown. A
+        // SemaphoreSlim whose AvailableWaitHandle was never touched holds nothing to release.
     }
 }
