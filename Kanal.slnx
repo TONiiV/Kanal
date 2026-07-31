@@ -4,6 +4,7 @@
     <Project Path="src/Kanal.Core/Kanal.Core.csproj" />
     <Project Path="src/Kanal.Host/Kanal.Host.csproj" />
     <Project Path="src/Kanal.Providers.Gladia/Kanal.Providers.Gladia.csproj" />
+    <Project Path="src/Kanal.Providers.LocalMt/Kanal.Providers.LocalMt.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Kanal.Tests/Kanal.Tests.csproj" />

@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\Kanal.Core\Kanal.Core.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Audio\Kanal.Audio.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
+    <ProjectReference Include="..\..\src\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Host\Kanal.Host.csproj" />
   </ItemGroup>
 
