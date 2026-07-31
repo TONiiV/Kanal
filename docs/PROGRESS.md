@@ -39,6 +39,15 @@ The structural bottleneck is "translate only on final", not MT speed.
 No audio ever touches disk locally: capture backends stream PCM in memory (`PushAudioAsync`);
 the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnostic.
 
+### Fixes
+
+- **Multi-room isolation.** Two hosts starting in the same second used to land on the same
+  broadcast channel (room id was `kanal-HHmmss`); ids now carry a random 4-char suffix
+  (`RoomIds.New`, e.g. `kanal-093005-x7kq`). The mobile page's localStorage cache is now keyed
+  per room, so a phone joining meeting B no longer opens on meeting A's history; other rooms'
+  caches are pruned on load. Concurrent meetings were otherwise already independent — one
+  Supabase channel per room, stateless static page.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

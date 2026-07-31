@@ -241,7 +241,7 @@ public partial class MainViewModel : ViewModelBase
             mt = new FakeMtProvider();
         }
 
-        var config = new RoomConfig($"kanal-{DateTime.Now:HHmmss}", languages);
+        var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
         IRelayPublisher relay = RelayEnabled
             ? new SupabaseRelayPublisher(relaySettings.SupabaseUrl, relaySettings.AnonKey, config.RoomId)
