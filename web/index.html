@@ -212,7 +212,8 @@ const params = new URLSearchParams(location.search);
 // scripted demo content is never persisted as if it were meeting record. On join, other
 // rooms' caches (and the pre-room-scoped "kanal.cache" key) are dropped so old meetings
 // don't accumulate in localStorage.
-const CACHE_KEY = params.get("room") ? "kanal.cache::" + params.get("room") : null;
+const CACHE_KEY = !params.get("demo") && params.get("room")
+  ? "kanal.cache::" + params.get("room") : null;
 if (CACHE_KEY) {
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith("kanal.cache") && k !== CACHE_KEY) localStorage.removeItem(k);
