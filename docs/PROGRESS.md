@@ -125,7 +125,18 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   Rendering it caught a defect the assertions could not: `FlyoutPresenter`'s default `MaxWidth` is
   narrower than a readable measure of body text, and content wider than it is **clipped, not
   wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
-  of the window. Both are now set explicitly, as with every other Fluent default here.
+  of the window. Both are now set explicitly, as with every other Fluent default here, and the
+  flyout content sits in a `ScrollViewer` so growth past `MaxHeight` scrolls instead of silently
+  clipping.
+
+  Review then caught the help **overstating privacy**: Demo promised "no network" while the demo's
+  stated purpose — checking the join QR and the phones — runs over the relay, and local · local
+  promised "nothing is sent anywhere" while the captions themselves cross the network in every
+  mode. The relay fact now lives once in the flyout's introduction, each mode's help claims only
+  what its *pipeline* sends out, and a test bans the false absolutes outright. The same review
+  closed a hermeticity hole the PR itself had documented: the mode list read the ambient
+  `GLADIA_API_KEY`, so "unavailable without a key" was untestable on a machine that has one —
+  the key resolver is now injected like the other two test seams.
 
 ### Design changes
 
