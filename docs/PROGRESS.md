@@ -147,6 +147,29 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   runs and `RECORDING HELD` while paused — the file outlives the meeting, and nobody should find
   out about it afterwards. Settings carries both folders and an off switch.
 
+- **Microphone test in Settings, and an honest answer about noise suppression.** There was no way
+  to find out whether the room's microphone worked until the meeting had started and the columns
+  were filling with nothing. Settings now opens with an `INPUT` section: pick a device, press
+  Test, speak from where people will sit, and get a verdict — *nothing is arriving* / *too quiet*
+  / *clipping* / *the room is nearly as loud as the speaker* / *good* — each with what to do about
+  it. Level logic lives in `LevelMeter` and is tested against generated audio rather than a room.
+
+  The measurement that earns its place is the **margin**: how far speech sits above the room's own
+  noise floor, taken as the 10th percentile of recent frames (between sentences a meeting room is
+  at its floor). A loud microphone in a loud room passes every single-number check and still
+  transcribes badly; only the distance between the two predicts that.
+
+  On noise suppression the answer is **Kanal has none**. `WasapiAudioCapture` opens a plain shared
+  -mode stream, so whatever the device and Windows do — suppression, echo cancellation, automatic
+  gain — happens before Kanal sees a sample and is configured per device in Windows. A level
+  slider here would have controlled nothing, so the panel states this and measures the result
+  instead.
+
+  Rendering it caught a misleading number: with digitally silent gaps the panel reported *"speech
+  sits 81 dB above the room"*, a margin measured against the dB clamp rather than against
+  anything real. Digital silence between sentences means a device delivering zeros or gating
+  hard, not a very quiet room, and it is now reported as such.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.
