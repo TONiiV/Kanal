@@ -751,6 +751,8 @@ public partial class MainViewModel : ViewModelBase
             {
                 _recorder = null;
                 _lastRecording = path; // what was written so far is patched and still plays
+                // the room was told it was being recorded; it has to be told that stopped
+                _ = session.SetRecordingAsync(false);
                 Dispatcher.UIThread.Post(() =>
                 {
                     RecordingPath = "";
@@ -760,6 +762,9 @@ public partial class MainViewModel : ViewModelBase
             _recorder = recorder;
             RecordingPath = path;
             session.AudioAccepted += frame => recorder.Write(frame.Span);
+            // The operator's status bar is read by the operator alone. The people whose voices
+            // are being written to the file read the phone, so the room is told as well.
+            _ = session.SetRecordingAsync(true);
         }
         catch (Exception ex)
         {

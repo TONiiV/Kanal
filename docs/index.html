@@ -86,6 +86,18 @@ header{
 
 /* ---------- connection strip ---------- */
 
+/* A standing fact, not an alarm: ink on paper with a hairline, so it reads as part of the
+   page's structure rather than as an error the reader can dismiss as noise. It lives inside
+   the sticky masthead deliberately — the feed follows the newest utterance, so a participant
+   spends the meeting scrolled to the bottom, and a notice left in the flow would be read
+   once and never again. Being told you are on tape is not a one-off announcement. */
+#rec{display:none;border-top:1px solid var(--rule)}
+#rec.show{display:block}
+#rec p{
+  max-width:var(--measure);margin:0 auto;padding:.5rem 1.25rem;
+  color:var(--ink-2);font-size:.8125rem;letter-spacing:.01em;
+}
+
 #status{display:none;background:var(--alarm-wash);border-bottom:1px solid var(--rule)}
 #status.show{display:block}
 #status p{
@@ -182,6 +194,7 @@ main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
       <select id="lang"></select>
     </label>
   </div>
+  <div id="rec" role="status" aria-live="polite"><p></p></div>
 </header>
 <div id="status" role="status" aria-live="polite"><p></p></div>
 <main id="feed" aria-live="polite" aria-atomic="false"></main>
@@ -233,19 +246,23 @@ const UI = {
   zh:{name:"中文",waiting:"等待发言",hint:"发言会实时出现在这里，译文在上、原文在下。右上角可切换语言。",
       connecting:"连接中…",reconnecting:"连接已断开，正在重连…",failed:"连接失败",
       missing:"缺少参数。请扫描主机端的二维码打开此页面。",codeswitch:"混合语种",original:"原文",
-      ended:"会议已结束。记录保留在此页面。",moved:"会议已重新开始，正在切换…",paused:"已暂停 — 暂不记录。"},
+      ended:"会议已结束。记录保留在此页面。",moved:"会议已重新开始，正在切换…",paused:"已暂停 — 暂不记录。",
+      rec:"本次会议正在录音，音频保存在主机本机。",recHeld:"录音已暂停，会议恢复后继续。"},
   de:{name:"Deutsch",waiting:"Warten auf Redebeiträge",hint:"Beiträge erscheinen hier in Echtzeit — Übersetzung oben, Original darunter. Sprache oben rechts.",
       connecting:"Verbinde…",reconnecting:"Verbindung getrennt, neuer Versuch…",failed:"Verbindung fehlgeschlagen",
       missing:"Parameter fehlen. Bitte den QR-Code des Hosts scannen.",codeswitch:"Gemischte Sprache",original:"Original",
-      ended:"Besprechung beendet. Das Protokoll bleibt hier stehen.",moved:"Besprechung neu gestartet — wechsle…",paused:"Pausiert — es wird nichts aufgezeichnet."},
+      ended:"Besprechung beendet. Das Protokoll bleibt hier stehen.",moved:"Besprechung neu gestartet — wechsle…",paused:"Pausiert — es wird nichts aufgezeichnet.",
+      rec:"Diese Besprechung wird aufgezeichnet. Der Ton bleibt auf dem Host-Rechner.",recHeld:"Aufzeichnung angehalten — sie läuft weiter, sobald fortgesetzt wird."},
   pl:{name:"Polski",waiting:"Oczekiwanie na wypowiedzi",hint:"Wypowiedzi pojawią się tu na żywo — tłumaczenie u góry, oryginał poniżej. Język w prawym górnym rogu.",
       connecting:"Łączenie…",reconnecting:"Rozłączono, ponawianie…",failed:"Połączenie nieudane",
       missing:"Brak parametrów. Zeskanuj kod QR z komputera prowadzącego.",codeswitch:"Mieszany język",original:"oryginał",
-      ended:"Spotkanie zakończone. Zapis pozostaje na tej stronie.",moved:"Spotkanie uruchomione ponownie — przełączam…",paused:"Wstrzymane — nic nie jest zapisywane."},
+      ended:"Spotkanie zakończone. Zapis pozostaje na tej stronie.",moved:"Spotkanie uruchomione ponownie — przełączam…",paused:"Wstrzymane — nic nie jest zapisywane.",
+      rec:"To spotkanie jest nagrywane. Dźwięk pozostaje na komputerze prowadzącego.",recHeld:"Nagrywanie wstrzymane — będzie kontynuowane po wznowieniu."},
   en:{name:"English",waiting:"Waiting for speech",hint:"Utterances appear here live — translation on top, original below. Language at top right.",
       connecting:"Connecting…",reconnecting:"Disconnected, reconnecting…",failed:"Connection failed",
       missing:"Missing parameters. Scan the QR code on the host to open this page.",codeswitch:"Mixed language",original:"original",
-      ended:"Meeting ended. The record stays on this page.",moved:"Meeting restarted — switching over…",paused:"Paused — nothing is being recorded."},
+      ended:"Meeting ended. The record stays on this page.",moved:"Meeting restarted — switching over…",paused:"Paused — nothing is being recorded.",
+      rec:"This meeting is being recorded. The audio stays on the host machine.",recHeld:"Recording held — it continues when the meeting resumes."},
 };
 
 const state = {
@@ -257,6 +274,7 @@ const state = {
   statusKey: "",         // UI key, re-rendered when the language changes
   closed: false,         // host stopped this room; survives reload via the cache
   paused: false,         // host took the room off the record; also survives reload
+  recording: false,      // host is writing the room's audio to a file; survives reload
 };
 
 /* Closed outranks paused: a room that ended while paused is ended, not waiting. */
@@ -264,6 +282,16 @@ const lifecycleStatus = () => state.closed ? "ended" : state.paused ? "paused" :
 
 const $ = (id) => document.getElementById(id);
 const t = (key) => (UI[state.lang] || UI.en)[key];
+
+/* The people in the room are the ones entitled to know they are on tape, and this page is the
+   only surface they read. Held rather than hidden during a pause: the file exists and resumes,
+   and a notice that vanished would read as "it stopped". */
+function setRecordingNotice() {
+  const show = state.recording && !state.closed;
+  const el = $("rec");
+  el.querySelector("p").textContent = show ? t(state.paused ? "recHeld" : "rec") : "";
+  el.classList.toggle("show", show);
+}
 
 function setStatus(key) {
   state.statusKey = key || "";
@@ -323,7 +351,9 @@ function applySnapshot(snap) {
   for (const u of snap.utterances) state.utterances.set(u.id, u);
   // a phone joining mid-pause never saw the announcement, so the snapshot carries it
   state.paused = !!snap.paused;
+  state.recording = !!snap.recording;
   if (!state.closed) setStatus(lifecycleStatus());
+  setRecordingNotice();
   renderAll();
   saveCache();
 }
@@ -338,6 +368,7 @@ function handle(msg) {
     case "room.closed": applyClosed(); break;
     case "room.moved": moveToRoom(msg.newRoomId); break;
     case "room.paused": applyPaused(msg.paused); break;
+    case "room.recording": applyRecording(msg.recording); break;
   }
 }
 
@@ -347,6 +378,13 @@ function handle(msg) {
 function applyPaused(paused) {
   state.paused = !!paused;
   if (!state.closed) setStatus(lifecycleStatus());
+  setRecordingNotice(); // held vs running is the difference between two true statements
+  saveCache();
+}
+
+function applyRecording(recording) {
+  state.recording = !!recording;
+  setRecordingNotice();
   saveCache();
 }
 
@@ -354,6 +392,8 @@ function applyPaused(paused) {
    subscribed because a restart announces itself here as room.moved. */
 function applyClosed() {
   state.closed = true;
+  state.recording = false; // the room is over; nothing is being written to any more
+  setRecordingNotice();
   setStatus("ended");
   saveCache();
 }
@@ -453,6 +493,7 @@ function setLanguage(lang, persist) {
   $("langCode").textContent = (lang || "").toUpperCase();
   $("langName").textContent = (UI[lang] || {}).name || "";
   if (state.statusKey) setStatus(state.statusKey); // re-render chrome in the new language
+  setRecordingNotice();
   renderAll();
 }
 
@@ -472,6 +513,7 @@ function saveCache() {
     utterances,
     closed: state.closed,
     paused: state.paused,
+    recording: state.recording,
   }));
 }
 
@@ -485,6 +527,8 @@ function loadCache() {
     for (const u of cache.utterances) state.utterances.set(u.id, u);
     state.closed = !!cache.closed; // a reload of a finished room must not look live
     state.paused = !!cache.paused; // …nor a reload of a paused one look like it is recording
+    state.recording = !!cache.recording; // the notice must survive a lock-screen reconnect
+    setRecordingNotice();
     renderAll();
   } catch { /* corrupt cache — start empty */ }
 }

@@ -255,6 +255,57 @@ public class MeetingSessionTests
         Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Paused);
     }
 
+    /// <summary>
+    /// Whether the room is being recorded to audio is the participants' business, not only the
+    /// operator's: two of the three languages in the room are spoken in jurisdictions where
+    /// recording a private conversation without the other side knowing is a criminal matter,
+    /// and the phone in their hand is the only surface they read.
+    /// </summary>
+    [Fact]
+    public async Task RecordingIsAnnouncedToTheRoom()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.SetRecordingAsync(false);
+
+        Assert.Equal([true, false], relay.OfType<RoomRecordingMessage>().Select(m => m.Recording));
+    }
+
+    /// <summary>Same reasoning as pause: a repeated setting must not fill the channel.</summary>
+    [Fact]
+    public async Task SettingTheSameRecordingStateTwiceIsNotAnnouncedTwice()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.SetRecordingAsync(true);
+
+        Assert.Single(relay.OfType<RoomRecordingMessage>());
+    }
+
+    /// <summary>
+    /// A phone that scans the QR ten minutes in never saw the announcement. Late join is served
+    /// entirely from the snapshot, so a notice that only existed as an event would be a notice
+    /// most participants never get.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotCarriesTheRecordingState()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.PublishSnapshotAsync();
+
+        Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Recording);
+    }
+
     /// <summary>Slow enough that shutdown always finds it in flight, quick enough to fit a grace.</summary>
     private sealed class SlowMt : IMtProvider
     {
