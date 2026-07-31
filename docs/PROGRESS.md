@@ -182,6 +182,16 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    left), after a first attempt using a `Paper` fill turned out to be invisible against `Sheet` in
    a headless render — a 4 % lightness step is not a signal at a metre.
 
+9. **Chrome accents are ink, not the OS accent.** FluentTheme paints checked boxes, radio dots and
+   list selection from `SystemAccentColor`, which on this machine is `#0078D7`. Reviewing the
+   renders for changes 6-8, that blue was the most saturated thing on screen in both dialogs —
+   four bright checkboxes in the language catalog out-shouting the speaker hues they sit beside,
+   directly against ".impeccable.md — the only colour on screen is people". The accent ramp is now
+   redirected onto the ink palette in `App.axaml` (`SystemAccentColor` → `Ink`, the Light steps →
+   `Ink2`/`Ink3`/`Rule`), so hover and pressed states still differ, but by weight rather than hue.
+   A test asserts every accent resource resolves to a palette colour, so the next control that
+   reaches for the system accent fails the suite instead of the design review.
+
    *Deliberate addition.* Alt+← / Alt+→ on a focused head performs the same move. Drag stays the
    primary gesture, but a modal OLE drag on a trackpad mid-meeting is a poor single route, and it
    is unverifiable here: Avalonia's headless platform registers no `IPlatformDragSource`, so

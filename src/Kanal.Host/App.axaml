@@ -23,6 +23,17 @@
             <SolidColorBrush x:Key="RuleFaint" Color="#E7EBEE" />
             <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
 
+            <!-- FluentTheme paints checked boxes, radios and selection in the OS accent, which put a
+                 saturated blue beside the speaker hues and out-shouted them. Redirect the accent ramp
+                 onto the ink palette: hover and pressed states still differ, but by weight, not hue. -->
+            <Color x:Key="SystemAccentColor">#111A21</Color>
+            <Color x:Key="SystemAccentColorLight1">#4A5862</Color>
+            <Color x:Key="SystemAccentColorLight2">#7C8A93</Color>
+            <Color x:Key="SystemAccentColorLight3">#D5DCE1</Color>
+            <Color x:Key="SystemAccentColorDark1">#111A21</Color>
+            <Color x:Key="SystemAccentColorDark2">#111A21</Color>
+            <Color x:Key="SystemAccentColorDark3">#111A21</Color>
+
             <!-- Latin first so Polish diacritics come from the grotesque, CJK from the fallback.
                  No embedded font: a Latin-only face would clash with the CJK fallback it sits next to. -->
             <FontFamily x:Key="Sans">Helvetica Neue, Helvetica, Segoe UI Variable Text, Segoe UI, Arial, Microsoft YaHei, PingFang SC</FontFamily>
