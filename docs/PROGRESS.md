@@ -112,6 +112,21 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   screen. A glyph is not text and does not inherit `TextElement.Foreground`, so every button state
   states what its icon is painted with — an icon left ink-on-ink during a hover fill disappears.
 
+- **Mode availability was invisible.** Whether a mode could run was carried only by the row's
+  contrast — the same signal the grey second line already uses — so five unequal choices read as
+  five equal ones and the operator found out at Start. Each row now carries a marker (filled
+  square = runs now, hollow = blocked) and states its status in words, and a **help flyout** next
+  to the dropdown lays all five out side by side with what each one does, what it sends off this
+  machine, and what is blocking it. The flyout is generated from the same `Modes` collection the
+  dropdown binds to, so the help cannot drift from the list. Three of five modes cannot run yet;
+  the list is as much roadmap as control, which is why a row nobody can pick still explains itself
+  — and, like every other string here, without naming a company.
+
+  Rendering it caught a defect the assertions could not: `FlyoutPresenter`'s default `MaxWidth` is
+  narrower than a readable measure of body text, and content wider than it is **clipped, not
+  wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
+  of the window. Both are now set explicitly, as with every other Fluent default here.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

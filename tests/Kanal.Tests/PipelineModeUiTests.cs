@@ -48,6 +48,44 @@ public class PipelineModeUiTests
         Assert.Contains(vm.Modes, o => o.Mode.Id == PipelineModeId.LocalLocal && !o.IsAvailable);
     }
 
+    /// <summary>
+    /// Availability was carried only by the row's contrast, which is the same signal a
+    /// long second line of grey text already uses — at a glance the list read as five equal
+    /// choices. Each row now states its status in words as well.
+    /// </summary>
+    [AvaloniaFact]
+    public void EveryRowSaysWhetherItCanRun()
+    {
+        var vm = TestViewModels.Hermetic();
+
+        foreach (var option in vm.Modes)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(option.Status));
+            if (option.IsAvailable)
+                Assert.Equal("ready", option.Status);
+            else
+                Assert.Equal(option.Unavailable, option.Status);
+        }
+
+        Assert.Contains(vm.Modes, o => o.Status == "ready");
+        Assert.Contains(vm.Modes, o => o.Status != "ready");
+    }
+
+    /// <summary>The status has to follow the settings it describes, not the value it was born with.</summary>
+    [AvaloniaFact]
+    public void StatusFollowsTheSettingsItDescribes()
+    {
+        var settings = new AppSettings();
+        var vm = TestViewModels.Hermetic(settings);
+        var cloud = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudCloud);
+
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
+        vm.RefreshPipelineStatus();
+
+        Assert.True(cloud.IsAvailable);
+        Assert.Equal("ready", cloud.Status);
+    }
+
     [AvaloniaFact]
     public void EveryModeRowStatesWhatLeavesTheMachine()
     {

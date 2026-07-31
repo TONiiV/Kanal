@@ -140,15 +140,84 @@
                             </ComboBox.ItemContainerTheme>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
-                                    <StackPanel Spacing="2" Margin="0,2,0,3">
-                                        <TextBlock Text="{Binding Name}" FontSize="12.5" />
-                                        <TextBlock Text="{Binding Detail}" FontSize="10.5"
-                                                   LineHeight="15" TextWrapping="Wrap" MaxWidth="316"
-                                                   Foreground="{StaticResource Ink3}" />
-                                    </StackPanel>
+                                    <!-- The marker is the fix for the real complaint: availability
+                                         used to be carried only by the row's contrast, which is
+                                         the same signal the grey second line already uses, so
+                                         five unequal choices read as five equal ones. -->
+                                    <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,3">
+                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
+                                              Margin="0,5,10,0" VerticalAlignment="Top"
+                                              Data="{StaticResource GlyphSquareFilled}"
+                                              Fill="{StaticResource Ink}"
+                                              IsVisible="{Binding IsAvailable}" />
+                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
+                                              Margin="0,5,10,0" VerticalAlignment="Top"
+                                              Data="{StaticResource GlyphSquareHollow}"
+                                              Fill="{StaticResource Ink3}"
+                                              IsVisible="{Binding !IsAvailable}" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="{Binding Name}" FontSize="12.5" />
+                                            <TextBlock Text="{Binding Detail}" FontSize="10.5"
+                                                       LineHeight="15" TextWrapping="Wrap" MaxWidth="300"
+                                                       Foreground="{StaticResource Ink3}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+
+                        <!-- The list is the roadmap as much as it is a control: three of the five
+                             cannot run yet. The flyout explains all five side by side, including
+                             the ones that are blocked, which a disabled dropdown row cannot. -->
+                        <Button Classes="ghost" Content="?" Padding="10,5" FontWeight="Bold"
+                                ToolTip.Tip="What the modes mean">
+                            <Button.Flyout>
+                                <Flyout Placement="BottomEdgeAlignedLeft">
+                                    <StackPanel Margin="20,17,20,8" Width="424">
+                                        <TextBlock Text="MODES" Classes="label" />
+                                        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                                                Margin="0,6,0,12" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"
+                                                   Margin="0,0,0,15" Foreground="{StaticResource Ink2}"
+                                                   Text="Kanal runs two stages — speech into text, then text into the other languages — and each one can run on this laptop or off it. A mode picks both at once. Modes that cannot run yet stay in the list with the reason." />
+                                        <ItemsControl ItemsSource="{Binding Modes}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:PipelineModeOption">
+                                                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,14">
+                                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
+                                                              Margin="0,5,11,0" VerticalAlignment="Top"
+                                                              Data="{StaticResource GlyphSquareFilled}"
+                                                              Fill="{StaticResource Ink}"
+                                                              IsVisible="{Binding IsAvailable}" />
+                                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
+                                                              Margin="0,5,11,0" VerticalAlignment="Top"
+                                                              Data="{StaticResource GlyphSquareHollow}"
+                                                              Fill="{StaticResource Ink3}"
+                                                              IsVisible="{Binding !IsAvailable}" />
+                                                        <StackPanel Grid.Column="1" Spacing="3">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12.5"
+                                                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                            <!-- Status and privacy on one line: the two
+                                                                 facts that decide whether to pick this row. -->
+                                                            <TextBlock FontSize="10.5" LetterSpacing="0.4"
+                                                                       TextWrapping="Wrap" LineHeight="15"
+                                                                       Foreground="{StaticResource Ink3}">
+                                                                <Run Text="{Binding Status, Mode=OneWay}" />
+                                                                <Run Text=" · " />
+                                                                <Run Text="{Binding Mode.Leaves, Mode=OneWay}" />
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding Help}" TextWrapping="Wrap"
+                                                                       FontSize="11.5" LineHeight="17"
+                                                                       Foreground="{StaticResource Ink2}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">

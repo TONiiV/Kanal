@@ -20,12 +20,22 @@ public partial class PipelineModeOption : ViewModelBase
 
     public string Name => Mode.Name;
 
+    public string Help => Mode.Help;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAvailable))]
     [NotifyPropertyChangedFor(nameof(Detail))]
+    [NotifyPropertyChangedFor(nameof(Status))]
     private string? _unavailable;
 
     public bool IsAvailable => Unavailable is null;
+
+    /// <summary>
+    /// Whether this row can be picked, in words. Availability used to be carried only by the
+    /// row's contrast — the same signal the grey second line already uses — so at a glance the
+    /// list read as five equal choices and the operator found out at Start.
+    /// </summary>
+    public string Status => Unavailable ?? "ready";
 
     /// <summary>The second line: the privacy consequence, then the blocker if there is one.</summary>
     public string Detail => IsAvailable ? Mode.Leaves : $"{Mode.Leaves} · {Unavailable}";
