@@ -98,6 +98,46 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    only Demo and Gladia: mode is the *audio* source, Settings is the translation engine, and a
    "Local" mode entry would reintroduce the vendor branching the capability model exists to
    avoid — plus there is no fully-local path to select until `WhisperCppAsrProvider` exists.
+   *Superseded by 6.*
+6. **The mode names the pipeline, not the vendor** (PR for #14). `Demo (scripted)` /
+   `Gladia (live)` became five modes spanning both stages — demo; cloud·cloud; cloud·local;
+   local·cloud; local·local — each stating in the row what it sends off the machine (nothing /
+   audio / only text). Two things were wrong with the old pair: it named a company, which
+   `.impeccable.md` rules out ("Precise. Calm. Unbranded."), and it hid half the pipeline —
+   `Gladia (live)` meant cloud or local translation depending on a setting several clicks away,
+   so the one question that has to be answered before a meeting with a Chinese supplier ("does
+   audio leave this machine, does text leave this machine") was the one the UI would not answer.
+   `TranslationPlanner` generalised into `PipelinePlanner`: one resolver mapping mode + settings
+   to a provider *pair*, an availability reason, and both stage labels. **No new branching
+   reached `MeetingSession`** — the mode is a preset, and cloud·local still works by the #7
+   mechanism (`GladiaOptions.EnableTranslation = false` drops `Caps.Translation`, which is what
+   makes the orchestrator route finals through `IMtProvider`). `MainViewModel` no longer holds a
+   vendor-typed field at all: it keeps `IAsrProvider`/`IMtProvider` and disposes whichever pair
+   the planner returned. The masthead's `Translation: …` label grew its missing half —
+   `Transcription: … | Translation: …` on the same hairline rule and the same `Ink3` chrome ink —
+   and the vendor-named `Gladia key: …` folded into the transcription label as
+   `key “meeting-room”` / `key from the environment`, since the env var's own name is a brand.
+   Settings is now grouped by stage (Transcription: the named key list, plus "Local transcription
+   — not built yet"; Translation: the local-model catalog, plus a line saying there is no
+   standalone cloud MT provider yet). The former `Gladia cloud` radio in the model list became
+   `None`: cloud-vs-local is the *mode's* choice now, and that row only picks which local model
+   the local-translation modes load.
+
+   *Deliberate deviations.* (a) The issue's table has demo translating with a fake; demo instead
+   keeps #7's behaviour — a downloaded model translates the scripted transcript, since with no
+   local ASR that is the only way to rehearse a model without a key, and a model that was chosen
+   but never downloaded still falls back loudly rather than silently. "Nothing leaves this
+   machine" holds either way, which is what the table's column is actually about. (b) Unavailable
+   rows recede in contrast (`Ink2`) but keep their reason at full legibility, and `ComboBoxItem`
+   selection moved off FluentTheme's system accent onto a `Rule`-grey block — the mode list was
+   the largest patch of non-speaker colour on the screen. (c) The mode combo is a two-line row
+   (name over consequence) in *both* the popup and the closed box: `.impeccable.md` says nobody
+   will hover for a tooltip, and Avalonia has no separate selection-box template, so the
+   consequence is either always shown or effectively hidden.
+
+   *Not built, still blocking `local · cloud`*: a standalone cloud `IMtProvider`. Gladia is a
+   speech API with no text-only translation endpoint, so that row is unavailable for two reasons
+   at once and says both.
 
 ### Fixes in review (PR #7)
 
@@ -149,6 +189,11 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Local translation LLM support** — `LlamaSharpMtProvider` (in-process llama.cpp, no
       ollama/Python dependency) + Settings section to download/select a translation model
       (catalog: Qwen3.5-4B default, Qwen3.5-2B, Gemma 3 4B with licence note; A/B-tested); TDD.
+- [x] **Modes describe the pipeline, not the vendor** — five modes over both stages,
+      `PipelinePlanner` resolving mode → provider pair, unavailable modes shown/disabled with the
+      reason and the privacy consequence in place, Settings grouped by stage (#14).
+- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
+      second blocker on `local · cloud`, buildable independently of the local ASR work.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).

@@ -63,8 +63,12 @@ public static class SettingsStore
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, Options));
     }
 
-    /// <summary>Resolve the Gladia key and a human-readable description of where it came from.</summary>
-    public static (string Key, string Source)? ResolveGladiaKey(AppSettings settings)
+    /// <summary>
+    /// Resolve the cloud key and where it came from. <paramref name="Name"/> is the stored
+    /// entry's name, or null when the key came from the environment — the caller phrases it,
+    /// because the main screen must not print a vendor's name or its env var.
+    /// </summary>
+    public static (string Key, string? Name)? ResolveGladiaKey(AppSettings settings)
     {
         var gladiaKeys = settings.ApiKeys
             .Where(k => k.Provider.Equals("gladia", StringComparison.OrdinalIgnoreCase))
@@ -73,10 +77,10 @@ public static class SettingsStore
         var active = gladiaKeys.FirstOrDefault(k => k.Name == settings.ActiveGladiaKeyName)
                      ?? gladiaKeys.FirstOrDefault();
         if (active is not null && !string.IsNullOrWhiteSpace(active.Key))
-            return (active.Key.Trim(), $"settings: {active.Name}");
+            return (active.Key.Trim(), active.Name);
 
         var fromEnv = ReadEnvAllScopes(GladiaEnvVar);
-        return fromEnv is null ? null : (fromEnv, $"env: {GladiaEnvVar}");
+        return fromEnv is null ? null : (fromEnv, null);
     }
 
     public static string? ReadEnvAllScopes(string name)

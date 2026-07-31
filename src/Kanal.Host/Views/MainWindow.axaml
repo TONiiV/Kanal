@@ -54,15 +54,15 @@
                     <TextBlock Grid.Column="0" Text="KANAL" FontSize="15" FontWeight="Bold"
                                LetterSpacing="3.4" VerticalAlignment="Center" />
                     <!-- What this machine is actually wired to, in the operator's line of sight
-                         before Start: which engine translates, and which Gladia key is in use. -->
+                         before Start — both stages, in pipeline order, on one rule. -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
                                 VerticalAlignment="Center" HorizontalAlignment="Right"
                                 Margin="0,0,20,0">
-                        <TextBlock Text="{Binding TranslationStatus}" FontSize="11"
+                        <TextBlock Text="{Binding TranscriptionStatus}" FontSize="11"
                                    Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
                         <Rectangle Width="1" Height="11" Fill="{StaticResource Rule}"
                                    VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding KeyStatus}" FontSize="11"
+                        <TextBlock Text="{Binding TranslationStatus}" FontSize="11"
                                    Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
@@ -76,8 +76,30 @@
                 <WrapPanel ItemSpacing="22" LineSpacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
                         <TextBlock Text="MODE" Classes="label" />
-                        <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" Width="152"
-                                  IsEnabled="{Binding !IsRunning}" />
+                        <!-- The mode names the pipeline, never the vendor, and each row carries
+                             what it sends off this machine. Rows that cannot run stay in the
+                             list, disabled, with the blocker printed beside them — hiding them
+                             hides the roadmap, and failing at Start is worse than both. -->
+                        <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
+                                  Width="352" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center">
+                            <ComboBox.ItemContainerTheme>
+                                <ControlTheme TargetType="ComboBoxItem"
+                                              x:DataType="vm:PipelineModeOption"
+                                              BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                                </ControlTheme>
+                            </ComboBox.ItemContainerTheme>
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PipelineModeOption">
+                                    <StackPanel Spacing="2" Margin="0,2,0,3">
+                                        <TextBlock Text="{Binding Name}" FontSize="12.5" />
+                                        <TextBlock Text="{Binding Detail}" FontSize="10.5"
+                                                   LineHeight="15" TextWrapping="Wrap" MaxWidth="316"
+                                                   Foreground="{StaticResource Ink3}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
@@ -109,7 +131,7 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center"
-                                IsVisible="{Binding IsGladiaMode}">
+                                IsVisible="{Binding NeedsMicrophone}">
                         <TextBlock Text="INPUT" Classes="label" />
                         <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" Width="220"
                                   IsEnabled="{Binding !IsRunning}">
@@ -209,7 +231,7 @@
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25" Foreground="{StaticResource Ink2}"
                        Text="Pick the languages spoken in the room, then Start. One column per language, newest utterance at the bottom." />
             <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="21" Foreground="{StaticResource Ink3}"
-                       Text="Demo (scripted) runs without an API key. Gladia (live) streams the selected input device. A join QR appears on the right — everyone else reads on their own phone, in their own language." />
+                       Text="The mode picks both stages — where speech is transcribed and where it is translated — and says what leaves this machine. Demo needs no key. A join QR appears on the right; everyone else reads on their own phone, in their own language." />
         </StackPanel>
 
         <!-- language columns -->

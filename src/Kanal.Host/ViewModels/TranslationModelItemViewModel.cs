@@ -8,8 +8,10 @@ using Kanal.Providers.LocalMt;
 namespace Kanal.Host.ViewModels;
 
 /// <summary>
-/// One row in the TRANSLATION MODEL section: either the "Gladia cloud" default
+/// One row in the TRANSLATION section's local-model list: either the "None" default
 /// (no download lifecycle) or a catalog model with download / cancel / delete.
+/// Which stage runs where is the mode's decision — this row only says *which* local
+/// model the local-translation modes should load.
 /// </summary>
 public partial class TranslationModelItemViewModel : ViewModelBase
 {
@@ -17,7 +19,7 @@ public partial class TranslationModelItemViewModel : ViewModelBase
     private readonly ModelDownloadManager? _downloads;
     private CancellationTokenSource? _downloadCts;
 
-    /// <summary>The cloud row: translation stays with the ASR provider.</summary>
+    /// <summary>The "no local model" row — the cloud-translation modes need nothing here.</summary>
     public TranslationModelItemViewModel()
     {
     }
@@ -33,10 +35,10 @@ public partial class TranslationModelItemViewModel : ViewModelBase
 
     public string? ModelId => _model?.Id;
 
-    public string DisplayName => _model?.DisplayName ?? "Gladia cloud";
+    public string DisplayName => _model?.DisplayName ?? "None";
 
     public string MetaLabel => _model is null
-        ? "Translated by the ASR provider — no download."
+        ? "No local model — the local-translation modes stay unavailable."
         : $"{_model.Parameters} · {_model.SizeLabel} · {_model.License}";
 
     public string? LicenseNote => _model?.LicenseNote;

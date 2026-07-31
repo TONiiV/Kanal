@@ -7,14 +7,15 @@ namespace Kanal.Tests;
 public class TranslationModelSettingsTests
 {
     [Fact]
-    public void CloudIsTheDefaultActiveChoice()
+    public void NoLocalModelIsTheDefaultActiveChoice()
     {
         var vm = new SettingsViewModel(new AppSettings());
 
         Assert.Equal(LocalModelCatalog.Models.Count + 1, vm.TranslationModels.Count);
-        var cloud = vm.TranslationModels[0];
-        Assert.False(cloud.IsLocal);
-        Assert.True(cloud.IsActive);
+        var none = vm.TranslationModels[0];
+        Assert.False(none.IsLocal);
+        Assert.True(none.IsActive);
+        Assert.Equal("None", none.DisplayName);
         Assert.All(vm.TranslationModels.Skip(1), m => Assert.True(m.IsLocal));
     }
 
@@ -28,7 +29,7 @@ public class TranslationModelSettingsTests
     }
 
     [Fact]
-    public void UnknownStoredSelectionFallsBackToCloud()
+    public void UnknownStoredSelectionFallsBackToNone()
     {
         var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "gone-model" });
 
@@ -73,12 +74,12 @@ public class TranslationModelSettingsTests
     }
 
     [Fact]
-    public void CloudRowHasNoDownloadControls()
+    public void TheNoneRowHasNoDownloadControls()
     {
-        var cloud = new SettingsViewModel(new AppSettings()).TranslationModels[0];
-        Assert.False(cloud.CanDownload);
-        Assert.False(cloud.CanDelete);
-        Assert.Equal("", cloud.StatusLabel);
+        var none = new SettingsViewModel(new AppSettings()).TranslationModels[0];
+        Assert.False(none.CanDownload);
+        Assert.False(none.CanDelete);
+        Assert.Equal("", none.StatusLabel);
     }
 
     [Fact]

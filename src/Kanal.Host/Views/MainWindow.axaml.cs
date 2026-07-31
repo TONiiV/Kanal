@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     {
         var dialog = new SettingsWindow();
         await dialog.ShowDialog(this);
-        (DataContext as MainViewModel)?.RefreshKeyStatus();
+        (DataContext as MainViewModel)?.RefreshPipelineStatus();
     }
 
     private async void OnLanguagesClick(object? sender, RoutedEventArgs e)

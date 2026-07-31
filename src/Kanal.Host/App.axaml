@@ -143,5 +143,29 @@
             <Setter Property="Padding" Value="9,5" />
             <Setter Property="FontSize" Value="12" />
         </Style>
+
+        <!-- FluentTheme paints selection in the system accent; on this screen colour belongs
+             to speakers alone, so selection is a paper block and square corners instead. -->
+        <Style Selector="ComboBoxItem">
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Rule}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Rule}" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <!-- A mode that cannot run recedes in contrast, never in legibility: its reason is
+             the whole reason the row is still in the list. -->
+        <Style Selector="ComboBoxItem:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Ink2}" />
+        </Style>
     </Application.Styles>
 </Application>

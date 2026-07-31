@@ -21,9 +21,19 @@ See [docs/PRD-v0.3.md](docs/PRD-v0.3.md) for the full requirements (Chinese).
 dotnet run --project src/Kanal.Host
 ```
 
-Start in **Demo (scripted)** mode — no keys needed; a fake trilingual meeting flows through the real orchestrator (ASR without translation → `IMtProvider` routing). Switch to **Gladia (live)** to stream the microphone (Windows capture only for now).
+The **mode** names the pipeline — both stages — and what leaves the machine, never a vendor:
 
-**API keys**: manage multiple named Gladia keys in ⚙ Settings (stored in `%APPDATA%/Kanal/settings.json`, one active at a time); the `GLADIA_API_KEY` env var (any scope) is the fallback when no stored key exists.
+| Mode | Transcription | Translation | Leaves the machine | Status |
+|---|---|---|---|---|
+| Demo — scripted | scripted | scripted, or a downloaded local model | nothing | works, no keys |
+| Cloud transcription · cloud translation | Gladia | Gladia | audio | works |
+| Cloud transcription · local translation | Gladia | local LLM | audio | works once a model is downloaded |
+| Local transcription · cloud translation | Whisper | cloud MT | text only | needs local ASR **and** a standalone cloud MT provider |
+| Local transcription · local translation | Whisper | local LLM | nothing | needs local ASR |
+
+Modes whose providers are missing stay in the list, disabled, with the reason printed in the row. The mode is only a preset that resolves to a provider pair (`PipelinePlanner`) — the orchestrator's single decision stays `if (!asr.Caps.Translation)`. Start in **Demo — scripted**: no keys needed, and a fake trilingual meeting flows through the real orchestrator.
+
+**Settings** is grouped by the same two stages. *Transcription*: multiple named Gladia keys (stored in `%APPDATA%/Kanal/settings.json`, one active at a time); the `GLADIA_API_KEY` env var (any scope) is the fallback when no stored key exists. *Translation*: which local GGUF model the local-translation modes should load, with download / delete.
 
 **Mobile clients**: on Start, the host publishes every room message to Supabase Realtime (broadcast channel = room id) and shows a **join QR code** encoding the mobile page URL with room + connection params. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog. Endpoint overrides: `KANAL_SUPABASE_URL`, `KANAL_SUPABASE_ANON_KEY`, `KANAL_WEB_URL`.
 

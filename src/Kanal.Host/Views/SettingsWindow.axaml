@@ -16,8 +16,12 @@
 
         <ScrollViewer>
             <StackPanel>
-                <TextBlock Text="GLADIA API KEYS" Classes="label" />
+                <!-- Grouped by pipeline stage, the same two stages the mode names. A provider
+                     is named here and only here: this is where the operator types its key. -->
+                <TextBlock Text="TRANSCRIPTION" Classes="label" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="Cloud provider — Gladia API keys" FontSize="12.5"
+                           FontWeight="SemiBold" Margin="0,0,0,6" />
                 <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
                            Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
 
@@ -47,10 +51,16 @@
                     <Button Content="Add" Command="{Binding AddCommand}" />
                 </StackPanel>
 
+                <TextBlock Text="Local transcription — not built yet." FontSize="11.5"
+                           Foreground="{StaticResource Ink3}" Margin="0,16,0,0" />
+
                 <!-- Local translation models: downloaded once, then all translation
                      text stays on this machine. One choice is always active. -->
-                <TextBlock Text="TRANSLATION MODEL" Classes="label" Margin="0,26,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+                <TextBlock Text="TRANSLATION" Classes="label" Margin="0,28,0,0" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="Local model" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                           Text="Downloaded once; after that no translated text leaves this machine. Used by the local-translation modes." />
 
                 <ItemsControl ItemsSource="{Binding TranslationModels}">
                     <ItemsControl.ItemTemplate>
@@ -87,6 +97,10 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                           Margin="0,14,0,0"
+                           Text="Cloud provider — none yet. Cloud translation runs inside the cloud transcription session, so it needs no key of its own." />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
