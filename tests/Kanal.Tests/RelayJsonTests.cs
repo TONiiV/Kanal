@@ -23,6 +23,25 @@ public class RelayJsonTests
     }
 
     [Fact]
+    public void RoomClosedRoundTrips()
+    {
+        var json = RelayJson.Serialize(new RoomClosedMessage());
+
+        Assert.Contains("\"type\":\"room.closed\"", json);
+        Assert.IsType<RoomClosedMessage>(RelayJson.Deserialize(json));
+    }
+
+    [Fact]
+    public void RoomMovedCarriesTheNewRoomId()
+    {
+        var json = RelayJson.Serialize(new RoomMovedMessage("kanal-093005-x7kq"));
+        var restored = RelayJson.Deserialize(json);
+
+        Assert.Contains("\"type\":\"room.moved\"", json);
+        Assert.Equal("kanal-093005-x7kq", Assert.IsType<RoomMovedMessage>(restored).NewRoomId);
+    }
+
+    [Fact]
     public void SnapshotRoundTrips()
     {
         var snapshot = new RoomSnapshot(

@@ -75,6 +75,10 @@ public sealed class MeetingSession : IAsyncDisposable
     public Task PublishSnapshotAsync(CancellationToken ct = default) =>
         _relay.PublishAsync(new RoomSnapshotMessage(Room.Snapshot()), ct);
 
+    /// <summary>Announce that this room is over, so clients stop presenting themselves as live.</summary>
+    public Task PublishClosedAsync(CancellationToken ct = default) =>
+        _relay.PublishAsync(new RoomClosedMessage(), ct);
+
     private async Task PumpAsync(CancellationToken ct)
     {
         var session = _session!;

@@ -48,6 +48,16 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   caches are pruned on load. Concurrent meetings were otherwise already independent — one
   Supabase channel per room, stateless static page.
 
+- **Room lifecycle is visible to clients.** Stop and restart were silent on the wire: a phone
+  held the channel it scanned into, so after Stop it sat on a dead room still looking connected,
+  and after a restart (new room id → new channel) it was stranded until someone rescanned the QR.
+  Two new wire messages close that: `room.closed` (transcript stays readable, page stops
+  presenting itself as live, survives reload via the cache) and `room.moved` carrying the new
+  room id, published on the **old** channel so already-joined phones re-subscribe themselves,
+  rewrite their URL and cache key, and drop the previous meeting's records. A fresh room id per
+  Start stays deliberate — ASR utterance ids restart at zero, so reusing a channel would let a
+  new meeting overwrite the old one's records by id.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.
