@@ -127,9 +127,13 @@ public sealed class MeetingSession : IAsyncDisposable
                 switch (e)
                 {
                     case AsrEvent.Transcript t:
-                        // A provider that generates its own audio (the scripted one) keeps
-                        // talking through a pause; nothing it says while paused is recorded.
-                        if (IsPaused)
+                        // While paused, a sentence that began on the record may still finish on
+                        // it, but nothing new may begin. The audio gate means a real transcriber
+                        // can only be flushing pre-pause audio here — dropping that would leave
+                        // the last on-record sentence a muted partial forever, and untranslated.
+                        // The known-id rule is also what keeps a provider that generates its own
+                        // audio (the scripted one) off the record while it talks through a pause.
+                        if (IsPaused && !Room.Contains(t.UtteranceId))
                             break;
 
                         var utterance = Room.ApplyTranscript(t);

@@ -112,6 +112,13 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   screen. A glyph is not text and does not inherit `TextElement.Foreground`, so every button state
   states what its icon is painted with — an icon left ink-on-ink during a hover fill disappears.
 
+  Review follow-up: while paused, a sentence that **began on the record may still finish on it**.
+  The pump originally dropped every transcript during a pause, including the final of a sentence
+  whose partial was already on every phone — and the audio gate means a real transcriber can only
+  be flushing pre-pause, on-record audio at that point, so the last sentence before the pause was
+  left a muted partial forever and its translation never requested. Nothing new may begin while
+  paused; that unchanged rule is what still keeps the scripted provider off the record.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.
