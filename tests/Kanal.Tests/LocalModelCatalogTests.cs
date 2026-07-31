@@ -87,6 +87,60 @@ public class ModelDownloadManagerTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A response body that hands over half the payload, signals, and then holds — so a test
+    /// can act while the manager is genuinely mid-stream with its part file open.
+    /// </summary>
+    private sealed class GatedBody : Stream
+    {
+        private readonly TaskCompletionSource _started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Task _resume;
+        private int _position;
+        private bool _handedOverFirstChunk;
+
+        public GatedBody(Task resume) => _resume = resume;
+
+        /// <summary>Completes once the body has been read into the part file at least once.</summary>
+        public Task Started => _started.Task;
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
+        {
+            if (!_handedOverFirstChunk)
+            {
+                _handedOverFirstChunk = true;
+                var half = Math.Min(buffer.Length, Payload.Length / 2);
+                Payload.AsMemory(0, half).CopyTo(buffer);
+                _position = half;
+                _started.TrySetResult();
+                return half;
+            }
+
+            await _resume.WaitAsync(ct);
+            var rest = Math.Min(buffer.Length, Payload.Length - _position);
+            if (rest <= 0)
+                return 0;
+            Payload.AsMemory(_position, rest).CopyTo(buffer);
+            _position += rest;
+            return rest;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] b, int o, int c) => throw new NotSupportedException();
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+        public override void SetLength(long v) => throw new NotSupportedException();
+        public override void Write(byte[] b, int o, int c) => throw new NotSupportedException();
+    }
+
+    private IEnumerable<string> PartFiles() => Directory.Exists(_dir)
+        ? Directory.EnumerateFiles(_dir, "*.part")
+        : Array.Empty<string>();
+
     private static LocalModelInfo TestModel(string? sha = null) => new(
         Id: "test-model",
         DisplayName: "Test Model",
@@ -129,7 +183,7 @@ public class ModelDownloadManagerTests : IDisposable
             manager.DownloadAsync(model, null, CancellationToken.None));
 
         Assert.False(manager.IsDownloaded(model));
-        Assert.False(File.Exists(manager.GetPath(model) + ".part"));
+        Assert.Empty(PartFiles());
     }
 
     [Fact]
@@ -147,29 +201,73 @@ public class ModelDownloadManagerTests : IDisposable
         Assert.False(manager.IsDownloaded(TestModel()));
     }
 
+    /// <summary>
+    /// Cancels from inside the response body, so the part file has really been created and
+    /// written to before the token trips — cancelling earlier would make the manager throw out
+    /// of <c>GetAsync</c> and never exercise the mid-stream cleanup this test is about.
+    /// </summary>
     [Fact]
-    public async Task CancelRemovesPartialFile()
+    public async Task CancelMidStreamRemovesPartialFile()
     {
         using var cts = new CancellationTokenSource();
+        // never resumes: the stream parks mid-body until the token trips
+        var body = new GatedBody(new TaskCompletionSource().Task);
         var handler = new FakeHandler
         {
-            Respond = _ =>
+            Respond = _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
-                cts.Cancel(); // cancel while the body is being streamed
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new ByteArrayContent(Payload),
-                };
+                Content = new StreamContent(body),
             },
         };
         var manager = Manager(handler);
         var model = TestModel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            manager.DownloadAsync(model, null, cts.Token));
+        var download = manager.DownloadAsync(model, null, cts.Token);
+        await body.Started.WaitAsync(TimeSpan.FromSeconds(10)); // part file now exists on disk
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);
 
         Assert.False(manager.IsDownloaded(model));
-        Assert.False(File.Exists(manager.GetPath(model) + ".part"));
+        Assert.Empty(PartFiles());
+    }
+
+    /// <summary>
+    /// Two downloads of the same model overlap whenever the Settings dialog is closed and
+    /// reopened mid-download. The second must not touch the file the first is still streaming
+    /// into — the first would otherwise die at the final rename after gigabytes of transfer.
+    /// </summary>
+    [Fact]
+    public async Task ASecondDownloadLeavesTheFirstOnesPartFileAlone()
+    {
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slowBody = new GatedBody(resume.Task);
+        var served = 0;
+        var handler = new FakeHandler
+        {
+            Respond = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = Interlocked.Increment(ref served) == 1
+                    ? new StreamContent(slowBody)
+                    : new ByteArrayContent(Payload),
+            },
+        };
+        var manager = Manager(handler);
+        var model = TestModel();
+
+        var first = manager.DownloadAsync(model, null, CancellationToken.None);
+        await slowBody.Started.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // the second download runs to completion while the first still holds its part file
+        await manager.DownloadAsync(model, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(manager.IsDownloaded(model));
+
+        resume.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(10)); // must not throw FileNotFoundException
+
+        Assert.True(manager.IsDownloaded(model));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
+        Assert.Empty(PartFiles());
     }
 
     [Fact]
@@ -183,6 +281,24 @@ public class ModelDownloadManagerTests : IDisposable
         manager.Delete(model);
 
         Assert.False(manager.IsDownloaded(model));
+    }
+
+    /// <summary>Including the bare <c>.part</c> an older build wrote before part files
+    /// became one-per-call.</summary>
+    [Fact]
+    public async Task DeleteSweepsLeftoverPartFiles()
+    {
+        var manager = Manager(new FakeHandler());
+        var model = TestModel();
+        await manager.DownloadAsync(model, null, CancellationToken.None);
+
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".part", "legacy");
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".deadbeef.part", "interrupted");
+
+        manager.Delete(model);
+
+        Assert.False(manager.IsDownloaded(model));
+        Assert.Empty(PartFiles());
     }
 
     public void Dispose()

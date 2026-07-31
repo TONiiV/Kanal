@@ -106,6 +106,17 @@ public partial class SettingsViewModel : ViewModelBase
             key.IsActive = ReferenceEquals(key, item);
     }
 
+    /// <summary>
+    /// Stops anything still downloading. The window owns this view model, and MainWindow builds
+    /// a new pair every time Settings opens: a download left running behind a closed dialog is
+    /// invisible, uncancellable, and collides with the download the next dialog offers.
+    /// </summary>
+    public void CancelDownloads()
+    {
+        foreach (var model in TranslationModels)
+            model.CancelDownload();
+    }
+
     public void Save()
     {
         var settings = SettingsStore.Load();

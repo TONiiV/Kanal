@@ -109,8 +109,10 @@ public partial class TranslationModelItemViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Also called when the Settings window closes — a download nobody can see
+    /// or cancel any more must not keep running against a discarded view model.</summary>
     [RelayCommand]
-    private void CancelDownload() => _downloadCts?.Cancel();
+    public void CancelDownload() => _downloadCts?.Cancel();
 
     [RelayCommand]
     private void Delete()
