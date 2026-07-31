@@ -71,22 +71,35 @@ public class AudioCaptureFactoryTests
         if (capture.GetDevices().Count == 0)
             return;
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(700));
+        // Device start can take well over a second on some Windows drivers, so the
+        // 700 ms measurement window opens at the FIRST frame, not at StartCapture.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        var sw = new System.Diagnostics.Stopwatch();
         var bytes = 0;
         try
         {
             await foreach (var frame in capture.CaptureAsync(null, cts.Token))
             {
                 Assert.Equal(0, frame.Length % 2);
+                if (!sw.IsRunning)
+                {
+                    sw.Start();
+                    // full measurement window even when device start ate most of the 6 s
+                    cts.CancelAfter(TimeSpan.FromSeconds(2));
+                }
                 bytes += frame.Length;
+                if (sw.ElapsedMilliseconds >= 700)
+                    break;
             }
         }
         catch (OperationCanceledException)
         {
-            // expected end of the timed capture
+            // device never produced a frame within the overall timeout
         }
 
-        // 700 ms at 16 kHz mono PCM16 is 22 400 bytes; allow for startup latency and the tail.
-        Assert.InRange(bytes, 3_200, 32_000);
+        // ~700 ms at 16 kHz mono PCM16 is 22 400 bytes plus at most one trailing buffer.
+        // The upper bound must stay below 2× rate (44 800) so an un-downmixed stereo or
+        // un-resampled 32 kHz stream still fails.
+        Assert.InRange(bytes, 8_000, 32_000);
     }
 }
