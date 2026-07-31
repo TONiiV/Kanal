@@ -201,6 +201,15 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   speakers panel. The button now sits under the two tags, which fits any language rather than the
   four that exist today.
 
+  Review fixes, after the fact. The German and Polish had promoted "the mode that sends audio
+  out" to "the *only* mode that sends audio out" — false, CloudLocal sends it too, and exactly
+  the fact this tool exists to keep straight; a test now refuses the claim. The Settings window,
+  where the switch happens, half-stayed in the old language: the env-var note, the processing
+  note, the folder note, the untested verdict and the model rows were all built at construction,
+  and the model rows were still hard-coded English besides. All of it now follows the change,
+  the two file dialogs use the keys that already existed for them, and the "same word in the
+  target language" exemptions are per language, so a Chinese 开始 reverted to "Start" fails.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

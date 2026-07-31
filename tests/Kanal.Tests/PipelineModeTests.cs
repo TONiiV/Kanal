@@ -283,7 +283,7 @@ public class PipelineModeTests
         var status = PipelinePlanner.Describe(
             PipelineMode.Of(PipelineModeId.CloudLocal), settings, downloads, SomeKey);
 
-        Assert.Equal("Translation: unknown model \"gone-model\"", status.TranslationLabel);
+        Assert.Equal("Translation: unknown model “gone-model”", status.TranslationLabel);
         Assert.NotNull(status.Unavailable);
     }
 

@@ -41,6 +41,20 @@ public class LocalizationTests
         Assert.True(extra.Count == 0, $"{code} has keys English does not: {string.Join(", ", extra)}");
     }
 
+    /// <summary>
+    /// The handful of strings that genuinely are the same word in the target language — "Start"
+    /// and "Pause" are ordinary German, "Start" is ordinary Polish. Exempted per language, not
+    /// per key: a Chinese 开始 accidentally reverted to "Start" must still fail.
+    /// </summary>
+    private static readonly HashSet<(string Code, string Key)> SameWordInTargetLanguage =
+    [
+        ("de", "transport.start"),
+        ("de", "transport.pause"),
+        ("de", "export.button"),
+        ("de", "column.original"),
+        ("pl", "transport.start"),
+    ];
+
     [Theory]
     [InlineData("zh")]
     [InlineData("de")]
@@ -53,16 +67,26 @@ public class LocalizationTests
         foreach (var (key, text) in other)
         {
             Assert.False(string.IsNullOrWhiteSpace(text), $"{code}/{key} is blank.");
-            // A handful are the same word in the target language — "Start" and "Pause" are
-            // ordinary German, "Start" is ordinary Polish. Everything else must actually differ,
-            // which is what catches a string added to English and forgotten in the other three.
-            if (key is "transport.start" or "transport.pause" or "export.button"
-                or "settings.title" or "column.original")
+            // Everything not exempted above must actually differ, which is what catches a
+            // string added to English and forgotten in the other three.
+            if (SameWordInTargetLanguage.Contains((code, key)))
                 continue;
             Assert.True(
                 text != english[key],
                 $"{code}/{key} is still the English string.");
         }
+    }
+
+    /// <summary>
+    /// Two modes send audio out — CloudCloud and CloudLocal — so no language may present
+    /// CloudCloud as the only one. The first translation did, in German and Polish, which
+    /// inverts the one fact this tool exists to keep straight.
+    /// </summary>
+    [Fact]
+    public void NoLanguageClaimsOnlyOneModeSendsAudioOut()
+    {
+        Assert.DoesNotContain("einzige", Table("de")["mode.cloudcloud.help"], StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("jedyn", Table("pl")["mode.cloudcloud.help"], StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -233,6 +257,69 @@ public class AppLanguageTests
 
             Assert.NotEqual(english, vm.Modes[0].Name);
             Assert.Equal(Strings.Tables["de"]["mode.demo.name"], vm.Modes[0].Name);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// The switch happens inside the Settings window, so that window least of all may stay in
+    /// the old language. Everything built at construction — the env-var note, the processing
+    /// note, the folder note, the untested verdict, the model rows — has to follow the change,
+    /// not wait for the dialog to be reopened.
+    /// </summary>
+    [AvaloniaFact]
+    public void SwitchingLanguageRefreshesTheSettingsWindowItself()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            Localizer.Instance.Current = "en";
+            var vm = new SettingsViewModel(new AppSettings(), () => null);
+
+            vm.AppLanguage = Localizer.Available.First(l => l.Code == "de");
+
+            var de = Strings.Tables["de"];
+            Assert.Equal(de["settings.input.note"], vm.ProcessingNote);
+            Assert.Equal(de["mic.untested"], vm.VerdictLabel);
+            Assert.Equal(de["mic.untested.detail"], vm.VerdictDetail);
+            Assert.StartsWith("Ersatzweise:", vm.EnvFallback);
+            Assert.Equal(
+                string.Format(de["settings.files.default"], SettingsStore.DefaultOutputFolder),
+                vm.DefaultFolderNote);
+            Assert.Equal(de["settings.model.none"], vm.TranslationModels[0].DisplayName);
+            Assert.Equal(de["settings.model.none.note"], vm.TranslationModels[0].MetaLabel);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// The model rows were the one part of Settings still hard-coded in English: "None",
+    /// "downloaded", "not downloaded" appeared verbatim on an otherwise translated screen.
+    /// </summary>
+    [AvaloniaFact]
+    public void ModelRowsSpeakTheApplicationLanguage()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            Localizer.Instance.Current = "zh";
+            var vm = new SettingsViewModel(new AppSettings(), () => null);
+
+            var zh = Strings.Tables["zh"];
+            Assert.Equal(zh["settings.model.none"], vm.TranslationModels[0].DisplayName);
+            Assert.Equal(zh["settings.model.none.note"], vm.TranslationModels[0].MetaLabel);
+
+            // whichever download state this machine happens to be in, the label is Chinese
+            var row = vm.TranslationModels[1];
+            Assert.Contains(
+                row.StatusLabel,
+                new[] { zh["settings.model.downloaded"], zh["settings.model.notdownloaded"] });
         }
         finally
         {

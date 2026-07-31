@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Kanal.Host.Localization;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.Host.Views;
@@ -40,7 +41,7 @@ public partial class MainWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save transcript",
+            Title = Localizer.Instance["export.dialog.title"],
             SuggestedFileName = suggestedName,
             DefaultExtension = "md",
             ShowOverwritePrompt = true,

@@ -69,9 +69,7 @@ public partial class SettingsViewModel : ViewModelBase
         if (Keys.Count > 0 && !Keys.Any(k => k.IsActive))
             Keys[0].IsActive = true;
 
-        EnvFallback = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null
-            ? Localizer.Instance.Format("settings.env.set", SettingsStore.GladiaEnvVar)
-            : Localizer.Instance.Format("settings.env.unset", SettingsStore.GladiaEnvVar);
+        _envVarIsSet = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null;
 
         var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
         TranslationModels.Add(new TranslationModelItemViewModel());
@@ -92,13 +90,52 @@ public partial class SettingsViewModel : ViewModelBase
         var chosen = settings.AppLanguage ?? Localizer.Instance.Current;
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
+
+        // The switch happens in this window, so this window least of all may stay in the old
+        // language. Unsubscribed in CancelDownloads — the same close-time cleanup the downloads
+        // use — so the static localizer does not keep dead view models reachable.
+        Localizer.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not "Item[]")
+            return;
+
+        OnPropertyChanged(nameof(EnvFallback));
+        OnPropertyChanged(nameof(ProcessingNote));
+        OnPropertyChanged(nameof(DefaultFolderNote));
+        foreach (var model in TranslationModels)
+            model.RefreshText();
+
+        // The verdict is re-spoken only where it is still a standing state rather than the
+        // record of a measurement or a failure: "not tested" before any test, "listening"
+        // while one runs but nothing has arrived, and a measured verdict recomputed from the
+        // meter it came from. A failure message keeps its language like any other event.
+        if (!_verdictTouched)
+        {
+            VerdictLabel = Localizer.Instance["mic.untested"];
+            VerdictDetail = Localizer.Instance["mic.untested.detail"];
+        }
+        else if (IsTesting && _meter.Frames == 0)
+        {
+            VerdictLabel = Localizer.Instance["mic.listening"];
+            VerdictDetail = Localizer.Instance["mic.listening.detail"];
+        }
+        else if (_meter.Frames > 0)
+        {
+            Publish();
+        }
     }
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
 
     public ObservableCollection<TranslationModelItemViewModel> TranslationModels { get; } = new();
 
-    public string EnvFallback { get; }
+    private readonly bool _envVarIsSet;
+
+    public string EnvFallback => Localizer.Instance.Format(
+        _envVarIsSet ? "settings.env.set" : "settings.env.unset", SettingsStore.GladiaEnvVar);
 
     /// <summary>
     /// Where the export dialog opens, and where a meeting's audio is written. Blank means
@@ -139,6 +176,10 @@ public partial class SettingsViewModel : ViewModelBase
 
     private CancellationTokenSource? _testCts;
     private LevelMeter _meter = new();
+
+    /// <summary>False until the first test touches the verdict — the only state in which a
+    /// language change may rewrite it wholesale rather than recompute or preserve it.</summary>
+    private bool _verdictTouched;
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
@@ -182,6 +223,7 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStartTest))]
     private void StartTest()
     {
+        _verdictTouched = true;
         var capture = CaptureFactory();
         if (capture is null)
         {
@@ -312,6 +354,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public void CancelDownloads()
     {
+        // Part of the same window-closed cleanup: without this the static localizer keeps
+        // every closed Settings dialog's view model alive and keeps refreshing it.
+        Localizer.Instance.PropertyChanged -= OnLanguageChanged;
+
         foreach (var model in TranslationModels)
             model.CancelDownload();
 
