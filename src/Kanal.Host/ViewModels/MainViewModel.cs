@@ -389,9 +389,12 @@ public partial class MainViewModel : ViewModelBase
             bubble.SourceLang = u.SrcLang.ToUpperInvariant();
             bubble.IsPartial = u.State == UtteranceState.Partial;
             bubble.CodeSwitch = u.CodeSwitch;
-            // translation on top, source below as the trust anchor; before the
-            // translation arrives the column shows the source text alone
-            bubble.Text = isSourceColumn ? u.SrcText : translation ?? u.SrcText;
+            // each column reads in its own language: the source column carries the transcript
+            // (labelled ORIGINAL), every other column waits for its translation — never the
+            // untranslated source text
+            bubble.IsTranscript = isSourceColumn;
+            bubble.AwaitingTranslation = !isSourceColumn && translation is null;
+            bubble.Text = isSourceColumn ? u.SrcText : translation ?? "…";
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
     }
