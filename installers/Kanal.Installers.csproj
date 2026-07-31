@@ -49,6 +49,7 @@
   <PropertyGroup>
     <MsiPath>$(ArtifactsDir)Kanal-$(Version)-$(TargetRid).msi</MsiPath>
     <WixSource>$(MSBuildThisFileDirectory)windows/Kanal.wxs</WixSource>
+    <WindowsIcon>$(RepoRoot)src/Kanal.Host/Assets/kanal.ico</WindowsIcon>
   </PropertyGroup>
 
   <!--
@@ -154,8 +155,13 @@
 
     <Exec Command="dotnet tool restore" WorkingDirectory="$(RepoRoot)" />
 
+    <!--
+      Paths go in as absolute values. A relative path inside the .wxs resolves against this process's
+      working directory rather than against the .wxs itself, which is how an icon reference ended up
+      pointing outside the repository.
+    -->
     <Exec WorkingDirectory="$(RepoRoot)"
-          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -o &quot;$(MsiPath)&quot;" />
+          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -o &quot;$(MsiPath)&quot;" />
 
     <Message Importance="high" Text="msi: $(MsiPath)" />
   </Target>

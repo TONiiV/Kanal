@@ -4,7 +4,11 @@
   runs on Windows - the toolset says so itself on any other host - so this file is exercised by the
   windows-latest CI job and nowhere else.
 
-  Preprocessor variables come from the command line: -d Version=... -d PublishDir=...
+  Preprocessor variables come from the command line: -d Version=... -d PublishDir=... -d IconPath=...
+
+  Every path here arrives as an absolute value rather than being written relative. Relative paths in
+  a .wxs resolve against the wix process's working directory, not against this file, which is a
+  quiet way to reference something outside the repository entirely.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 
@@ -24,7 +28,7 @@
 
     <MediaTemplate EmbedCab="yes" />
 
-    <Icon Id="KanalIcon" SourceFile="..\..\src\Kanal.Host\Assets\kanal.ico" />
+    <Icon Id="KanalIcon" SourceFile="$(IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="KanalIcon" />
 
     <Feature Id="Main" Title="Kanal">

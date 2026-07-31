@@ -166,9 +166,17 @@ dependency update bump this past 5.x** without deciding to pay.
 undefined"), so `Kanal.wxs` cannot be fully validated on the development Mac — the `windows-latest`
 CI job is its only real exercise. Schema validation does run cross-platform though, and it earned
 its keep: it caught a `ComponentGroup` nested inside `StandardDirectory`, which is not a legal child.
-One diagnostic does not survive the port — `WIX0389: 'Kanal' is not a relative path` on a plain
-`Directory/@Name`, which is the most ordinary construct in the language and is treated as a
-platform artefact.
+
+Exactly one diagnostic does not survive the port, and it is worth knowing about before it wastes
+someone's afternoon: `WIX0389: The Directory/@Name attribute's value, 'Kanal', is not a relative
+path`, raised against the most ordinary construct in the language. Confirmed to be a platform
+artefact — the `windows-latest` run does not raise it. **Off Windows, treat `WIX0389` as noise and
+read the errors around it.**
+
+Every path reaches the `.wxs` as an absolute value passed with `-d`. Relative paths there resolve
+against the wix process's working directory rather than against the `.wxs` file, which is how the
+icon reference initially pointed outside the repository — a failure that only appears on the runner,
+since off-Windows the build never gets far enough to look for the file.
 
 **`UpgradeCode` is fixed for the lifetime of the product:** `49907851-1726-470B-A773-9F62E492913F`.
 Changing or regenerating it makes new versions install *alongside* old ones instead of upgrading them.
