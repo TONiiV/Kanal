@@ -115,7 +115,7 @@
 
                         <Button Content="Export .md" Command="{Binding ExportMarkdownCommand}" Classes="ghost" />
                         <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
-                                ToolTip.Tip="Settings">
+                                ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
                             <Path Classes="glyph" Data="{StaticResource GlyphSettings}"
                                   Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
                         </Button>
