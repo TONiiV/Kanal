@@ -218,11 +218,14 @@ public class RecordingTests
     [Fact]
     public void ALiveMeetingIsRecordedIntoTheAudioFolderUnderTheRoomId()
     {
-        var settings = new AppSettings { AudioFolder = @"D:\meetings\audio" };
+        // Built with Path.Combine rather than written out: CI runs on Linux, where the separator
+        // is "/", and a hardcoded backslash passes on the developer's machine and nowhere else.
+        var folder = Path.Combine("meetings", "audio");
+        var settings = new AppSettings { AudioFolder = folder };
 
         var path = MainViewModel.RecordingPathFor(Live, settings, "kanal-093005-x7kq");
 
-        Assert.Equal(@"D:\meetings\audio\kanal-093005-x7kq.wav", path);
+        Assert.Equal(Path.Combine(folder, "kanal-093005-x7kq.wav"), path);
     }
 
     /// <summary>A scripted run has no room audio to record — there is no microphone open.</summary>
