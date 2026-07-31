@@ -108,4 +108,18 @@ public class HostUiTests
         await vm.StopCommand.ExecuteAsync(null);
         window.Close();
     }
+
+    /// <summary>The operator picks a microphone from this list, so it must fill on every
+    /// platform that has a capture backend — not Windows only.</summary>
+    [AvaloniaFact]
+    public void MicrophoneListFillsOnAnySupportedPlatform()
+    {
+        var vm = new MainViewModel { RelayEnabled = false };
+
+        if (!Kanal.Audio.AudioCaptureFactory.IsSupported)
+            return;
+
+        Assert.NotEmpty(vm.Devices);
+        Assert.Equal(vm.Devices[0], vm.SelectedDevice);
+    }
 }
