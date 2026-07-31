@@ -4,6 +4,10 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Embeds the icon in the exe's Win32 resources. MainWindow.axaml only sets
+         the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
+         Ignored by non-Windows builds, so it needs no OS condition. -->
+    <ApplicationIcon>Assets\kanal.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
