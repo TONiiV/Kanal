@@ -34,6 +34,15 @@ public partial class BubbleViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(TextColor))]
     private bool _isPartial = true;
 
+    /// <summary>True in the column whose language was spoken — the text is a transcript, not a translation.</summary>
+    [ObservableProperty]
+    private bool _isTranscript;
+
+    /// <summary>True while a non-source column waits for its translation; the body shows a muted ellipsis.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextColor))]
+    private bool _awaitingTranslation;
+
     [ObservableProperty]
     private bool _codeSwitch;
 
@@ -47,8 +56,8 @@ public partial class BubbleViewModel : ViewModelBase
 
     public bool HasSource => SourceText.Length > 0;
 
-    /// <summary>Gray while partial (still changing), ink once final.</summary>
-    public string TextColor => IsPartial ? "#7C8A93" : "#111A21";
+    /// <summary>Gray while partial (still changing) or awaiting translation, ink once final.</summary>
+    public string TextColor => IsPartial || AwaitingTranslation ? "#7C8A93" : "#111A21";
 
     /// <summary>
     /// The rule above the utterance: neutral hairline for history, the speaker's colour for the

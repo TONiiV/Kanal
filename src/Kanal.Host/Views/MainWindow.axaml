@@ -231,6 +231,10 @@
                                                     <TextBlock Classes="who" Text="{Binding SourceLang}"
                                                                LetterSpacing="1.5"
                                                                Foreground="{StaticResource Ink3}" />
+                                                    <TextBlock Classes="who" Text="· ORIGINAL" LetterSpacing="1.5"
+                                                               IsVisible="{Binding IsTranscript}"
+                                                               ToolTip.Tip="Spoken in this language — transcript, not a translation"
+                                                               Foreground="{StaticResource Ink3}" />
                                                     <TextBlock Classes="who" Text="⇄" ToolTip.Tip="Mixed language"
                                                                IsVisible="{Binding CodeSwitch}"
                                                                Foreground="{StaticResource Ink3}" />
