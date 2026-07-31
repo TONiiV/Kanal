@@ -206,6 +206,20 @@ const CACHE_LIMIT = 50; // survive lock-screen reconnects without a blank page
 const STICK_SLOP = 160; // px from the bottom that still counts as "following along"
 const params = new URLSearchParams(location.search);
 
+// Cache is per room: a phone that joins meeting B must never open on meeting A's history.
+// Only a real room join touches storage — demo runs and paramless loads neither read, write,
+// nor prune, so a stray bare-URL visit can't wipe the room cache a reconnect depends on, and
+// scripted demo content is never persisted as if it were meeting record. On join, other
+// rooms' caches (and the pre-room-scoped "kanal.cache" key) are dropped so old meetings
+// don't accumulate in localStorage.
+const CACHE_KEY = !params.get("demo") && params.get("room")
+  ? "kanal.cache::" + params.get("room") : null;
+if (CACHE_KEY) {
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith("kanal.cache") && k !== CACHE_KEY) localStorage.removeItem(k);
+  }
+}
+
 /* Chrome follows the reader's chosen language — a Polish contractor should not have to
    read a Chinese error string. Falls back to English for any other ISO code. */
 const UI = {
@@ -411,8 +425,9 @@ $("lang").addEventListener("change", (e) => {
 /* ---------- local cache (offline / reconnect) ---------- */
 
 function saveCache() {
+  if (!CACHE_KEY) return;
   const utterances = [...state.utterances.values()].slice(-CACHE_LIMIT);
-  localStorage.setItem("kanal.cache", JSON.stringify({
+  localStorage.setItem(CACHE_KEY, JSON.stringify({
     languages: state.languages,
     speakers: [...state.speakers.values()],
     utterances,
@@ -420,8 +435,9 @@ function saveCache() {
 }
 
 function loadCache() {
+  if (!CACHE_KEY) return;
   try {
-    const cache = JSON.parse(localStorage.getItem("kanal.cache") || "null");
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     if (!cache) return;
     applyConfig({ languages: cache.languages });
     for (const s of cache.speakers) applySpeaker(s);
