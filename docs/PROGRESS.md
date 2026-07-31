@@ -170,6 +170,16 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   anything real. Digital silence between sentences means a device delivering zeros or gating
   hard, not a very quiet room, and it is now reported as such.
 
+  Review fixes, after the fact. Every piece of advice named Windows, on a tool whose development
+  machine is a Mac — and macOS answers a denied microphone permission with exactly what a dead
+  device answers, zeros, so the one actionable cause was the one cause never mentioned. The
+  wording now follows the platform and names Privacy & Security where it applies. A second fix:
+  the capture loop wrote into the meter *field*, so a frame the old device still had in flight
+  when the operator pressed Stop landed in the next test's meter — one full-scale straggler and
+  a perfectly good second microphone was condemned as clipping until yet another restart. The
+  loop now writes only into the meter it was started with, and every update back to the UI
+  checks it still speaks for the current session.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

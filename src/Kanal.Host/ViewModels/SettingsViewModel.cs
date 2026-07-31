@@ -40,8 +40,16 @@ public partial class SettingsViewModel : ViewModelBase
     /// Test seam, like <c>MainViewModel</c>'s: headless runs must not enumerate or open the
     /// developer's real microphone.
     /// </param>
-    public SettingsViewModel(AppSettings settings, Func<IAudioCaptureService?>? captureFactory = null)
+    /// <param name="isMacOs">
+    /// Test seam for the advice wording: the tests pin a platform so their assertions hold on
+    /// whatever OS CI happens to run.
+    /// </param>
+    public SettingsViewModel(
+        AppSettings settings,
+        Func<IAudioCaptureService?>? captureFactory = null,
+        bool? isMacOs = null)
     {
+        _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         try
         {
@@ -113,8 +121,12 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>Test seam: headless tests feed generated audio instead of opening a device.</summary>
     public Func<IAudioCaptureService?> CaptureFactory { get; }
 
+    private readonly bool _isMac;
     private CancellationTokenSource? _testCts;
     private LevelMeter _meter = new();
+
+    /// <summary>Where the input level actually lives on this machine — the advice points there.</summary>
+    private string SoundSettings => _isMac ? "System Settings → Sound" : "Windows sound settings";
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
@@ -146,14 +158,14 @@ public partial class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// The honest answer to "what noise suppression does this have": none of its own. Whatever
-    /// the device and Windows do to the signal happens before Kanal sees a sample, so the useful
-    /// thing this panel can offer is a measurement of the result rather than a control that
-    /// pretends to change it.
+    /// the device and the operating system do to the signal happens before Kanal sees a sample,
+    /// so the useful thing this panel can offer is a measurement of the result rather than a
+    /// control that pretends to change it.
     /// </summary>
     public string ProcessingNote =>
         "Kanal applies no noise suppression, echo cancellation or automatic gain of its own. "
-        + "Whatever the microphone and Windows do to the signal happens before Kanal sees it, and "
-        + "is configured per device in Windows sound settings — this test measures the result.";
+        + "Whatever the microphone and the operating system do to the signal happens before Kanal "
+        + $"sees it, and is configured per device in {SoundSettings} — this test measures the result.";
 
     private bool CanStartTest() => !IsTesting;
 
@@ -170,31 +182,44 @@ public partial class SettingsViewModel : ViewModelBase
             return;
         }
 
-        _meter = new LevelMeter();
+        var meter = new LevelMeter();
+        _meter = meter;
         _testCts = new CancellationTokenSource();
         IsTesting = true;
         VerdictLabel = "Listening…";
         VerdictDetail = "Speak from where people will actually sit, then leave a few seconds of quiet.";
-        _ = RunTestAsync(capture, TestDevice?.Id, _testCts.Token);
+        _ = RunTestAsync(capture, meter, TestDevice?.Id, _testCts.Token);
     }
 
     [RelayCommand(CanExecute = nameof(CanStopTest))]
     private void StopTest()
     {
         _testCts?.Cancel();
+        _testCts?.Dispose();
         _testCts = null;
         IsTesting = false;
         LevelScale = 0;
     }
 
-    private async Task RunTestAsync(IAudioCaptureService capture, string? deviceId, CancellationToken ct)
+    /// <summary>
+    /// The loop writes into the meter it was started with, never the field: Stop-then-Test
+    /// swaps the field immediately, but a frame the old capture already had in flight must land
+    /// in the old session, not condemn the new device's fresh meter. Every state update checks
+    /// it still speaks for the current session before touching the UI.
+    /// </summary>
+    private async Task RunTestAsync(
+        IAudioCaptureService capture, LevelMeter meter, string? deviceId, CancellationToken ct)
     {
         try
         {
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
-                _meter.Add(frame.Span);
-                Dispatcher.UIThread.Post(Publish);
+                meter.Add(frame.Span);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(meter, _meter))
+                        Publish();
+                });
             }
         }
         catch (OperationCanceledException)
@@ -204,6 +229,8 @@ public partial class SettingsViewModel : ViewModelBase
         {
             Dispatcher.UIThread.Post(() =>
             {
+                if (!ReferenceEquals(meter, _meter))
+                    return;
                 VerdictLabel = "Could not open the microphone";
                 VerdictDetail = ex.Message;
                 IsTesting = false;
@@ -211,7 +238,11 @@ public partial class SettingsViewModel : ViewModelBase
         }
         finally
         {
-            Dispatcher.UIThread.Post(() => LevelScale = 0);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(meter, _meter))
+                    LevelScale = 0;
+            });
         }
     }
 
@@ -230,13 +261,20 @@ public partial class SettingsViewModel : ViewModelBase
         {
             InputVerdict.Silent => (
                 "Nothing is arriving",
-                "Check that this is the right device and that Windows has not muted or disabled it."),
+                // On macOS a denied microphone permission delivers exactly what a dead device
+                // delivers — zeros — so the permission has to be named or it is undiagnosable.
+                _isMac
+                    ? "Check that this is the right device, that its input level in "
+                      + "System Settings → Sound is not zero, and that this app is allowed the "
+                      + "microphone under System Settings → Privacy & Security → Microphone — a "
+                      + "denied permission delivers exactly this silence."
+                    : "Check that this is the right device and that Windows has not muted or disabled it."),
             InputVerdict.TooQuiet => (
                 "Too quiet",
-                "Raise the input level in Windows sound settings, or put the microphone nearer the table."),
+                $"Raise the input level in {SoundSettings}, or put the microphone nearer the table."),
             InputVerdict.Clipping => (
                 "Clipping",
-                "Lower the input level in Windows sound settings. A clipped consonant is gone for good — "
+                $"Lower the input level in {SoundSettings}. A clipped consonant is gone for good — "
                 + "no transcriber recovers it."),
             InputVerdict.Noisy => (
                 "The room is nearly as loud as the speaker",
