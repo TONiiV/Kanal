@@ -139,6 +139,58 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
    speech API with no text-only translation endpoint, so that row is unavailable for two reasons
    at once and says both.
 
+7. **The four-column limit is enforced where it is chosen** (PR for #15). `.impeccable.md` freezes
+   the host at four columns and `StartAsync` truncated with `Take(4)`, but the *selection* was
+   unbounded: six ticked languages silently became four columns while all six were still requested
+   as translation targets — and Gladia processes targets **sequentially**, so the two invisible
+   ones cost latency on every final. The cap now lives in one place, `MainViewModel.MaxLanguages`,
+   read by both the selection and the column loop, so `Take(…)` cannot drift from the picker.
+   At the cap the remaining catalog rows are disabled and recede in contrast, the add-by-ISO-code
+   row refuses and keeps what was typed, and the reason — *four columns maximum — deselect one to
+   add another* — is printed between the two, because a click that does nothing and says nothing
+   is exactly the failure this replaces. The refusal is enforced on `LanguageOption.IsSelected`
+   itself rather than in the view, so a fifth cannot arrive by any other route; nothing persists a
+   language list today, and a future restore path hits the same rule.
+
+   *Consequence worth naming*: capping the selection also caps what phones can choose. The mobile
+   page renders one column from a dropdown and could until now offer a fifth language that the host
+   never displayed. That is a real reduction in reach, taken deliberately — a language the operator
+   cannot see is a language nobody can correct — and it buys latency back on every final.
+
+   *Fixed in passing*: a language typed as an ISO code reached the catalog but never
+   `SelectedLanguages`, because the option arrived already selected and its `PropertyChanged`
+   handler was attached afterwards. The flag stack, the summary and the room config all missed it
+   until some other checkbox was toggled.
+
+8. **Columns can be moved, mid-meeting** (PR for #15). The operator drags a column head to put the
+   language they are actually reading where they are looking; the head is the grab handle, so the
+   transcript under it stays scrollable. `MoveColumn` moves the `ColumnViewModel` itself, so every
+   utterance already rendered travels with it — nothing is rebuilt, nothing re-resolved, and
+   `ApplyUtterance` addresses columns by language, never by index, so a move during a live
+   utterance cannot misroute it. One order is authoritative: a private list of codes that both the
+   columns and the flag stack read, so the two can never disagree; a language selected after a
+   reorder joins at the end, and the order survives Stop/Start.
+
+   **Nothing goes on the wire.** `RoomConfig` carries the language *set*, phones render a single
+   column chosen from a dropdown, and column order is host-local presentation — no `room.config`
+   republish, no snapshot change, no client-visible effect at all.
+
+   *Design.* The drop target is a 3 px ink rule standing in the gutter the column would be
+   inserted into — the same rule vocabulary as the live record, not a coloured highlight, and no
+   drag ghost. It overlays rather than occupying layout, so marking a target never reflows text
+   under the operator's eye. Keyboard focus on a head is marked the same way (a rule down its
+   left), after a first attempt using a `Paper` fill turned out to be invisible against `Sheet` in
+   a headless render — a 4 % lightness step is not a signal at a metre.
+
+   *Deliberate addition.* Alt+← / Alt+→ on a focused head performs the same move. Drag stays the
+   primary gesture, but a modal OLE drag on a trackpad mid-meeting is a poor single route, and it
+   is unverifiable here: Avalonia's headless platform registers no `IPlatformDragSource`, so
+   `DoDragDropAsync` returns `None` and a real drag cannot be simulated. The keyboard route is the
+   one path a headless test drives end to end (real key event → handler → view model → order); the
+   pointer handler is covered by a smoke test proving the gesture is harmless without a drag
+   source, and the drop geometry is tested through `BeginColumnDrag`/`UpdateColumnDropTarget`/
+   `DropColumn`, which is all the handler computes.
+
 ### Fixes in review (PR #7)
 
 - **Native use-after-free on Stop.** `LlamaSharpTextGenerator.Dispose()` freed the llama.cpp
@@ -192,6 +244,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Modes describe the pipeline, not the vendor** — five modes over both stages,
       `PipelinePlanner` resolving mode → provider pair, unavailable modes shown/disabled with the
       reason and the privacy consequence in place, Settings grouped by stage (#14).
+- [x] **Operator control over the language columns** — selection capped at four with the reason
+      stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
+      order host-local (#15).
 - [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
       second blocker on `local · cloud`, buildable independently of the local ASR work.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.

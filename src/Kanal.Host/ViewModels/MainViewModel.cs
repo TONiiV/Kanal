@@ -35,6 +35,17 @@ public partial class MainViewModel : ViewModelBase
     private readonly Func<AppSettings> _loadSettings;
     private readonly Func<ModelDownloadManager> _downloads;
 
+    /// <summary>
+    /// Presentation order of the language codes, seeded from <see cref="LanguageCatalog"/> and
+    /// rewritten when the operator drags a column. The flag stack and the columns both read it,
+    /// so they cannot disagree. Host-local: <see cref="RoomConfig"/> carries the language *set*,
+    /// phones render one column chosen from a dropdown, and nothing about order goes on the wire.
+    /// </summary>
+    private readonly List<string> _columnOrder = new();
+
+    /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
+    private int _dragSource = -1;
+
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath))
     {
@@ -83,6 +94,13 @@ public partial class MainViewModel : ViewModelBase
         RefreshPipelineStatus();
     }
 
+    /// <summary>
+    /// The PRD freezes the host at four language columns. This is the only place that number
+    /// lives: the selection refuses the fifth language here, and <see cref="StartAsync"/> builds
+    /// its columns from the same constant, so the picker and the layout cannot drift apart.
+    /// </summary>
+    public const int MaxLanguages = 4;
+
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
@@ -100,28 +118,71 @@ public partial class MainViewModel : ViewModelBase
         ? "none — click to add"
         : string.Join(" · ", SelectedLanguages.Select(o => o.Code.ToUpperInvariant()));
 
+    /// <summary>True once four languages are selected: every other row is refused until one goes.</summary>
+    public bool IsAtLanguageLimit => SelectedLanguages.Count >= MaxLanguages;
+
+    /// <summary>
+    /// Why the remaining rows are disabled. Printed in the catalog dialog beside the rows and the
+    /// add-by-code row, both of which obey the same cap — a click that does nothing and says
+    /// nothing is the failure this replaces.
+    /// </summary>
+    public string LanguageLimitNotice => IsAtLanguageLimit
+        ? "Four columns maximum — deselect one to add another."
+        : "";
+
     private void AttachLanguageOption(LanguageOption option)
     {
+        // An option that arrives already selected over the cap — a restored list, a future
+        // settings file — is taken in unselected rather than becoming a fifth column.
+        if (option.IsSelected && IsAtLanguageLimit)
+            option.IsSelected = false;
+
+        if (!_columnOrder.Any(c => string.Equals(c, option.Code, StringComparison.OrdinalIgnoreCase)))
+            _columnOrder.Add(option.Code); // a language the operator adds joins at the end
+
         option.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(LanguageOption.IsSelected))
-                RefreshSelectedLanguages();
+            if (e.PropertyName != nameof(LanguageOption.IsSelected))
+                return;
+
+            // The catalog disables these rows, but nothing stops a fifth arriving in code, so
+            // the refusal lives on the property itself: one rule, every path.
+            if (option.IsSelected && IsAtLanguageLimit && !SelectedLanguages.Contains(option))
+            {
+                option.IsSelected = false; // re-enters here and falls through to the refresh
+                return;
+            }
+
+            RefreshSelectedLanguages();
         };
         LanguageOptions.Add(option);
+
+        // The handler above cannot fire for an option that arrived already selected — a language
+        // typed as an ISO code did reach the catalog but never the flag stack or the room config.
+        RefreshSelectedLanguages();
     }
 
     private void RefreshSelectedLanguages()
     {
         SelectedLanguages.Clear();
-        foreach (var option in LanguageOptions.Where(o => o.IsSelected))
+        foreach (var option in LanguageOptions.Where(o => o.IsSelected).OrderBy(ColumnOrderIndex))
             SelectedLanguages.Add(option);
+
+        var full = SelectedLanguages.Count >= MaxLanguages;
+        foreach (var option in LanguageOptions)
+            option.IsSelectable = option.IsSelected || !full;
+
         OnPropertyChanged(nameof(SelectedLanguageSummary));
+        OnPropertyChanged(nameof(IsAtLanguageLimit));
+        OnPropertyChanged(nameof(LanguageLimitNotice));
     }
 
     /// <summary>Adds (or selects) languages typed as ISO codes in the edit dialog, e.g. "tr, nl".</summary>
     [RelayCommand]
     private void AddLanguage()
     {
+        var refused = new List<string>();
+
         foreach (var raw in NewLanguageInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var code = raw.ToLowerInvariant();
@@ -130,6 +191,16 @@ public partial class MainViewModel : ViewModelBase
 
             var existing = LanguageOptions.FirstOrDefault(o =>
                 string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && existing.IsSelected)
+                continue;
+
+            if (IsAtLanguageLimit)
+            {
+                // the same cap the checkboxes obey; LanguageLimitNotice sits above this row
+                refused.Add(code);
+                continue;
+            }
+
             if (existing is not null)
                 existing.IsSelected = true;
             else
@@ -141,7 +212,85 @@ public partial class MainViewModel : ViewModelBase
                 });
         }
 
-        NewLanguageInput = "";
+        // what was refused stays in the box: retyping it after deselecting is not the operator's job
+        NewLanguageInput = string.Join(", ", refused);
+    }
+
+    private int ColumnOrderIndex(LanguageOption option)
+    {
+        var index = _columnOrder.FindIndex(c =>
+            string.Equals(c, option.Code, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? int.MaxValue : index;
+    }
+
+    /// <summary>
+    /// Moves a column to a new position, mid-meeting — the operator puts the language they are
+    /// reading where they are looking. The <see cref="ColumnViewModel"/> moves with it, so every
+    /// utterance already rendered comes along untouched; the selected-language order is rewritten
+    /// to match, so the flag stack never disagrees with the screen. Nothing is republished:
+    /// order is host-local presentation.
+    /// </summary>
+    public void MoveColumn(int from, int to)
+    {
+        if (from == to || from < 0 || to < 0 || from >= Columns.Count || to >= Columns.Count)
+            return;
+
+        Columns.Move(from, to);
+
+        // rewrite only the slots the columns occupy — a selected language without a column, and
+        // every unselected one, keeps its place in the catalog's order
+        var slots = new List<int>();
+        for (var i = 0; i < _columnOrder.Count; i++)
+        {
+            if (Columns.Any(c => string.Equals(c.Language, _columnOrder[i], StringComparison.OrdinalIgnoreCase)))
+                slots.Add(i);
+        }
+
+        for (var s = 0; s < slots.Count && s < Columns.Count; s++)
+            _columnOrder[slots[s]] = Columns[s].Language;
+
+        RefreshSelectedLanguages();
+    }
+
+    /// <summary>Records which column was picked up; the drop is resolved against it.</summary>
+    public void BeginColumnDrag(int index) =>
+        _dragSource = index >= 0 && index < Columns.Count ? index : -1;
+
+    /// <summary>Marks one edge of one column with the drop rule, and clears every other.</summary>
+    public void UpdateColumnDropTarget(int hoveredIndex, bool before)
+    {
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            var hit = _dragSource >= 0 && i == hoveredIndex;
+            Columns[i].IsDropBefore = hit && before;
+            Columns[i].IsDropAfter = hit && !before;
+        }
+    }
+
+    /// <summary>Drag abandoned: no rule left on screen, no order changed.</summary>
+    public void CancelColumnDrag()
+    {
+        _dragSource = -1;
+        foreach (var column in Columns)
+        {
+            column.IsDropBefore = false;
+            column.IsDropAfter = false;
+        }
+    }
+
+    /// <summary>Commits the drag: the picked-up column lands on the marked edge.</summary>
+    public void DropColumn(int hoveredIndex, bool before)
+    {
+        var from = _dragSource;
+        CancelColumnDrag();
+        if (from < 0 || hoveredIndex < 0 || hoveredIndex >= Columns.Count)
+            return;
+
+        var target = before ? hoveredIndex : hoveredIndex + 1;
+        if (target > from)
+            target--; // the column vacates its own slot before it lands
+
+        MoveColumn(from, Math.Clamp(target, 0, Columns.Count - 1));
     }
 
     /// <summary>The five pipelines, in order. Unavailable ones stay in the list, disabled.</summary>
@@ -260,8 +409,9 @@ public partial class MainViewModel : ViewModelBase
         Speakers.Clear();
         _speakerModels.Clear();
         _tagToCanonical.Clear();
-        // host renders at most 4 columns; remaining languages still translate and relay
-        foreach (var lang in languages.Take(4))
+        // the selection is already capped at MaxLanguages; this reads the same constant so the
+        // two can never disagree about how many columns a room has
+        foreach (var lang in languages.Take(MaxLanguages))
             Columns.Add(new ColumnViewModel(lang));
 
         var mode = SelectedMode.Mode;

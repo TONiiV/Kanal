@@ -44,6 +44,16 @@
         <Style Selector="Border.rec.live TextBlock.who">
             <Setter Property="FontSize" Value="11.5" />
         </Style>
+
+        <!-- The column head is the grab handle, and a tab stop for the keyboard route. Focus is
+             marked with the same rule the drop target uses — this column is the one that moves.
+             The negative margin pays for the rule, so the head never shifts against its column. -->
+        <Style Selector="Border.colhead:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="Padding" Value="6,0,0,0" />
+            <Setter Property="Margin" Value="-9,0,0,16" />
+        </Style>
     </Window.Styles>
 
     <DockPanel>
@@ -243,15 +253,28 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ColumnViewModel">
-                    <DockPanel Margin="0,0,30,0">
-                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
+                  <!-- The drop rules overlay the gutters rather than sitting in the layout, so
+                       marking a target never reflows the text under the operator's eye. -->
+                  <Panel Margin="0,0,30,0" DragDrop.AllowDrop="True"
+                         DragDrop.DragOver="OnColumnDragOver"
+                         DragDrop.DragLeave="OnColumnDragLeave"
+                         DragDrop.Drop="OnColumnDrop">
+                    <DockPanel>
+                        <!-- grab handle: drag the head to move the column, or Alt+←/→ once focused -->
+                        <Border DockPanel.Dock="Top" Classes="colhead" Margin="0,0,0,16"
+                                Background="Transparent" Focusable="True" Cursor="SizeWestEast"
+                                ToolTip.Tip="Drag to move this column — or Alt+← / Alt+→"
+                                PointerPressed="OnColumnHeadPointerPressed"
+                                KeyDown="OnColumnHeadKeyDown">
+                          <StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="9">
                                 <TextBlock Text="{Binding Code}" FontSize="21" FontWeight="Bold" LetterSpacing="0.5" />
                                 <TextBlock Text="{Binding NativeName}" FontSize="12.5" Margin="0,0,0,3"
                                            Foreground="{StaticResource Ink3}" VerticalAlignment="Bottom" />
                             </StackPanel>
                             <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
-                        </StackPanel>
+                          </StackPanel>
+                        </Border>
                         <ScrollViewer Loaded="OnColumnScrollLoaded" DetachedFromVisualTree="OnColumnScrollDetached">
                             <ItemsControl ItemsSource="{Binding Bubbles}" Margin="0,0,14,40">
                                 <ItemsControl.ItemTemplate>
@@ -290,6 +313,14 @@
                             </ItemsControl>
                         </ScrollViewer>
                     </DockPanel>
+
+                    <!-- where the dragged column will land: the heaviest rule in the vocabulary,
+                         standing in the gutter it would be inserted into -->
+                    <Rectangle Width="3" HorizontalAlignment="Left" Margin="-16,0,0,0"
+                               Fill="{StaticResource Ink}" IsVisible="{Binding IsDropBefore}" />
+                    <Rectangle Width="3" HorizontalAlignment="Right" Margin="0,0,-16,0"
+                               Fill="{StaticResource Ink}" IsVisible="{Binding IsDropAfter}" />
+                  </Panel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
