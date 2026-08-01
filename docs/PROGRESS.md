@@ -147,6 +147,22 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   runs and `RECORDING HELD` while paused — the file outlives the meeting, and nobody should find
   out about it afterwards. Settings carries both folders and an off switch.
 
+  Review then asked the question the host-side indicator could not answer: the operator knows,
+  but the people whose voices are in the file read a phone, and two of the three languages in
+  the room are spoken where recording a private conversation without the other side knowing is
+  a criminal matter, not an etiquette one. Recording is now a room state like pause —
+  `room.recording` on the wire, carried in `room.snapshot` because a phone that scans the QR ten
+  minutes in never saw the announcement, and cached, because the notice has to survive a
+  lock-screen reconnect. The mobile page states it in all four languages, and says where the
+  audio stays.
+
+  Rendering it caught the defect the assertions could not: the notice was in the flow, and the
+  feed follows the newest utterance, so a participant spends the meeting scrolled to the bottom
+  with the notice a few thousand pixels above them. It lives inside the sticky masthead now.
+  During a pause it is held rather than hidden — the file exists and resumes, and a notice that
+  vanished would read as "it stopped". It is ink on paper with a hairline, not the alarm wash:
+  a standing fact about the room, not an error.
+
 - **Microphone test in Settings, and an honest answer about noise suppression.** There was no way
   to find out whether the room's microphone worked until the meeting had started and the columns
   were filling with nothing. Settings now opens with an `INPUT` section: pick a device, press

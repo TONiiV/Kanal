@@ -30,7 +30,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
-    private WavWriter? _recorder;
+    private MeetingRecorder? _recorder;
     private IAsrProvider? _asr;
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
@@ -490,11 +490,6 @@ public partial class MainViewModel : ViewModelBase
 
         var session = new MeetingSession(asr, mt, relay, config);
 
-        // Hung off the session's own tap, not the capture loop: pause promises that nothing said
-        // in that minute is kept, and a second pause check here would be a second place for that
-        // promise to quietly stop being true.
-        StartRecording(session, mode, settings, config.RoomId);
-
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
         session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
@@ -519,6 +514,15 @@ public partial class MainViewModel : ViewModelBase
         Status = mode.Id == PipelineModeId.Demo
             ? "Demo running." + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : $"Live — {mode.Leaves}.";
+
+        // Hung off the session's own tap, not the capture loop: pause promises that nothing said
+        // in that minute is kept, and a second pause check here would be a second place for that
+        // promise to quietly stop being true. Placed after the session started and the status
+        // line is set — a start that fails must not leave a recorder holding an open file under
+        // a lit RECORDING label, and a recording that cannot start appends its failure to the
+        // status rather than being overwritten by it. The tap only fires once the microphone
+        // pump below pushes audio, so nothing is missed by attaching here.
+        StartRecording(session, mode, settings, config.RoomId);
 
         if (RelayEnabled)
         {
@@ -738,27 +742,37 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            var writer = new WavWriter(path);
-            _recorder = writer;
-            RecordingPath = path;
-            session.AudioAccepted += frame =>
+            // MeetingRecorder owns the failure policy: Write never throws — an exception
+            // escaping onto the capture thread would take the capture loop, and with it the
+            // meeting, down along with the recording. The callback runs on that thread, so
+            // every UI mutation goes through the dispatcher; raising PropertyChanged directly
+            // here would hand Avalonia a binding update off the UI thread.
+            var recorder = new MeetingRecorder(new WavWriter(path), reason =>
             {
-                try
+                _recorder = null;
+                _lastRecording = path; // what was written so far is patched and still plays
+                // the room was told it was being recorded; it has to be told that stopped
+                _ = session.SetRecordingAsync(false);
+                Dispatcher.UIThread.Post(() =>
                 {
-                    writer.Write(frame.Span);
-                }
-                catch (Exception ex)
-                {
-                    StopRecording();
-                    Dispatcher.UIThread.Post(() => Status = $"Recording stopped: {ex.Message}");
-                }
-            };
+                    RecordingPath = "";
+                    Status = $"Recording stopped: {reason}";
+                });
+            });
+            _recorder = recorder;
+            RecordingPath = path;
+            session.AudioAccepted += frame => recorder.Write(frame.Span);
+            // The operator's status bar is read by the operator alone. The people whose voices
+            // are being written to the file read the phone, so the room is told as well.
+            _ = session.SetRecordingAsync(true);
         }
         catch (Exception ex)
         {
             // A meeting that cannot be recorded is still a meeting worth holding — an
-            // unwritable folder must not stop Start.
-            Status = $"Not recording: {ex.Message}";
+            // unwritable folder must not stop Start. Appended rather than assigned: the
+            // "Live —" line was just set, and a message the operator never sees is a meeting
+            // they believe is being recorded when it is not.
+            Status = $"{Status} Not recording: {ex.Message}";
         }
     }
 
