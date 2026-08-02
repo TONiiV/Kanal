@@ -16,9 +16,55 @@
 
         <ScrollViewer>
             <StackPanel>
+                <!-- The check that has to happen before anyone sits down. Everything below this
+                     is configuration; this is the one thing that can only be found out by
+                     listening, and the only place a dead or clipping microphone gets caught
+                     before it costs a meeting. -->
+                <TextBlock Text="INPUT" Classes="label" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="Test a microphone" FontSize="12.5" FontWeight="SemiBold"
+                           Margin="0,0,0,6" />
+
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+                    <ComboBox Grid.Column="0" ItemsSource="{Binding Devices}"
+                              SelectedItem="{Binding TestDevice}" HorizontalAlignment="Stretch"
+                              IsEnabled="{Binding !IsTesting}" Margin="0,0,8,0">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="1" Content="Test" Command="{Binding StartTestCommand}"
+                            IsVisible="{Binding !IsTesting}" />
+                    <Button Grid.Column="2" Content="Stop" Command="{Binding StopTestCommand}"
+                            IsVisible="{Binding IsTesting}" />
+                </Grid>
+
+                <!-- Live level over a held peak: one bar showing both what is arriving now and
+                     the loudest thing heard, because the judgement is about the pair. -->
+                <Panel Height="10" Margin="0,0,0,7">
+                    <Rectangle Fill="{StaticResource RuleFaint}" />
+                    <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
+                                 Foreground="{StaticResource Rule}" Background="Transparent"
+                                 CornerRadius="0" />
+                    <ProgressBar Value="{Binding LevelScale}" Maximum="100" Height="10"
+                                 Foreground="{StaticResource Ink}" Background="Transparent"
+                                 CornerRadius="0" />
+                </Panel>
+                <TextBlock Text="{Binding LevelReadout}" FontSize="11"
+                           Foreground="{StaticResource Ink3}" Margin="0,0,0,8" />
+
+                <TextBlock Text="{Binding VerdictLabel}" FontSize="13" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding VerdictDetail}" FontSize="11.5" TextWrapping="Wrap"
+                           LineHeight="18" Foreground="{StaticResource Ink2}" Margin="0,3,0,10" />
+
+                <TextBlock Text="{Binding ProcessingNote}" FontSize="11" TextWrapping="Wrap"
+                           LineHeight="17" Foreground="{StaticResource Ink3}" Margin="0,0,0,4" />
+
                 <!-- Grouped by pipeline stage, the same two stages the mode names. A provider
                      is named here and only here: this is where the operator types its key. -->
-                <TextBlock Text="TRANSCRIPTION" Classes="label" />
+                <TextBlock Text="TRANSCRIPTION" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
                 <TextBlock Text="Cloud provider — Gladia API keys" FontSize="12.5"
                            FontWeight="SemiBold" Margin="0,0,0,6" />
