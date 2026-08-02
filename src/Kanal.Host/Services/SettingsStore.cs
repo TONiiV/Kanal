@@ -101,17 +101,29 @@ public static class SettingsStore
     /// </summary>
     public static (string Key, string? Name)? ResolveGladiaKey(AppSettings settings)
     {
+        if (ResolveStoredGladiaKey(settings) is { } stored)
+            return stored;
+
+        var fromEnv = ReadEnvAllScopes(GladiaEnvVar);
+        return fromEnv is null ? null : (fromEnv, null);
+    }
+
+    /// <summary>
+    /// The stored half of the resolution only — no environment fallback. Hermetic tests inject
+    /// this so what they assert about mode availability cannot depend on whether the machine
+    /// running them happens to carry a GLADIA_API_KEY.
+    /// </summary>
+    public static (string Key, string? Name)? ResolveStoredGladiaKey(AppSettings settings)
+    {
         var gladiaKeys = settings.ApiKeys
             .Where(k => k.Provider.Equals("gladia", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var active = gladiaKeys.FirstOrDefault(k => k.Name == settings.ActiveGladiaKeyName)
                      ?? gladiaKeys.FirstOrDefault();
-        if (active is not null && !string.IsNullOrWhiteSpace(active.Key))
-            return (active.Key.Trim(), active.Name);
-
-        var fromEnv = ReadEnvAllScopes(GladiaEnvVar);
-        return fromEnv is null ? null : (fromEnv, null);
+        return active is not null && !string.IsNullOrWhiteSpace(active.Key)
+            ? (active.Key.Trim(), active.Name)
+            : null;
     }
 
     public static string? ReadEnvAllScopes(string name)

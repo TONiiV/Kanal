@@ -115,7 +115,7 @@
 
                         <Button Content="Export .md" Command="{Binding ExportMarkdownCommand}" Classes="ghost" />
                         <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
-                                ToolTip.Tip="Settings">
+                                ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
                             <Path Classes="glyph" Data="{StaticResource GlyphSettings}"
                                   Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
                         </Button>
@@ -173,13 +173,22 @@
                                 ToolTip.Tip="What the modes mean">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedLeft">
+                                    <!-- The presenter clips anything past its MaxHeight rather than
+                                         wrapping it — the failure the first version of this flyout
+                                         had horizontally. The ScrollViewer is the guard: invisible
+                                         while the content fits, honest when a help string grows. -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
                                     <StackPanel Margin="20,17,20,8" Width="424">
                                         <TextBlock Text="MODES" Classes="label" />
                                         <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
                                                 Margin="0,6,0,12" />
+                                        <!-- The relay fact is stated once, here: the captions cross
+                                             the network to the phones in every mode. Each mode's own
+                                             help then claims only what its pipeline sends out. -->
                                         <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"
                                                    Margin="0,0,0,15" Foreground="{StaticResource Ink2}"
-                                                   Text="Kanal runs two stages — speech into text, then text into the other languages — and each one can run on this laptop or off it. A mode picks both at once. Modes that cannot run yet stay in the list with the reason." />
+                                                   Text="Kanal runs two stages — speech into text, then text into the other languages — and each one can run on this laptop or off it. A mode picks both at once. In every mode the finished captions reach the phones through the relay, as text. Modes that cannot run yet stay in the list with the reason." />
                                         <ItemsControl ItemsSource="{Binding Modes}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:PipelineModeOption">
@@ -215,6 +224,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
+                                    </ScrollViewer>
                                 </Flyout>
                             </Button.Flyout>
                         </Button>

@@ -70,6 +70,14 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   failure stays quiet on purpose: the languages that worked are worth more than a warning about
   the one that did not.
 
+  Review of the fix found a third window of the same shape: the pending snapshot is taken while
+  the pump may still be draining finals buffered before Stop, so a translation tracked during the
+  grace was cancelled with the rest but awaited by nobody — disposal could return, and the caller
+  free the native weights, while that decode was still unwinding, with the freshly disposed
+  cancellation source firing a spurious "Relay publish failed" behind it. Once the pump has
+  exited nothing can register any more, so disposal now takes the pending list a second time at
+  that point and waits for the stragglers; they are already cancelled, so Stop stays bounded.
+
 - **Multi-room isolation.** Two hosts starting in the same second used to land on the same
   broadcast channel (room id was `kanal-HHmmss`); ids now carry a random 4-char suffix
   (`RoomIds.New`, e.g. `kanal-093005-x7kq`). The mobile page's localStorage cache is now keyed
@@ -112,6 +120,13 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   screen. A glyph is not text and does not inherit `TextElement.Foreground`, so every button state
   states what its icon is painted with — an icon left ink-on-ink during a hover fill disappears.
 
+  Review follow-up: while paused, a sentence that **began on the record may still finish on it**.
+  The pump originally dropped every transcript during a pause, including the final of a sentence
+  whose partial was already on every phone — and the audio gate means a real transcriber can only
+  be flushing pre-pause, on-record audio at that point, so the last sentence before the pause was
+  left a muted partial forever and its translation never requested. Nothing new may begin while
+  paused; that unchanged rule is what still keeps the scripted provider off the record.
+
 - **Mode availability was invisible.** Whether a mode could run was carried only by the row's
   contrast — the same signal the grey second line already uses — so five unequal choices read as
   five equal ones and the operator found out at Start. Each row now carries a marker (filled
@@ -125,7 +140,18 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   Rendering it caught a defect the assertions could not: `FlyoutPresenter`'s default `MaxWidth` is
   narrower than a readable measure of body text, and content wider than it is **clipped, not
   wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
-  of the window. Both are now set explicitly, as with every other Fluent default here.
+  of the window. Both are now set explicitly, as with every other Fluent default here, and the
+  flyout content sits in a `ScrollViewer` so growth past `MaxHeight` scrolls instead of silently
+  clipping.
+
+  Review then caught the help **overstating privacy**: Demo promised "no network" while the demo's
+  stated purpose — checking the join QR and the phones — runs over the relay, and local · local
+  promised "nothing is sent anywhere" while the captions themselves cross the network in every
+  mode. The relay fact now lives once in the flyout's introduction, each mode's help claims only
+  what its *pipeline* sends out, and a test bans the false absolutes outright. The same review
+  closed a hermeticity hole the PR itself had documented: the mode list read the ambient
+  `GLADIA_API_KEY`, so "unavailable without a key" was untestable on a machine that has one —
+  the key resolver is now injected like the other two test seams.
 
 - **A meeting now produces both artefacts, where the operator chose.** Export wrote to
   `Documents\<roomid>.md` and printed the path in a status line nobody was looking at. It now
