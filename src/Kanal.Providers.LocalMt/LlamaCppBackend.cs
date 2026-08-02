@@ -15,9 +15,11 @@ public sealed class LlamaCppBackend : ILlamaBackend
 {
     private ModelParams? _params;
     private LLamaWeights? _weights;
+    private string? _assistantPrefill;
 
-    public async Task LoadAsync(string modelPath, CancellationToken ct)
+    public async Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct)
     {
+        _assistantPrefill = assistantPrefill;
         _params = new ModelParams(modelPath)
         {
             ContextSize = 4096,
@@ -41,12 +43,17 @@ public sealed class LlamaCppBackend : ILlamaBackend
         return output.ToString();
     }
 
-    /// <summary>Wrap the prompt in the model's own chat template (ChatML for Qwen, Gemma format for Gemma…).</summary>
+    /// <summary>
+    /// Wrap the prompt in the model's own chat template (ChatML for Qwen, Gemma format for
+    /// Gemma…), then open the assistant turn with whatever the catalog says this model needs —
+    /// for a reasoning model, an already-closed think block, so the token budget goes to the
+    /// translation instead of to deliberation the operator never sees.
+    /// </summary>
     private string ApplyChatTemplate(string userMessage)
     {
         var template = new LLamaTemplate(_weights!) { AddAssistant = true };
         template.Add("user", userMessage);
-        return Encoding.UTF8.GetString(template.Apply());
+        return Encoding.UTF8.GetString(template.Apply()) + _assistantPrefill;
     }
 
     public void Dispose()

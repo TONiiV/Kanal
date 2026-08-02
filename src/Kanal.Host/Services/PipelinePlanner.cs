@@ -75,7 +75,8 @@ public static class PipelinePlanner
         // Demo must always run: a model that was chosen but never downloaded falls back to the
         // scripted translator rather than blocking, and Substitution says so out loud.
         var mt = resolved.Model is not null
-            ? new LlamaSharpMtProvider(new LlamaSharpTextGenerator(downloads.GetPath(resolved.Model)))
+            ? new LlamaSharpMtProvider(new LlamaSharpTextGenerator(
+                downloads.GetPath(resolved.Model), resolved.Model.AssistantPrefill))
             : mode.Translation == StageKind.Cloud ? null : (IMtProvider)new FakeMtProvider();
 
         return new PipelinePlan(
