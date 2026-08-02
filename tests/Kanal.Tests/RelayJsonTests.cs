@@ -41,6 +41,20 @@ public class RelayJsonTests
         Assert.Equal("kanal-093005-x7kq", Assert.IsType<RoomMovedMessage>(restored).NewRoomId);
     }
 
+    /// <summary>The client switches on the camelCase name, so the casing is part of the contract.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RoomPausedCarriesWhichWay(bool paused)
+    {
+        var json = RelayJson.Serialize(new RoomPausedMessage(paused));
+        var restored = RelayJson.Deserialize(json);
+
+        Assert.Contains("\"type\":\"room.paused\"", json);
+        Assert.Contains($"\"paused\":{paused.ToString().ToLowerInvariant()}", json);
+        Assert.Equal(paused, Assert.IsType<RoomPausedMessage>(restored).Paused);
+    }
+
     [Fact]
     public void SnapshotRoundTrips()
     {

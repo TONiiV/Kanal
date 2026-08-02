@@ -16,6 +16,7 @@ namespace Kanal.Core.Relay;
 [JsonDerivedType(typeof(RoomConfigMessage), "room.config")]
 [JsonDerivedType(typeof(RoomClosedMessage), "room.closed")]
 [JsonDerivedType(typeof(RoomMovedMessage), "room.moved")]
+[JsonDerivedType(typeof(RoomPausedMessage), "room.paused")]
 public abstract record RelayMessage;
 
 /// <summary>Partial and final share one message; clients replace in place by Utterance.Id.</summary>
@@ -48,10 +49,23 @@ public sealed record RoomClosedMessage : RelayMessage;
 /// </summary>
 public sealed record RoomMovedMessage(string NewRoomId) : RelayMessage;
 
+/// <summary>
+/// The room is temporarily off the record, or back on it. A column that simply stops is
+/// indistinguishable from a broken connection, so the pause is stated rather than left to be
+/// inferred — the same reasoning as <see cref="RoomClosedMessage"/>. Everything already said
+/// stays readable; the meeting, the room id and the join URL are all unchanged.
+/// </summary>
+public sealed record RoomPausedMessage(bool Paused) : RelayMessage;
+
+/// <param name="Paused">
+/// Carried here as well as in <see cref="RoomPausedMessage"/> because a phone joining mid-pause
+/// never saw the announcement, and late join is served entirely from the snapshot.
+/// </param>
 public sealed record RoomSnapshot(
     RoomConfig Config,
     IReadOnlyList<Speaker> Speakers,
-    IReadOnlyList<Utterance> Utterances);
+    IReadOnlyList<Utterance> Utterances,
+    bool Paused = false);
 
 public static class RelayJson
 {

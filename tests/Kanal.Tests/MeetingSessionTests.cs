@@ -81,6 +81,264 @@ public class MeetingSessionTests
         }
     }
 
+    /// <summary>Records what actually reached the wire, so "nothing left the machine" is testable.</summary>
+    private sealed class AudioCountingAsr : IAsrProvider
+    {
+        public readonly Session Pushes = new();
+
+        public string Id => "audio-counting";
+
+        public AsrCapabilities Caps { get; } = new(
+            Streaming: true, Diarization: false, Translation: true,
+            AutoLanguageDetect: true, new HashSet<string> { "zh" }, LatencyClass.Realtime);
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            Task.FromResult<IAsrSession>(Pushes);
+
+        internal sealed class Session : IAsrSession
+        {
+            private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
+
+            public int Frames;
+
+            public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default)
+            {
+                Interlocked.Increment(ref Frames);
+                return ValueTask.CompletedTask;
+            }
+
+            /// <summary>Says nothing until disposed — this fake exists to count audio, not to speak.</summary>
+            public IAsyncEnumerable<AsrEvent> Events => _events.Reader.ReadAllAsync();
+
+            public ValueTask DisposeAsync()
+            {
+                _events.Writer.TryComplete();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    /// <summary>An ASR the test speaks through directly, so event timing against a pause is exact.</summary>
+    private sealed class HandDrivenAsr : IAsrProvider
+    {
+        public readonly Session Feed = new();
+
+        public string Id => "hand-driven";
+
+        public AsrCapabilities Caps { get; } = new(
+            Streaming: true, Diarization: true, Translation: true,
+            AutoLanguageDetect: true, new HashSet<string> { "zh", "de" }, LatencyClass.Realtime);
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            Task.FromResult<IAsrSession>(Feed);
+
+        internal sealed class Session : IAsrSession
+        {
+            private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
+
+            public ValueTask SayAsync(AsrEvent e) => _events.Writer.WriteAsync(e);
+
+            public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default) =>
+                ValueTask.CompletedTask;
+
+            public IAsyncEnumerable<AsrEvent> Events => _events.Reader.ReadAllAsync();
+
+            public ValueTask DisposeAsync()
+            {
+                _events.Writer.TryComplete();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    private static AsrEvent.Transcript Spoken(string id, string text, bool isFinal) => new(
+        id, "S01", text, "zh", 0, isFinal ? 900 : null, isFinal,
+        CodeSwitch: false, SpeakerConfidence: 0.9, Translations: null);
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 5_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            await Task.Delay(10);
+        }
+    }
+
+    /// <summary>
+    /// The audio gate means everything the ASR sends during a pause derives from audio that was
+    /// pushed before it — words spoken on the record. The operator pauses the moment the other
+    /// side finishes a sentence; the transcriber flushes that sentence's final a beat later.
+    /// Dropping it would leave the last on-record sentence a muted partial on every phone and in
+    /// the export forever, and its translation would never be requested: content loss, with no
+    /// privacy bought in exchange. A sentence that began on the record may finish on it.
+    /// </summary>
+    [Fact]
+    public async Task ASentenceBegunOnTheRecordStillGetsItsFinalDuringPause()
+    {
+        var asr = new HandDrivenAsr();
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            asr, null, relay, new RoomConfig("t", ["zh"]));
+        await session.StartAsync();
+
+        await asr.Feed.SayAsync(Spoken("u1", "料号 KX-", isFinal: false));
+        await WaitUntilAsync(() => relay.OfType<UtteranceUpsert>().Count == 1);
+
+        await session.SetPausedAsync(true);
+        await asr.Feed.SayAsync(Spoken("u1", "料号 KX-4402 确认。", isFinal: true));
+
+        await WaitUntilAsync(() =>
+            relay.OfType<UtteranceUpsert>().Any(u => u.Utterance.State == UtteranceState.Final));
+        var recorded = Assert.Single(session.Room.Snapshot().Utterances);
+        Assert.Equal("料号 KX-4402 确认。", recorded.SrcText);
+    }
+
+    /// <summary>
+    /// The other side of the same line: an utterance that *begins* while paused never enters,
+    /// partial or final. This is what keeps the scripted provider — which generates its own
+    /// audio and talks straight through a pause — off the record.
+    /// </summary>
+    [Fact]
+    public async Task ASentenceBegunWhilePausedNeverEnters()
+    {
+        var asr = new HandDrivenAsr();
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            asr, null, relay, new RoomConfig("t", ["zh"]));
+        await session.StartAsync();
+
+        await session.SetPausedAsync(true);
+        await asr.Feed.SayAsync(Spoken("u2", "内部", isFinal: false));
+        await asr.Feed.SayAsync(Spoken("u2", "内部商量。", isFinal: true));
+
+        // a sentinel error is processed even while paused, so once it surfaces the pump has
+        // already read (and dropped) everything written before it — only then is it safe to
+        // resume without racing the reader
+        var sentinel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        session.ErrorOccurred += _ => sentinel.TrySetResult();
+        await asr.Feed.SayAsync(new AsrEvent.Error("sentinel", Fatal: false));
+        await sentinel.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await session.SetPausedAsync(false);
+        await asr.Feed.SayAsync(Spoken("u3", "继续。", isFinal: true));
+
+        await WaitUntilAsync(() => relay.OfType<UtteranceUpsert>().Any(u => u.Utterance.Id == "u3"));
+        Assert.DoesNotContain(relay.OfType<UtteranceUpsert>(), u => u.Utterance.Id == "u2");
+        Assert.DoesNotContain(session.Room.Snapshot().Utterances, u => u.Id == "u2");
+    }
+
+    /// <summary>
+    /// The half that makes pause a privacy control rather than a display one. Dropping
+    /// transcripts while still streaming the room to a cloud transcriber would mean the audio
+    /// of the private conversation left the building and only the transcript of it was hidden —
+    /// worse than not offering pause at all. A paused session accepts no audio.
+    /// </summary>
+    [Fact]
+    public async Task APausedSessionAcceptsNoAudio()
+    {
+        var asr = new AudioCountingAsr();
+        await using var session = new MeetingSession(
+            asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
+        await session.StartAsync();
+
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, asr.Pushes.Frames);
+
+        await session.SetPausedAsync(true);
+        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, asr.Pushes.Frames);
+
+        await session.SetPausedAsync(false);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(2, asr.Pushes.Frames);
+    }
+
+    /// <summary>
+    /// Pause is a privacy control before it is a convenience one: in a supplier negotiation the
+    /// operator steps out of the meeting to talk to their own side, and nothing said in that
+    /// minute may be transcribed, translated, published to the phones in the room, or — in a
+    /// cloud mode — sent off this machine at all.
+    /// </summary>
+    [Fact]
+    public async Task NothingSpokenWhilePausedIsRecordedOrPublished()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await RunToEndAsync(session);
+
+        Assert.Empty(relay.OfType<UtteranceUpsert>());
+        Assert.Empty(session.Room.Snapshot().Utterances);
+    }
+
+    [Fact]
+    public async Task ResumingRecordsAgain()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(false);
+        await RunToEndAsync(session);
+
+        Assert.NotEmpty(relay.OfType<UtteranceUpsert>());
+    }
+
+    /// <summary>
+    /// A phone whose column simply stops is indistinguishable from a phone whose connection
+    /// broke. The room is told, so the page can say "paused" rather than leaving the
+    /// participant to guess — the same reasoning as <c>room.closed</c>.
+    /// </summary>
+    [Fact]
+    public async Task PauseAndResumeAreAnnouncedToTheRoom()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(false);
+
+        var announced = relay.OfType<RoomPausedMessage>();
+        Assert.Equal([true, false], announced.Select(m => m.Paused));
+    }
+
+    /// <summary>Setting pause to what it already is says nothing — a repeated press must not
+    /// fill the channel with messages the clients would only re-apply.</summary>
+    [Fact]
+    public async Task SettingTheSamePauseStateTwiceIsNotAnnouncedTwice()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true);
+
+        Assert.Single(relay.OfType<RoomPausedMessage>());
+    }
+
+    /// <summary>A phone joining mid-pause has missed the announcement; the snapshot carries it,
+    /// so late join lands in the same state as everyone else — the room.snapshot invariant.</summary>
+    [Fact]
+    public async Task SnapshotCarriesThePausedState()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetPausedAsync(true);
+        await session.PublishSnapshotAsync();
+
+        Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Paused);
+    }
+
     /// <summary>Slow enough that shutdown always finds it in flight, quick enough to fit a grace.</summary>
     private sealed class SlowMt : IMtProvider
     {

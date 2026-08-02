@@ -21,6 +21,7 @@ public sealed class MeetingSession : IAsyncDisposable
     private IAsrSession? _session;
     private Task? _pump;
     private int _disposed;
+    private int _paused;
 
     /// <summary>How long shutdown waits for translations already in flight before cancelling them.</summary>
     public static readonly TimeSpan DefaultTranslationGrace = TimeSpan.FromSeconds(2);
@@ -61,9 +62,36 @@ public sealed class MeetingSession : IAsyncDisposable
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
     }
 
+    /// <summary>
+    /// True while the room is off the record. Pause is a privacy control before it is a
+    /// convenience one — the operator steps out of a negotiation to talk to their own side —
+    /// so it stops the audio at the door rather than hiding the transcript afterwards.
+    /// </summary>
+    public bool IsPaused => Volatile.Read(ref _paused) == 1;
+
+    /// <summary>
+    /// Takes the room off the record, or puts it back on. Announced to clients, since a column
+    /// that simply stops looks exactly like a connection that broke. A no-op when the state is
+    /// already what was asked for, so a repeated press does not fill the channel.
+    /// </summary>
+    public async Task SetPausedAsync(bool paused, CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _paused, paused ? 1 : 0) == (paused ? 1 : 0))
+            return;
+
+        await PublishSafeAsync(new RoomPausedMessage(paused));
+    }
+
     public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default)
     {
         var session = _session ?? throw new InvalidOperationException("Session not started.");
+
+        // Dropping the transcript but still streaming the room to a cloud transcriber would
+        // mean the private conversation left the building and only the record of it was
+        // hidden — worse than offering no pause at all.
+        if (IsPaused)
+            return ValueTask.CompletedTask;
+
         return session.PushAudioAsync(pcm16, ct);
     }
 
@@ -83,7 +111,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
     /// <summary>Publish the full state — served on late join and client reconnect.</summary>
     public Task PublishSnapshotAsync(CancellationToken ct = default) =>
-        _relay.PublishAsync(new RoomSnapshotMessage(Room.Snapshot()), ct);
+        _relay.PublishAsync(new RoomSnapshotMessage(Room.Snapshot() with { Paused = IsPaused }), ct);
 
     /// <summary>Announce that this room is over, so clients stop presenting themselves as live.</summary>
     public Task PublishClosedAsync(CancellationToken ct = default) =>
@@ -99,6 +127,15 @@ public sealed class MeetingSession : IAsyncDisposable
                 switch (e)
                 {
                     case AsrEvent.Transcript t:
+                        // While paused, a sentence that began on the record may still finish on
+                        // it, but nothing new may begin. The audio gate means a real transcriber
+                        // can only be flushing pre-pause audio here — dropping that would leave
+                        // the last on-record sentence a muted partial forever, and untranslated.
+                        // The known-id rule is also what keeps a provider that generates its own
+                        // audio (the scripted one) off the record while it talks through a pause.
+                        if (IsPaused && !Room.Contains(t.UtteranceId))
+                            break;
+
                         var utterance = Room.ApplyTranscript(t);
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)
