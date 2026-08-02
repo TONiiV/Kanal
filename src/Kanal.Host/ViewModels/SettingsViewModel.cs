@@ -59,6 +59,10 @@ public partial class SettingsViewModel : ViewModelBase
                          m => m.IsLocal && m.ModelId == settings.ActiveTranslationModelId)
                      ?? TranslationModels[0];
         active.IsActive = true;
+
+        _transcriptFolder = settings.TranscriptFolder ?? "";
+        _audioFolder = settings.AudioFolder ?? "";
+        _recordAudio = settings.RecordAudio;
     }
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
@@ -66,6 +70,25 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<TranslationModelItemViewModel> TranslationModels { get; } = new();
 
     public string EnvFallback { get; }
+
+    /// <summary>
+    /// Where the export dialog opens, and where a meeting's audio is written. Blank means
+    /// "wherever the default is" rather than the current directory — a cleared box must not
+    /// silently start writing transcripts next to the executable.
+    /// </summary>
+    [ObservableProperty]
+    private string _transcriptFolder = "";
+
+    /// <inheritdoc cref="TranscriptFolder"/>
+    [ObservableProperty]
+    private string _audioFolder = "";
+
+    /// <summary>Whether the room is written to disk while a meeting runs.</summary>
+    [ObservableProperty]
+    private bool _recordAudio = true;
+
+    /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
+    public string DefaultFolderNote => $"Empty means {SettingsStore.DefaultOutputFolder}";
 
     [ObservableProperty]
     private string _newName = "";
@@ -134,5 +157,12 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        settings.TranscriptFolder = Folder(TranscriptFolder);
+        settings.AudioFolder = Folder(AudioFolder);
+        settings.RecordAudio = RecordAudio;
     }
+
+    /// <summary>Whitespace is stored as "unset", so the resolver's fallback is the only default.</summary>
+    private static string? Folder(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

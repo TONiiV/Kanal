@@ -17,6 +17,7 @@ namespace Kanal.Core.Relay;
 [JsonDerivedType(typeof(RoomClosedMessage), "room.closed")]
 [JsonDerivedType(typeof(RoomMovedMessage), "room.moved")]
 [JsonDerivedType(typeof(RoomPausedMessage), "room.paused")]
+[JsonDerivedType(typeof(RoomRecordingMessage), "room.recording")]
 public abstract record RelayMessage;
 
 /// <summary>Partial and final share one message; clients replace in place by Utterance.Id.</summary>
@@ -57,6 +58,15 @@ public sealed record RoomMovedMessage(string NewRoomId) : RelayMessage;
 /// </summary>
 public sealed record RoomPausedMessage(bool Paused) : RelayMessage;
 
+/// <summary>
+/// Whether the host is writing the room's audio to a file. Sent to the clients because the
+/// people being recorded are the ones entitled to know: the host's own status bar is read by
+/// the operator alone, and in Germany and Poland recording a private conversation without the
+/// other side knowing is not merely rude. Like pause, a state rather than an event, so it is
+/// carried in the snapshot too.
+/// </summary>
+public sealed record RoomRecordingMessage(bool Recording) : RelayMessage;
+
 /// <param name="Paused">
 /// Carried here as well as in <see cref="RoomPausedMessage"/> because a phone joining mid-pause
 /// never saw the announcement, and late join is served entirely from the snapshot.
@@ -65,7 +75,8 @@ public sealed record RoomSnapshot(
     RoomConfig Config,
     IReadOnlyList<Speaker> Speakers,
     IReadOnlyList<Utterance> Utterances,
-    bool Paused = false);
+    bool Paused = false,
+    bool Recording = false);
 
 public static class RelayJson
 {

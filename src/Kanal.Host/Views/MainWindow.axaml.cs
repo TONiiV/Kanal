@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Kanal.Host.ViewModels;
@@ -24,6 +25,46 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is MainViewModel vm)
+                vm.ChooseExportPath = ChooseExportPathAsync;
+        };
+    }
+
+    /// <summary>
+    /// The view half of export: the view model builds the transcript and knows what to suggest,
+    /// this opens the dialog. Returns null when the operator cancels.
+    /// </summary>
+    private async Task<string?> ChooseExportPathAsync(string folder, string suggestedName)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save transcript",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "md",
+            ShowOverwritePrompt = true,
+            SuggestedStartLocation = await SafeFolderAsync(folder),
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Markdown") { Patterns = ["*.md"] },
+            ],
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    /// <summary>A configured folder that has since been deleted must not take the dialog with it.</summary>
+    private async Task<IStorageFolder?> SafeFolderAsync(string path)
+    {
+        try
+        {
+            return await StorageProvider.TryGetFolderFromPathAsync(path);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)

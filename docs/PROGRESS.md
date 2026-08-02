@@ -153,6 +153,42 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   `GLADIA_API_KEY`, so "unavailable without a key" was untestable on a machine that has one —
   the key resolver is now injected like the other two test seams.
 
+- **A meeting now produces both artefacts, where the operator chose.** Export wrote to
+  `Documents\<roomid>.md` and printed the path in a status line nobody was looking at. It now
+  opens a save dialog on the configured transcript folder with the room id as the name — both
+  only suggestions. A cancelled dialog writes nothing; a failed write (read-only folder, full
+  disk) is reported rather than thrown out of a command nothing awaits, because losing the
+  transcript at the last step is the worst possible moment for that.
+
+  The room's audio is written to disk as the meeting runs (`WavWriter`, one file per meeting
+  named after the room, ~115 MB an hour). Streamed rather than assembled at the end — an hour in
+  memory means a crash costs all of it — and the RIFF lengths are patched every ~2 s, so a host
+  that dies mid-meeting still leaves a file that plays. A WAV with zero lengths is not a
+  truncated recording; it is one most players refuse to open.
+
+  **Recording hangs off `MeetingSession.AudioAccepted`, a tap that only fires for audio the
+  session actually took.** Reading `IsPaused` a second time in the capture loop would have worked
+  today and given the pause promise a second place to quietly stop being true. Pause says nothing
+  said in that minute is kept; that is now structural. The status bar states `RECORDING` while it
+  runs and `RECORDING HELD` while paused — the file outlives the meeting, and nobody should find
+  out about it afterwards. Settings carries both folders and an off switch.
+
+  Review then asked the question the host-side indicator could not answer: the operator knows,
+  but the people whose voices are in the file read a phone, and two of the three languages in
+  the room are spoken where recording a private conversation without the other side knowing is
+  a criminal matter, not an etiquette one. Recording is now a room state like pause —
+  `room.recording` on the wire, carried in `room.snapshot` because a phone that scans the QR ten
+  minutes in never saw the announcement, and cached, because the notice has to survive a
+  lock-screen reconnect. The mobile page states it in all four languages, and says where the
+  audio stays.
+
+  Rendering it caught the defect the assertions could not: the notice was in the flow, and the
+  feed follows the newest utterance, so a participant spends the meeting scrolled to the bottom
+  with the notice a few thousand pixels above them. It lives inside the sticky masthead now.
+  During a pause it is held rather than hidden — the file exists and resumes, and a notice that
+  vanished would read as "it stopped". It is ink on paper with a hairline, not the alarm wash:
+  a standing fact about the room, not an error.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

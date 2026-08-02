@@ -18,6 +18,7 @@ public sealed class MeetingSession : IAsyncDisposable
     private readonly List<Task> _pendingTranslations = new();
     private readonly object _gate = new();
     private readonly TimeSpan _translationGrace;
+    private int _recording;
     private IAsrSession? _session;
     private Task? _pump;
     private int _disposed;
@@ -48,6 +49,14 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
+
+    /// <summary>
+    /// Raised for audio the session actually accepted — so never while paused. The recorder
+    /// hangs off this rather than off the capture loop: pause is a promise that nothing said in
+    /// that minute is kept, and a second copy of the pause check somewhere else is a second
+    /// place for that promise to quietly stop being true.
+    /// </summary>
+    public event Action<ReadOnlyMemory<byte>>? AudioAccepted;
 
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -82,6 +91,22 @@ public sealed class MeetingSession : IAsyncDisposable
         await PublishSafeAsync(new RoomPausedMessage(paused));
     }
 
+    public bool IsRecording => Volatile.Read(ref _recording) == 1;
+
+    /// <summary>
+    /// Tells the room that its audio is, or is no longer, being written to a file. The host is
+    /// the only place that knows; the participants are the ones it concerns. Announced on the
+    /// same terms as pause — a no-op when nothing changed — and carried in the snapshot, since
+    /// a phone that joins mid-meeting never saw the announcement.
+    /// </summary>
+    public async Task SetRecordingAsync(bool recording, CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _recording, recording ? 1 : 0) == (recording ? 1 : 0))
+            return;
+
+        await PublishSafeAsync(new RoomRecordingMessage(recording));
+    }
+
     public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default)
     {
         var session = _session ?? throw new InvalidOperationException("Session not started.");
@@ -92,6 +117,7 @@ public sealed class MeetingSession : IAsyncDisposable
         if (IsPaused)
             return ValueTask.CompletedTask;
 
+        AudioAccepted?.Invoke(pcm16);
         return session.PushAudioAsync(pcm16, ct);
     }
 
@@ -111,7 +137,10 @@ public sealed class MeetingSession : IAsyncDisposable
 
     /// <summary>Publish the full state — served on late join and client reconnect.</summary>
     public Task PublishSnapshotAsync(CancellationToken ct = default) =>
-        _relay.PublishAsync(new RoomSnapshotMessage(Room.Snapshot() with { Paused = IsPaused }), ct);
+        _relay.PublishAsync(
+            new RoomSnapshotMessage(
+                Room.Snapshot() with { Paused = IsPaused, Recording = IsRecording }),
+            ct);
 
     /// <summary>Announce that this room is over, so clients stop presenting themselves as live.</summary>
     public Task PublishClosedAsync(CancellationToken ct = default) =>

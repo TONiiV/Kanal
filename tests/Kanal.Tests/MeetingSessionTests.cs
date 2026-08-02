@@ -257,6 +257,34 @@ public class MeetingSessionTests
     }
 
     /// <summary>
+    /// The recorder hangs off this tap rather than off the capture loop, so "paused means it is
+    /// not being recorded" is structurally true instead of remembered in a second place.
+    /// </summary>
+    [Fact]
+    public async Task AudioAcceptedFiresForWhatWasTakenAndNothingElse()
+    {
+        var asr = new AudioCountingAsr();
+        var taken = 0;
+        await using var session = new MeetingSession(
+            asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
+        session.AudioAccepted += _ => Interlocked.Increment(ref taken);
+        await session.StartAsync();
+
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, taken);
+
+        await session.SetPausedAsync(true);
+        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(1, taken);
+
+        await session.SetPausedAsync(false);
+        await session.PushAudioAsync(new byte[320]);
+        Assert.Equal(2, taken);
+        Assert.Equal(taken, asr.Pushes.Frames); // the tap and the wire see exactly the same audio
+    }
+
+    /// <summary>
     /// Pause is a privacy control before it is a convenience one: in a supplier negotiation the
     /// operator steps out of the meeting to talk to their own side, and nothing said in that
     /// minute may be transcribed, translated, published to the phones in the room, or — in a
@@ -337,6 +365,57 @@ public class MeetingSessionTests
         await session.PublishSnapshotAsync();
 
         Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Paused);
+    }
+
+    /// <summary>
+    /// Whether the room is being recorded to audio is the participants' business, not only the
+    /// operator's: two of the three languages in the room are spoken in jurisdictions where
+    /// recording a private conversation without the other side knowing is a criminal matter,
+    /// and the phone in their hand is the only surface they read.
+    /// </summary>
+    [Fact]
+    public async Task RecordingIsAnnouncedToTheRoom()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.SetRecordingAsync(false);
+
+        Assert.Equal([true, false], relay.OfType<RoomRecordingMessage>().Select(m => m.Recording));
+    }
+
+    /// <summary>Same reasoning as pause: a repeated setting must not fill the channel.</summary>
+    [Fact]
+    public async Task SettingTheSameRecordingStateTwiceIsNotAnnouncedTwice()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.SetRecordingAsync(true);
+
+        Assert.Single(relay.OfType<RoomRecordingMessage>());
+    }
+
+    /// <summary>
+    /// A phone that scans the QR ten minutes in never saw the announcement. Late join is served
+    /// entirely from the snapshot, so a notice that only existed as an event would be a notice
+    /// most participants never get.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotCarriesTheRecordingState()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.SetRecordingAsync(true);
+        await session.PublishSnapshotAsync();
+
+        Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Recording);
     }
 
     /// <summary>Slow enough that shutdown always finds it in flight, quick enough to fit a grace.</summary>
