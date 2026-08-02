@@ -161,6 +161,15 @@ public sealed class RoomState
         return updated;
     }
 
+    /// <summary>Whether an utterance has already entered the record — i.e. it began on it.</summary>
+    public bool Contains(string utteranceId)
+    {
+        lock (_gate)
+        {
+            return _utterances.ContainsKey(utteranceId);
+        }
+    }
+
     /// <summary>Resolve a raw diarization tag to its canonical (post-merge) speaker tag.</summary>
     public string ResolveTag(string tag)
     {

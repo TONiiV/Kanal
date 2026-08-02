@@ -54,6 +54,22 @@ public class PipelineModeTests
         }
     }
 
+    /// <summary>
+    /// The captions — the meeting's own words and their translations — go to the phones through
+    /// the relay in every mode; that is the product. A help string that promises "no network" or
+    /// "nothing is sent anywhere" is overstating privacy to the one person who must be able to
+    /// repeat it to the other side of the table. The mode chooses what the *pipeline* sends out
+    /// (audio, transcript, or nothing); help may only claim that much.
+    /// </summary>
+    [Fact]
+    public void HelpNeverOverstatesPrivacy()
+    {
+        string[] falseAbsolutes = ["no network", "nothing is sent anywhere", "wording never leaves"];
+        foreach (var mode in PipelineMode.All)
+        foreach (var phrase in falseAbsolutes)
+            Assert.DoesNotContain(phrase, mode.Help, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void FiveModesCoverBothStagesInBothPlaces()
     {

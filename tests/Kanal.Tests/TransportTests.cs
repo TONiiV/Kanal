@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Kanal.Core.Relay;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.Tests;
@@ -16,6 +17,20 @@ public class TransportTests
         var deadline = Environment.TickCount64 + ms;
         while (Environment.TickCount64 < deadline)
         {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 15_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
             Dispatcher.UIThread.RunJobs();
             await Task.Delay(20);
         }
@@ -64,13 +79,15 @@ public class TransportTests
     {
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
+        // without a factory, an enabled relay falls back to the real Supabase publisher —
+        // a unit test must never put packets on the production channel
+        vm.RelayPublisherFactory = _ => new NullRelayPublisher();
         await vm.StartCommand.ExecuteAsync(null);
-        await PumpAsync(300);
+        await WaitForAsync(() => vm.Columns.Count > 0 && vm.Columns[0].Bubbles.Count > 0);
 
         var room = vm.JoinUrl;
         var columns = vm.Columns.Count;
         var said = vm.Columns[0].Bubbles.Count;
-        Assert.True(said > 0, "nothing was transcribed before the pause.");
 
         await vm.PauseCommand.ExecuteAsync(null);
         await PumpAsync(200);

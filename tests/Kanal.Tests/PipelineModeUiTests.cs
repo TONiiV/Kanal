@@ -79,6 +79,10 @@ public class PipelineModeUiTests
         var vm = TestViewModels.Hermetic(settings);
         var cloud = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudCloud);
 
+        // Without this the test is vacuous on any machine whose environment carries the key:
+        // the mode is available from construction and the refresh below proves nothing.
+        Assert.False(cloud.IsAvailable);
+
         settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
         vm.RefreshPipelineStatus();
 

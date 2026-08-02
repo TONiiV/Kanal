@@ -20,7 +20,12 @@ internal static class TestViewModels
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
-        return new MainViewModel(() => resolved, () => new ModelDownloadManager(dir))
+        // Stored keys only — the default resolver falls back to the ambient GLADIA_API_KEY,
+        // which made "unavailable without a key" assertions vacuous on a machine that has one.
+        return new MainViewModel(
+            () => resolved,
+            () => new ModelDownloadManager(dir),
+            SettingsStore.ResolveStoredGladiaKey)
         {
             RelayEnabled = false,
         };
