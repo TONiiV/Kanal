@@ -41,6 +41,11 @@
             <StreamGeometry x:Key="GlyphPlay">M0,0 L10,6 L0,12 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphPause">M0,0 H3.4 V12 H0 Z M6.6,0 H10 V12 H6.6 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphStop">M0,0 H11 V11 H0 Z</StreamGeometry>
+            <!-- Availability marker on a mode row. Filled = this can run now, hollow = it cannot.
+                 Even-odd fill turns the inner square into a hole rather than a second block. -->
+            <StreamGeometry x:Key="GlyphSquareFilled">M0,0 H8 V8 H0 Z</StreamGeometry>
+            <StreamGeometry x:Key="GlyphSquareHollow">M0,0 H8 V8 H0 Z M1.6,1.6 H6.4 V6.4 H1.6 Z</StreamGeometry>
+
             <!-- Settings as three sliders, not a gear: it is drawn from the same rules-and-blocks
                  vocabulary as the rest of the screen, and it reads at a glance at 14 px. F1 =
                  non-zero fill, or each knob would punch a hole in the rule it sits on. -->
@@ -172,6 +177,21 @@
         <Style Selector="ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+        </Style>
+
+        <!-- Flyouts are sheets of paper with a rule round them, like everything else here —
+             not the themed rounded card with a shadow that Fluent ships. -->
+        <Style Selector="FlyoutPresenter">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <!-- Fluent's defaults are narrower than a readable measure of body text and taller
+                 than this window: content wider than MaxWidth is clipped, not wrapped, so the
+                 first version of the mode help lost the right-hand third of every line. -->
+            <Setter Property="MaxWidth" Value="500" />
+            <Setter Property="MaxHeight" Value="700" />
         </Style>
 
         <Style Selector="TextBox">

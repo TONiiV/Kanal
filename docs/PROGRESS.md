@@ -127,6 +127,32 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   left a muted partial forever and its translation never requested. Nothing new may begin while
   paused; that unchanged rule is what still keeps the scripted provider off the record.
 
+- **Mode availability was invisible.** Whether a mode could run was carried only by the row's
+  contrast — the same signal the grey second line already uses — so five unequal choices read as
+  five equal ones and the operator found out at Start. Each row now carries a marker (filled
+  square = runs now, hollow = blocked) and states its status in words, and a **help flyout** next
+  to the dropdown lays all five out side by side with what each one does, what it sends off this
+  machine, and what is blocking it. The flyout is generated from the same `Modes` collection the
+  dropdown binds to, so the help cannot drift from the list. Three of five modes cannot run yet;
+  the list is as much roadmap as control, which is why a row nobody can pick still explains itself
+  — and, like every other string here, without naming a company.
+
+  Rendering it caught a defect the assertions could not: `FlyoutPresenter`'s default `MaxWidth` is
+  narrower than a readable measure of body text, and content wider than it is **clipped, not
+  wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
+  of the window. Both are now set explicitly, as with every other Fluent default here, and the
+  flyout content sits in a `ScrollViewer` so growth past `MaxHeight` scrolls instead of silently
+  clipping.
+
+  Review then caught the help **overstating privacy**: Demo promised "no network" while the demo's
+  stated purpose — checking the join QR and the phones — runs over the relay, and local · local
+  promised "nothing is sent anywhere" while the captions themselves cross the network in every
+  mode. The relay fact now lives once in the flyout's introduction, each mode's help claims only
+  what its *pipeline* sends out, and a test bans the false absolutes outright. The same review
+  closed a hermeticity hole the PR itself had documented: the mode list read the ambient
+  `GLADIA_API_KEY`, so "unavailable without a key" was untestable on a machine that has one —
+  the key resolver is now injected like the other two test seams.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

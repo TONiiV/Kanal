@@ -35,6 +35,41 @@ public class PipelineModeTests
 
     private static readonly PipelinePlanner.KeyResolver SomeKey = _ => ("k", "meeting-room");
 
+    /// <summary>
+    /// Every mode explains itself in the help flyout. The list is the roadmap as much as it is a
+    /// control — three of five modes cannot run yet — so a row the operator cannot pick still has
+    /// to say what it would do, without naming the company that would do it.
+    /// </summary>
+    [Fact]
+    public void EveryModeExplainsItself()
+    {
+        var seen = new HashSet<string>();
+        foreach (var mode in PipelineMode.All)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(mode.Help), $"{mode.Id} has no help text.");
+            Assert.True(mode.Help.Length > 40, $"{mode.Id} help is too thin to be worth a flyout.");
+            Assert.True(seen.Add(mode.Help), $"{mode.Id} reuses another mode's help text.");
+            foreach (var vendor in VendorNames)
+                Assert.DoesNotContain(vendor, mode.Help, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// The captions — the meeting's own words and their translations — go to the phones through
+    /// the relay in every mode; that is the product. A help string that promises "no network" or
+    /// "nothing is sent anywhere" is overstating privacy to the one person who must be able to
+    /// repeat it to the other side of the table. The mode chooses what the *pipeline* sends out
+    /// (audio, transcript, or nothing); help may only claim that much.
+    /// </summary>
+    [Fact]
+    public void HelpNeverOverstatesPrivacy()
+    {
+        string[] falseAbsolutes = ["no network", "nothing is sent anywhere", "wording never leaves"];
+        foreach (var mode in PipelineMode.All)
+        foreach (var phrase in falseAbsolutes)
+            Assert.DoesNotContain(phrase, mode.Help, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void FiveModesCoverBothStagesInBothPlaces()
     {

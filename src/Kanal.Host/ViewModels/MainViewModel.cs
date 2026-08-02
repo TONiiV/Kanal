@@ -34,6 +34,8 @@ public partial class MainViewModel : ViewModelBase
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
     private readonly Func<ModelDownloadManager> _downloads;
+    /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
+    private readonly PipelinePlanner.KeyResolver? _resolveKey;
 
     /// <summary>
     /// Presentation order of the language codes, seeded from <see cref="LanguageCatalog"/> and
@@ -55,12 +57,18 @@ public partial class MainViewModel : ViewModelBase
     /// Test seam, in the shape of <see cref="RelayPublisherFactory"/>: both halves of "what does
     /// this machine translate with" are injected. Headless runs must not read the developer's
     /// real %APPDATA%\Kanal\settings.json — on a machine with a model downloaded, that made a
-    /// UI test load a multi-gigabyte LLM and behave differently per developer.
+    /// UI test load a multi-gigabyte LLM and behave differently per developer. The key resolver
+    /// is injected for the same reason: the default falls back to the ambient GLADIA_API_KEY,
+    /// which made "this mode is unavailable without a key" untestable on a machine that has one.
     /// </summary>
-    public MainViewModel(Func<AppSettings> loadSettings, Func<ModelDownloadManager> downloads)
+    public MainViewModel(
+        Func<AppSettings> loadSettings,
+        Func<ModelDownloadManager> downloads,
+        PipelinePlanner.KeyResolver? resolveKey = null)
     {
         _loadSettings = loadSettings;
         _downloads = downloads;
+        _resolveKey = resolveKey;
 
         foreach (var mode in PipelineMode.All)
             Modes.Add(new PipelineModeOption(mode, unavailable: null));
@@ -377,9 +385,9 @@ public partial class MainViewModel : ViewModelBase
 
         foreach (var option in Modes)
             option.Unavailable = PipelinePlanner
-                .Describe(option.Mode, settings, downloads).Unavailable;
+                .Describe(option.Mode, settings, downloads, _resolveKey).Unavailable;
 
-        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads);
+        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey);
         TranscriptionStatus = status.TranscriptionLabel;
         TranslationStatus = status.TranslationLabel;
     }
@@ -455,7 +463,7 @@ public partial class MainViewModel : ViewModelBase
 
         var mode = SelectedMode.Mode;
         var settings = _loadSettings();
-        var plan = PipelinePlanner.Plan(mode, settings, _downloads());
+        var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
         TranscriptionStatus = plan.Status.TranscriptionLabel;
         TranslationStatus = plan.Status.TranslationLabel;
 
