@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Audio;
+using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
@@ -11,8 +12,18 @@ namespace Kanal.Tests;
 /// answer is the one that cannot be answered by staring at the columns during the meeting: is
 /// this device going to work in this room.
 /// </summary>
-public class MicTestPanelTests
+public class MicTestPanelTests : IDisposable
 {
+    private readonly string _previousLanguage = Localizer.Instance.Current;
+
+    /// <summary>
+    /// Every verdict here is asserted verbatim in English, and the application language defaults
+    /// to the machine's own — so without this the whole class passes or fails by desktop locale.
+    /// </summary>
+    public MicTestPanelTests() => Localizer.Instance.Current = "en";
+
+    public void Dispose() => Localizer.Instance.Current = _previousLanguage;
+
     /// <summary>Plays generated audio down the capture interface — no device, no room.</summary>
     private sealed class ScriptedCapture(IReadOnlyList<byte[]> frames) : IAudioCaptureService
     {

@@ -34,6 +34,13 @@ public sealed class AppSettings
     /// runs while paused.
     /// </summary>
     public bool RecordAudio { get; set; } = true;
+
+    /// <summary>
+    /// ISO code the host's own labels and messages are shown in. Null follows the operating
+    /// system, falling back to English. Nothing to do with the room's languages — the person
+    /// driving the laptop is often not one of the people being translated for.
+    /// </summary>
+    public string? AppLanguage { get; set; }
 }
 
 /// <summary>

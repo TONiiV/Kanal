@@ -222,6 +222,53 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   loop now writes only into the meter it was started with, and every update back to the UI
   checks it still speaks for the current session.
 
+- **The host speaks four languages.** Chrome, messages and mode descriptions in English, 简体中文,
+  Deutsch and Polski, chosen in Settings and remembered. Separate from the room's languages by
+  design: the person driving the laptop is often not one of the people the meeting is being
+  translated for, and a German buyer running a session between a Chinese supplier and a Polish
+  contractor should not have to read English labels to do it.
+
+  A `Localizer` singleton with an indexer, reached from XAML through an `{l:T key}` markup
+  extension that produces a *binding* rather than a value. Switching therefore reaches windows
+  that are already open — mid-meeting, without restarting a room. Modes carry keys rather than
+  text for the same reason: built once at construction, they would otherwise have stayed in
+  whatever language the application started in. Missing keys fall back to English and then to the
+  key itself, so a gap shows up as a visible identifier rather than as a blank control.
+
+  Three tests keep it honest: the other three languages must carry **exactly** the English key
+  set, no string may still be the English one (bar a handful that genuinely are the same word —
+  "Start" and "Pause" are ordinary German), and `{0}` placeholders must survive translation, since
+  a format string that loses one drops the path or the decibel figure it was carrying and
+  `string.Format` says nothing. The unbranded rule is now checked in all four languages.
+
+  Two defects this turned up. A `Strings.Tables` map declared **above** the dictionaries it
+  indexes was built out of four nulls — static initialisers run in declaration order — so every
+  lookup threw instead of falling back. And a test that switched the language never put it back:
+  the language is a global singleton, as it must be for a desktop application, so a leak changed
+  what every other test's window said, and xunit's parallel classes turned that into failures that
+  moved between runs. Parallelisation is now off for the assembly, with the reason recorded.
+
+  Rendering all four caught the layout defect i18n always produces: `Merge` is one short word in
+  English and `Zusammenführen` in German, and on one row the German ran off the edge of the
+  speakers panel. The button now sits under the two tags, which fits any language rather than the
+  four that exist today.
+
+  Review fixes, after the fact. The German and Polish had promoted "the mode that sends audio
+  out" to "the *only* mode that sends audio out" — false, CloudLocal sends it too, and exactly
+  the fact this tool exists to keep straight; a test now refuses the claim. The Settings window,
+  where the switch happens, half-stayed in the old language: the env-var note, the processing
+  note, the folder note, the untested verdict and the model rows were all built at construction,
+  and the model rows were still hard-coded English besides. All of it now follows the change,
+  the two file dialogs use the keys that already existed for them, and the "same word in the
+  target language" exemptions are per language, so a Chinese 开始 reverted to "Start" fails.
+
+  Merging the two brought out a conflict worth naming: the microphone panel had just been made
+  platform-aware in English while this branch was turning the same strings into keys, so taking
+  either side alone would have silently reverted the macOS permission advice. The platform
+  difference lives in the language tables now — `settings.sound.mac` / `settings.sound.win` fill
+  a placeholder in the three sentences that name a settings panel, and the silent verdict has a
+  macOS detail of its own, because a denied permission there sounds exactly like a dead device.
+
 ### Design changes
 
 1. **Column rendering rule** (PR #2): each language column carries *only* its own language.

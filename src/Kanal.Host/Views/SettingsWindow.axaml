@@ -1,9 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:l="using:Kanal.Host.Localization"
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
-        Title="Kanal — Settings"
+        Title="{l:T settings.title}"
         Width="620" Height="640"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
@@ -11,7 +12,7 @@
         Background="{StaticResource Sheet}">
 
     <DockPanel Margin="24,20,24,20">
-        <Button DockPanel.Dock="Bottom" Content="Save &amp; Close" Click="OnSaveClick"
+        <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
         <ScrollViewer>
@@ -20,9 +21,28 @@
                      is configuration; this is the one thing that can only be found out by
                      listening, and the only place a dead or clipping microphone gets caught
                      before it costs a meeting. -->
-                <TextBlock Text="INPUT" Classes="label" />
+                <!-- First, because an operator who cannot read the screen cannot use anything
+                     below it. Applied on selection rather than on Save for the same reason. -->
+                <TextBlock Text="{l:T settings.applang.heading}" Classes="label" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="Test a microphone" FontSize="12.5" FontWeight="SemiBold"
+                <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                    <TextBlock Grid.Column="0" Text="{l:T settings.applang.label}" FontSize="12.5"
+                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AppLanguages}"
+                              SelectedItem="{Binding AppLanguage}" HorizontalAlignment="Left" Width="200">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="l:AppLanguage">
+                                <TextBlock Text="{Binding NativeName}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+                <TextBlock Text="{l:T settings.applang.note}" FontSize="11.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource Ink3}" Margin="0,0,0,28" />
+
+                <TextBlock Text="{l:T settings.input.heading}" Classes="label" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="{l:T settings.input.title}" FontSize="12.5" FontWeight="SemiBold"
                            Margin="0,0,0,6" />
 
                 <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
@@ -35,9 +55,9 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Button Grid.Column="1" Content="Test" Command="{Binding StartTestCommand}"
+                    <Button Grid.Column="1" Content="{l:T settings.input.test}" Command="{Binding StartTestCommand}"
                             IsVisible="{Binding !IsTesting}" />
-                    <Button Grid.Column="2" Content="Stop" Command="{Binding StopTestCommand}"
+                    <Button Grid.Column="2" Content="{l:T settings.input.stop}" Command="{Binding StopTestCommand}"
                             IsVisible="{Binding IsTesting}" />
                 </Grid>
 
@@ -64,9 +84,9 @@
 
                 <!-- Grouped by pipeline stage, the same two stages the mode names. A provider
                      is named here and only here: this is where the operator types its key. -->
-                <TextBlock Text="TRANSCRIPTION" Classes="label" Margin="0,28,0,0" />
+                <TextBlock Text="{l:T settings.transcription.heading}" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="Cloud provider — Gladia API keys" FontSize="12.5"
+                <TextBlock Text="{l:T settings.transcription.keys}" FontSize="12.5"
                            FontWeight="SemiBold" Margin="0,0,0,6" />
                 <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
                            Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
@@ -77,7 +97,7 @@
                             <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
                                 <Grid ColumnDefinitions="Auto,152,*,Auto">
                                     <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
-                                                 VerticalAlignment="Center" ToolTip.Tip="Use this key" />
+                                                 VerticalAlignment="Center" ToolTip.Tip="{l:T settings.usekey.tip}" />
                                     <TextBox Grid.Column="1" Text="{Binding Name}" Margin="6,0" />
                                     <TextBox Grid.Column="2" Text="{Binding Key}" PasswordChar="•" Margin="6,0" />
                                     <Button Grid.Column="3" Content="✕" Classes="ghost" Padding="10,5"
@@ -89,24 +109,24 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Text="ADD A KEY" Classes="label" Margin="0,18,0,0" />
+                <TextBlock Text="{l:T settings.addkey}" Classes="label" Margin="0,18,0,0" />
                 <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBox Text="{Binding NewName}" PlaceholderText="name (e.g. work)" Width="152" />
-                    <TextBox Text="{Binding NewKey}" PlaceholderText="API key" PasswordChar="•" Width="258" />
-                    <Button Content="Add" Command="{Binding AddCommand}" />
+                    <TextBox Text="{Binding NewName}" PlaceholderText="{l:T settings.key.name}" Width="152" />
+                    <TextBox Text="{Binding NewKey}" PlaceholderText="{l:T settings.key.value}" PasswordChar="•" Width="258" />
+                    <Button Content="{l:T settings.add}" Command="{Binding AddCommand}" />
                 </StackPanel>
 
-                <TextBlock Text="Local transcription — not built yet." FontSize="11.5"
+                <TextBlock Text="{l:T settings.localasr.note}" FontSize="11.5"
                            Foreground="{StaticResource Ink3}" Margin="0,16,0,0" />
 
                 <!-- Local translation models: downloaded once, then all translation
                      text stays on this machine. One choice is always active. -->
-                <TextBlock Text="TRANSLATION" Classes="label" Margin="0,28,0,0" />
+                <TextBlock Text="{l:T settings.translation.heading}" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="Local model" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Text="{l:T settings.translation.localmodel}" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,4" />
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Text="Downloaded once; after that no translated text leaves this machine. Used by the local-translation modes." />
+                           Text="{l:T settings.translation.note}" />
 
                 <ItemsControl ItemsSource="{Binding TranslationModels}">
                     <ItemsControl.ItemTemplate>
@@ -116,7 +136,7 @@
                                     <RadioButton Grid.Column="0" GroupName="activeModel"
                                                  IsChecked="{Binding IsActive}"
                                                  VerticalAlignment="Top" Margin="0,1,0,0"
-                                                 ToolTip.Tip="Use for translation" />
+                                                 ToolTip.Tip="{l:T settings.model.usetip}" />
                                     <StackPanel Grid.Column="1" Margin="6,0,10,0">
                                         <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding MetaLabel}" FontSize="11"
@@ -130,11 +150,11 @@
                                                Margin="0,0,12,0" />
                                     <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
                                                 VerticalAlignment="Center">
-                                        <Button Content="Download" Command="{Binding DownloadCommand}"
+                                        <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
                                                 IsVisible="{Binding CanDownload}" />
-                                        <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                                        <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
                                                 IsVisible="{Binding IsDownloading}" />
-                                        <Button Content="Delete" Classes="ghost"
+                                        <Button Content="{l:T settings.model.delete}" Classes="ghost"
                                                 Command="{Binding DeleteCommand}"
                                                 IsVisible="{Binding CanDelete}" />
                                     </StackPanel>
@@ -146,40 +166,40 @@
 
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                            Margin="0,14,0,0"
-                           Text="Cloud provider — none yet. Cloud translation runs inside the cloud transcription session, so it needs no key of its own." />
+                           Text="{l:T settings.translation.cloudnote}" />
 
                 <!-- Where a meeting's two artefacts land. These are the operator's files, not
                      the application's: a transcript gets mailed to a supplier, so it has to be
                      somewhere findable without knowing where an app hides things. -->
-                <TextBlock Text="FILES" Classes="label" Margin="0,28,0,0" />
+                <TextBlock Text="{l:T settings.files.heading}" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="Where meetings are saved" FontSize="12.5" FontWeight="SemiBold"
+                <TextBlock Text="{l:T settings.files.title}" FontSize="12.5" FontWeight="SemiBold"
                            Margin="0,0,0,4" />
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Text="The export dialog opens on the transcript folder; the file name and place can still be changed there every time." />
+                           Text="{l:T settings.files.note}" />
                 <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
                            Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
 
                 <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="TRANSCRIPTS" Classes="label"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:T settings.files.transcripts}" Classes="label"
                                VerticalAlignment="Center" />
                     <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TranscriptFolder}"
-                             PlaceholderText="default" Margin="0,0,8,0" />
-                    <Button Grid.Row="0" Grid.Column="2" Content="Browse…" Click="OnBrowseTranscriptsClick" />
+                             PlaceholderText="{l:T settings.files.placeholder}" Margin="0,0,8,0" />
+                    <Button Grid.Row="0" Grid.Column="2" Content="{l:T settings.browse}" Click="OnBrowseTranscriptsClick" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="AUDIO" Classes="label"
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:T settings.files.audio}" Classes="label"
                                VerticalAlignment="Center" Margin="0,9,0,0" />
                     <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AudioFolder}"
-                             PlaceholderText="default" Margin="0,9,8,0" />
-                    <Button Grid.Row="1" Grid.Column="2" Content="Browse…" Margin="0,9,0,0"
+                             PlaceholderText="{l:T settings.files.placeholder}" Margin="0,9,8,0" />
+                    <Button Grid.Row="1" Grid.Column="2" Content="{l:T settings.browse}" Margin="0,9,0,0"
                             Click="OnBrowseAudioClick" />
                 </Grid>
 
                 <CheckBox IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
-                          Content="Record the room to disk while a meeting runs" />
+                          Content="{l:T settings.record}" />
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                            Margin="0,2,0,0"
-                           Text="One file per meeting, named after the room. About 115 MB an hour. The recording never leaves this machine and is not written while the meeting is paused." />
+                           Text="{l:T settings.record.note}" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Kanal.Host.Localization;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.ViewModels;
@@ -35,10 +36,10 @@ public partial class TranslationModelItemViewModel : ViewModelBase
 
     public string? ModelId => _model?.Id;
 
-    public string DisplayName => _model?.DisplayName ?? "None";
+    public string DisplayName => _model?.DisplayName ?? Localizer.Instance["settings.model.none"];
 
     public string MetaLabel => _model is null
-        ? "No local model — the local-translation modes stay unavailable."
+        ? Localizer.Instance["settings.model.none.note"]
         : $"{_model.Parameters} · {_model.SizeLabel} · {_model.License}";
 
     public string? LicenseNote => _model?.LicenseNote;
@@ -76,8 +77,16 @@ public partial class TranslationModelItemViewModel : ViewModelBase
     public string StatusLabel =>
         !IsLocal ? "" :
         Error.Length > 0 ? Error :
-        IsDownloading ? $"downloading {(int)(Progress * 100)}%" :
-        IsDownloaded ? "downloaded" : "not downloaded";
+        IsDownloading ? Localizer.Instance.Format("settings.model.downloading", (int)(Progress * 100)) :
+        Localizer.Instance[IsDownloaded ? "settings.model.downloaded" : "settings.model.notdownloaded"];
+
+    /// <summary>Re-reads this row's strings after the application's language changes.</summary>
+    public void RefreshText()
+    {
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(MetaLabel));
+        OnPropertyChanged(nameof(StatusLabel));
+    }
 
     [RelayCommand]
     private async Task DownloadAsync()
@@ -101,7 +110,7 @@ public partial class TranslationModelItemViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Error = $"download failed: {ex.Message}";
+            Error = Localizer.Instance.Format("settings.model.downloadfailed", ex.Message);
         }
         finally
         {

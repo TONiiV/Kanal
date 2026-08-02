@@ -15,6 +15,12 @@ using Kanal.Tests;
 
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
 
+// A desktop application has exactly one UI language at a time, so Localizer is a singleton — and
+// a test that switches it changes what every other test's window says. Running classes in
+// parallel made a handful of unrelated assertions fail at random depending on which language a
+// localisation test happened to be holding at that instant.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace Kanal.Tests;
 
 public class TestAppBuilder

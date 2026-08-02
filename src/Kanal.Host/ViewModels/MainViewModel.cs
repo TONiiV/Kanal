@@ -15,6 +15,7 @@ using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
 using Kanal.Core.Room;
+using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
 using QRCoder;
@@ -101,7 +102,24 @@ public partial class MainViewModel : ViewModelBase
         }
 
         RefreshPipelineStatus();
+
+        // The mode list and the two stage labels are built once; without this, switching the
+        // application's language left five English rows on an otherwise translated screen.
+        Localizer.Instance.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not "Item[]")
+                return;
+
+            foreach (var option in Modes)
+                option.RefreshText();
+            OnPropertyChanged(nameof(SelectedLanguageSummary));
+            OnPropertyChanged(nameof(LanguageLimitNotice));
+            OnPropertyChanged(nameof(PauseLabel));
+            RefreshPipelineStatus();
+        };
     }
+
+    private static Localizer L => Localizer.Instance;
 
     /// <summary>
     /// The PRD freezes the host at four language columns. This is the only place that number
@@ -124,7 +142,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Codes next to the flags: colour never carries meaning alone.</summary>
     public string SelectedLanguageSummary => SelectedLanguages.Count == 0
-        ? "none — click to add"
+        ? L["languages.none"]
         : string.Join(" · ", SelectedLanguages.Select(o => o.Code.ToUpperInvariant()));
 
     /// <summary>True once four languages are selected: every other row is refused until one goes.</summary>
@@ -136,7 +154,7 @@ public partial class MainViewModel : ViewModelBase
     /// nothing is the failure this replaces.
     /// </summary>
     public string LanguageLimitNotice => IsAtLanguageLimit
-        ? "Four columns maximum — deselect one to add another."
+        ? L["langdlg.limit"]
         : "";
 
     private void AttachLanguageOption(LanguageOption option)
@@ -322,7 +340,7 @@ public partial class MainViewModel : ViewModelBase
     private AudioDeviceInfo? _selectedDevice;
 
     [ObservableProperty]
-    private string _status = "Idle.";
+    private string _status = Localizer.Instance["status.idle"];
 
     /// <summary>Where the selected mode transcribes, named before Start rather than guessed.</summary>
     [ObservableProperty]
@@ -412,7 +430,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
     private bool _isPaused;
 
-    public string PauseLabel => IsPaused ? "Resume" : "Pause";
+    public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
 
     private bool CanStart() => !IsRunning && !IsStopping;
 
@@ -430,8 +448,8 @@ public partial class MainViewModel : ViewModelBase
         await _session.SetPausedAsync(paused);
         IsPaused = paused;
         Status = paused
-            ? "Paused — nothing is being transcribed, translated or sent. The room stays open."
-            : $"Live — {SelectedMode.Mode.Leaves}.";
+            ? L["status.paused"]
+            : L.Format("status.live", SelectedMode.Mode.Leaves);
     }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -442,7 +460,7 @@ public partial class MainViewModel : ViewModelBase
             .ToList();
         if (languages.Count == 0)
         {
-            Status = "Select at least one language.";
+            Status = L["status.pickalanguage"];
             return;
         }
 
@@ -501,9 +519,9 @@ public partial class MainViewModel : ViewModelBase
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
         session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
-            Status = (e.Fatal ? "Fatal: " : "Warning: ") + e.Message);
+            Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
         session.SessionEnded += reason => Dispatcher.UIThread.Post(() =>
-            Status = $"Session ended: {reason ?? "done"}");
+            Status = L.Format("status.sessionended", reason ?? L["status.done"]));
 
         try
         {
@@ -511,7 +529,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Status = $"Start failed: {ex.Message}";
+            Status = L.Format("status.startfailed", ex.Message);
             await session.DisposeAsync();
             await DisposeProvidersAsync();
             return;
@@ -520,8 +538,8 @@ public partial class MainViewModel : ViewModelBase
         _session = session;
         IsRunning = true;
         Status = mode.Id == PipelineModeId.Demo
-            ? "Demo running." + (plan.Substitution is null ? "" : $" {plan.Substitution}")
-            : $"Live — {mode.Leaves}.";
+            ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
+            : L.Format("status.live", mode.Leaves);
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
         // in that minute is kept, and a second pause check here would be a second place for that
@@ -549,7 +567,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task StopAsync()
     {
         IsStopping = true;
-        Status = "Stopping…";
+        Status = L["status.stopping"];
 
         try
         {
@@ -574,8 +592,8 @@ public partial class MainViewModel : ViewModelBase
             IsRunning = false;
             IsPaused = false;
             Status = _lastRecording.Length > 0
-                ? $"Stopped. Audio saved to {_lastRecording}. Rename, merge and export still work."
-                : "Stopped. Rename, merge and export still work on the last room.";
+                ? L.Format("status.stopped.audio", _lastRecording)
+                : L["status.stopped"];
         }
         finally
         {
@@ -632,7 +650,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Status = $"Warning: snapshot publish failed: {ex.Message}";
+            Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
         }
     }
 
@@ -645,7 +663,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Status = $"Warning: close notice failed: {ex.Message}";
+            Status = L.Format("status.warning", L.Format("status.closefailed", ex.Message));
         }
     }
 
@@ -657,7 +675,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Status = $"Warning: relay publish failed: {ex.Message}";
+            Status = L.Format("status.warning", L.Format("status.publishfailed", ex.Message));
         }
     }
 
@@ -674,7 +692,7 @@ public partial class MainViewModel : ViewModelBase
         var capture = AudioCaptureFactory.TryCreate();
         if (capture is null)
         {
-            Dispatcher.UIThread.Post(() => Status = "No audio capture backend on this platform.");
+            Dispatcher.UIThread.Post(() => Status = L["status.nobackend"]);
             return;
         }
 
@@ -699,7 +717,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Dispatcher.UIThread.Post(() => Status = $"Audio capture failed: {ex.Message}");
+            Dispatcher.UIThread.Post(() => Status = L.Format("status.audiofailed", ex.Message));
         }
         finally
         {
@@ -768,7 +786,7 @@ public partial class MainViewModel : ViewModelBase
                 Dispatcher.UIThread.Post(() =>
                 {
                     RecordingPath = "";
-                    Status = $"Recording stopped: {reason}";
+                    Status = L.Format("status.recordingstopped", reason);
                 });
             });
             _recorder = recorder;
@@ -784,7 +802,8 @@ public partial class MainViewModel : ViewModelBase
             // unwritable folder must not stop Start. Appended rather than assigned: the
             // "Live —" line was just set, and a message the operator never sees is a meeting
             // they believe is being recorded when it is not.
-            Status = $"{Status} Not recording: {ex.Message}";
+            var note = L.Format("status.notrecording", ex.Message);
+            Status = $"{Status} {note}";
         }
     }
 
@@ -823,7 +842,7 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_session is null)
         {
-            Status = "Nothing to export.";
+            Status = L["status.nothingtoexport"];
             return;
         }
 
@@ -836,7 +855,7 @@ public partial class MainViewModel : ViewModelBase
             : await ChooseExportPath(folder, name);
         if (path is null)
         {
-            Status = "Export cancelled.";
+            Status = L["status.exportcancelled"];
             return;
         }
 
@@ -870,7 +889,7 @@ public partial class MainViewModel : ViewModelBase
         {
             // Losing the transcript at the last step is the worst possible moment for a throw
             // out of a command nothing is awaiting: read-only folder, full disk, revoked rights.
-            Status = $"Export failed: {ex.Message}";
+            Status = L.Format("status.exportfailed", ex.Message);
         }
     }
 

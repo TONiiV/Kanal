@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
@@ -34,7 +35,7 @@ public partial class SettingsWindow : Window
         var start = string.IsNullOrWhiteSpace(current) ? SettingsStore.DefaultOutputFolder : current;
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose a folder",
+            Title = Localizer.Instance["settings.browse.title"],
             AllowMultiple = false,
             SuggestedStartLocation = await SafeFolderAsync(start),
         });
