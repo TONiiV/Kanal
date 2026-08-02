@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -185,5 +186,30 @@ public class HostUiTests
                 offset + (long)size <= ico.Length,
                 $"entry {i} spans {offset}..{offset + size} but the file is only {ico.Length} B.");
         }
+    }
+
+    /// <summary>
+    /// A button whose face is only a glyph has no text for the automation tree to read, so a
+    /// screen reader announces an unnamed button. Any icon-only control must say what it is
+    /// through AutomationProperties.Name — the tooltip does not count.
+    /// </summary>
+    [AvaloniaFact]
+    public void IconOnlyButtonsCarryAnAccessibleName()
+    {
+        var vm = TestViewModels.Demo();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var iconOnly = window.GetVisualDescendants().OfType<Button>()
+            .Where(b => !b.GetVisualDescendants().OfType<TextBlock>().Any())
+            .ToList();
+
+        Assert.NotEmpty(iconOnly); // Settings is icon-only by design
+        Assert.All(iconOnly, b => Assert.False(
+            string.IsNullOrWhiteSpace(AutomationProperties.GetName(b)),
+            "an icon-only button carries no accessible name."));
+
+        window.Close();
     }
 }

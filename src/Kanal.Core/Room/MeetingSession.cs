@@ -156,9 +156,13 @@ public sealed class MeetingSession : IAsyncDisposable
                 switch (e)
                 {
                     case AsrEvent.Transcript t:
-                        // A provider that generates its own audio (the scripted one) keeps
-                        // talking through a pause; nothing it says while paused is recorded.
-                        if (IsPaused)
+                        // While paused, a sentence that began on the record may still finish on
+                        // it, but nothing new may begin. The audio gate means a real transcriber
+                        // can only be flushing pre-pause audio here — dropping that would leave
+                        // the last on-record sentence a muted partial forever, and untranslated.
+                        // The known-id rule is also what keeps a provider that generates its own
+                        // audio (the scripted one) off the record while it talks through a pause.
+                        if (IsPaused && !Room.Contains(t.UtteranceId))
                             break;
 
                         var utterance = Room.ApplyTranscript(t);
@@ -306,7 +310,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
         try
         {
-            await landed; // cancelled ones unwind here; nothing is left running behind us
+            await landed; // cancelled ones unwind here
         }
         catch
         {
@@ -314,6 +318,26 @@ public sealed class MeetingSession : IAsyncDisposable
 
         if (_pump is not null)
             await _pump;
+
+        // The snapshot above was taken while the pump could still be draining finals buffered
+        // before shutdown, and anything it tracked since is cancelled now but absent from
+        // `landed`. The pump has exited, so the list is final: wait for the stragglers too, or
+        // disposal returns with a decode still unwinding behind it and a _cts about to be
+        // disposed under whoever touches it next.
+        Task[] stragglers;
+        lock (_gate)
+        {
+            stragglers = _pendingTranslations.ToArray();
+        }
+
+        try
+        {
+            await Task.WhenAll(stragglers);
+        }
+        catch
+        {
+        }
+
         _cts.Dispose();
     }
 }

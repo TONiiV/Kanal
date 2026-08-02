@@ -116,7 +116,8 @@
 
                         <Button Content="{l:T export.button}" Command="{Binding ExportMarkdownCommand}" Classes="ghost" />
                         <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
-                                ToolTip.Tip="{l:T settings.tip}">
+                                ToolTip.Tip="{l:T settings.tip}"
+                                AutomationProperties.Name="{l:T settings.tip}">
                             <Path Classes="glyph" Data="{StaticResource GlyphSettings}"
                                   Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
                         </Button>
@@ -174,10 +175,19 @@
                                 ToolTip.Tip="{l:T modes.tip}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedLeft">
+                                    <!-- The presenter clips anything past its MaxHeight rather than
+                                         wrapping it — the failure the first version of this flyout
+                                         had horizontally. The ScrollViewer is the guard: invisible
+                                         while the content fits, honest when a help string grows. -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
                                     <StackPanel Margin="20,17,20,8" Width="424">
                                         <TextBlock Text="{l:T modes.heading}" Classes="label" />
                                         <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
                                                 Margin="0,6,0,12" />
+                                        <!-- The relay fact is stated once, here: the captions cross
+                                             the network to the phones in every mode. Each mode's own
+                                             help then claims only what its pipeline sends out. -->
                                         <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"
                                                    Margin="0,0,0,15" Foreground="{StaticResource Ink2}"
                                                    Text="{l:T modes.intro}" />
@@ -216,6 +226,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
+                                    </ScrollViewer>
                                 </Flyout>
                             </Button.Flyout>
                         </Button>

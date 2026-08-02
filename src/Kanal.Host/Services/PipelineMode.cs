@@ -38,7 +38,10 @@ public enum PipelineModeId
 /// <param name="HelpKey">
 /// What this mode actually does, for the help flyout. Three of the five cannot run yet, so a row
 /// the operator cannot pick still has to explain what it would do — and, like every other string
-/// here, without naming the company that would do it, in any of the four languages.
+/// here, without naming the company that would do it, in any of the four languages. The captions
+/// reach the phones through the relay in every mode, so help may only describe what the
+/// *pipeline* sends out — never promise "no network" or "nothing is sent": the operator repeats
+/// these words to the other side of the table.
 /// </param>
 /// <remarks>
 /// Modes carry localisation keys rather than text, and resolve on read: the operator can change
