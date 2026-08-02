@@ -1,0 +1,158 @@
+name: Release
+
+# Two gears.
+#
+#   tags v*        signed, notarised, published to a GitHub Release
+#   pull requests  unsigned smoke build, artefacts only
+#
+# The PR gear exists so the packaging chain cannot rot unnoticed between releases, and it is
+# path-filtered so ordinary PRs stay on the fast ubuntu loop in ci.yml. It also covers fork PRs,
+# which cannot read secrets and therefore must be able to build unsigned.
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'installers/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/release.yml'
+      - 'src/**/*.csproj'
+  workflow_dispatch:
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # arm64 runner, builds osx-arm64 natively
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      # A tag is the source of truth for the version. Everything else builds 0.0.0, which is a
+      # valid MSI ProductVersion and an obviously non-releasable one.
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            # MSI compares only three components. A pre-release suffix is kept for the release
+            # name and stripped for the package itself.
+            echo "version=${version%%-*}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Signing needs a tag *and* the secrets. Reading them through env rather than interpolating
+      # into the script keeps the values off the command line.
+      - name: Decide whether this build signs
+        id: signing
+        shell: bash
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" \
+                && "${{ github.event_name }}" == "push" \
+                && -n "$CERT_P12" ]]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Building unsigned. macOS will warn on first launch."
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_pwd="$(uuidgen)"
+
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$keychain_pwd" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_pwd" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PWD" \
+            -T /usr/bin/codesign -T /usr/bin/productsign
+
+          # Without this, codesign raises a GUI authorisation prompt. On a headless runner that is
+          # a silent hang until the job times out, with nothing useful in the log.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_pwd" "$keychain"
+
+          security list-keychain -d user -s "$keychain" login.keychain-db
+
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Write notary API key
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Package
+        shell: bash
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          dotnet build installers/Kanal.Installers.csproj \
+            -t:PackInstaller \
+            -p:Version=${{ steps.version.outputs.version }} \
+            -p:TargetRid=${{ matrix.rid }} \
+            -p:SignBuild=${{ steps.signing.outputs.sign }}
+
+      - name: Remove notary key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/notary.p8"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kanal-${{ matrix.rid }}
+          path: |
+            artifacts/*.dmg
+            artifacts/*.msi
+          if-no-files-found: error
+
+  release:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # gh is preinstalled on the runner, so the release needs no third-party action.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -lh dist
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

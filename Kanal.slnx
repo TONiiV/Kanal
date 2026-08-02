@@ -12,4 +12,7 @@
   <Folder Name="/tools/">
     <Project Path="tools/Kanal.Doctor/Kanal.Doctor.csproj" />
   </Folder>
+  <Folder Name="/installers/">
+    <Project Path="installers/Kanal.Installers.csproj" />
+  </Folder>
 </Solution>

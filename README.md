@@ -15,7 +15,34 @@ See [docs/PRD-v0.3.md](docs/PRD-v0.3.md) for the full requirements (Chinese).
 | `tests/Kanal.Tests` | xUnit: resampler chunk-equivalence, RoomState upsert/merge/stale-translation semantics, orchestrator capability routing, relay JSON round-trips, Gladia wire parsing. |
 | `web/` | Read-only mobile client (single static HTML file). `?demo=1` for a scripted preview; Ably transport wired for `?room=<id>&key=<key>` once the host-side publisher lands (M0-D7). |
 
+## Install
+
+Operators install from a release, not from source — nothing else needs to be present on the machine,
+including a .NET runtime.
+
+| Platform | Artefact | How |
+|---|---|---|
+| macOS (Apple Silicon) | `Kanal-<version>-osx-arm64.dmg` | open it, drag Kanal to Applications |
+| Windows (x64) | `Kanal-<version>-win-x64.msi` | run it — installs per-user, no admin rights needed |
+
+The dmg is signed and notarised, so it opens on double-click. The MSI is not yet signed: Windows
+shows a SmartScreen warning on first run that has to be clicked through with **More info → Run
+anyway**.
+
+Building the packages locally (each produces the artefact for the OS you are on, into `artifacts/`):
+
+```bash
+dotnet build installers/Kanal.Installers.csproj -t:PackInstaller -p:Version=0.1.0
+```
+
+Add `-p:SignBuild=true` on macOS to sign and notarise. That needs a `Developer ID Application`
+certificate plus `NOTARY_KEY_PATH`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` in the environment.
+See [the design note](docs/superpowers/specs/2026-08-01-installers-design.md) for why both the `.app`
+and the dmg get stapled, and why Homebrew is deliberately not used.
+
 ## Run
+
+From source, for development:
 
 ```bash
 dotnet run --project src/Kanal.Host

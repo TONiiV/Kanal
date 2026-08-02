@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Applied by codesign together with the hardened runtime option. Notarisation requires the hardened
+  runtime, and the hardened runtime breaks both of the things below by default. Neither failure
+  reproduces in an unsigned build, which is why they are asserted in InstallerLayoutTests rather
+  than discovered on a rehearsal machine.
+-->
+<plist version="1.0">
+<dict>
+	<!-- The .NET JIT maps pages write-then-execute. Under the hardened runtime that is refused and
+	     the app dies at startup. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+
+	<!-- The hardened-runtime counterpart to NSMicrophoneUsageDescription. The Info.plist string
+	     alone is not enough once the runtime is hardened. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
