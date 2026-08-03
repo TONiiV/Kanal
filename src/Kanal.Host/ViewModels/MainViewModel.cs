@@ -107,7 +107,7 @@ public partial class MainViewModel : ViewModelBase
         // application's language left five English rows on an otherwise translated screen.
         Localizer.Instance.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is not "Item[]")
+            if (e.PropertyName is not Localizer.IndexerName)
                 return;
 
             foreach (var option in Modes)
@@ -882,8 +882,8 @@ public partial class MainViewModel : ViewModelBase
             // both here is the only moment the operator is told where the recording went.
             var audio = _recorder?.Path ?? (_lastRecording.Length > 0 ? _lastRecording : null);
             Status = audio is null
-                ? $"Exported to {path}"
-                : $"Exported to {path} · audio: {audio}";
+                ? L.Format("status.exported", path)
+                : L.Format("status.exported.audio", path, audio);
         }
         catch (Exception ex)
         {

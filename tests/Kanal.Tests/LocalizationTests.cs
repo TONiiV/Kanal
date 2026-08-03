@@ -1,8 +1,12 @@
 using System.Text.RegularExpressions;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
+using Kanal.Host.Views;
 
 namespace Kanal.Tests;
 
@@ -134,7 +138,7 @@ public class LocalizationTests
         }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void AMissingKeyFallsBackToEnglishThenToTheKeyItself()
     {
         var localizer = Localizer.Instance;
@@ -153,7 +157,7 @@ public class LocalizationTests
         }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void AnUnknownLanguageFallsBackToEnglish()
     {
         var localizer = Localizer.Instance;
@@ -171,10 +175,62 @@ public class LocalizationTests
     }
 
     /// <summary>
+    /// The four-language twin of <see cref="PipelineModeTests.HelpNeverOverstatesPrivacy"/>:
+    /// the captions always reach the phones through the relay, so no translation may promise
+    /// "no network" or "nothing is ever sent" either. The operator repeats these words to the
+    /// other side of the table — in whichever language the chrome happens to be in.
+    /// </summary>
+    [Theory]
+    [InlineData("zh", "不联网", "没有网络", "什么都不会发送", "绝不发送")]
+    [InlineData("de", "kein netz", "nichts wird gesendet", "verlässt nie")]
+    [InlineData("pl", "bez sieci", "nic nie jest wysyłane", "nigdy nie opuszcza")]
+    public void HelpNeverOverstatesPrivacyInAnyLanguage(string code, params string[] falseAbsolutes)
+    {
+        foreach (var (key, text) in Table(code).Where(e => e.Key.StartsWith("mode.") && e.Key.EndsWith(".help")))
+        foreach (var phrase in falseAbsolutes)
+            Assert.False(
+                text.Contains(phrase, StringComparison.OrdinalIgnoreCase),
+                $"{code}/{key} claims \"{phrase}\".");
+    }
+
+    /// <summary>
+    /// Text the operator reads may not be typed into XAML directly — a literal is invisible to
+    /// the language switch and to the four-language key guard above. Everything user-visible
+    /// goes through <c>{l:T key}</c> or a binding; the whitelist is the handful of glyphs and
+    /// proper nouns that are the same in every language.
+    /// </summary>
+    [Fact]
+    public void NoAxamlCarriesLiteralUserVisibleText()
+    {
+        // glyphs, the product name, and speaker-tag examples — identical in all four languages
+        var whitelist = new HashSet<string> { "KANAL", "Kanal", "?", "✓", "✕", "→", "⇄", " · ", "S03", "S01" };
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepoRoot(), "src", "Kanal.Host"), "*.axaml", SearchOption.AllDirectories))
+        {
+            foreach (Match m in Regex.Matches(
+                         File.ReadAllText(file),
+                         "(?<![\\w.])(?<attr>Text|Content|ToolTip\\.Tip|Title|Header|PlaceholderText|Watermark)=\"(?<value>[^\"{][^\"]*)\""))
+            {
+                var value = m.Groups["value"].Value;
+                if (!whitelist.Contains(value))
+                    offenders.Add($"{Path.GetFileName(file)}: {m.Groups["attr"].Value}=\"{value}\"");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Literal text in XAML — use {l:T key} instead:\n" + string.Join("\n", offenders));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, "..", ".."));
+
+    /// <summary>
     /// Switching has to reach windows that are already open — the operator changes it mid-meeting
     /// and the screen follows, without restarting a room.
     /// </summary>
-    [Fact]
+    [AvaloniaFact]
     public void SwitchingRaisesTheIndexerSoBoundTextRereads()
     {
         var localizer = Localizer.Instance;
@@ -184,7 +240,9 @@ public class LocalizationTests
         try
         {
             localizer.Current = "pl";
-            Assert.Contains("Item[]", raised);
+            // Avalonia's indexer notification name (CommonPropertyNames.IndexerName) — not
+            // WPF's "Item[]", which Avalonia ignores and which left open windows untranslated.
+            Assert.Contains("Item", raised);
         }
         finally
         {
@@ -297,6 +355,40 @@ public class AppLanguageTests
         }
         finally
         {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// The other half of switching mid-meeting: strings set straight from XAML with
+    /// <c>{l:T key}</c> — Start, MODE, the section headings — live in windows that are already
+    /// open when the language changes. The view-model strings followed the switch and these did
+    /// not, which left a screen speaking two languages at once.
+    /// </summary>
+    [AvaloniaFact]
+    public void OpenWindowsReRenderTheirLiteralTextOnALanguageSwitch()
+    {
+        var previous = Localizer.Instance.Current;
+        Window? window = null;
+        try
+        {
+            Localizer.Instance.Current = "en";
+            window = new MainWindow { DataContext = TestViewModels.Hermetic() };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var en = Strings.Tables["en"]["mode.label"];
+            var label = window.GetVisualDescendants().OfType<TextBlock>()
+                .First(t => t.Text == en);
+
+            Localizer.Instance.Current = "zh";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(Strings.Tables["zh"]["mode.label"], label.Text);
+        }
+        finally
+        {
+            window?.Close();
             Localizer.Instance.Current = previous;
         }
     }

@@ -107,7 +107,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not "Item[]")
+        if (e.PropertyName is not Localizer.IndexerName)
             return;
 
         OnPropertyChanged(nameof(EnvFallback));

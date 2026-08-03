@@ -13,6 +13,7 @@
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <EmbeddedResource Include="Localization\i18n\*.json" />
   </ItemGroup>
 
   <ItemGroup>
