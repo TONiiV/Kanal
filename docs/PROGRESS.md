@@ -33,7 +33,33 @@ common case allocate nothing — safe at partial frequency. **Limitation:** one-
 disambiguation — acceptable here because the input is overwhelmingly machine-emitted Traditional
 forms of Simplified-intended speech, not literary text.
 
+### UI polish (fix/ui-polish)
 
+Four small host-UI fixes from screenshot review, one PR:
+
+- **Transport buttons share one width.** Start/Pause/Stop sized independently, and the Pause
+  label carried a `Width="50"` hack that fit English only. The three buttons now sit in a
+  `SharedSizeGroup` (scope on the transport StackPanel), so the widest label in the current
+  chrome language sizes all three — "Zakończ" and "Weiter" included. Guarded by
+  `TransportLayoutTests.TransportButtonsShareOneWidthInEveryLanguage`, which lays the window
+  out in all four languages.
+- **Masthead no longer repeats the pipeline status.** The `Transcription: … | Translation: …`
+  pair duplicated what the mode selector already says, so the block is gone; the old
+  `MastheadNamesBothStages` test went with it and
+  `MastheadDoesNotRepeatThePipelineStatus` asserts the reverse. The `TranscriptionStatus` /
+  `TranslationStatus` view-model properties stay — their label logic is still covered by
+  `TranslationStatusTests` and mode-switch tests, and a future surface (status line, tooltip)
+  is the likely place they resurface.
+- **Settings scrollbar takes layout space.** The overlay scrollbar sat on top of the rightmost
+  controls and section rules; `AllowAutoHide="False"` puts it in the layout, plus a 14 px right
+  margin on the content so the ragged right edge clears the bar.
+- **Model-row Delete matches its neighbours.** It was the only `ghost` (borderless) button in a
+  row of outlined ones (Download / Cancel); it now wears the default outlined face. The last
+  two are style-only changes verified by the existing suite.
+
+---
+
+## 2026-07-31
 
 ### Findings
 
