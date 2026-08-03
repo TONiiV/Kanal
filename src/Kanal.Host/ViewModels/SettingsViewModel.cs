@@ -34,7 +34,7 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 public partial class SettingsViewModel : ViewModelBase
 {
     public SettingsViewModel()
-        : this(SettingsStore.Load())
+        : this(SettingsStore.Load(), deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
     {
     }
 
@@ -46,23 +46,25 @@ public partial class SettingsViewModel : ViewModelBase
     /// Test seam for the advice wording: the tests pin a platform so their assertions hold on
     /// whatever OS CI happens to run.
     /// </param>
+    /// <param name="deviceWatcherFactory">
+    /// Hot-plug notifications for the test-device dropdown; tests fire a fake by hand.
+    /// </param>
     public SettingsViewModel(
         AppSettings settings,
         Func<IAudioCaptureService?>? captureFactory = null,
-        bool? isMacOs = null)
+        bool? isMacOs = null,
+        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null)
     {
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
-        try
-        {
-            foreach (var device in CaptureFactory()?.GetDevices() ?? [])
-                Devices.Add(device);
-            TestDevice = Devices.FirstOrDefault();
-        }
-        catch
-        {
-            // no capture backend, or no devices — the panel says so when the test is started
-        }
+        // no capture backend, or no devices — the panel says so when the test is started
+        RefreshDevices();
+
+        // Only the production constructor passes the real platform factory: a native listener
+        // created by every headless test would pile up registrations for hardware no test sees.
+        _deviceWatcher = deviceWatcherFactory?.Invoke();
+        if (_deviceWatcher is not null)
+            _deviceWatcher.DevicesChanged += OnDevicesChanged;
 
         foreach (var entry in settings.ApiKeys.Where(k => k.Provider == "gladia"))
         {
@@ -201,6 +203,36 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private AudioDeviceInfo? _testDevice;
+
+    private IAudioDeviceWatcher? _deviceWatcher;
+
+    /// <summary>Watcher callbacks arrive on a CoreAudio/COM thread; Avalonia throws off the UI thread.</summary>
+    private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshDevices);
+
+    /// <summary>
+    /// Re-enumerates into <see cref="Devices"/>. The selection survives by its stable id, and
+    /// an unplugged selection falls back to the list head, which the backends order
+    /// default-first. A test already running keeps the device it opened — the same rule the
+    /// meeting capture follows.
+    /// </summary>
+    private void RefreshDevices()
+    {
+        IReadOnlyList<AudioDeviceInfo> fresh;
+        try
+        {
+            fresh = CaptureFactory()?.GetDevices() ?? [];
+        }
+        catch
+        {
+            return; // enumeration can fail transiently mid-unplug; a stale list beats none
+        }
+
+        var selectedId = TestDevice?.Id;
+        Devices.Clear();
+        foreach (var device in fresh)
+            Devices.Add(device);
+        TestDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
@@ -405,6 +437,15 @@ public partial class SettingsViewModel : ViewModelBase
         // Same reasoning: a microphone left open behind a closed dialog is invisible and
         // uncancellable, and it holds the device the next meeting wants.
         StopTest();
+
+        // And the native hot-plug listener: each Settings opening builds a fresh view model,
+        // so one left registered would fire into a dead dialog forever.
+        if (_deviceWatcher is not null)
+        {
+            _deviceWatcher.DevicesChanged -= OnDevicesChanged;
+            _deviceWatcher.Dispose();
+            _deviceWatcher = null;
+        }
     }
 
     public void Save()
