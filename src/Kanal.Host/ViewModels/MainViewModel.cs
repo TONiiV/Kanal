@@ -375,6 +375,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
     public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
 
+    /// <summary>
+    /// Test seam, in the shape of <see cref="RelayPublisherFactory"/>: rewrites the resolved
+    /// plan before Start uses it, so a headless test can substitute providers — a translator
+    /// whose load is held open, an ASR wrapper that records whether transcription began —
+    /// without a real model on disk.
+    /// </summary>
+    public Func<PipelinePlan, PipelinePlan>? PlanFilter { get; set; }
+
     [ObservableProperty]
     private PipelineModeOption _selectedMode;
 
@@ -469,6 +477,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool _isStopping;
 
     /// <summary>
+    /// Set while Start is loading a local translation model — seconds to tens of seconds in
+    /// which the room is not yet open and nothing is being transcribed. Start stays refused
+    /// (no second load behind the first), and Stop stays offered: the loading phase is the
+    /// operator's to abort, not a wait they are locked into.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    private bool _isStarting;
+
+    /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
+    private CancellationTokenSource? _warmupCts;
+
+    /// <summary>
     /// The room is open but off the record. One button carries both directions — an operator
     /// mid-meeting should not have to find a second control to undo the first.
     /// </summary>
@@ -478,11 +501,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
 
-    private bool CanStart() => !IsRunning && !IsStopping;
+    private bool CanStart() => !IsRunning && !IsStopping && !IsStarting;
 
-    private bool CanStop() => IsRunning && !IsStopping;
+    // Stop is offered while a model is still loading: pressing it then aborts the load.
+    private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
 
-    private bool CanPause() => IsRunning && !IsStopping;
+    private bool CanPause() => IsRunning && !IsStopping && !IsStarting;
 
     [RelayCommand(CanExecute = nameof(CanPause))]
     private async Task PauseAsync()
@@ -529,6 +553,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var mode = SelectedMode.Mode;
         var settings = _loadSettings();
         var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
+        if (PlanFilter is not null)
+            plan = PlanFilter(plan);
         TranscriptionStatus = plan.Status.TranscriptionLabel;
         TranslationStatus = plan.Status.TranslationLabel;
 
@@ -545,6 +571,42 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var mt = plan.Mt;
         _asr = asr;
         _mt = mt;
+
+        // A local translation model loads to a working state *before* the room opens. Loading
+        // it on the first final — which is what lazy loading did — meant the meeting's opening
+        // sentences waited out a multi-gigabyte load with nothing on screen saying why.
+        // Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
+        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start
+        // rather than opening a room that cannot translate.
+        if (mt is IWarmupProvider warmable)
+        {
+            IsStarting = true;
+            Status = L["status.loadingmodel"];
+            var warmupCts = new CancellationTokenSource();
+            _warmupCts = warmupCts;
+            try
+            {
+                await Task.Run(() => warmable.WarmUpAsync(warmupCts.Token));
+            }
+            catch (OperationCanceledException)
+            {
+                await DisposeProvidersAsync();
+                Status = L["status.idle"];
+                return;
+            }
+            catch (Exception ex)
+            {
+                await DisposeProvidersAsync();
+                Status = L.Format("status.modelloadfailed", ex.Message);
+                return;
+            }
+            finally
+            {
+                _warmupCts = null;
+                warmupCts.Dispose();
+                IsStarting = false;
+            }
+        }
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
@@ -621,6 +683,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // rethrows what they throw, and anything escaping before the finally would leave
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
+            _warmupCts?.Cancel(); // a model still loading is abandoned, not waited out
             _captureCts?.Cancel();
             _captureCts = null;
 
