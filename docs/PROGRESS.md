@@ -40,6 +40,57 @@ meeting-room drawer — never appeared without reopening the window.
   in a meeting). Firing them is a manual test: plug and unplug a USB microphone while the main
   window and Settings are open, on each platform.
 
+### Chinese comes out Simplified, wherever it was produced
+
+**Finding.** Chinese transcripts (and translations into Chinese) reached the room in Traditional
+characters, but the primary Chinese participant is a mainland supplier who reads Simplified.
+Gladia offers no knob for this: both `TranscriptionLanguageCodeEnum` and
+`TranslationLanguageCodeEnum` know a single `zh` — no `zh-Hans`/`zh-Hant`, nothing in
+`language_config` or `translation_config` selects a script. So the fix cannot live in the request
+body; it has to live on the host.
+
+**Fix.** `SimplifiedChinese` (`Kanal.Core/Text`): Traditional→Simplified normalization applied by
+`MeetingSession` — the host is the single authority, so text is normalized once, before it enters
+`RoomState` or the relay, and clients never convert. It covers all three ways Chinese text is
+produced: transcript partials/finals with `SrcLang: zh`, translations arriving inside Gladia
+transcript events, and `IMtProvider` results. The local-MT prompt now also asks for "Simplified
+Chinese" outright — steering word choice at the source (信息 not 資訊), which character mapping
+cannot fix after the fact.
+
+**Trade-offs.** No dependency: OpenCC's `TSCharacters.txt` (Apache-2.0, ~5 000 single-character
+mappings) is embedded as a resource instead of pulling in an OpenCC binding (OpenCCSharp is
+prerelease and its trie/data packages are more moving parts than this needs). Conversion is
+character-level and pure dictionary lookups; text below the CJK range skips the lookup entirely and
+unchanged strings return the same instance, so the Latin/Polish path and the already-Simplified
+common case allocate nothing — safe at partial frequency. **Limitation:** one-to-many characters
+(乾/幹/干, 髮/发…) take OpenCC's first, most common mapping, and there is no phrase-level
+disambiguation — acceptable here because the input is overwhelmingly machine-emitted Traditional
+forms of Simplified-intended speech, not literary text.
+
+### UI polish (fix/ui-polish)
+
+Four small host-UI fixes from screenshot review, one PR:
+
+- **Transport buttons share one width.** Start/Pause/Stop sized independently, and the Pause
+  label carried a `Width="50"` hack that fit English only. The three buttons now sit in a
+  `SharedSizeGroup` (scope on the transport StackPanel), so the widest label in the current
+  chrome language sizes all three — "Zakończ" and "Weiter" included. Guarded by
+  `TransportLayoutTests.TransportButtonsShareOneWidthInEveryLanguage`, which lays the window
+  out in all four languages.
+- **Masthead no longer repeats the pipeline status.** The `Transcription: … | Translation: …`
+  pair duplicated what the mode selector already says, so the block is gone; the old
+  `MastheadNamesBothStages` test went with it and
+  `MastheadDoesNotRepeatThePipelineStatus` asserts the reverse. The `TranscriptionStatus` /
+  `TranslationStatus` view-model properties stay — their label logic is still covered by
+  `TranslationStatusTests` and mode-switch tests, and a future surface (status line, tooltip)
+  is the likely place they resurface.
+- **Settings scrollbar takes layout space.** The overlay scrollbar sat on top of the rightmost
+  controls and section rules; `AllowAutoHide="False"` puts it in the layout, plus a 14 px right
+  margin on the content so the ragged right edge clears the bar.
+- **Model-row Delete matches its neighbours.** It was the only `ghost` (borderless) button in a
+  row of outlined ones (Download / Cancel); it now wears the default outlined face. The last
+  two are style-only changes verified by the existing suite.
+
 ---
 
 ## 2026-07-31
