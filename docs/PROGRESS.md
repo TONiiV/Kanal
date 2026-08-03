@@ -4,7 +4,36 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
-## 2026-07-31
+## 2026-08-03
+
+### Chinese comes out Simplified, wherever it was produced
+
+**Finding.** Chinese transcripts (and translations into Chinese) reached the room in Traditional
+characters, but the primary Chinese participant is a mainland supplier who reads Simplified.
+Gladia offers no knob for this: both `TranscriptionLanguageCodeEnum` and
+`TranslationLanguageCodeEnum` know a single `zh` — no `zh-Hans`/`zh-Hant`, nothing in
+`language_config` or `translation_config` selects a script. So the fix cannot live in the request
+body; it has to live on the host.
+
+**Fix.** `SimplifiedChinese` (`Kanal.Core/Text`): Traditional→Simplified normalization applied by
+`MeetingSession` — the host is the single authority, so text is normalized once, before it enters
+`RoomState` or the relay, and clients never convert. It covers all three ways Chinese text is
+produced: transcript partials/finals with `SrcLang: zh`, translations arriving inside Gladia
+transcript events, and `IMtProvider` results. The local-MT prompt now also asks for "Simplified
+Chinese" outright — steering word choice at the source (信息 not 資訊), which character mapping
+cannot fix after the fact.
+
+**Trade-offs.** No dependency: OpenCC's `TSCharacters.txt` (Apache-2.0, ~5 000 single-character
+mappings) is embedded as a resource instead of pulling in an OpenCC binding (OpenCCSharp is
+prerelease and its trie/data packages are more moving parts than this needs). Conversion is
+character-level and pure dictionary lookups; text below the CJK range skips the lookup entirely and
+unchanged strings return the same instance, so the Latin/Polish path and the already-Simplified
+common case allocate nothing — safe at partial frequency. **Limitation:** one-to-many characters
+(乾/幹/干, 髮/发…) take OpenCC's first, most common mapping, and there is no phrase-level
+disambiguation — acceptable here because the input is overwhelmingly machine-emitted Traditional
+forms of Simplified-intended speech, not literary text.
+
+
 
 ### Findings
 

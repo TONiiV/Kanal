@@ -1,6 +1,7 @@
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
+using Kanal.Core.Text;
 
 namespace Kanal.Core.Room;
 
@@ -165,7 +166,7 @@ public sealed class MeetingSession : IAsyncDisposable
                         if (IsPaused && !Room.Contains(t.UtteranceId))
                             break;
 
-                        var utterance = Room.ApplyTranscript(t);
+                        var utterance = Room.ApplyTranscript(NormalizeChinese(t));
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)
                             TrackTranslation(() => TranslateAsync(utterance, ct));
@@ -203,8 +204,8 @@ public sealed class MeetingSession : IAsyncDisposable
                 return;
 
             var context = Room.RecentFinals(8, excludeId: utterance.Id);
-            var translations = await _mt!.TranslateAsync(
-                utterance.SrcText, utterance.SrcLang, targets, context, ct);
+            var translations = NormalizeChinese(await _mt!.TranslateAsync(
+                utterance.SrcText, utterance.SrcLang, targets, context, ct))!;
 
             var updated = Room.ApplyTranslations(utterance.Id, utterance.Revision, translations);
             if (updated is not null)
@@ -217,6 +218,48 @@ public sealed class MeetingSession : IAsyncDisposable
         {
             ErrorOccurred?.Invoke(new AsrEvent.Error($"Translation failed: {ex.Message}", Fatal: false));
         }
+    }
+
+    /// <summary>
+    /// The host is the single authority, so script normalization happens here — once,
+    /// before text enters <see cref="RoomState"/> or the relay — never on the clients.
+    /// Gladia only knows a single "zh" and tends to emit Traditional characters; the
+    /// primary Chinese participant is a mainland supplier who reads Simplified.
+    /// Non-Chinese text passes through as the same instance at the cost of one
+    /// language-code check, so the Latin/Polish path stays allocation-free.
+    /// </summary>
+    private static AsrEvent.Transcript NormalizeChinese(AsrEvent.Transcript t)
+    {
+        var text = SimplifiedChinese.IsChinese(t.SrcLang)
+            ? SimplifiedChinese.Normalize(t.Text)
+            : t.Text;
+        var translations = NormalizeChinese(t.Translations);
+        return ReferenceEquals(text, t.Text) && ReferenceEquals(translations, t.Translations)
+            ? t
+            : t with { Text = text, Translations = translations };
+    }
+
+    private static IReadOnlyDictionary<string, string>? NormalizeChinese(
+        IReadOnlyDictionary<string, string>? translations)
+    {
+        if (translations is null || translations.Count == 0)
+            return translations;
+
+        Dictionary<string, string>? copy = null;
+        foreach (var (lang, text) in translations)
+        {
+            if (!SimplifiedChinese.IsChinese(lang))
+                continue;
+
+            var normalized = SimplifiedChinese.Normalize(text);
+            if (ReferenceEquals(normalized, text))
+                continue;
+
+            copy ??= new Dictionary<string, string>(translations);
+            copy[lang] = normalized;
+        }
+
+        return copy ?? translations;
     }
 
     /// <summary>
