@@ -9,7 +9,10 @@ public static class MtPrompt
 {
     private static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["zh"] = "Chinese",
+        // "Simplified" is load-bearing: the mainland supplier reads 简体, and asking
+        // for it up front also steers word choice (信息 not 資訊) — something the
+        // host's character-level t2s fallback cannot fix after the fact.
+        ["zh"] = "Simplified Chinese",
         ["de"] = "German",
         ["pl"] = "Polish",
         ["en"] = "English",
