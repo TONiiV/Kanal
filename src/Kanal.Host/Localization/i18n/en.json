@@ -69,6 +69,8 @@
   "status.live": "Live — {0}.",
   "status.paused": "Paused — nothing is being transcribed, translated or sent. The room stays open.",
   "status.stopping": "Stopping…",
+  "status.loadingmodel": "Loading the translation model — transcription starts once it is ready…",
+  "status.modelloadfailed": "Translation model failed to load: {0}",
   "status.stopped": "Stopped. Rename, merge and export still work on the last room.",
   "status.stopped.audio": "Stopped. Audio saved to {0}. Rename, merge and export still work.",
   "status.startfailed": "Start failed: {0}",

@@ -1,12 +1,16 @@
+using Kanal.Core.Providers;
+
 namespace Kanal.Providers.LocalMt;
 
 /// <summary>
 /// Real inference through LLamaSharp (llama.cpp in-process). Weights load lazily
 /// on the first request so constructing the provider never blocks the UI thread;
-/// requests are serialized because one local model context serves them all.
-/// Deliberately thin: everything testable lives in front of <see cref="ITextGenerator"/>.
+/// <see cref="WarmUpAsync"/> pulls that load forward so Start can pay it before the
+/// meeting instead of the first sentence paying it during. Requests are serialized
+/// because one local model context serves them all. Deliberately thin: everything
+/// testable lives in front of <see cref="ITextGenerator"/>.
 /// </summary>
-public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable, IAsyncDisposable
+public sealed class LlamaSharpTextGenerator : ITextGenerator, IWarmupProvider, IDisposable, IAsyncDisposable
 {
     private readonly string _modelPath;
     private readonly string? _assistantPrefill;
@@ -39,19 +43,42 @@ public sealed class LlamaSharpTextGenerator : ITextGenerator, IDisposable, IAsyn
         await _gate.WaitAsync(ct);
         try
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (!_loaded)
-            {
-                await _backend.LoadAsync(_modelPath, _assistantPrefill, ct);
-                _loaded = true;
-            }
-
+            await EnsureLoadedUnderGateAsync(ct);
             return await _backend.InferAsync(prompt, ct);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Loads the weights now, so the first translation of the meeting pays inference latency
+    /// instead of a multi-gigabyte load. Idempotent: after a completed load this returns at
+    /// once. A cancelled load is abandoned, not latched — the next warm-up (or the first real
+    /// request) loads again. Shares the request gate, so it can never race a decode.
+    /// </summary>
+    public async Task WarmUpAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await EnsureLoadedUnderGateAsync(ct);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task EnsureLoadedUnderGateAsync(CancellationToken ct)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_loaded)
+            return;
+
+        await _backend.LoadAsync(_modelPath, _assistantPrefill, ct);
+        _loaded = true;
     }
 
     /// <summary>

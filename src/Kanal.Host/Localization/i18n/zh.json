@@ -69,6 +69,8 @@
   "status.live": "进行中——{0}。",
   "status.paused": "已暂停——不转写、不翻译、不发送。房间保持开启。",
   "status.stopping": "正在结束…",
+  "status.loadingmodel": "正在加载翻译模型——加载完成后开始转写…",
+  "status.modelloadfailed": "翻译模型加载失败：{0}",
   "status.stopped": "已结束。重命名、合并和导出仍可用于上一场会议。",
   "status.stopped.audio": "已结束。音频已保存至 {0}。重命名、合并和导出仍可用。",
   "status.startfailed": "启动失败：{0}",

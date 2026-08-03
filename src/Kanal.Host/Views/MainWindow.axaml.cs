@@ -33,6 +33,13 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>The native device-hotplug listener must not outlive the window that shows the list.</summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        (DataContext as MainViewModel)?.Dispose();
+        base.OnClosed(e);
+    }
+
     /// <summary>
     /// The view half of export: the view model builds the transcript and knows what to suggest,
     /// this opens the dialog. Returns null when the operator cancels.

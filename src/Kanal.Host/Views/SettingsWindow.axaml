@@ -15,8 +15,11 @@
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
-        <ScrollViewer>
-            <StackPanel>
+        <!-- The scrollbar takes layout space instead of floating over the content: an overlay
+             bar sat on top of the rightmost controls and section rules. The margin keeps the
+             ragged right edge clear of the bar even while it is being dragged. -->
+        <ScrollViewer AllowAutoHide="False">
+            <StackPanel Margin="0,0,14,0">
                 <!-- The check that has to happen before anyone sits down. Everything below this
                      is configuration; this is the one thing that can only be found out by
                      listening, and the only place a dead or clipping microphone gets caught
@@ -154,7 +157,11 @@
                                                 IsVisible="{Binding CanDownload}" />
                                         <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
                                                 IsVisible="{Binding IsDownloading}" />
-                                        <Button Content="{l:T settings.model.delete}" Classes="ghost"
+                                        <!-- Same outlined face as Download and Cancel beside it:
+                                             the three are one family of actions on one row, and
+                                             a borderless odd one out read as a different kind of
+                                             control rather than a quieter one. -->
+                                        <Button Content="{l:T settings.model.delete}"
                                                 Command="{Binding DeleteCommand}"
                                                 IsVisible="{Binding CanDelete}" />
                                     </StackPanel>

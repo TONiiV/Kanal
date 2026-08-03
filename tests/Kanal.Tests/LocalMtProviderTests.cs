@@ -8,7 +8,7 @@ public class MtPromptTests
     [Theory]
     [InlineData("de", "German")]
     [InlineData("pl", "Polish")]
-    [InlineData("zh", "Chinese")]
+    [InlineData("zh", "Simplified Chinese")]
     [InlineData("en", "English")]
     public void UsesEnglishLanguageName(string code, string name)
     {

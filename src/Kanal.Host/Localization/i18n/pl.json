@@ -69,6 +69,8 @@
   "status.live": "Na żywo — {0}.",
   "status.paused": "Wstrzymane — nic nie jest transkrybowane, tłumaczone ani wysyłane. Pokój pozostaje otwarty.",
   "status.stopping": "Kończenie…",
+  "status.loadingmodel": "Wczytywanie modelu tłumaczenia — transkrypcja rozpocznie się, gdy będzie gotowy…",
+  "status.modelloadfailed": "Nie udało się wczytać modelu tłumaczenia: {0}",
   "status.stopped": "Zakończone. Zmiana nazw, scalanie i eksport nadal działają dla ostatniego pokoju.",
   "status.stopped.audio": "Zakończone. Dźwięk zapisano w {0}. Zmiana nazw, scalanie i eksport nadal działają.",
   "status.startfailed": "Nie udało się uruchomić: {0}",

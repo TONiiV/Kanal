@@ -22,7 +22,7 @@ using QRCoder;
 
 namespace Kanal.Host.ViewModels;
 
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
@@ -36,6 +36,9 @@ public partial class MainViewModel : ViewModelBase
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
     private readonly Func<ModelDownloadManager> _downloads;
+    /// <summary>Enumeration source for the device dropdown; the capture pump opens its own.</summary>
+    private readonly Func<IAudioCaptureService?> _captureFactory;
+    private IAudioDeviceWatcher? _deviceWatcher;
     /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
     private readonly PipelinePlanner.KeyResolver? _resolveKey;
 
@@ -51,7 +54,8 @@ public partial class MainViewModel : ViewModelBase
     private int _dragSource = -1;
 
     public MainViewModel()
-        : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath))
+        : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
+            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
     {
     }
 
@@ -62,15 +66,20 @@ public partial class MainViewModel : ViewModelBase
     /// UI test load a multi-gigabyte LLM and behave differently per developer. The key resolver
     /// is injected for the same reason: the default falls back to the ambient GLADIA_API_KEY,
     /// which made "this mode is unavailable without a key" untestable on a machine that has one.
+    /// The capture factory feeds the device dropdown, and the watcher factory delivers hot-plug
+    /// notifications for it — tests hand in a fake watcher they fire by hand.
     /// </summary>
     public MainViewModel(
         Func<AppSettings> loadSettings,
         Func<ModelDownloadManager> downloads,
-        PipelinePlanner.KeyResolver? resolveKey = null)
+        PipelinePlanner.KeyResolver? resolveKey = null,
+        Func<IAudioCaptureService?>? captureFactory = null,
+        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null)
     {
         _loadSettings = loadSettings;
         _downloads = downloads;
         _resolveKey = resolveKey;
+        _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
 
         foreach (var mode in PipelineMode.All)
             Modes.Add(new PipelineModeOption(mode, unavailable: null));
@@ -90,16 +99,14 @@ public partial class MainViewModel : ViewModelBase
         _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _snapshotTimer.Tick += async (_, _) => await PublishSnapshotSafeAsync();
 
-        try
-        {
-            foreach (var device in AudioCaptureFactory.Create().GetDevices())
-                Devices.Add(device);
-            SelectedDevice = Devices.FirstOrDefault();
-        }
-        catch
-        {
-            // no capture backend or no devices — demo mode still works
-        }
+        // no capture backend or no devices — demo mode still works
+        RefreshDevices();
+
+        // Only the production constructor passes the real platform factory: a native listener
+        // created by every headless test would pile up registrations for hardware no test sees.
+        _deviceWatcher = deviceWatcherFactory?.Invoke();
+        if (_deviceWatcher is not null)
+            _deviceWatcher.DevicesChanged += OnDevicesChanged;
 
         RefreshPipelineStatus();
 
@@ -120,6 +127,45 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private static Localizer L => Localizer.Instance;
+
+    /// <summary>Watcher callbacks arrive on a CoreAudio/COM thread; Avalonia throws off the UI thread.</summary>
+    private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshDevices);
+
+    /// <summary>
+    /// Re-enumerates into <see cref="Devices"/>. The selection survives by its stable id —
+    /// enumeration builds fresh instances every time — and an unplugged selection falls back
+    /// to the list head, which the backends already order default-first. A capture already
+    /// running keeps the device id it was started with: the dropdown updates, the meeting
+    /// does not switch microphones mid-sentence.
+    /// </summary>
+    private void RefreshDevices()
+    {
+        IReadOnlyList<AudioDeviceInfo> fresh;
+        try
+        {
+            fresh = _captureFactory()?.GetDevices() ?? [];
+        }
+        catch
+        {
+            return; // enumeration can fail transiently mid-unplug; a stale list beats none
+        }
+
+        var selectedId = SelectedDevice?.Id;
+        Devices.Clear();
+        foreach (var device in fresh)
+            Devices.Add(device);
+        SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+    }
+
+    /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
+    public void Dispose()
+    {
+        if (_deviceWatcher is null)
+            return;
+        _deviceWatcher.DevicesChanged -= OnDevicesChanged;
+        _deviceWatcher.Dispose();
+        _deviceWatcher = null;
+    }
 
     /// <summary>
     /// The PRD freezes the host at four language columns. This is the only place that number
@@ -329,6 +375,14 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
     public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
 
+    /// <summary>
+    /// Test seam, in the shape of <see cref="RelayPublisherFactory"/>: rewrites the resolved
+    /// plan before Start uses it, so a headless test can substitute providers — a translator
+    /// whose load is held open, an ASR wrapper that records whether transcription began —
+    /// without a real model on disk.
+    /// </summary>
+    public Func<PipelinePlan, PipelinePlan>? PlanFilter { get; set; }
+
     [ObservableProperty]
     private PipelineModeOption _selectedMode;
 
@@ -423,6 +477,21 @@ public partial class MainViewModel : ViewModelBase
     private bool _isStopping;
 
     /// <summary>
+    /// Set while Start is loading a local translation model — seconds to tens of seconds in
+    /// which the room is not yet open and nothing is being transcribed. Start stays refused
+    /// (no second load behind the first), and Stop stays offered: the loading phase is the
+    /// operator's to abort, not a wait they are locked into.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    private bool _isStarting;
+
+    /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
+    private CancellationTokenSource? _warmupCts;
+
+    /// <summary>
     /// The room is open but off the record. One button carries both directions — an operator
     /// mid-meeting should not have to find a second control to undo the first.
     /// </summary>
@@ -432,11 +501,12 @@ public partial class MainViewModel : ViewModelBase
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
 
-    private bool CanStart() => !IsRunning && !IsStopping;
+    private bool CanStart() => !IsRunning && !IsStopping && !IsStarting;
 
-    private bool CanStop() => IsRunning && !IsStopping;
+    // Stop is offered while a model is still loading: pressing it then aborts the load.
+    private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
 
-    private bool CanPause() => IsRunning && !IsStopping;
+    private bool CanPause() => IsRunning && !IsStopping && !IsStarting;
 
     [RelayCommand(CanExecute = nameof(CanPause))]
     private async Task PauseAsync()
@@ -483,6 +553,8 @@ public partial class MainViewModel : ViewModelBase
         var mode = SelectedMode.Mode;
         var settings = _loadSettings();
         var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
+        if (PlanFilter is not null)
+            plan = PlanFilter(plan);
         TranscriptionStatus = plan.Status.TranscriptionLabel;
         TranslationStatus = plan.Status.TranslationLabel;
 
@@ -499,6 +571,42 @@ public partial class MainViewModel : ViewModelBase
         var mt = plan.Mt;
         _asr = asr;
         _mt = mt;
+
+        // A local translation model loads to a working state *before* the room opens. Loading
+        // it on the first final — which is what lazy loading did — meant the meeting's opening
+        // sentences waited out a multi-gigabyte load with nothing on screen saying why.
+        // Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
+        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start
+        // rather than opening a room that cannot translate.
+        if (mt is IWarmupProvider warmable)
+        {
+            IsStarting = true;
+            Status = L["status.loadingmodel"];
+            var warmupCts = new CancellationTokenSource();
+            _warmupCts = warmupCts;
+            try
+            {
+                await Task.Run(() => warmable.WarmUpAsync(warmupCts.Token));
+            }
+            catch (OperationCanceledException)
+            {
+                await DisposeProvidersAsync();
+                Status = L["status.idle"];
+                return;
+            }
+            catch (Exception ex)
+            {
+                await DisposeProvidersAsync();
+                Status = L.Format("status.modelloadfailed", ex.Message);
+                return;
+            }
+            finally
+            {
+                _warmupCts = null;
+                warmupCts.Dispose();
+                IsStarting = false;
+            }
+        }
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
@@ -575,6 +683,7 @@ public partial class MainViewModel : ViewModelBase
             // rethrows what they throw, and anything escaping before the finally would leave
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
+            _warmupCts?.Cancel(); // a model still loading is abandoned, not waited out
             _captureCts?.Cancel();
             _captureCts = null;
 
