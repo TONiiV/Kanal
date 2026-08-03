@@ -479,3 +479,33 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 
 - macOS audio capture (`feat/macos-audio-capture`): CoreAudio backend, `AudioCaptureFactory`,
   cross-platform mic list.
+
+## 2026-08-03
+
+### Local model warm-up on Start (`fix/local-mt-warmup`)
+
+Start with a local translation model opened the room first and let the weights load lazily on
+the meeting's first final — so the opening sentences sat untranslated for however long llama.cpp
+took to map a multi-gigabyte file, with nothing on screen saying why. Start now loads the model
+to a working state *before* transcription begins, and the first sentence's translation delay is
+plain inference latency.
+
+- **Capability, not vendor.** A new `IWarmupProvider` in `Kanal.Core.Providers` declares
+  "my backing resources load slowly and can be loaded ahead of use" — idempotent, cancellable.
+  `LlamaSharpTextGenerator` implements it by pulling its existing lazy load forward (same gate
+  as decodes, so warm-up can never race one); `LlamaSharpMtProvider` forwards to its generator.
+  `MainViewModel.StartAsync` checks the interface, never a vendor: the scripted demo translator
+  implements nothing and starts exactly as before.
+- **The loading phase is visible and abortable.** While the model loads the masthead says so
+  (`status.loadingmodel`, en/zh/de/pl; indeterminate wording — llama.cpp reports no progress),
+  `IsStarting` refuses a second Start, and Stop stays offered: pressing it cancels the load via
+  a `CancellationToken` that runs the whole way into `LLamaWeights.LoadFromFileAsync`. The load
+  itself runs on a background thread, so neither the UI nor Stop blocks on it (the PR #20
+  guarantee holds). A load that fails reports `status.modelloadfailed` and disposes the planned
+  providers instead of opening a room that cannot translate; a cancelled load unwinds to Idle.
+- **Ordering.** Warm-up completes before the relay is created, the previous room is redirected,
+  or the ASR session starts — a room is never live, and no audio is ever captured, while the
+  translator is not yet ready. Tests drive this through a new `PlanFilter` seam on
+  `MainViewModel` (the `RelayPublisherFactory` shape): a gated warmable fake holds the load
+  open while a wrapper records that ASR never started; plus generator-level tests for
+  load-once, cancel-then-retry, and warm-up-after-dispose. 10 new tests, suite at 269.
