@@ -64,52 +64,62 @@
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Grid.Column="0" Text="KANAL" FontSize="15" FontWeight="Bold"
                                LetterSpacing="3.4" VerticalAlignment="Center" />
-                    <!-- What this machine is actually wired to, in the operator's line of sight
-                         before Start — both stages, in pipeline order, on one rule. -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
-                                VerticalAlignment="Center" HorizontalAlignment="Right"
-                                Margin="0,0,20,0">
-                        <TextBlock Text="{Binding TranscriptionStatus}" FontSize="11"
-                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
-                        <Rectangle Width="1" Height="11" Fill="{StaticResource Rule}"
-                                   VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding TranslationStatus}" FontSize="11"
-                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
-                    </StackPanel>
                     <!-- Transport, then a rule, then the things that are not transport. The icons
                          carry the shape at a glance from a metre; the words carry which of the
-                         three it is, since ▶ and ❚❚ differ by very little at that distance. -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                        <Button Command="{Binding StartCommand}" Classes="accent">
-                            <StackPanel Orientation="Horizontal" Spacing="9">
-                                <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
-                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
-                                <TextBlock Text="{l:T transport.start}" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
+                         three it is, since ▶ and ❚❚ differ by very little at that distance.
+                         The three share one width through a shared-size group: the widest label
+                         in the current language sizes all of them, so the trio stays a trio in
+                         every chrome language instead of three unrelated widths. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                Grid.IsSharedSizeScope="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Transport" />
+                            </Grid.ColumnDefinitions>
+                            <Button Command="{Binding StartCommand}" Classes="accent"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                    <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
+                                          Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <TextBlock Text="{l:T transport.start}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
                         <!-- One button, both directions: mid-meeting the operator should not have
                              to find a second control to undo the first. -->
-                        <Button Command="{Binding PauseCommand}"
-                                ToolTip.Tip="{l:T transport.pause.tip}">
-                            <StackPanel Orientation="Horizontal" Spacing="9">
-                                <Path Classes="glyph" Data="{StaticResource GlyphPause}"
-                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
-                                      IsVisible="{Binding !IsPaused}" />
-                                <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
-                                      Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
-                                      IsVisible="{Binding IsPaused}" />
-                                <TextBlock Text="{Binding PauseLabel}" VerticalAlignment="Center" Width="50" />
-                            </StackPanel>
-                        </Button>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Transport" />
+                            </Grid.ColumnDefinitions>
+                            <Button Command="{Binding PauseCommand}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    ToolTip.Tip="{l:T transport.pause.tip}">
+                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                    <Path Classes="glyph" Data="{StaticResource GlyphPause}"
+                                          Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
+                                          IsVisible="{Binding !IsPaused}" />
+                                    <Path Classes="glyph" Data="{StaticResource GlyphPlay}"
+                                          Width="10" Height="12" Stretch="Uniform" VerticalAlignment="Center"
+                                          IsVisible="{Binding IsPaused}" />
+                                    <TextBlock Text="{Binding PauseLabel}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
-                        <Button Command="{Binding StopCommand}">
-                            <StackPanel Orientation="Horizontal" Spacing="9">
-                                <Path Classes="glyph" Data="{StaticResource GlyphStop}"
-                                      Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
-                                <TextBlock Text="{l:T transport.stop}" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Transport" />
+                            </Grid.ColumnDefinitions>
+                            <Button Command="{Binding StopCommand}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                    <Path Classes="glyph" Data="{StaticResource GlyphStop}"
+                                          Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" />
+                                    <TextBlock Text="{l:T transport.stop}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
                         <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
                                    VerticalAlignment="Center" Margin="4,0" />

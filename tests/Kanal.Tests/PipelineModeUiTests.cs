@@ -138,21 +138,10 @@ public class PipelineModeUiTests
         Assert.Equal(unavailable.Unavailable, vm.Status);
     }
 
-    [AvaloniaFact]
-    public void MastheadNamesBothStages()
-    {
-        var vm = TestViewModels.Hermetic();
-        var window = new MainWindow { DataContext = vm };
-        window.Show();
-
-        var texts = window.GetVisualDescendants().OfType<TextBlock>()
-            .Select(t => t.Text).Where(t => t is not null).ToList();
-
-        Assert.Contains("Transcription: scripted", texts);
-        Assert.Contains("Translation: scripted", texts);
-
-        window.Close();
-    }
+    // The masthead used to repeat both stage labels; that block is gone — the mode selector
+    // already names the pipeline, and TransportLayoutTests.MastheadDoesNotRepeatThePipelineStatus
+    // holds the door shut. The labels themselves are still asserted below and in
+    // TranslationStatusTests.
 
     [AvaloniaFact]
     public void SwitchingModeRepointsBothStageLabels()

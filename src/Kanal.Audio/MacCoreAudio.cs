@@ -79,6 +79,10 @@ internal static class MacCoreAudio
     internal delegate void AudioQueueInputCallback(
         IntPtr userData, IntPtr queue, IntPtr buffer, IntPtr startTime, uint packets, IntPtr packetDescriptions);
 
+    /// <summary>AudioObjectPropertyListenerProc. Invoked on CoreAudio's notification thread.</summary>
+    internal delegate int AudioObjectPropertyListener(
+        uint objectId, uint addressCount, IntPtr addresses, IntPtr clientData);
+
     [DllImport(CoreAudio)]
     private static extern int AudioObjectGetPropertyDataSize(
         uint objectId, ref PropertyAddress address, uint qualifierSize, IntPtr qualifier, out uint size);
@@ -86,6 +90,14 @@ internal static class MacCoreAudio
     [DllImport(CoreAudio)]
     private static extern int AudioObjectGetPropertyData(
         uint objectId, ref PropertyAddress address, uint qualifierSize, IntPtr qualifier, ref uint size, IntPtr data);
+
+    [DllImport(CoreAudio)]
+    private static extern int AudioObjectAddPropertyListener(
+        uint objectId, ref PropertyAddress address, AudioObjectPropertyListener listener, IntPtr clientData);
+
+    [DllImport(CoreAudio)]
+    private static extern int AudioObjectRemovePropertyListener(
+        uint objectId, ref PropertyAddress address, AudioObjectPropertyListener listener, IntPtr clientData);
 
     [DllImport(CoreFoundation)]
     private static extern IntPtr CFStringCreateWithCString(IntPtr allocator, byte[] cString, uint encoding);
@@ -118,6 +130,45 @@ internal static class MacCoreAudio
 
     [DllImport(AudioToolbox)]
     private static extern int AudioQueueSetProperty(IntPtr queue, uint propertyId, ref IntPtr data, uint size);
+
+    /// <summary>
+    /// Registers <paramref name="listener"/> on the system object for hot-plug ('dev#') and
+    /// default-input ('dIn ') changes. Both matter to a device dropdown: plugging or unplugging
+    /// changes the set, and reassigning the default reorders it (<see cref="CoreAudioCapture"/>
+    /// floats the default to the top). The caller keeps the delegate rooted until removal.
+    /// </summary>
+    internal static void AddDeviceTopologyListener(AudioObjectPropertyListener listener)
+    {
+        var registered = new List<uint>(2);
+        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput })
+        {
+            var address = new PropertyAddress { Selector = selector, Scope = ScopeGlobal, Element = 0 };
+            var status = AudioObjectAddPropertyListener(SystemObject, ref address, listener, IntPtr.Zero);
+            if (status != 0)
+            {
+                // All or nothing: a half-registered listener could not be removed symmetrically.
+                foreach (var done in registered)
+                {
+                    var undo = new PropertyAddress { Selector = done, Scope = ScopeGlobal, Element = 0 };
+                    AudioObjectRemovePropertyListener(SystemObject, ref undo, listener, IntPtr.Zero);
+                }
+
+                throw new InvalidOperationException($"AudioObjectAddPropertyListener failed: {Describe(status)}");
+            }
+
+            registered.Add(selector);
+        }
+    }
+
+    internal static void RemoveDeviceTopologyListener(AudioObjectPropertyListener listener)
+    {
+        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput })
+        {
+            var address = new PropertyAddress { Selector = selector, Scope = ScopeGlobal, Element = 0 };
+            // Best effort: on teardown there is nothing useful to do with a failure.
+            AudioObjectRemovePropertyListener(SystemObject, ref address, listener, IntPtr.Zero);
+        }
+    }
 
     /// <summary>Input-capable devices, identified by their persistent UID.</summary>
     internal static List<AudioDeviceInfo> GetInputDevices()
