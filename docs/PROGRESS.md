@@ -6,6 +6,36 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-03
 
+### Every `{l:T}` string now follows the language switch, and the tables live in JSON
+
+- **Bug — `{l:T}` bindings never refreshed on a language change.** `Localizer` raised
+  `PropertyChanged("Item[]")`, which is **WPF's** indexer notification name; Avalonia's reflection
+  binding listens for `CommonPropertyNames.IndexerName` — `"Item"` — and never matched it. Every
+  string set straight from XAML (Start, MODE, section headings, window titles) stayed frozen in
+  the language its window opened in, while every view-model INPC property switched correctly,
+  which left one screen speaking two languages. One-line fix: raise `"Item"`, now the
+  `Localizer.IndexerName` constant, shared by the two view models that were string-matching
+  `"Item[]"` on their own. Guarded by a headless test that opens `MainWindow`, flips
+  `Localizer.Instance.Current`, and asserts the rendered `TextBlock` re-reads. The three
+  localisation tests that switch the language off the UI thread became `[AvaloniaFact]`s — with
+  the fix in place a switch genuinely reaches live bindings, so it must happen on the thread the
+  bindings live on, exactly as in production.
+- **Last hard-coded operator string.** The export status ("Exported to …") was composed inline in
+  `MainViewModel`; it now uses the `status.exported` / `status.exported.audio` keys that already
+  existed in all four languages. An audit of every remaining literal in `src/Kanal.Host` found
+  nothing else user-visible outside the tables.
+- **Tables migrated to `Localization/i18n/{en,zh,de,pl}.json`** — flat JSON, one file per
+  language, embedded resources loaded once by `Strings` through `System.Text.Json` (no new
+  package). `Localizer`'s API — indexer, `Format`, fallback to English then to the key — is
+  unchanged, and all existing guards (identical key sets, placeholder parity, nothing left in
+  English, no vendor names) keep running against the loaded tables.
+- **Two new guards.** A repo-scanning test forbids literal user-visible text in `.axaml`
+  (`Text=`, `Content=`, `ToolTip.Tip=`, `Title=`, …) outside a small whitelist of glyphs and the
+  product name, so a hard-coded string can no longer slip past the language switch unnoticed; and
+  `HelpNeverOverstatesPrivacy` gained a four-language twin — no translation of the mode help may
+  promise "不联网", "nichts wird gesendet" or "bez sieci" any more than English may promise
+  "no network".
+
 ### Input device hot-plug
 
 The device dropdowns (main window and Settings) enumerated once at construction, so a USB

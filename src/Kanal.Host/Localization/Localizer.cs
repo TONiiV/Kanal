@@ -18,13 +18,20 @@ public sealed record AppLanguage(string Code, string NativeName);
 /// <remarks>
 /// An indexer on a singleton rather than generated resource classes: switching language has to
 /// take effect on a window that is already open — mid-meeting, without restarting a room — and
-/// raising <see cref="Binding.IndexerName"/> makes every bound string re-read at once. Missing
+/// raising Avalonia's indexer notification ("Item") makes every bound string re-read at once. Missing
 /// keys fall back to English and then to the key itself, so a gap shows up as a visible
 /// identifier rather than as a blank control.
 /// </remarks>
 public sealed class Localizer : INotifyPropertyChanged
 {
     public const string Fallback = "en";
+
+    /// <summary>
+    /// The notification name Avalonia's reflection binding listens for on an indexer —
+    /// CommonPropertyNames.IndexerName. WPF's "Item[]" is never matched by Avalonia: raising
+    /// it left every {l:T …} string frozen in the language its window happened to open in.
+    /// </summary>
+    public const string IndexerName = "Item";
 
     public static Localizer Instance { get; } = new();
 
@@ -51,8 +58,7 @@ public sealed class Localizer : INotifyPropertyChanged
                 return;
 
             _current = resolved;
-            // "Item[]" is the indexer's binding name: every {l:T …} in every open window re-reads
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerName));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Current)));
         }
     }
