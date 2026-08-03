@@ -4,6 +4,44 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-03
+
+### Input device hot-plug
+
+The device dropdowns (main window and Settings) enumerated once at construction, so a USB
+microphone plugged in after launch — the normal order of events when the mic lives in the
+meeting-room drawer — never appeared without reopening the window.
+
+- **`IAudioDeviceWatcher`** (Kanal.Audio): raises a payload-free `DevicesChanged` when the input
+  set may have changed; the one correct reaction is to re-enumerate, and a device list on the
+  event would invite acting on a stale one. `AudioCaptureFactory.TryCreateDeviceWatcher()` picks
+  the platform implementation, and returns null rather than throwing when registration fails —
+  a dropdown that misses a hot-plug is degraded, a start-up that dies over it is broken.
+- **macOS**: `CoreAudioDeviceWatcher`, an `AudioObjectAddPropertyListener` on
+  `kAudioObjectSystemObject` for `kAudioHardwarePropertyDevices` ('dev#') and
+  `kAudioHardwarePropertyDefaultInputDevice` ('dIn ') — the default matters because
+  `CoreAudioCapture` floats it to the top of the list. Removed symmetrically on dispose.
+- **Windows**: `WasapiDeviceWatcher` via NAudio's `IMMNotificationClient` — no degradation
+  needed, NAudio.Wasapi 2.3.0 already ships the interface. Add/remove/state/default-changed all
+  refresh (a USB unplug often surfaces as a state change, not `OnDeviceRemoved`);
+  `OnPropertyValueChanged` deliberately does not — it fires per property on every volume move.
+- **View models**: both `MainViewModel` and `SettingsViewModel` re-enumerate on the event,
+  marshalled through `Dispatcher.UIThread.Post` (callbacks arrive on CoreAudio/COM threads).
+  The selection survives a refresh by its stable device id — enumeration builds fresh instances
+  every time — and an unplugged selection falls back to the list head, which the backends order
+  default-first. A capture already running keeps the device it opened: the dropdown updates, the
+  meeting does not switch microphones mid-sentence. Listeners are released with the window that
+  shows the list (`MainWindow.OnClosed` → `MainViewModel.Dispose`, `SettingsWindow.OnClosed` →
+  `CancelDownloads`), since a native listener firing into a dead dialog would live forever.
+- **Tests** (`DeviceHotplugTests`): the refresh/keep/fall-back logic runs against a hand-fired
+  fake watcher over a mutable fake device list. The native wrappers are deliberately thin; the
+  headless suite proves only that real registration and removal survive
+  (`TheRealWatcherRegistersAndUnregistersCleanly` — a wrong P/Invoke signature dies there, not
+  in a meeting). Firing them is a manual test: plug and unplug a USB microphone while the main
+  window and Settings are open, on each platform.
+
+---
+
 ## 2026-07-31
 
 ### Findings
