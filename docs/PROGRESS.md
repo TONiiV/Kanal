@@ -6,6 +6,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### Unit-test projects now follow the Core/UI boundary
+
+- Replaced the former mixed test assembly with `tests/Kanal.Core.UnitTests` for core,
+  audio, provider, serialization, orchestration, and non-visual service tests, plus
+  `tests/Kanal.UI.UnitTests` for deterministic view-model and host application-state behavior.
+- The UI suite no longer treats Avalonia rendering as a unit-test contract. Tests for palette
+  values, control geometry, visual-tree content, icon resources, automation labels, and synthetic
+  pointer/keyboard input were removed; mixed tests now drive commands and observable view-model
+  state directly.
+- Solution membership, provider friend-assembly declarations, CI commands, and contributor docs
+  now name the two projects explicitly so either boundary can be built and tested independently.
+
 ### README is now the open-source project entry point
 
 The root README was a compact architecture inventory followed by milestone checklists, relay
@@ -128,14 +140,12 @@ Four small host-UI fixes from screenshot review, one PR:
 - **Transport buttons share one width.** Start/Pause/Stop sized independently, and the Pause
   label carried a `Width="50"` hack that fit English only. The three buttons now sit in a
   `SharedSizeGroup` (scope on the transport StackPanel), so the widest label in the current
-  chrome language sizes all three — "Zakończ" and "Weiter" included. Guarded by
-  `TransportLayoutTests.TransportButtonsShareOneWidthInEveryLanguage`, which lays the window
-  out in all four languages.
+  chrome language sizes all three — "Zakończ" and "Weiter" included. This was originally guarded
+  by a headless geometry assertion, removed when unit tests were split by the Core/UI boundary.
 - **Masthead no longer repeats the pipeline status.** The `Transcription: … | Translation: …`
   pair duplicated what the mode selector already says, so the block is gone; the old
-  `MastheadNamesBothStages` test went with it and
-  `MastheadDoesNotRepeatThePipelineStatus` asserts the reverse. The `TranscriptionStatus` /
-  `TranslationStatus` view-model properties stay — their label logic is still covered by
+  corresponding rendering checks went with it. The `TranscriptionStatus` / `TranslationStatus`
+  view-model properties stay — their label logic is still covered by
   `TranslationStatusTests` and mode-switch tests, and a future surface (status line, tooltip)
   is the likely place they resurface.
 - **Settings scrollbar takes layout space.** The overlay scrollbar sat on top of the rightmost
