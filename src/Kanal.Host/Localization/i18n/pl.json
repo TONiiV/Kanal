@@ -74,6 +74,7 @@
   "status.stopped": "Zakończone. Zmiana nazw, scalanie i eksport nadal działają dla ostatniego pokoju.",
   "status.stopped.audio": "Zakończone. Dźwięk zapisano w {0}. Zmiana nazw, scalanie i eksport nadal działają.",
   "status.startfailed": "Nie udało się uruchomić: {0}",
+  "status.relayunavailable": "Przekaźnik mobilny jest niedostępny; sesja działa bez kodu QR. {0}",
   "status.sessionended": "Sesja zakończona: {0}",
   "status.done": "gotowe",
   "status.fatal": "Błąd krytyczny: {0}",

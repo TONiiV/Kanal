@@ -131,7 +131,9 @@ Environment variables override connection defaults:
 Relay stays disabled rather than using a public fallback when either relay variable is absent. The
 function secret and desktop variable must contain the same high-entropy value. `KANAL_RELAY_URL` is
 an address, not a credential: every gateway route still requires the bootstrap token or a
-role-scoped room ticket. Deployment commands are in
+role-scoped room ticket. Missing configuration or a gateway failure does not block transcription:
+the meeting continues without a QR code and the status bar reports the degraded mobile relay.
+Deployment commands are in
 [`supabase/functions/kanal-relay/README.md`](supabase/functions/kanal-relay/README.md).
 
 The default web URL is `https://toniiv.github.io/Kanal/`. To self-host it, serve

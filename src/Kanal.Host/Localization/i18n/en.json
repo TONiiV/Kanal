@@ -74,6 +74,7 @@
   "status.stopped": "Stopped. Rename, merge and export still work on the last room.",
   "status.stopped.audio": "Stopped. Audio saved to {0}. Rename, merge and export still work.",
   "status.startfailed": "Start failed: {0}",
+  "status.relayunavailable": "Mobile relay unavailable; the session is running without a QR code. {0}",
   "status.sessionended": "Session ended: {0}",
   "status.done": "done",
   "status.fatal": "Fatal: {0}",

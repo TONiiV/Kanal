@@ -375,6 +375,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
     public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
 
+    /// <summary>Loads relay runtime configuration; injectable so tests never read ambient secrets.</summary>
+    public Func<RelaySettings> RelaySettingsFactory { get; set; } = RelaySettings.FromEnvironment;
+
     /// <summary>
     /// Test seam, in the shape of <see cref="RelayPublisherFactory"/>: rewrites the resolved
     /// plan before Start uses it, so a headless test can substitute providers — a translator
@@ -609,7 +612,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
-        var relaySettings = RelaySettings.FromEnvironment();
+        var relaySettings = RelaySettingsFactory();
         var signingKey = RelaySigningKey.Create();
         RelayConnection relayConnection;
         try
@@ -621,10 +624,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            signingKey.Dispose();
-            await DisposeProvidersAsync();
-            Status = L.Format("status.startfailed", ex.Message);
-            return;
+            // The meeting is the primary function; mobile delivery is optional. A missing,
+            // unreachable, or rejected gateway must remove the QR, not prevent transcription.
+            // There is deliberately no public Supabase fallback: the null publisher keeps the
+            // secure boundary while the operator gets an explicit degraded-mode warning.
+            relayConnection = new RelayConnection(
+                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
+                null,
+                null,
+                ex.Message);
         }
         var relay = relayConnection.Publisher;
 
@@ -632,12 +640,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // where the meeting went — otherwise a restart strands everyone until they rescan.
         if (_relay is not null)
         {
-            await PublishSafeAsync(
-                _relay,
-                new RoomMovedMessage(
-                    config.RoomId,
-                    signingKey.VerificationKey,
-                    relayConnection.InviteTicket ?? ""));
+            if (relayConnection.InviteTicket is not null)
+            {
+                await PublishSafeAsync(
+                    _relay,
+                    new RoomMovedMessage(
+                        config.RoomId,
+                        signingKey.VerificationKey,
+                        relayConnection.InviteTicket));
+            }
             await _relay.DisposeAsync();
         }
 
@@ -660,15 +671,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             Status = L.Format("status.startfailed", ex.Message);
             await session.DisposeAsync();
+            _relay = null;
+            await relay.DisposeAsync();
             await DisposeProvidersAsync();
             return;
         }
 
         _session = session;
         IsRunning = true;
-        Status = mode.Id == PipelineModeId.Demo
+        var runningStatus = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
+        Status = relayConnection.Warning is null
+            ? runningStatus
+            : $"{runningStatus} {L.Format("status.relayunavailable", relayConnection.Warning)}";
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
         // in that minute is kept, and a second pause check here would be a second place for that
@@ -822,13 +838,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return new RelayConnection(
                 new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
                 null,
+                null,
                 null);
 
         if (RelayPublisherFactory is not null)
             return new RelayConnection(
                 new SignedRelayPublisher(RelayPublisherFactory(roomId), signingKey),
                 settings.GatewayUrl ?? "https://relay.test/kanal-relay",
-                "test-reader-ticket");
+                "test-reader-ticket",
+                null);
 
         if (!settings.IsConfigured)
             throw new InvalidOperationException(
@@ -842,13 +860,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         return new RelayConnection(
             new SignedRelayPublisher(room.Publisher, signingKey),
             settings.GatewayUrl,
-            room.InviteTicket);
+            room.InviteTicket,
+            null);
     }
 
     private sealed record RelayConnection(
         IRelayPublisher Publisher,
         string? GatewayUrl,
-        string? InviteTicket);
+        string? InviteTicket,
+        string? Warning);
 
     private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)
     {

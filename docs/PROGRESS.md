@@ -31,6 +31,10 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - Added regression coverage for repository/build credential absence, gateway role separation,
   invitation shape, signature verification and tampering, room rotation, private-channel use, and
   byte-for-byte parity of the two static mobile pages.
+- Fixed the first integration regression: relay configuration was optional in the UI but a missing
+  gateway was treated as a fatal Start error. Relay setup now fails closed to a signed null
+  transport, keeps the meeting running without a QR code, and shows a localized degraded-mode
+  warning. No public Supabase fallback was reintroduced.
 
 ---
 

@@ -74,6 +74,7 @@
   "status.stopped": "已结束。重命名、合并和导出仍可用于上一场会议。",
   "status.stopped.audio": "已结束。音频已保存至 {0}。重命名、合并和导出仍可用。",
   "status.startfailed": "启动失败：{0}",
+  "status.relayunavailable": "手机中继不可用；会话已继续运行，但不会显示二维码。{0}",
   "status.sessionended": "会话结束：{0}",
   "status.done": "完成",
   "status.fatal": "严重错误：{0}",
