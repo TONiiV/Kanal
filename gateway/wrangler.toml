@@ -1,0 +1,29 @@
+# Kanal relay gateway — Cloudflare Worker + Durable Objects.
+#
+# Free-plan friendly: Durable Objects with SQLite storage and WebSocket hibernation are
+# included in the Workers Free plan, and hibernated reader sockets have no wall-clock
+# limit — this is why the gateway is a Worker and not a serverless function.
+#
+# Secrets (set once with `wrangler secret put <NAME>`):
+#   KANAL_TICKET_SECRET  — >=32 random bytes; HMAC key for short-lived room tickets
+#   KANAL_ADMIN_TOKEN    — >=32 random bytes; authorises minting device activation codes
+name = "kanal-relay"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+# Origin allowed to open reader WebSockets from a browser. Override per environment:
+#   wrangler deploy --var KANAL_ALLOWED_ORIGIN:https://example.com
+[vars]
+KANAL_ALLOWED_ORIGIN = "https://toniiv.github.io"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomRelay"
+
+[[durable_objects.bindings]]
+name = "REGISTRY"
+class_name = "DeviceRegistry"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomRelay", "DeviceRegistry"]

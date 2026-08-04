@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Relay;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -66,6 +67,25 @@ public class TransportTests
         Assert.False(vm.IsPaused);
         Assert.Equal("Pause", vm.PauseLabel);
 
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task MissingRelayConfigurationDoesNotBlockTheMeeting()
+    {
+        var vm = TestViewModels.Demo();
+        vm.RelayEnabled = true;
+        vm.RelaySettingsFactory = () => new RelaySettings(
+            null,
+            null,
+            RelaySettings.DefaultWebAppUrl);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsRunning);
+        Assert.Empty(vm.JoinUrl);
+        Assert.True(vm.HasJoinError);
+        Assert.Contains("QR code", vm.JoinError, StringComparison.OrdinalIgnoreCase);
         await vm.StopCommand.ExecuteAsync(null);
     }
 
