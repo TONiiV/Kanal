@@ -10,8 +10,9 @@ meeting. Hibernated Durable Object sockets have no wall-clock limit and are incl
 Functions (no WebSockets) would forcibly disconnect every phone every few minutes.
 
 No backing store is involved: the Worker holds no Supabase/database URL or key, messages are
-fanned out in memory and never stored, and the repository, desktop build, and mobile page
-contain no server credential of any kind.
+fanned out in memory and never written to disk — a room holds only the latest `room.snapshot`
+envelope, in memory, to greet a reconnecting phone — and the repository, desktop build, and
+mobile page contain no server credential of any kind.
 
 ## Deploy (once)
 
@@ -94,7 +95,7 @@ suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the co
 |---|---|---|
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
-| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames |
+| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the last `room.snapshot` first, if the room has one |
 | `POST ?action=activate` | activation code | one-time exchange for a device credential |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 

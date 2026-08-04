@@ -130,6 +130,24 @@ async function verifyTicket(env: Env, ticket: string, role: Role): Promise<Ticke
   }
 }
 
+/**
+ * The discriminator of the relay message inside a signed envelope, or null if it cannot be
+ * read. Envelopes are signed, not encrypted, so this is a plain base64url decode — the gateway
+ * learns nothing it was not already forwarding. It also does not have to trust the answer: the
+ * phone verifies the host's P-256 signature on every frame, so a mislabelled or forged envelope
+ * costs at most one discarded frame and can never inject content.
+ */
+function envelopeType(payload: unknown): string | null {
+  const data = (payload as { data?: unknown }).data;
+  if (typeof data !== "string") return null;
+  try {
+    const message = JSON.parse(decoder.decode(decodeBase64Url(data))) as { type?: unknown };
+    return typeof message.type === "string" ? message.type : null;
+  } catch {
+    return null;
+  }
+}
+
 function bearer(request: Request): string {
   return request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
 }
@@ -334,6 +352,18 @@ export default {
  * of compute, and nothing ever forces the phones to reconnect.
  */
 export class RoomRelay extends DurableObject<Env> {
+  /**
+   * The last `room.snapshot` frame, verbatim, replayed to every reader that arrives after it.
+   * A phone that reconnects otherwise shows its `localStorage` copy until the host's next
+   * snapshot heartbeat, up to 15 s later.
+   *
+   * Held in memory, not in storage: the host republishes a snapshot every 15 s and each publish
+   * wakes this object, so a cache lost to eviction refills within one heartbeat — the worst case
+   * is exactly today's behaviour. Storage would instead put a write on the fan-out path of every
+   * snapshot for the whole meeting.
+   */
+  private lastSnapshot: string | null = null;
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return response({ error: "WebSocket upgrade required" }, 426);
@@ -354,6 +384,9 @@ export class RoomRelay extends DurableObject<Env> {
     // Same contract as before: the reader treats the session message as proof it is
     // subscribed to the room it was invited to, before trusting any relayed envelope.
     server.send(JSON.stringify({ type: "gateway.session", room, verificationKey, expiresAt }));
+    // An ordinary relay frame, indistinguishable from a live one — the phone verifies and
+    // applies it through the same path, so late join needs no client change.
+    if (this.lastSnapshot) server.send(this.lastSnapshot);
 
     return new Response(null, {
       status: 101,
@@ -365,6 +398,18 @@ export class RoomRelay extends DurableObject<Env> {
   /** Fan a signed envelope out to every live reader. Called over RPC from the Worker. */
   async publish(payload: unknown): Promise<void> {
     const message = JSON.stringify({ type: "relay", payload });
+    // A snapshot supersedes the previous one. A room that has ended or moved must not greet a
+    // late reader with a finished meeting rendered as live — nothing is published here any more
+    // to correct it — so those two announcements drop the cache instead.
+    switch (envelopeType(payload)) {
+      case "room.snapshot":
+        this.lastSnapshot = message;
+        break;
+      case "room.closed":
+      case "room.moved":
+        this.lastSnapshot = null;
+        break;
+    }
     const now = Math.floor(Date.now() / 1000);
     for (const socket of this.ctx.getWebSockets()) {
       if (this.expired(socket, now)) continue;

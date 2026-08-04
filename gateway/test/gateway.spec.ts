@@ -45,6 +45,8 @@ interface Reader {
   socket: WebSocket;
   protocol: string | null;
   messages: unknown[];
+  /** The frames exactly as they arrived, for assertions about byte-for-byte pass-through. */
+  raw: string[];
   closes: { code: number; reason: string }[];
 }
 
@@ -62,10 +64,12 @@ async function openReader(ticket: string, origin?: string): Promise<Reader | Res
     socket,
     protocol: response.headers.get("Sec-WebSocket-Protocol"),
     messages: [],
+    raw: [],
     closes: [],
   };
   socket.accept();
   socket.addEventListener("message", (event) => {
+    if (typeof event.data === "string") reader.raw.push(event.data);
     reader.messages.push(
       typeof event.data === "string" && event.data.startsWith("{")
         ? JSON.parse(event.data)
@@ -92,6 +96,19 @@ const signedEnvelope = {
   data: "eyJ0eXBlIjoicm9vbS5zbmFwc2hvdCJ9",
   signature: "c2ln",
 };
+
+/**
+ * The desktop's `SignedRelayMessage`: the exact relay JSON, base64url-encoded, plus a P-256
+ * signature over it. Signed, not encrypted — the discriminator is readable to the gateway and
+ * verified by the phone.
+ */
+function envelope(message: unknown, signature = "c2ln") {
+  const data = btoa(JSON.stringify(message))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return { type: "relay.signed", version: 1, data, signature };
+}
 
 describe("device authorization", () => {
   it("minting an activation code requires the admin token", async () => {
@@ -313,5 +330,143 @@ describe("origin policy", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
       "https://toniiv.github.io",
     );
+  });
+});
+
+/**
+ * A phone that reconnects mid-meeting must not stare at its `localStorage` cache until the
+ * host's next 15 s snapshot heartbeat. The room remembers the last snapshot envelope and
+ * replays it right after `gateway.session` — one ordinary `{type:"relay"}` frame, which the
+ * phone already verifies and applies like any other.
+ */
+describe("snapshot replay", () => {
+  const snapshot = envelope({ type: "room.snapshot", snapshot: { utterances: [] } }, "c25hcDE");
+  const laterSnapshot = envelope({ type: "room.snapshot", snapshot: { utterances: [1] } }, "c25hcDI");
+  const utterance = envelope({ type: "utterance.upsert", utterance: { id: "u1" } }, "dXR0");
+
+  it("greets a reader that joins after a snapshot with that snapshot", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110000-ReplayJoinLate");
+    expect((await post("publish", { payload: snapshot }, room.hostTicket)).status).toBe(200);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 2);
+    expect((reader.messages[0] as { type: string }).type).toBe("gateway.session");
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: snapshot });
+  });
+
+  it("replays the envelope byte for byte", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110001-ReplayVerbatim");
+    const live = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => live.messages.length >= 1);
+    await post("publish", { payload: laterSnapshot }, room.hostTicket);
+    await until(() => live.messages.length >= 2);
+
+    const rejoined = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => rejoined.raw.length >= 2);
+    // The replayed frame is the same bytes the live reader received, not a re-encoding.
+    expect(rejoined.raw[1]).toBe(live.raw[1]);
+    expect(JSON.parse(rejoined.raw[1]).payload).toEqual(laterSnapshot);
+  });
+
+  it("sends nothing but the session when no snapshot has been published", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110002-ReplayNoneYet");
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("replays only the most recent snapshot", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110003-ReplayLatestOne");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: laterSnapshot }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 2);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(2);
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: laterSnapshot });
+  });
+
+  it("does not cache envelopes that are not snapshots", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110004-ReplayUtterOnly");
+    await post("publish", { payload: utterance }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("keeps the snapshot as the replayed frame when later utterances arrive", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110005-ReplayThenUtter");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 2);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(2);
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: snapshot });
+  });
+
+  it("forgets the snapshot once the room is closed", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110006-ReplayAfterEnd");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: envelope({ type: "room.closed" }, "Y2xz") }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("forgets the snapshot once the room has moved", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110007-ReplayAfterMove");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    const moved = envelope(
+      { type: "room.moved", newRoomId: "kanal-110008-ReplayMoveTarget" },
+      "bXZk",
+    );
+    await post("publish", { payload: moved }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("never replays one room's snapshot into another room", async () => {
+    const { deviceToken } = await activateDevice();
+    const roomA = await createRoom(deviceToken, "kanal-110009-ReplayIsolateA");
+    const roomB = await createRoom(deviceToken, "kanal-110010-ReplayIsolateB");
+    await post("publish", { payload: snapshot }, roomA.hostTicket);
+
+    const reader = (await openReader(roomB.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("still fans a snapshot out live to readers already connected", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110011-ReplayLiveToo");
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await until(() => reader.messages.length >= 2);
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: snapshot });
+    // The reader that was already there is not sent the cached copy a second time.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(2);
   });
 });

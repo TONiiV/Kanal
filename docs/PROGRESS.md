@@ -6,6 +6,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### A reconnecting phone gets the room state at once, not at the next heartbeat
+
+- The room Durable Object now keeps the most recent `room.snapshot` envelope and sends it to a
+  reader immediately after `gateway.session`. A phone that locks, roams, or joins late used to
+  render its `localStorage` copy and then wait up to 15 s for the host's next snapshot heartbeat
+  before the live meeting appeared; that gap is now ~0. Issue #40, item 1.
+- Nothing on the wire changed for either client. The replay is an ordinary `{type:"relay"}` frame
+  carrying the exact bytes the host published, so the phone verifies and applies it through the
+  path it already uses, and the desktop is not involved at all.
+- To recognise a snapshot the gateway base64url-decodes the envelope's `data` and reads the `type`
+  discriminator. Envelopes are signed, not encrypted — this reveals nothing the gateway was not
+  already forwarding — and the gateway does not have to trust what it reads, because the phone
+  verifies the host's P-256 signature on every frame regardless. A mislabelled envelope costs one
+  discarded frame; it cannot inject content.
+- The cache lives in the object's memory rather than in Durable Object storage. A hibernated
+  object can be evicted and lose it, but the host republishes a snapshot every 15 s and each
+  publish wakes the object, so the cache refills within one heartbeat and the worst case is
+  exactly the behaviour being replaced. Storage would instead add a write to the fan-out path of
+  every snapshot for the whole meeting.
+- `room.closed` and `room.moved` drop the cache. Both mean the host has stopped publishing on that
+  room, so a snapshot replayed afterwards would present a finished or relocated meeting as live
+  with nothing arriving to correct it. A reader arriving after either announcement now gets only
+  `gateway.session`, the same as a room that has never published.
+- Gateway suite: 25 → 35 vitest cases.
+
 ### Kanal traffic is behind an authenticated gateway
 
 - Removed all Supabase project URLs and client API keys from the desktop source, compiled defaults,
