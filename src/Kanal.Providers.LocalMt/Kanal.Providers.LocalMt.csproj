@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Kanal.Tests" />
+    <InternalsVisibleTo Include="Kanal.Core.UnitTests" />
   </ItemGroup>
 
   <PropertyGroup>
