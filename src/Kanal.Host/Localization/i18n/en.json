@@ -54,6 +54,7 @@
   "empty.body1": "Pick the languages spoken in the room, then Start. One column per language, newest utterance at the bottom.",
   "empty.body2": "The mode picks both stages — where speech is transcribed and where it is translated — and says what leaves this machine. Demo needs no key. A join QR appears on the right; everyone else reads on their own phone, in their own language.",
   "join.label": "JOIN",
+  "join.unavailable": "QR code was not generated because the mobile relay is unavailable. {0}",
   "speakers.label": "SPEAKERS",
   "merge.label": "MERGE",
   "merge.button": "Merge",

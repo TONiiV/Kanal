@@ -434,7 +434,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private Bitmap? _qrImage;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasJoinError))]
+    private string _joinError = "";
+
     public bool HasJoinInfo => JoinUrl.Length > 0;
+
+    /// <summary>Shows relay bootstrap failures where the operator expected the join QR.</summary>
+    public bool HasJoinError => JoinError.Length > 0;
 
     /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
     public bool HasColumns => Columns.Count > 0;
@@ -685,6 +692,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Status = relayConnection.Warning is null
             ? runningStatus
             : $"{runningStatus} {L.Format("status.relayunavailable", relayConnection.Warning)}";
+        JoinError = relayConnection.Warning is null
+            ? ""
+            : L.Format("join.unavailable", relayConnection.Warning);
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
         // in that minute is kept, and a second pause check here would be a second place for that
@@ -739,6 +749,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StopRecording();
             JoinUrl = "";
             QrImage = null;
+            JoinError = "";
             IsRunning = false;
             IsPaused = false;
             Status = _lastRecording.Length > 0

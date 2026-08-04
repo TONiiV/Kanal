@@ -11,6 +11,16 @@ Optional runtime secret:
 
 - `KANAL_ALLOWED_ORIGIN`: mobile-page origin; defaults to `https://toniiv.github.io`.
 
+## Who has to configure it
+
+- The Supabase project operator deploys this Function and sets `KANAL_HOST_TOKEN` once.
+- Every trusted desktop that must host a meeting and generate a join QR receives the Function URL
+  and the same bootstrap token as runtime environment variables.
+- People who only scan a QR configure nothing; their short-lived reader ticket is inside the QR.
+- Someone who pulls the repository can run transcription without relay configuration, but gets no
+  QR. Do not give arbitrary repository users the shared bootstrap token; they should deploy their
+  own gateway, or a future authenticated issuer must mint per-user host credentials.
+
 Deploy with JWT verification disabled because the function performs capability authentication on
 all three routes itself:
 

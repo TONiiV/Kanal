@@ -84,6 +84,8 @@ public class TransportTests
 
         Assert.True(vm.IsRunning);
         Assert.Empty(vm.JoinUrl);
+        Assert.True(vm.HasJoinError);
+        Assert.Contains("QR code", vm.JoinError, StringComparison.OrdinalIgnoreCase);
         await vm.StopCommand.ExecuteAsync(null);
     }
 

@@ -346,6 +346,15 @@
                              TextWrapping="Wrap" AcceptsReturn="True" Margin="0,10,0,0" />
                 </StackPanel>
 
+                <!-- A missing QR is actionable operator state, not empty space. Keep the
+                     technical reason beside the place where the QR should have appeared. -->
+                <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasJoinError}" Margin="0,0,0,22">
+                    <TextBlock Text="{l:T join.label}" Classes="label" />
+                    <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,12" />
+                    <TextBlock Text="{Binding JoinError}" TextWrapping="Wrap"
+                               Foreground="{StaticResource Ink2}" FontSize="12" />
+                </StackPanel>
+
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
                     <TextBlock Text="{l:T merge.label}" Classes="label" />
                     <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
