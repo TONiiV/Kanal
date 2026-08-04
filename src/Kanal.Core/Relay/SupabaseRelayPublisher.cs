@@ -46,7 +46,6 @@ public sealed class SupabaseRelayPublisher : IRelayPublisher
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
         request.Headers.Add("apikey", _apiKey);
-        request.Headers.Add("Authorization", $"Bearer {_apiKey}");
 
         using var response = await _http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)

@@ -34,11 +34,13 @@ public class RelayJsonTests
     [Fact]
     public void RoomMovedCarriesTheNewRoomId()
     {
-        var json = RelayJson.Serialize(new RoomMovedMessage("kanal-093005-x7kq"));
+        var json = RelayJson.Serialize(new RoomMovedMessage("kanal-093005-capability", "new-public-key"));
         var restored = RelayJson.Deserialize(json);
 
         Assert.Contains("\"type\":\"room.moved\"", json);
-        Assert.Equal("kanal-093005-x7kq", Assert.IsType<RoomMovedMessage>(restored).NewRoomId);
+        var moved = Assert.IsType<RoomMovedMessage>(restored);
+        Assert.Equal("kanal-093005-capability", moved.NewRoomId);
+        Assert.Equal("new-public-key", moved.NewVerificationKey);
     }
 
     /// <summary>The client switches on the camelCase name, so the casing is part of the contract.</summary>

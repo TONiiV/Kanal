@@ -1,3 +1,4 @@
+using System.Text;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Relay;
@@ -19,8 +20,19 @@ public class StopFeedbackTests
     {
         public async Task PublishAsync(RelayMessage message, CancellationToken ct = default)
         {
-            if (message is RoomSnapshotMessage)
+            if (Unwrap(message) is RoomSnapshotMessage)
                 await gate;
+        }
+
+        private static RelayMessage Unwrap(RelayMessage message)
+        {
+            if (message is not SignedRelayMessage signed)
+                return message;
+
+            var encoded = signed.Data.Replace('-', '+').Replace('_', '/');
+            encoded = encoded.PadRight(encoded.Length + ((4 - encoded.Length % 4) % 4), '=');
+            return RelayJson.Deserialize(Encoding.UTF8.GetString(Convert.FromBase64String(encoded)))
+                ?? throw new InvalidOperationException("Signed test message had no payload.");
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

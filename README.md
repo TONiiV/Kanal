@@ -13,7 +13,7 @@ See [docs/PRD-v0.3.md](docs/PRD-v0.3.md) for the full requirements (Chinese).
 | `src/Kanal.Providers.Gladia` | Gladia live v2 client: REST session init + `ClientWebSocket` streaming, reconnect with backoff, lenient wire parsing in `GladiaWire`. |
 | `src/Kanal.Host` | Avalonia desktop app: up to 4 language columns, partial-gray/final-black bubbles, speaker rename & merge, markdown export. Demo mode runs without any API key. |
 | `tests/Kanal.Tests` | xUnit: resampler chunk-equivalence, RoomState upsert/merge/stale-translation semantics, orchestrator capability routing, relay JSON round-trips, Gladia wire parsing. |
-| `web/` | Read-only mobile client (single static HTML file). `?demo=1` for a scripted preview; Ably transport wired for `?room=<id>&key=<key>` once the host-side publisher lands (M0-D7). |
+| `web/` | Read-only mobile client (single static HTML file). `?demo=1` opens a scripted preview; real invitations use a URL fragment containing a room capability and an ephemeral verification key. |
 
 ## Run
 
@@ -35,7 +35,7 @@ Modes whose providers are missing stay in the list, disabled, with the reason pr
 
 **Settings** is grouped by the same two stages. *Transcription*: multiple named Gladia keys (stored in `%APPDATA%/Kanal/settings.json`, one active at a time); the `GLADIA_API_KEY` env var (any scope) is the fallback when no stored key exists. *Translation*: which local GGUF model the local-translation modes should load, with download / delete.
 
-**Mobile clients**: on Start, the host publishes every room message to Supabase Realtime (broadcast channel = room id) and shows a **join QR code** encoding the mobile page URL with room + connection params. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog. Endpoint overrides: `KANAL_SUPABASE_URL`, `KANAL_SUPABASE_ANON_KEY`, `KANAL_WEB_URL`.
+**Mobile clients**: on Start, the host generates a 128-bit room capability and an ephemeral P-256 signing key, publishes signed room messages to Supabase Realtime, and shows a **join QR code** containing only the mobile-page URL, capability, and public verification key. The fragment is not sent to the web host. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog. Endpoint overrides: `KANAL_SUPABASE_URL`, `KANAL_SUPABASE_PUBLISHABLE_KEY`, `KANAL_WEB_URL`; `KANAL_SUPABASE_ANON_KEY` remains a compatibility fallback.
 
 ```bash
 dotnet test
@@ -67,7 +67,9 @@ dotnet test
 
 ## Relay notes
 
-The shared Supabase project `muwffgozlmjafsoykqfr` (eu-central-1) carries broadcast-only channels named `kanal-*`; nothing is written to its database. The anon key is public by design (it ships in every join QR). Moving to a dedicated Supabase project = changing `KANAL_SUPABASE_URL`/`KANAL_SUPABASE_ANON_KEY`.
+The built-in Supabase URL and `sb_publishable_...` key are public client configuration, not secrets; never put a secret/service-role key in the app. They no longer travel in invitation URLs. The default project is shared with unrelated workloads, although its public tables currently have RLS enabled, and Kanal itself only uses Realtime broadcast. A dedicated project is still recommended for quota and blast-radius isolation and can be selected with `KANAL_SUPABASE_URL` / `KANAL_SUPABASE_PUBLISHABLE_KEY` (the deployed mobile page must use the same project).
+
+Public Realtime channels remain intentionally account-free. Confidentiality is therefore based on possession of an unguessable room capability, while the ephemeral signature lets clients reject forged or unsigned messages. This is not revocation, authenticated membership, or infrastructure isolation; those require Supabase Auth plus private-channel RLS, or a dedicated relay project.
 
 ## Open decisions / risks
 

@@ -610,13 +610,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
-        var relay = CreateRelay(config.RoomId, relaySettings);
+        var signingKey = RelaySigningKey.Create();
+        var relay = CreateRelay(config.RoomId, relaySettings, signingKey);
 
         // Phones hold the channel they scanned into, so the previous room has to be told
         // where the meeting went — otherwise a restart strands everyone until they rescan.
         if (_relay is not null)
         {
-            await PublishSafeAsync(_relay, new RoomMovedMessage(config.RoomId));
+            await PublishSafeAsync(
+                _relay,
+                new RoomMovedMessage(config.RoomId, signingKey.VerificationKey));
             await _relay.DisposeAsync();
         }
 
@@ -660,7 +663,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (RelayEnabled)
         {
-            ShowJoinInfo(relaySettings.BuildJoinUrl(config.RoomId));
+            ShowJoinInfo(relaySettings.BuildJoinUrl(config.RoomId, signingKey.VerificationKey));
             _snapshotTimer.Start();
         }
 
@@ -788,12 +791,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private IRelayPublisher CreateRelay(string roomId, RelaySettings settings)
+    private IRelayPublisher CreateRelay(
+        string roomId,
+        RelaySettings settings,
+        RelaySigningKey signingKey)
     {
-        if (!RelayEnabled)
-            return new NullRelayPublisher();
-        return RelayPublisherFactory?.Invoke(roomId)
-               ?? new SupabaseRelayPublisher(settings.SupabaseUrl, settings.AnonKey, roomId);
+        var transport = !RelayEnabled
+            ? new NullRelayPublisher()
+            : RelayPublisherFactory?.Invoke(roomId)
+              ?? new SupabaseRelayPublisher(
+                  settings.SupabaseUrl,
+                  settings.PublishableKey,
+                  roomId);
+        return new SignedRelayPublisher(transport, signingKey);
     }
 
     private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)

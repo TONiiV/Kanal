@@ -4,6 +4,32 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-04
+
+### Relay invitations are capabilities and every message is authenticated
+
+- Replaced timestamp-only room names with 128-bit random capabilities and moved invitation data
+  into the URL fragment. QR codes now carry only the room capability and the host's ephemeral
+  P-256 verification key; Supabase project configuration no longer leaks through invitations or
+  browser/server logs.
+- Wrapped every relay payload in an ECDSA/SHA-256 signed envelope. The mobile page imports the
+  verification key from the invitation and rejects unsigned, malformed, tampered, or wrong-key
+  messages before they reach room state. Room rotation is signed by the old key and hands the
+  client the new room capability and verification key atomically.
+- Switched the built-in credential from the legacy anon JWT to Supabase's current
+  `sb_publishable_...` format and stopped sending it as an Authorization bearer token. The public
+  URL/key remain client configuration by design; a secret/service-role key must never ship in the
+  desktop or static web app. `KANAL_SUPABASE_PUBLISHABLE_KEY` is the preferred override, with the
+  old anon-key variable retained only as a compatibility fallback.
+- Audited the connected Supabase project: it is healthy and public tables have RLS enabled, but it
+  is shared with unrelated workloads. This change does not pretend a public, zero-account channel
+  is private membership: possession of the high-entropy room capability provides confidentiality,
+  signatures provide message authenticity, and a dedicated project or Auth + private-channel RLS
+  remains the route to quota isolation, revocation, and authenticated membership.
+- Added regression coverage for room entropy, invitation shape, signature verification and
+  tampering, request headers, room rotation, and parity/security behavior of the two static mobile
+  pages.
+
 ## 2026-08-03
 
 ### Every `{l:T}` string now follows the language switch, and the tables live in JSON
