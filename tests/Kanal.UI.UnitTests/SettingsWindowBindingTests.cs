@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -19,15 +20,15 @@ public class SettingsWindowBindingTests
     [AvaloniaFact]
     public void TheLogPanelBindsToTheChosenLevelAndSize()
     {
-        var window = new SettingsWindow
-        {
-            DataContext = new SettingsViewModel(
-                new AppSettings { LogLevel = LogLevel.Error, LogMaxFileSizeMb = 33 },
-                () => null,
-                isMacOs: false,
-                deviceWatcherFactory: null,
-                openFolder: _ => { }),
-        };
+        // Constructor-injected, not assigned after: setting DataContext afterwards still ran the
+        // production view model first — the developer's real settings file, their real
+        // microphones, and a native hot-plug listener that then outlived the window.
+        var window = new SettingsWindow(new SettingsViewModel(
+            new AppSettings { LogLevel = LogLevel.Error, LogMaxFileSizeMb = 33 },
+            () => null,
+            isMacOs: false,
+            deviceWatcherFactory: null,
+            openFolder: _ => { }));
         window.Show();
 
         var levels = window.GetLogicalDescendants().OfType<ComboBox>()
@@ -39,6 +40,10 @@ public class SettingsWindowBindingTests
         var size = Assert.Single(window.GetLogicalDescendants().OfType<NumericUpDown>());
         Assert.Equal(33m, size.Value);
         Assert.Equal(SettingsStore.MaxLogMaxFileSizeMb, size.Maximum);
+        // Without this the control *rejects* an out-of-range entry instead of clamping it, and
+        // leaves the typed number in the box: the operator types 2000, sees 2000, saves, and the
+        // file keeps the old value with nothing said.
+        Assert.True(size.ClipValueToMinMax);
 
         window.Close();
     }
@@ -46,10 +51,8 @@ public class SettingsWindowBindingTests
     [AvaloniaFact]
     public void EveryOpenSourceNoticeIsOnScreen()
     {
-        var window = new SettingsWindow
-        {
-            DataContext = new SettingsViewModel(new AppSettings(), () => null, openFolder: _ => { }),
-        };
+        var window = new SettingsWindow(
+            new SettingsViewModel(new AppSettings(), () => null, openFolder: _ => { }));
         window.Show();
 
         var rendered = window.GetLogicalDescendants().OfType<TextBlock>()
@@ -73,5 +76,28 @@ public class SettingsWindowBindingTests
         Assert.Contains(Changelog.Releases[0].Changes[0], rendered);
 
         window.Close();
+    }
+
+    /// <summary>
+    /// The date beside a version is a build identifier, so it is ISO everywhere. Formatted against
+    /// the ambient culture it followed the operator's calendar — a Thai or Umm al-Qura locale
+    /// printed a year that matches nothing in the repository.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheChangelogDateIsTheSameInEveryCalendar()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("th-TH");
+            var entry = new ChangelogEntryViewModel(
+                new ChangelogRelease("9.9.9", new DateOnly(2026, 8, 4), ["something"]));
+
+            Assert.Equal("2026-08-04", entry.Date);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 }

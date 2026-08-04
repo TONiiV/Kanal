@@ -12,7 +12,9 @@
         Background="{StaticResource Sheet}">
 
     <DockPanel Margin="26,20,26,18">
-        <Button DockPanel.Dock="Bottom" Content="{l:T changelog.close}" Classes="accent"
+        <!-- Not accent: in this host accent marks the committing action, and there is nothing to
+             commit here. -->
+        <Button DockPanel.Dock="Bottom" Content="{l:T changelog.close}"
                 HorizontalAlignment="Right" Margin="0,16,0,0" Click="OnCloseClick" />
 
         <TextBlock DockPanel.Dock="Top" Text="{Binding CurrentVersion}" Classes="label" />

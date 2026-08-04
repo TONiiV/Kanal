@@ -411,7 +411,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     private readonly Action<string> _openFolder;
 
-    /// <summary>Quietest first, so the list reads as a dial from "everything" to "only failures".</summary>
+    /// <summary>A dial, most detail first: from "everything" down to "only failures".</summary>
     public IReadOnlyList<LogLevelOption> LogLevels { get; } =
     [
         new(CoreLogLevel.Debug),
@@ -424,9 +424,13 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private LogLevelOption? _logLevel;
 
-    /// <summary>Megabytes a log file may reach before it is rolled over.</summary>
+    /// <summary>
+    /// Megabytes a log file may reach before it is rolled over. Nullable to match the spin box,
+    /// which empties to null when its text is cleared — a blank box is "whatever the default is",
+    /// not a silently kept stale number.
+    /// </summary>
     [ObservableProperty]
-    private int _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
+    private decimal? _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
 
     public int LogMinSizeMb => SettingsStore.MinLogMaxFileSizeMb;
 
@@ -538,11 +542,18 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    public void Save()
+    /// <summary>
+    /// Writes the edited state to disk and hands it back. The caller needs the object rather than
+    /// re-reading the file: a settings file locked for the instant between the write and the read
+    /// comes back as blank defaults, and the level the operator just chose reverts with nothing on
+    /// screen saying so.
+    /// </summary>
+    public AppSettings Save()
     {
         var settings = SettingsStore.Load();
         ApplyTo(settings);
         SettingsStore.Save(settings);
+        return settings;
     }
 
     /// <summary>Write the edited state onto <paramref name="settings"/> (separated from disk IO for tests).</summary>
@@ -560,7 +571,9 @@ public partial class SettingsViewModel : ViewModelBase
         settings.RecordAudio = RecordAudio;
         settings.AppLanguage = AppLanguage?.Code;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
-        settings.LogMaxFileSizeMb = LogMaxFileSizeMb;
+        settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
+            ? AppSettings.DefaultLogMaxFileSizeMb
+            : (int)Math.Round(LogMaxFileSizeMb.Value);
     }
 
     /// <summary>Whitespace is stored as "unset", so the resolver's fallback is the only default.</summary>

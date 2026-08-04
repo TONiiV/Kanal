@@ -26,7 +26,7 @@ build reports, and a test holds the two together.
   Settings.
 - This changelog, readable from Settings.
 
-## 0.3.0 — 2026-08-04
+## 0.3.0 — 2026-08-03
 
 - The host chrome speaks English, Chinese, German and Polish, and switching takes effect on the
   windows that are already open.
@@ -57,6 +57,6 @@ build reports, and a test holds the two together.
 
 ## 0.1.0 — 2026-07-30
 
-- First working host: Avalonia desktop capture, a pluggable ASR/MT chain behind capability-driven
-  orchestration, a Gladia streaming client, the Supabase relay, and a read-only mobile page reached
-  by scanning the join QR code.
+- First working host: desktop capture, a pluggable transcription/translation chain behind
+  capability-driven orchestration, a streaming cloud transcription client, the broadcast relay, and
+  a read-only mobile page reached by scanning the join QR code.

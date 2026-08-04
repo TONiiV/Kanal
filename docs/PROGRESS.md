@@ -21,9 +21,9 @@ overwrote. Three things that belong to a tool people other than its author run n
   executable is one more thing that can go missing from a published build.
 - **One file a day, rolled over at a size the operator sets.** `%APPDATA%/Kanal/logs/kanal-<date>.log`
   keeps a stable name all day so "send me today's log" names one file; rollovers are numbered beside
-  it, capped at 20 a day and 14 days. The size box takes any number of megabytes, which means it also
-  takes 0 and -1 — `ResolveLogMaxFileSizeMb` clamps to 1–1024, because a threshold of zero rolls over
-  on every line.
+  it and kept 14 days. The dialog's box is bounded at 1–1024 MB and `ResolveLogMaxFileSizeMb` clamps
+  to the same range for the hand-edited settings file, where 0 is reachable — and a threshold of
+  zero rolls the file over on every line.
 - **What actually gets logged.** Startup with the version and OS, unhandled and unobserved
   exceptions, rooms opening and closing with their mode and languages, a refused Start, a translation
   model that will not load, relay publishes that fail, capture that stops under a live room, a
@@ -32,11 +32,15 @@ overwrote. Three things that belong to a tool people other than its author run n
 - **One click to the folder.** The person who has to send a log is on a call, mid-meeting, and will
   not be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
   platform branching, injected into `SettingsViewModel` so a headless test never launches Explorer.
-- **The open-source list, at the bottom of Settings.** An obligation before it is a feature: the MIT
-  and BSD licences Kanal is assembled from require their notice to travel with the binary, and the
-  people running this in a meeting are the ones handing that binary around. Each notice carries the
-  NuGet ids it covers, and a test parses every `src/**.csproj` in both directions — a package added
-  without a credit fails, and a credit left behind after a package is dropped fails too.
+- **The open-source list, at the bottom of Settings.** An obligation before it is a feature: the
+  licences Kanal is assembled from require their notice to travel with the binary, and the people
+  running this in a meeting are the ones handing that binary around. Each notice carries the NuGet
+  ids it covers, and a test reads every shipped project file — `src/`, `tools/` and the root
+  `Directory.Build.props` — as XML, in both directions: a package added without a credit fails, and
+  a credit left behind after a package is dropped fails too. What that test *cannot* see is
+  listed by hand and marked as such: code arriving inside another package (Skia, llama.cpp) and
+  OpenCC's conversion table, which is compiled into `Kanal.Core` and carries the one licence here
+  that spells out that its notice travels with the work.
 - **A changelog, readable in the room.** `CHANGELOG.md` is embedded in the executable and parsed for
   a dialog behind Settings → Version; the laptop running a meeting is not the machine anybody browses
   a repository on. The file stays plain Markdown rather than becoming a format only the parser
@@ -44,9 +48,64 @@ overwrote. Three things that belong to a tool people other than its author run n
   "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
   entries were reconstructed from the history.
 
-42 new tests (289 → 331), including headless loads of both dialogs — the bindings are reflection-based,
-so a mistyped path or a value that will not convert to the control's type fails at runtime with an
-empty control rather than at build time. No assertions about pixels, layout or style.
+64 new tests (299 → 363), including headless loads of both dialogs — the bindings are
+reflection-based, so a mistyped path or a value that will not convert to the control's type fails at
+runtime with an empty control rather than at build time. No assertions about pixels, layout or style.
+
+### What three review passes over the above found, and what changed
+
+Reviewed by three agents — one on the logging layer, one on the UI and the four language tables, one
+on the tests and the repo's own rules. Everything below was reproduced before it was fixed; the
+fixes are in this same branch.
+
+- **Saving Settings mid-meeting destroyed a block of the log.** `Apply` handed NLog a second
+  `FileTarget` over the file the first one still held open; the new one opened at a stale offset and
+  overwrote a buffer's worth of what had already been flushed — measured at ~3,000 lines under load,
+  at the exact moment an operator turns Debug on because something is going wrong. The target is now
+  updated in place (`ReconfigExistingLoggers`), which measures at zero lines lost.
+- **The changelog dialog showed half-sentences.** The bullet parser kept only the first physical
+  line, and every entry in the file is hard-wrapped, so 18 of 22 entries stopped mid-clause —
+  "…kept for two weeks and never". Wrapped lines now fold into their bullet, and a test asserts every
+  shipped entry ends as a whole sentence.
+- **A hand-edited log level cost the operator their API key.** Anything but the four exact names
+  threw, `Load` caught it and started fresh, and the next Save wrote the defaults over the file —
+  "Warn" being the obvious thing to type. A forgiving converter now costs one wrong level and
+  nothing else.
+- **"Kept 14 days" was false.** NLog's file-count cap counts across dates, not per day, so 20
+  archives at the smallest rollover size cut two weeks to hours. Age is now the only cap.
+- **`{#}` in the archive name was NLog 5 syntax**, silently dropped by 6 — the naming the comment
+  described was fiction that happened to match the default.
+- **`Shutdown()` in `Main`'s `finally` swallowed the teardown lines**, which are the ones explaining
+  a crash on the way out. It flushes now.
+- **The size box rejected out-of-range entries instead of clamping them** and left the typed number
+  on screen: type 2000, see 2000, save, get 10. `ClipValueToMinMax`, and a cleared box now means the
+  default rather than a silently kept stale value.
+- **Debug was a level that did nothing** — no call site in the host wrote one. Capture open, frames
+  counted, snapshots published now do, and a test fails if Debug stops carrying anything Info does not.
+- **German called the log folder "Protokollordner"**, which is what this same window already calls
+  the *transcript* folder — an operator asked to send a log would have opened the meeting
+  transcripts. Now "Logdateien" / "Log-Ordner", and "Rotation" rather than "Umbruch", which is a
+  typographic line break.
+- **The licence guard passed on uncredited packages**: its regex needed `Include` to be the first
+  attribute and double-quoted, and it never looked at `tools/` or `Directory.Build.props`. It also
+  reported a still-shipping package as stale when the attributes were merely reordered. It reads XML
+  now, and the list gained ten components that genuinely ship — including OpenCC's Apache-2.0 table.
+- **Two window tests ran the production view model** before replacing its `DataContext`, reading the
+  developer's real settings and registering a native hot-plug listener that outlived the window —
+  the exact thing `SettingsViewModel` documents as forbidden. The window now takes its view model as
+  a constructor argument.
+- **Nothing tested that any of this was written down.** Five tests now drive the real view model and
+  read the sink: a room opening and closing, a refused Start, an export that cannot be written, that
+  Debug carries something, and that nothing said in the room — and no key — ever reaches the file.
+- Smaller: the changelog date is invariant rather than the operator's calendar; the changelog dialog
+  is guarded against naming a vendor, like every other surface; error text from a provider or the
+  gateway is bounded before it is logged; the relay failing to set up is logged at all; `Log`'s sink
+  field is `volatile`; the Close button no longer wears the accent reserved for committing actions;
+  and 0.3.0's changelog entry carries the date its work actually landed.
+
+One thing was left undone deliberately: the changelog's prose is English on every language setting.
+Translating release notes into four languages is a standing cost on every release, not a bug fix,
+and it is the operator's call whether it is worth it.
 
 ### Kanal traffic is behind an authenticated gateway
 

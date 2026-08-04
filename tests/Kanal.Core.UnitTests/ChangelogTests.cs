@@ -54,6 +54,50 @@ public class ChangelogTests
         Assert.DoesNotContain(releases, r => r.Changes.Any(c => c.Contains("preamble")));
     }
 
+    /// <summary>
+    /// Every entry in the shipped file is hard-wrapped, because it is a Markdown file people read
+    /// in a diff. A parser that keeps only the first physical line puts half-sentences on screen —
+    /// "…kept for two weeks and never" — which is worse than showing nothing.
+    /// </summary>
+    [Fact]
+    public void AWrappedBulletKeepsTheWholeSentence()
+    {
+        var releases = Changelog.Parse("""
+            ## 0.6.0 — 2026-08-04
+
+            - One sentence that runs past the column limit and therefore
+              continues on the next line, and then
+              on a third.
+            - A short one.
+            """);
+
+        Assert.Equal(
+            [
+                "One sentence that runs past the column limit and therefore continues on the next line, and then on a third.",
+                "A short one.",
+            ],
+            releases[0].Changes);
+    }
+
+    /// <summary>A wrapped line is not a new entry, and it is not part of the next release either.</summary>
+    [Fact]
+    public void AContinuationLineDoesNotLeakIntoTheNextRelease()
+    {
+        var releases = Changelog.Parse("""
+            ## 0.6.0 — 2026-08-04
+
+            - Something that wraps
+              onto a second line.
+
+            ## 0.5.0 — 2026-08-01
+
+            - Something else.
+            """);
+
+        Assert.Equal(["Something that wraps onto a second line."], releases[0].Changes);
+        Assert.Equal(["Something else."], releases[1].Changes);
+    }
+
     [Fact]
     public void AVersionWithoutADateStillParses()
     {
@@ -86,6 +130,37 @@ public class ChangelogTests
 
         var versions = Changelog.Releases.Select(r => r.Version).ToList();
         Assert.Equal(versions.Count, versions.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The guard against the parser quietly cutting the file up: every line the dialog shows is a
+    /// finished sentence. A truncated entry is easy to miss in a test that only counts entries and
+    /// impossible to miss on screen.
+    /// </summary>
+    [Fact]
+    public void EveryShippedChangeIsAWholeSentence()
+    {
+        foreach (var release in Changelog.Releases)
+        foreach (var change in release.Changes)
+            Assert.True(change.EndsWith('.'), $"{release.Version}: \"{change}\" stops mid-sentence.");
+    }
+
+    /// <summary>
+    /// The changelog is a screen in the host like any other, so the unbranded rule reaches it:
+    /// the dialog must not be where a vendor's name turns up after being kept off every label.
+    /// </summary>
+    [Fact]
+    public void NoReleaseNamesAVendor()
+    {
+        string[] vendors =
+            ["Gladia", "Whisper", "DeepL", "Google", "OpenAI", "Claude", "Anthropic", "Qwen", "Gemma", "Supabase"];
+
+        foreach (var release in Changelog.Releases)
+        foreach (var change in release.Changes)
+        foreach (var vendor in vendors)
+            Assert.False(
+                change.Contains(vendor, StringComparison.OrdinalIgnoreCase),
+                $"{release.Version} names {vendor}.");
     }
 
     /// <summary>

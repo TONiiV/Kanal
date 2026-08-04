@@ -233,9 +233,13 @@
                     </ComboBox>
                     <TextBlock Grid.Column="2" Text="{l:T settings.logs.size}" Classes="label"
                                VerticalAlignment="Center" Margin="18,0,10,0" />
+                    <!-- ClipValueToMinMax, or the control *rejects* an out-of-range entry instead
+                         of clamping it and leaves the typed number sitting in the box: the
+                         operator types 2000, sees 2000, saves, and the file keeps the old value
+                         with nothing said. -->
                     <NumericUpDown Grid.Column="3" Value="{Binding LogMaxFileSizeMb}"
                                    Minimum="{Binding LogMinSizeMb}" Maximum="{Binding LogMaxSizeMb}"
-                                   Increment="1" FormatString="0" />
+                                   ClipValueToMinMax="True" Increment="1" FormatString="0" />
                 </Grid>
 
                 <StackPanel Orientation="Horizontal" Spacing="12">

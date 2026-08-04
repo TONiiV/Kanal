@@ -643,6 +643,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 null,
                 null,
                 ex.Message);
+            // "The QR code doesn't work" is the likeliest call this tool will ever generate, and
+            // the warning it produces on screen is gone the moment the next status line lands.
+            Log.Warning(RelayLog, "The relay could not be set up; the room is running without a QR code.", ex);
         }
         var relay = relayConnection.Publisher;
 
@@ -673,7 +676,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // Logged off the dispatcher: a fatal error that stops the room must be on disk even
             // if the UI thread never gets round to showing it.
             Log.Write(
-                e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, e.Message, error: null);
+                e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
             Dispatcher.UIThread.Post(() =>
                 Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
         };
@@ -823,7 +826,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             if (_session is not null)
+            {
                 await _session.PublishSnapshotAsync();
+                // Every 15 s while a room is open: a phone that shows nothing is either not
+                // receiving these or not rendering them, and the file settles which.
+                Log.Debug(RelayLog, "Snapshot published.");
+            }
         }
         catch (Exception ex)
         {
@@ -863,6 +871,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const string RoomLog = "room";
     private const string RelayLog = "relay";
     private const string AudioLog = "audio";
+
+    /// <summary>
+    /// Caps a message the host did not write. A provider's or a gateway's error text is passed
+    /// through verbatim and can carry a whole rejected payload — which is a log line the length of
+    /// a meeting, and, since the payload is what was said in the room, more of it on disk than the
+    /// failure needs.
+    /// </summary>
+    private static string Bounded(string message) =>
+        message.Length <= 300 ? message : message[..300] + "…";
 
     private async Task<RelayConnection> CreateRelayAsync(
         string roomId,
@@ -914,12 +931,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        Log.Debug(AudioLog, $"Capture opened on {deviceId ?? "the default device"}.");
+
         try
         {
             var framesSinceMeter = 0;
+            var frames = 0L;
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
                 await session.PushAudioAsync(frame, ct);
+
+                // A count, never a sample: the point of the Debug level is answering "was audio
+                // still arriving at 14:32", which is the question a silent transcript raises.
+                if (++frames % 500 == 0)
+                    Log.Debug(AudioLog, $"{frames} frames captured.");
 
                 // input level meter ~4×/s — "is the mic alive" must be visible at a glance
                 if (++framesSinceMeter >= 3)

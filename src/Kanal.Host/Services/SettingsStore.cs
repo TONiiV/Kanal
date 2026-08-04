@@ -10,6 +10,44 @@ namespace Kanal.Host.Services;
 
 public sealed record ApiKeyEntry(string Name, string Provider, string Key);
 
+/// <summary>
+/// Reads the log level by name, and falls back to Info for anything it does not recognise.
+/// </summary>
+/// <remarks>
+/// Deliberately forgiving, unlike the rest of the file. The stock string-enum converter throws on
+/// anything but the four exact names — and "Warn" is what a hand types for Warning. The throw was
+/// caught by <see cref="SettingsStore.Load"/>, which starts fresh on a corrupt file, and the next
+/// Save wrote those defaults back: one typo in a level cost the operator their stored API key,
+/// their folders and their language, with nothing on screen. A level nobody can read is worth
+/// exactly one wrong level.
+/// </remarks>
+public sealed class LogLevelConverter : JsonConverter<LogLevel>
+{
+    public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.String:
+                return Enum.TryParse<LogLevel>(reader.GetString(), ignoreCase: true, out var byName)
+                       && Enum.IsDefined(byName)
+                    ? byName
+                    : LogLevel.Info;
+            case JsonTokenType.Number:
+                return reader.TryGetInt32(out var ordinal) && Enum.IsDefined((LogLevel)ordinal)
+                    ? (LogLevel)ordinal
+                    : LogLevel.Info;
+            case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                reader.Skip(); // whatever this is, it is not a level — step over it intact
+                return LogLevel.Info;
+            default:
+                return LogLevel.Info;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, LogLevel value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
+}
+
 public sealed class AppSettings
 {
     public List<ApiKeyEntry> ApiKeys { get; set; } = new();
@@ -49,7 +87,7 @@ public sealed class AppSettings
     /// the frame-by-frame chatter that only helps when reproducing a fault. Written as a word
     /// rather than an ordinal: this file gets edited by hand, and "3" for Error is a trap.
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter<LogLevel>))]
+    [JsonConverter(typeof(LogLevelConverter))]
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
 
     /// <summary>
@@ -71,7 +109,13 @@ public static class SettingsStore
 {
     public const string GladiaEnvVar = "GLADIA_API_KEY";
 
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        // Same reasoning as the level converter: this file is edited by hand, and a quoted number
+        // is not a reason to discard everything else in it.
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
 
     public static string SettingsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "settings.json");
@@ -112,9 +156,9 @@ public static class SettingsStore
     public const int MaxLogMaxFileSizeMb = 1024;
 
     /// <summary>
-    /// The size box takes any number of megabytes, which means it also takes 0 and -1. A
-    /// threshold of zero rolls the file over on every line; the clamp is what stands between a
-    /// typo and ten thousand files.
+    /// The last word on the rollover threshold. The dialog's box is bounded, so this catches the
+    /// hand-edited settings file — where 0 is reachable, and a threshold of zero rolls the file
+    /// over on every line.
     /// </summary>
     public static int ResolveLogMaxFileSizeMb(AppSettings settings) =>
         Math.Clamp(settings.LogMaxFileSizeMb, MinLogMaxFileSizeMb, MaxLogMaxFileSizeMb);

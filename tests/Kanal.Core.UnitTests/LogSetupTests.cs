@@ -63,6 +63,38 @@ public class LogSettingsTests
 
         Assert.Equal(expected, SettingsStore.ResolveLogMaxFileSizeMb(settings));
     }
+
+    /// <summary>
+    /// The doc comment invites hand-editing, and "Warn" is what a hand types for Warning. Anything
+    /// but the four exact names threw, <see cref="SettingsStore.Load"/> caught it and started
+    /// fresh, and the next Save wrote those defaults over the file — so one typo in a level cost
+    /// the operator their stored API key, folders and language, with nothing on screen.
+    /// </summary>
+    [Theory]
+    [InlineData("\"Warn\"")]
+    [InlineData("\"verbose\"")]
+    [InlineData("null")]
+    [InlineData("42")]
+    public void AnUnreadableLevelCostsTheLevelAndNothingElse(string written)
+    {
+        var loaded = JsonSerializer.Deserialize<AppSettings>(
+            $$"""{"ApiKeys":[{"Name":"prod","Provider":"gladia","Key":"secret"}],"LogLevel":{{written}}}""")!;
+
+        Assert.Equal(LogLevel.Info, loaded.LogLevel);
+        Assert.Equal("secret", Assert.Single(loaded.ApiKeys).Key);
+    }
+
+    /// <summary>The four names it does understand still round-trip, in any casing.</summary>
+    [Theory]
+    [InlineData("\"Debug\"", LogLevel.Debug)]
+    [InlineData("\"warning\"", LogLevel.Warning)]
+    [InlineData("\"ERROR\"", LogLevel.Error)]
+    public void TheFourNamesAreRead(string written, LogLevel expected)
+    {
+        var loaded = JsonSerializer.Deserialize<AppSettings>($$"""{"LogLevel":{{written}}}""")!;
+
+        Assert.Equal(expected, loaded.LogLevel);
+    }
 }
 
 /// <summary>
@@ -101,8 +133,33 @@ public class LogSetupTests
     {
         var target = Target(new AppSettings(), "/logs");
 
-        Assert.True(target.MaxArchiveFiles > 0);
-        Assert.True(target.MaxArchiveDays > 0);
+        Assert.Equal(LogSetup.RetentionDays, target.MaxArchiveDays);
+    }
+
+    /// <summary>
+    /// NLog's file-count cap counts every file matching the pattern, across dates — not per day, as
+    /// its name suggests. Set alongside a day-based retention it wins, and a busy meeting at the
+    /// smallest rollover size silently cuts the two weeks the settings panel promises down to hours.
+    /// The promise on screen is the one that has to hold.
+    /// </summary>
+    [Fact]
+    public void TheRetentionPromiseIsNotUndercutByAFileCount()
+    {
+        var target = Target(new AppSettings { LogMaxFileSizeMb = 1 }, "/logs");
+
+        Assert.True(target.MaxArchiveFiles <= 0, "a file-count cap would undercut the promised days");
+    }
+
+    /// <summary>
+    /// `{#}` is NLog 5's archive placeholder. NLog 6 strips it instead of substituting it, so a
+    /// name written with one describes files that never appear.
+    /// </summary>
+    [Fact]
+    public void TheArchiveNameCarriesNoPlaceholderTheLoggerWillNotSubstitute()
+    {
+        var target = Target(new AppSettings(), "/logs");
+
+        Assert.DoesNotContain("{#}", target.ArchiveFileName.ToString());
     }
 
     [Theory]
@@ -196,6 +253,70 @@ public class LogSetupTests
             var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
             Assert.DoesNotContain("chatter nobody asked for", written);
             Assert.Contains("worth keeping", written);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    /// <summary>
+    /// Changing the level mid-meeting must not cost the lines already written. Handing NLog a
+    /// second <c>FileTarget</c> over the same open file did exactly that: the new target opened at
+    /// a stale offset and overwrote a buffer's worth of what the old one had flushed — thousands of
+    /// lines, at the one moment the operator turned Debug on because something was going wrong.
+    /// </summary>
+    [Fact]
+    public void ChangingTheLevelKeepsTheLinesAlreadyWritten()
+    {
+        var directory = TempDirectory();
+        try
+        {
+            using var scope = LogSetup.InstallFor(directory, new AppSettings { LogLevel = LogLevel.Info });
+            var before = NLog.LogManager.Configuration!.FindTargetByName(LogSetup.TargetName);
+
+            for (var i = 0; i < 500; i++)
+                Log.Info("test", $"before {i:D4}");
+
+            LogSetup.ApplyTo(directory, new AppSettings { LogLevel = LogLevel.Debug, LogMaxFileSizeMb = 7 });
+            Log.Debug("test", "after the change");
+            scope.Flush();
+
+            // the same file, still open by the same target — not a second handle at a stale offset
+            Assert.Same(before, NLog.LogManager.Configuration!.FindTargetByName(LogSetup.TargetName));
+
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            for (var i = 0; i < 500; i++)
+                Assert.Contains($"before {i:D4}", written);
+            Assert.Contains("after the change", written);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    /// <summary>
+    /// Flushing is not closing. The host flushes on its way out, but a capture loop or a session
+    /// still unwinding writes after that — and those lines are the ones explaining why it is on its
+    /// way out. Shutting NLog down there swallowed them silently.
+    /// </summary>
+    [Fact]
+    public void LinesWrittenAfterTheFinalFlushStillLand()
+    {
+        var directory = TempDirectory();
+        try
+        {
+            using var scope = LogSetup.InstallFor(directory, new AppSettings());
+
+            Log.Info("test", "on the way out");
+            LogSetup.Flush();
+            Log.Error("test", "and the reason why", new InvalidOperationException("teardown"));
+            scope.Flush();
+
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            Assert.Contains("and the reason why", written);
+            Assert.Contains("teardown", written);
         }
         finally
         {

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -10,8 +11,13 @@ public sealed class ChangelogEntryViewModel(ChangelogRelease release)
 {
     public string Version { get; } = release.Version;
 
-    /// <summary>ISO, not a localised date: it is a build identifier, read beside a version number.</summary>
-    public string Date { get; } = release.Date?.ToString("yyyy-MM-dd") ?? "";
+    /// <summary>
+    /// ISO, not a localised date: it is a build identifier, read beside a version number. Invariant
+    /// on purpose — against the ambient culture this followed the operator's calendar, and a Thai
+    /// or Umm al-Qura locale printed a year that matches nothing in the repository.
+    /// </summary>
+    public string Date { get; } =
+        release.Date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
 
     public IReadOnlyList<string> Changes { get; } = release.Changes;
 }

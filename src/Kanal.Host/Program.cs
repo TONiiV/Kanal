@@ -36,7 +36,9 @@ sealed class Program
         }
         finally
         {
-            LogSetup.Shutdown();
+            // Flushed, not shut down: the capture loop and the session are still unwinding behind
+            // this, and the lines they are about to write are the ones explaining why.
+            LogSetup.Flush();
         }
     }
 

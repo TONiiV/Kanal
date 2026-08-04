@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Kanal.Host.Services;
 
 namespace Kanal.Core.UnitTests;
@@ -55,6 +55,21 @@ public class OpenSourceNoticeTests
             $"Not named in Settings' open-source list: {string.Join(", ", missing)}");
     }
 
+    /// <summary>
+    /// The obligation a package scan cannot see: OpenCC's conversion table is compiled into
+    /// <c>Kanal.Core</c> as an embedded resource, and Apache-2.0 is the one licence here that
+    /// spells out that its notice travels with the work.
+    /// </summary>
+    [Fact]
+    public void TheEmbeddedConversionTableIsCredited()
+    {
+        var table = Path.Combine(RepoRoot(), "src", "Kanal.Core", "Text", "TSCharacters.txt");
+        Assert.True(File.Exists(table), "the table moved — this guard has to move with it");
+
+        var notice = Assert.Single(OpenSourceNotices.All.Where(n => n.Name == "OpenCC"));
+        Assert.Equal("Apache-2.0", notice.License);
+    }
+
     /// <summary>And the reverse: a package dropped from the build must not linger in the list.</summary>
     [Fact]
     public void NothingIsCreditedThatIsNoLongerBuiltIn()
@@ -72,12 +87,40 @@ public class OpenSourceNoticeTests
         Assert.True(stale.Count == 0, $"No longer referenced: {string.Join(", ", stale)}");
     }
 
-    private static IEnumerable<string> ShippedProjects() =>
-        Directory.GetFiles(Path.Combine(RepoRoot(), "src"), "*.csproj", SearchOption.AllDirectories);
+    /// <summary>
+    /// Everything whose packages end up in what an operator is handed: the host and the libraries
+    /// it references, the diagnostic tool that ships beside them, and the props file that injects
+    /// references into all of them at once. Not the test projects — those are not distributed.
+    /// </summary>
+    private static IEnumerable<string> ShippedProjects()
+    {
+        var root = RepoRoot();
+        foreach (var project in Directory.GetFiles(
+                     Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories))
+            yield return project;
+        foreach (var project in Directory.GetFiles(
+                     Path.Combine(root, "tools"), "*.csproj", SearchOption.AllDirectories))
+            yield return project;
 
-    private static IEnumerable<string> PackageIds(string csproj) =>
-        Regex.Matches(File.ReadAllText(csproj), "<PackageReference\\s+Include=\"([^\"]+)\"")
-            .Select(m => m.Groups[1].Value);
+        var props = Path.Combine(root, "Directory.Build.props");
+        if (File.Exists(props))
+            yield return props;
+    }
+
+    /// <summary>
+    /// Read as XML, not scanned with a regex. A pattern anchored on <c>Include</c> being the first
+    /// attribute misses <c>&lt;PackageReference Version="…" Include="…" /&gt;</c> and
+    /// single-quoted attributes — both valid MSBuild, both what a format-on-save or a dependency
+    /// bot produces — so an uncredited package sailed through, and merely reordering the
+    /// attributes on a package still being shipped reported it as stale.
+    /// </summary>
+    private static IEnumerable<string> PackageIds(string projectFile) =>
+        XDocument.Load(projectFile)
+            .Descendants()
+            .Where(e => e.Name.LocalName == "PackageReference")
+            .Select(e => (string?)e.Attribute("Include") ?? (string?)e.Attribute("Update"))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!.Trim());
 
     /// <summary>Walks up from the test binary until the solution file turns up.</summary>
     private static string RepoRoot()

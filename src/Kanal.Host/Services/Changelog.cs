@@ -34,6 +34,7 @@ public static partial class Changelog
         string? version = null;
         DateOnly? date = null;
         var changes = new List<string>();
+        var open = false; // is the last bullet still taking wrapped lines?
 
         void Flush()
         {
@@ -62,7 +63,21 @@ public static partial class Changelog
                 continue;
 
             if (Bullet().Match(line) is { Success: true } bullet)
+            {
                 changes.Add(bullet.Groups["text"].Value.Trim());
+                open = true;
+                continue;
+            }
+
+            // An indented line under an open bullet is that bullet, wrapped. The file is written
+            // to be read in a diff, so every entry is hard-wrapped — taking only the first
+            // physical line put half-sentences on screen, which is worse than showing nothing.
+            // A blank line closes the bullet, so a paragraph that follows one is not swallowed
+            // into it.
+            if (open && changes.Count > 0 && Continuation().IsMatch(line))
+                changes[^1] = $"{changes[^1]} {line.Trim()}";
+            else
+                open = false;
         }
 
         Flush();
@@ -85,4 +100,8 @@ public static partial class Changelog
 
     [GeneratedRegex(@"^\s{0,3}[-*]\s+(?<text>.+)$")]
     private static partial Regex Bullet();
+
+    /// <summary>An indented line that is not itself a bullet: the previous bullet, wrapped.</summary>
+    [GeneratedRegex(@"^\s+\S")]
+    private static partial Regex Continuation();
 }

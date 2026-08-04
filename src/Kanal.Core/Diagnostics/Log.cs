@@ -40,7 +40,12 @@ public interface ILogSink
 /// </remarks>
 public static class Log
 {
-    private static ILogSink? _sink;
+    /// <summary>
+    /// Volatile: installed from the UI thread, read from capture, COM and dispatcher threads.
+    /// Nothing in the memory model otherwise requires a logging thread to notice a sink that was
+    /// installed after it started.
+    /// </summary>
+    private static volatile ILogSink? _sink;
 
     /// <summary>The installed sink, or null while nothing is listening. Restore-friendly for tests.</summary>
     public static ILogSink? Sink => _sink;

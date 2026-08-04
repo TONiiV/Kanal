@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Kanal.Core.Diagnostics;
 using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -13,9 +14,20 @@ namespace Kanal.Host.Views;
 public partial class SettingsWindow : Window
 {
     public SettingsWindow()
+        : this(new SettingsViewModel())
+    {
+    }
+
+    /// <summary>
+    /// The view model is built by the caller so a test can hand in a hermetic one. Setting
+    /// <c>DataContext</c> after construction did not: the parameterless view model had already
+    /// read the developer's real settings file, enumerated their microphones and registered a
+    /// native hot-plug listener that then outlived the window.
+    /// </summary>
+    public SettingsWindow(SettingsViewModel viewModel)
     {
         InitializeComponent();
-        DataContext = new SettingsViewModel();
+        DataContext = viewModel;
     }
 
     private async void OnBrowseTranscriptsClick(object? sender, RoutedEventArgs e)
@@ -57,17 +69,38 @@ public partial class SettingsWindow : Window
         }
     }
 
+    /// <summary>Guards against a second dialog while one is open — the button stays clickable.</summary>
+    private bool _changelogOpen;
+
     private async void OnChangelogClick(object? sender, RoutedEventArgs e)
     {
-        await new ChangelogWindow().ShowDialog(this);
+        if (_changelogOpen)
+            return;
+
+        _changelogOpen = true;
+        try
+        {
+            await new ChangelogWindow().ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            // async void: an exception escaping here takes the host down mid-meeting rather than
+            // losing a dialog nobody needs. Same hardening as the folder pickers above.
+            Log.Warning("settings", "The changelog window did not open.", ex);
+        }
+        finally
+        {
+            _changelogOpen = false;
+        }
     }
 
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
-        (DataContext as SettingsViewModel)?.Save();
         // The level and the size the operator just chose apply to the next line written, not to
         // the next launch: the reason someone turns Debug on is that something is going wrong now.
-        LogSetup.Apply(SettingsStore.Load());
+        // Applied from what Save returned rather than by re-reading the file — see Save.
+        if ((DataContext as SettingsViewModel)?.Save() is { } saved)
+            LogSetup.Apply(saved);
         Close();
     }
 
