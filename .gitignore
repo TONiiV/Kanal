@@ -12,6 +12,10 @@ artifacts/
 appsettings.local.json
 .env
 
+# gateway (Cloudflare Worker) toolchain
+node_modules/
+gateway/.wrangler/
+
 # git worktrees (CLAUDE.md workflow)
 .worktrees/
 

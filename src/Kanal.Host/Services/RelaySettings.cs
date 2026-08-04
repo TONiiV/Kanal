@@ -3,9 +3,10 @@ using System;
 namespace Kanal.Host.Services;
 
 /// <summary>
-/// Public gateway/mobile endpoints plus the host bootstrap capability. Neither the repository
-/// nor a built client contains Supabase configuration; the operator provisions these two relay
-/// values outside the build and the QR carries only a short-lived reader ticket.
+/// Public gateway/mobile endpoints plus this desktop's device credential (obtained once with an
+/// activation code; see gateway/README.md). Neither the repository nor a built client contains
+/// any backing-store configuration; the operator provisions these two relay values outside the
+/// build and the QR carries only a short-lived reader ticket.
 /// </summary>
 public sealed record RelaySettings(string? GatewayUrl, string? HostToken, string WebAppUrl)
 {

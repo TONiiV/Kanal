@@ -6,8 +6,9 @@ using System.Text.Json;
 namespace Kanal.Core.Relay;
 
 /// <summary>
-/// Publishes through the authenticated Kanal gateway. Supabase credentials exist only inside
-/// that server-side function; the desktop receives a short-lived, room-scoped host ticket.
+/// Publishes through the authenticated Kanal gateway. The desktop authenticates room creation
+/// with its per-device credential and receives a short-lived, room-scoped host ticket; no
+/// backing-store URL or key ever reaches a client.
 /// </summary>
 public sealed class GatewayRelayPublisher : IRelayPublisher
 {
@@ -30,20 +31,20 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
 
     public static async Task<GatewayRoom> CreateRoomAsync(
         string gatewayUrl,
-        string bootstrapToken,
+        string deviceToken,
         string roomId,
         string verificationKey,
         HttpClient? http = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gatewayUrl);
-        ArgumentException.ThrowIfNullOrWhiteSpace(bootstrapToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceToken);
         ArgumentException.ThrowIfNullOrWhiteSpace(roomId);
         ArgumentException.ThrowIfNullOrWhiteSpace(verificationKey);
-        if (Encoding.UTF8.GetByteCount(bootstrapToken) < 32)
+        if (Encoding.UTF8.GetByteCount(deviceToken) < 32)
             throw new ArgumentException(
                 "Relay host token must contain at least 32 bytes.",
-                nameof(bootstrapToken));
+                nameof(deviceToken));
 
         var ownsHttp = http is null;
         http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
@@ -55,7 +56,7 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
             {
                 Content = JsonContent.Create(new { roomId, verificationKey }),
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bootstrapToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", deviceToken);
 
             using var response = await http.SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);

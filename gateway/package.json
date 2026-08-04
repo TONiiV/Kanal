@@ -1,0 +1,17 @@
+{
+  "name": "kanal-relay",
+  "private": true,
+  "description": "Authenticated relay gateway between the Kanal host and read-only phones (Cloudflare Workers + Durable Objects).",
+  "scripts": {
+    "test": "vitest run",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.9.12",
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "typescript": "^5.9.2",
+    "vitest": "~3.2.4",
+    "wrangler": "^4.38.0"
+  }
+}

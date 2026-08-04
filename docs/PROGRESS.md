@@ -13,11 +13,29 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   `KANAL_RELAY_HOST_TOKEN` at runtime; the public URL identifies the gateway but grants no project
   access. Relay stays disabled rather than silently falling back to a shared public credential when
   either setting is absent.
-- Added the `kanal-relay` Edge Function. A host bootstrap token can create a room and receives two
-  signed, 12-hour HMAC capabilities: a publish-only host ticket and a receive-only reader ticket.
-  Only the function holds the Supabase server credential. It publishes signed envelopes to a
-  private Realtime channel and proxies that channel to an authenticated WebSocket; reader sockets
-  cannot send relay messages.
+- Added the `kanal-relay` gateway as a **Cloudflare Worker with Durable Objects** (`gateway/`).
+  An authorised desktop can create a room and receives two signed, 12-hour HMAC capabilities: a
+  publish-only host ticket and a receive-only reader ticket. Fan-out happens inside one Durable
+  Object per room over hibernated WebSockets; reader sockets cannot send relay messages. The
+  first draft of this PR was a Supabase Edge Function, rejected on a measured platform limit:
+  Edge Functions cap wall clock at 150 s on the free plan (400 s paid), which would have forced
+  every phone to reconnect every 2.5 minutes of a 90-minute meeting, and `EdgeRuntime.waitUntil`
+  does not lift that cap. Vercel was rejected because its functions cannot hold WebSockets at
+  all. Hibernated Durable Object sockets have no wall-clock limit and are on the Workers Free
+  plan — and once a Durable Object does the fan-out, Supabase Realtime became a redundant hop,
+  so no Supabase (or any backing-store) credential exists anywhere in the system any more.
+- Replaced the single shared host bootstrap token with **per-device credentials**: the operator
+  mints a one-time activation code (`?action=admin.code`), the desktop trades it for its own
+  token (`?action=activate`), and a lost laptop is revoked alone (`?action=admin.revoke`)
+  without rotating anyone else. The registry is a SQLite Durable Object storing only SHA-256
+  hashes of codes and tokens. The wire protocol toward the desktop and the phone is unchanged.
+- The gateway has its own test suite: 25 vitest cases running in real workerd via
+  `@cloudflare/vitest-pool-workers` (`gateway/npm test`, wired into CI) covering the device
+  lifecycle, role separation, envelope filtering, size limits, per-room isolation, subprotocol
+  negotiation, ping/pong, receive-only enforcement, and the browser origin policy.
+- Known reachability caveat, recorded in the README: `*.workers.dev` is blocked in mainland
+  China, and a participant roaming through a Chinese carrier tunnels through the Chinese
+  network even abroad — for that participant the Worker must sit on a custom domain.
 - Replaced direct Realtime access in `GatewayRelayPublisher` and both copies of the static mobile
   page. The QR fragment now carries the gateway endpoint, reader ticket, 128-bit room capability,
   and ephemeral P-256 verification key. GitHub Pages opens the ticketed WebSocket, checks that the
@@ -26,11 +44,10 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - Room rotation now includes the next reader ticket inside a message signed by the old room key, so
   connected phones can follow a restart without receiving a reusable host credential. The bearer
   invitation remains readable by anyone who obtains it until expiry; tickets are stateless and are
-  not individually revocable. This boundary protects Kanal without creating a second project, but
-  does not alter unrelated public access already configured elsewhere in the shared project.
+  not individually revocable before their 12-hour expiry.
 - Added regression coverage for repository/build credential absence, gateway role separation,
-  invitation shape, signature verification and tampering, room rotation, private-channel use, and
-  byte-for-byte parity of the two static mobile pages.
+  invitation shape, signature verification and tampering, room rotation, and byte-for-byte
+  parity of the two static mobile pages.
 - Fixed the first integration regression: relay configuration was optional in the UI but a missing
   gateway was treated as a fatal Start error. Relay setup now fails closed to a signed null
   transport, keeps the meeting running without a QR code, and shows a localized degraded-mode

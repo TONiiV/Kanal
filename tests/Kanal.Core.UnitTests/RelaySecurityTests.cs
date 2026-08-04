@@ -38,7 +38,7 @@ public class RelaySecurityTests
                 Path.Combine(root, "web"), "*.html", SearchOption.AllDirectories))
             .Concat([
                 Path.Combine(root, "docs", "index.html"),
-                Path.Combine(root, "supabase", "functions", "kanal-relay", "index.ts"),
+                Path.Combine(root, "gateway", "src", "index.ts"),
             ])
             .Select(File.ReadAllText);
 
@@ -136,19 +136,24 @@ public class RelaySecurityTests
         Assert.DoesNotContain("apikey", web, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The gateway Worker is the only holder of relay secrets. It must authenticate every
+    /// route with a server-side capability, store device material only as hashes, and contain
+    /// no backing-store URL or key that a leak of the repository could expose.
+    /// </summary>
     [Fact]
-    public void EdgeFunctionKeepsSupabaseAndHostCredentialsServerSide()
+    public void GatewayWorkerKeepsRelayCredentialsServerSide()
     {
         var root = FindRepositoryRoot();
-        var edge = File.ReadAllText(Path.Combine(
-            root, "supabase", "functions", "kanal-relay", "index.ts"));
+        var worker = File.ReadAllText(Path.Combine(root, "gateway", "src", "index.ts"));
 
-        Assert.Contains("KANAL_HOST_TOKEN", edge);
-        Assert.Contains("SUPABASE_SECRET_KEYS", edge);
-        Assert.Contains("private: true", edge);
-        Assert.Contains("ticket.", edge);
-        Assert.DoesNotContain("sb_publishable_", edge);
-        Assert.DoesNotContain(".supabase.co", edge);
+        Assert.Contains("KANAL_TICKET_SECRET", worker);
+        Assert.Contains("KANAL_ADMIN_TOKEN", worker);
+        Assert.Contains("ticket.", worker);
+        Assert.Contains("sha256Hex(deviceToken)", worker); // credentials stored hashed
+        Assert.DoesNotContain("sb_publishable_", worker);
+        Assert.DoesNotContain(".supabase.co", worker);
+        Assert.DoesNotContain("supabase", worker, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepositoryRoot()
