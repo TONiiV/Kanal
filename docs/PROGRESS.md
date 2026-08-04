@@ -4,6 +4,30 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-04
+
+### README is now the open-source project entry point
+
+The root README was a compact architecture inventory followed by milestone checklists, relay
+deployment notes, and a live risk log. That made it useful to the project owner but left a new user
+to reconstruct what Kanal is, which modes work, what crosses the network, and how to try it.
+
+- Reframed it around the user problem, working features, a keyless demo, live-room setup, and the
+  desktop/mobile experience. Detailed milestones, measurements, and decision history remain here
+  and in the PRD instead of being duplicated on the project landing page.
+- Made the two privacy boundaries explicit: a mode describes where speech processing runs, while
+  captions and room state still use the Supabase relay in every production mode. The README also
+  documents the default local WAV recording, plain-JSON key storage, and self-hosting overrides.
+- Derived the availability table, configuration names, settings locations, project map, supported
+  capture platforms, and contribution invariants from the current code and CI configuration. The
+  quick-start and `Kanal.Doctor` examples now use the executable command shape actually accepted by
+  the projects.
+- Added a concise limitations/roadmap section linking back to this log: local ASR and standalone
+  cloud MT remain missing, Linux has no live-capture backend, and real Chinese↔Polish terminology
+  validation remains the go/no-go gate.
+
+---
+
 ## 2026-08-03
 
 ### Every `{l:T}` string now follows the language switch, and the tables live in JSON
