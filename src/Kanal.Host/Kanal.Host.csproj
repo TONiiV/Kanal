@@ -3,6 +3,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- The version the About section shows and CHANGELOG.md's newest entry names. A test holds
+         the two together, so releasing is: add the changelog entry, bump this. -->
+    <Version>0.4.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Embeds the icon in the exe's Win32 resources. MainWindow.axaml only sets
          the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
@@ -14,6 +17,9 @@
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
     <EmbeddedResource Include="Localization\i18n\*.json" />
+    <!-- The repository's own changelog, shown in the application: one file, so the version an
+         operator reads on screen cannot drift from the one a reader sees on GitHub. -->
+    <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="Kanal.Host.CHANGELOG.md" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +31,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="NLog" Version="6.1.4" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 

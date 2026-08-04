@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
@@ -56,9 +57,17 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void OnChangelogClick(object? sender, RoutedEventArgs e)
+    {
+        await new ChangelogWindow().ShowDialog(this);
+    }
+
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
         (DataContext as SettingsViewModel)?.Save();
+        // The level and the size the operator just chose apply to the next line written, not to
+        // the next launch: the reason someone turns Debug on is that something is going wrong now.
+        LogSetup.Apply(SettingsStore.Load());
         Close();
     }
 

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Kanal.Core.Diagnostics;
 
 namespace Kanal.Host.Services;
 
@@ -41,6 +43,22 @@ public sealed class AppSettings
     /// driving the laptop is often not one of the people being translated for.
     /// </summary>
     public string? AppLanguage { get; set; }
+
+    /// <summary>
+    /// How much detail the log file keeps. Info by default — the shape of the meeting, without
+    /// the frame-by-frame chatter that only helps when reproducing a fault. Written as a word
+    /// rather than an ordinal: this file gets edited by hand, and "3" for Error is a trap.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<LogLevel>))]
+    public LogLevel LogLevel { get; set; } = LogLevel.Info;
+
+    /// <summary>
+    /// Megabytes a single log file may reach before it is rolled over. Free-form: a support case
+    /// sometimes wants one enormous file, a laptop with a full disk wants small ones.
+    /// </summary>
+    public int LogMaxFileSizeMb { get; set; } = DefaultLogMaxFileSizeMb;
+
+    public const int DefaultLogMaxFileSizeMb = 10;
 }
 
 /// <summary>
@@ -63,6 +81,14 @@ public static class SettingsStore
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
 
     /// <summary>
+    /// Where the log files land. Beside the settings rather than in Documents: these are the
+    /// application's files, not the operator's — nobody mails a log to a supplier, they open the
+    /// folder from Settings when something has to be explained.
+    /// </summary>
+    public static string LogsPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "logs");
+
+    /// <summary>
     /// Where a meeting's artefacts go when nothing is configured. Documents rather than
     /// %APPDATA%: these are the operator's files, not the application's — a transcript gets
     /// mailed to a supplier and has to be findable without knowing where an app hides things.
@@ -78,6 +104,20 @@ public static class SettingsStore
 
     /// <summary>A cleared text box is not a folder: writing to "" is a failure, not a default.</summary>
     private static bool Blank(string? path) => string.IsNullOrWhiteSpace(path);
+
+    /// <summary>Smallest rollover threshold offered, in megabytes.</summary>
+    public const int MinLogMaxFileSizeMb = 1;
+
+    /// <summary>Largest rollover threshold offered, in megabytes.</summary>
+    public const int MaxLogMaxFileSizeMb = 1024;
+
+    /// <summary>
+    /// The size box takes any number of megabytes, which means it also takes 0 and -1. A
+    /// threshold of zero rolls the file over on every line; the clamp is what stands between a
+    /// typo and ten thousand files.
+    /// </summary>
+    public static int ResolveLogMaxFileSizeMb(AppSettings settings) =>
+        Math.Clamp(settings.LogMaxFileSizeMb, MinLogMaxFileSizeMb, MaxLogMaxFileSizeMb);
 
     public static AppSettings Load()
     {

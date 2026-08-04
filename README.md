@@ -112,12 +112,18 @@ Most configuration is available from the in-app **Settings** window:
 - local translation model download, selection, and deletion;
 - microphone selection and level/noise check;
 - transcript and audio output folders;
-- local WAV recording on/off; and
-- operator-interface language.
+- local WAV recording on/off;
+- operator-interface language;
+- how much detail the log keeps, the size at which a log file is rolled over, and a button that
+  opens the log folder; and
+- the version, its changelog, and the open-source projects Kanal is built on.
 
 Preferences are written to `Kanal/settings.json` beneath the operating system's application-data
-directory. Downloaded models live in the adjacent `Kanal/models` directory. Transcript exports and
-recordings default to `Documents/Kanal`.
+directory. Downloaded models live in the adjacent `Kanal/models` directory, and log files in
+`Kanal/logs`. Transcript exports and recordings default to `Documents/Kanal`.
+
+Logs are written with NLog: one file per day (`kanal-<date>.log`), rolled over once it passes the
+configured size, kept for two weeks, and never sent anywhere.
 
 Environment variables override connection defaults:
 
@@ -236,6 +242,10 @@ Detailed status, benchmarks, and the next implementation steps are tracked in
 
 ## License
 
-Kanal is released under the [MIT License](LICENSE). Downloaded translation models and external
-services have their own licences and terms; the model catalog displays the relevant licence for
-each model, including a warning where it is not OSI-approved.
+Kanal is released under the [MIT License](LICENSE). The open-source projects it is built on are
+listed with their licences at the bottom of the Settings window. Downloaded translation models and
+external services have their own licences and terms; the model catalog displays the relevant licence
+for each model, including a warning where it is not OSI-approved.
+
+Release notes live in [`CHANGELOG.md`](CHANGELOG.md) and are readable from inside the application
+under Settings → Version.

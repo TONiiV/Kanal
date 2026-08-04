@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
@@ -564,6 +565,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             SelectedMode.Unavailable = plan.Status.Unavailable;
             Status = plan.Status.Unavailable;
+            Log.Warning(RoomLog, $"Start refused: mode {mode.Id} is unavailable.");
             return;
         }
 
@@ -598,6 +600,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 await DisposeProvidersAsync();
                 Status = L.Format("status.modelloadfailed", ex.Message);
+                Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
                 return;
             }
             finally
@@ -626,8 +629,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
-        session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
-            Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
+        session.ErrorOccurred += e =>
+        {
+            // Logged off the dispatcher: a fatal error that stops the room must be on disk even
+            // if the UI thread never gets round to showing it.
+            Log.Write(
+                e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, e.Message, error: null);
+            Dispatcher.UIThread.Post(() =>
+                Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
+        };
         session.SessionEnded += reason => Dispatcher.UIThread.Post(() =>
             Status = L.Format("status.sessionended", reason ?? L["status.done"]));
 
@@ -638,6 +648,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.startfailed", ex.Message);
+            Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
             await session.DisposeAsync();
             await DisposeProvidersAsync();
             return;
@@ -645,6 +656,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         _session = session;
         IsRunning = true;
+        Log.Info(
+            RoomLog,
+            $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
+            $"relay {(RelayEnabled ? "on" : "off")}.");
         Status = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
@@ -703,6 +718,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = _lastRecording.Length > 0
                 ? L.Format("status.stopped.audio", _lastRecording)
                 : L["status.stopped"];
+            Log.Info(RoomLog, "Room closed.");
         }
         finally
         {
@@ -760,6 +776,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
+            Log.Warning(RelayLog, "The closing snapshot did not publish.", ex);
         }
     }
 
@@ -773,6 +790,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.closefailed", ex.Message));
+            Log.Warning(RelayLog, "The room-closed message did not publish; phones may still be waiting.", ex);
         }
     }
 
@@ -785,8 +803,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.publishfailed", ex.Message));
+            Log.Warning(RelayLog, $"A {message.GetType().Name} did not publish.", ex);
         }
     }
+
+    // Categories, so a line can be traced to what produced it without reading the message.
+    private const string RoomLog = "room";
+    private const string RelayLog = "relay";
+    private const string AudioLog = "audio";
 
     private IRelayPublisher CreateRelay(string roomId, RelaySettings settings)
     {
@@ -826,6 +850,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
+            Log.Error(AudioLog, "Capture stopped; the room is live with no audio arriving.", ex);
             Dispatcher.UIThread.Post(() => Status = L.Format("status.audiofailed", ex.Message));
         }
         finally
@@ -913,6 +938,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // they believe is being recorded when it is not.
             var note = L.Format("status.notrecording", ex.Message);
             Status = $"{Status} {note}";
+            Log.Warning(AudioLog, $"The room is not being recorded: {path} could not be opened.", ex);
         }
     }
 
@@ -999,6 +1025,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // Losing the transcript at the last step is the worst possible moment for a throw
             // out of a command nothing is awaiting: read-only folder, full disk, revoked rights.
             Status = L.Format("status.exportfailed", ex.Message);
+            Log.Error(RoomLog, $"The transcript could not be written to {path}.", ex);
         }
     }
 

@@ -6,6 +6,48 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### The host keeps a record of itself: logs, licences, changelog (issue #35)
+
+A meeting cannot be replayed. Whatever went wrong happened once, in a room, with the other side of
+the table waiting — and until now the only trace was a status line that the next status line
+overwrote. Three things that belong to a tool people other than its author run now exist.
+
+- **A log facade in the core, NLog in the host.** `Kanal.Core.Diagnostics` defines four levels, an
+  `ILogSink` and a static `Log` — the same rule as the provider abstractions: the core states the
+  capability, the host names the vendor. Nothing is written until a host installs a sink, so tests,
+  `Kanal.Doctor` and any future embedder stay silent by default, and a sink that throws (full disk,
+  deleted folder) never reaches the caller. `LogSetup` builds the NLog configuration in code rather
+  than from `NLog.config`: the level has to change without a restart, and a config file beside the
+  executable is one more thing that can go missing from a published build.
+- **One file a day, rolled over at a size the operator sets.** `%APPDATA%/Kanal/logs/kanal-<date>.log`
+  keeps a stable name all day so "send me today's log" names one file; rollovers are numbered beside
+  it, capped at 20 a day and 14 days. The size box takes any number of megabytes, which means it also
+  takes 0 and -1 — `ResolveLogMaxFileSizeMb` clamps to 1–1024, because a threshold of zero rolls over
+  on every line.
+- **What actually gets logged.** Startup with the version and OS, unhandled and unobserved
+  exceptions, rooms opening and closing with their mode and languages, a refused Start, a translation
+  model that will not load, relay publishes that fail, capture that stops under a live room, a
+  recording that cannot be opened, an export that cannot be written. Every one of those was already a
+  message on screen that the next message erased.
+- **One click to the folder.** The person who has to send a log is on a call, mid-meeting, and will
+  not be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
+  platform branching, injected into `SettingsViewModel` so a headless test never launches Explorer.
+- **The open-source list, at the bottom of Settings.** An obligation before it is a feature: the MIT
+  and BSD licences Kanal is assembled from require their notice to travel with the binary, and the
+  people running this in a meeting are the ones handing that binary around. Each notice carries the
+  NuGet ids it covers, and a test parses every `src/**.csproj` in both directions — a package added
+  without a credit fails, and a credit left behind after a package is dropped fails too.
+- **A changelog, readable in the room.** `CHANGELOG.md` is embedded in the executable and parsed for
+  a dialog behind Settings → Version; the laptop running a meeting is not the machine anybody browses
+  a repository on. The file stays plain Markdown rather than becoming a format only the parser
+  understands. A test holds the newest entry against the version the build reports, so releasing is
+  "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
+  entries were reconstructed from the history.
+
+42 new tests (289 → 331), including headless loads of both dialogs — the bindings are reflection-based,
+so a mistyped path or a value that will not convert to the control's type fails at runtime with an
+empty control rather than at build time. No assertions about pixels, layout or style.
+
 ### Unit-test projects now follow the Core/UI boundary
 
 - Replaced the former mixed test assembly with `tests/Kanal.Core.UnitTests` for core,

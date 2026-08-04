@@ -8,11 +8,27 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
+using Kanal.Core.Diagnostics;
+using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
+using CoreLogLevel = Kanal.Core.Diagnostics.LogLevel;
 
 namespace Kanal.Host.ViewModels;
+
+/// <summary>
+/// One row of the log-level dropdown. A view model rather than the bare enum so the name follows a
+/// language change while the dialog is open, like every other label in it.
+/// </summary>
+public sealed partial class LogLevelOption(LogLevel level) : ViewModelBase
+{
+    public LogLevel Level { get; } = level;
+
+    public string Name => Localizer.Instance[$"log.level.{Level.ToString().ToLowerInvariant()}"];
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+}
 
 public partial class ApiKeyItemViewModel : ViewModelBase
 {
@@ -49,12 +65,18 @@ public partial class SettingsViewModel : ViewModelBase
     /// <param name="deviceWatcherFactory">
     /// Hot-plug notifications for the test-device dropdown; tests fire a fake by hand.
     /// </param>
+    /// <param name="openFolder">
+    /// How a folder is shown to the operator. Test seam: a headless run must not launch the
+    /// machine's file manager.
+    /// </param>
     public SettingsViewModel(
         AppSettings settings,
         Func<IAudioCaptureService?>? captureFactory = null,
         bool? isMacOs = null,
-        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null)
+        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
+        Action<string>? openFolder = null)
     {
+        _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         // no capture backend, or no devices — the panel says so when the test is started
@@ -101,6 +123,9 @@ public partial class SettingsViewModel : ViewModelBase
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
 
+        _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
+        _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
+
         // The switch happens in this window, so this window least of all may stay in the old
         // language. Unsubscribed in CancelDownloads — the same close-time cleanup the downloads
         // use — so the static localizer does not keep dead view models reachable.
@@ -115,8 +140,13 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(EnvFallback));
         OnPropertyChanged(nameof(ProcessingNote));
         OnPropertyChanged(nameof(DefaultFolderNote));
+        OnPropertyChanged(nameof(LogNote));
+        OnPropertyChanged(nameof(VersionLabel));
+        OnPropertyChanged(nameof(LicenseNote));
         foreach (var model in TranslationModels)
             model.RefreshText();
+        foreach (var level in LogLevels)
+            level.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -377,6 +407,66 @@ public partial class SettingsViewModel : ViewModelBase
         };
     }
 
+    // ---- log files -------------------------------------------------------------------------
+
+    private readonly Action<string> _openFolder;
+
+    /// <summary>Quietest first, so the list reads as a dial from "everything" to "only failures".</summary>
+    public IReadOnlyList<LogLevelOption> LogLevels { get; } =
+    [
+        new(CoreLogLevel.Debug),
+        new(CoreLogLevel.Info),
+        new(CoreLogLevel.Warning),
+        new(CoreLogLevel.Error),
+    ];
+
+    /// <summary>How much detail the file keeps. Applied when Settings is saved, not on the next launch.</summary>
+    [ObservableProperty]
+    private LogLevelOption? _logLevel;
+
+    /// <summary>Megabytes a log file may reach before it is rolled over.</summary>
+    [ObservableProperty]
+    private int _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
+
+    public int LogMinSizeMb => SettingsStore.MinLogMaxFileSizeMb;
+
+    public int LogMaxSizeMb => SettingsStore.MaxLogMaxFileSizeMb;
+
+    /// <summary>What the files are and how long they last, in one line under the two controls.</summary>
+    public string LogNote => Localizer.Instance.Format("settings.logs.note", LogSetup.RetentionDays);
+
+    /// <summary>Printed beside the button: an operator reading it out over the phone needs the path.</summary>
+    public string LogFolder => SettingsStore.LogsPath;
+
+    /// <summary>
+    /// The whole point of the button: the person who has to send a log is on a call, mid-meeting,
+    /// and will not be typing an %APPDATA% path into a file manager.
+    /// </summary>
+    [RelayCommand]
+    private void OpenLogFolder()
+    {
+        try
+        {
+            _openFolder(SettingsStore.LogsPath);
+        }
+        catch (Exception ex)
+        {
+            // No file manager, a locked-down desktop, a folder that will not be created: worth a
+            // line in the log, never worth taking the dialog down for.
+            Log.Warning("settings", $"Could not open {SettingsStore.LogsPath}.", ex);
+        }
+    }
+
+    /// <summary>Which build this is, printed above the changelog it belongs to.</summary>
+    public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
+
+    /// <summary>What Kanal is built on, named at the bottom of the dialog with its licence.</summary>
+    public IReadOnlyList<OpenSourceNotice> Notices => OpenSourceNotices.All;
+
+    /// <summary>Kanal's own licence, stated over the list so the whole picture is on one screen.</summary>
+    public string LicenseNote =>
+        Localizer.Instance.Format("settings.licenses.note", OpenSourceNotices.OwnLicense);
+
     /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
     public string DefaultFolderNote =>
         Localizer.Instance.Format("settings.files.default", SettingsStore.DefaultOutputFolder);
@@ -469,6 +559,8 @@ public partial class SettingsViewModel : ViewModelBase
         settings.AudioFolder = Folder(AudioFolder);
         settings.RecordAudio = RecordAudio;
         settings.AppLanguage = AppLanguage?.Code;
+        settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
+        settings.LogMaxFileSizeMb = LogMaxFileSizeMb;
     }
 
     /// <summary>Whitespace is stored as "unset", so the resolver's fallback is the only default.</summary>
