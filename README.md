@@ -44,18 +44,20 @@ Kanal has two separate network boundaries: the speech pipeline and the mobile-ca
 | Data | Where it goes |
 |---|---|
 | Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes once a local ASR provider exists. |
-| Captions and room state | Published to Supabase Realtime so joined phones can read the room. Messages include transcript text, translations, speaker labels, language configuration, and pause/recording/lifecycle state. |
+| Captions and room state | Sent through the authenticated Kanal gateway (a Cloudflare Worker) to the meeting's private room object, which fans them out to joined phones. Messages include transcript text, translations, speaker labels, language configuration, and pause/recording/lifecycle state. Nothing is stored server-side. |
 | Joined-phone cache | The mobile client stores the current room transcript and state in browser `localStorage` so it can render before a reconnect snapshot arrives. |
 | Local recording | Live microphone modes record a WAV file by default in the configured audio folder. Recording pauses with the room and can be disabled in Settings. The WAV is not published by Kanal. |
-| API keys and preferences | Stored as plain JSON in the platform application-data directory. `GLADIA_API_KEY` can be used instead of storing a key in the UI. |
+| API keys and preferences | Gladia keys selected in the UI are stored as plain JSON in the platform application-data directory. The relay host token is supplied only through the operator machine's runtime environment. |
 | Local translation models | Downloaded from the model catalog to the platform application-data directory and loaded in-process with llama.cpp. Model files and generated translations stay on the host, apart from captions sent to the relay. |
 
-The bundled relay uses stateless broadcast and does not write room messages to a Supabase database,
-but its defaults are convenient for testing, not a private deployment boundary. The join URL
-contains the room id and public anonymous key; anyone who receives that URL can subscribe while the
-room is broadcasting. For a controlled environment, point Kanal at your own Supabase project and
-host the static mobile page yourself; see [Configuration](#configuration). Network reachability for
-the relay is required for phones to receive captions.
+Kanal ships no backing-store URL or API key of any kind: the relay is a self-contained
+[Cloudflare Worker](gateway/) and the only address clients ever see is the Worker's own. The join
+QR contains the public gateway address plus a receive-only, room-scoped ticket; anyone who obtains
+that bearer invitation can read the room until the ticket expires (currently 12 hours), but cannot
+create rooms, publish messages, or enumerate other rooms. Room creation itself requires a
+per-device credential issued by the gateway operator, so a stolen laptop is revoked alone without
+rotating anything else. Network reachability for the relay is required for phones to receive
+captions.
 
 ## Quick start
 
@@ -130,14 +132,22 @@ Environment variables override connection defaults:
 | Variable | Purpose |
 |---|---|
 | `GLADIA_API_KEY` | Fallback speech-provider key when no stored named key is selected |
-| `KANAL_SUPABASE_URL` | Supabase project URL used by the broadcast relay |
-| `KANAL_SUPABASE_ANON_KEY` | Public Supabase anonymous key carried in the phone join URL |
+| `KANAL_RELAY_URL` | Public HTTPS endpoint of the deployed `kanal-relay` Worker |
+| `KANAL_RELAY_HOST_TOKEN` | This desktop's device credential, obtained once with an activation code; runtime only, never part of a build or QR |
 | `KANAL_WEB_URL` | Base URL of the static mobile client placed in the join QR code |
 
+Relay stays disabled rather than using a public fallback when either relay variable is absent.
+`KANAL_RELAY_URL` is an address, not a credential: every gateway route still requires the device
+credential or a role-scoped room ticket. Missing configuration or a gateway failure does not block
+transcription: the meeting continues without a QR code and the status bar reports the degraded
+mobile relay. Deployment and device-activation commands are in
+[`gateway/README.md`](gateway/README.md).
+
 The default web URL is `https://toniiv.github.io/Kanal/`. To self-host it, serve
-[`web/index.html`](web/index.html) over HTTPS and point `KANAL_WEB_URL` at that URL. The mobile page
-loads the Supabase JavaScript SDK at runtime; it otherwise has no external font or stylesheet
-dependency.
+[`web/index.html`](web/index.html) over HTTPS and point `KANAL_WEB_URL` at that URL. The page has no
+runtime import, project configuration, external font, or stylesheet dependency. On Start, the
+host puts only the gateway address, 12-hour reader ticket, random room capability, and public P-256
+verification key in the URL fragment; the fragment is not sent to the web host.
 
 ## Architecture
 
@@ -165,7 +175,7 @@ clients resolve the canonical speaker at render time.
 
 | Project | Responsibility |
 |---|---|
-| `src/Kanal.Core` | Provider contracts, room/domain model, orchestration, relay protocol and Supabase publisher |
+| `src/Kanal.Core` | Provider contracts, room/domain model, orchestration, relay protocol and authenticated gateway publisher |
 | `src/Kanal.Audio` | 16 kHz mono PCM16 capture, Windows WASAPI, macOS AudioQueue/CoreAudio, resampling and WAV support |
 | `src/Kanal.Providers.Gladia` | Gladia live-v2 session setup, WebSocket streaming, reconnect and wire normalization |
 | `src/Kanal.Providers.LocalMt` | In-process llama.cpp translation, prompts, model catalog and downloads |
@@ -173,6 +183,7 @@ clients resolve the canonical speaker at render time.
 | `tests/Kanal.Core.UnitTests` | Unit tests for audio, providers, serialization, room state, orchestration, and non-visual services |
 | `tests/Kanal.UI.UnitTests` | Headless unit tests for deterministic host view-model and application-state behavior; rendering and layout are intentionally out of scope |
 | `web/index.html` | Static mobile client; `docs/index.html` is its byte-identical GitHub Pages copy |
+| `gateway/` | Relay gateway: Cloudflare Worker plus per-room and device-registry Durable Objects, with its own vitest suite |
 | `tools/Kanal.Doctor` | Microphone and live-ASR diagnostics |
 
 The original product requirements and design trade-offs are documented in the Chinese
@@ -229,8 +240,10 @@ question before starting a broad change.
 - Local transcription is not implemented, so a fully local live pipeline is not available.
 - There is no standalone cloud text-translation provider, which also blocks local-to-cloud mode.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.
-- Mobile delivery depends on Supabase Realtime reachability. A different relay can be added behind
-  `IRelayPublisher`, but no alternative ships today.
+- Mobile delivery depends on the authenticated gateway being reachable. A different relay can be
+  added behind `IRelayPublisher`, but no alternative ships today. The default `workers.dev`
+  hostname is blocked in mainland China; participants whose phones roam through a Chinese
+  carrier need the gateway on a custom domain.
 - Cloud transcription sends room audio to Gladia. Local WAV recording is enabled by default for
   live microphone modes and must be disclosed to participants.
 - Chinese↔Polish terminology quality with real meeting material remains the primary go/no-go

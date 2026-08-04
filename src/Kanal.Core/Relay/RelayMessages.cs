@@ -18,6 +18,7 @@ namespace Kanal.Core.Relay;
 [JsonDerivedType(typeof(RoomMovedMessage), "room.moved")]
 [JsonDerivedType(typeof(RoomPausedMessage), "room.paused")]
 [JsonDerivedType(typeof(RoomRecordingMessage), "room.recording")]
+[JsonDerivedType(typeof(SignedRelayMessage), "relay.signed")]
 public abstract record RelayMessage;
 
 /// <summary>Partial and final share one message; clients replace in place by Utterance.Id.</summary>
@@ -46,9 +47,13 @@ public sealed record RoomClosedMessage : RelayMessage;
 /// The operator restarted: a new room id (and channel) has taken over. Published on the
 /// OLD channel so phones already holding a QR-scanned URL follow along without rescanning.
 /// A fresh room id per Start is deliberate — ASR utterance ids restart at zero, so reusing
-/// the channel would let a new meeting overwrite the previous one's records by id.
+/// the channel would let a new meeting overwrite the previous one's records by id. The new
+/// receive-only ticket travels inside this message, which is signed by the old room key.
 /// </summary>
-public sealed record RoomMovedMessage(string NewRoomId) : RelayMessage;
+public sealed record RoomMovedMessage(
+    string NewRoomId,
+    string NewVerificationKey,
+    string NewInviteTicket) : RelayMessage;
 
 /// <summary>
 /// The room is temporarily off the record, or back on it. A column that simply stops is
@@ -66,6 +71,13 @@ public sealed record RoomPausedMessage(bool Paused) : RelayMessage;
 /// carried in the snapshot too.
 /// </summary>
 public sealed record RoomRecordingMessage(bool Recording) : RelayMessage;
+
+/// <summary>
+/// An exact relay JSON payload authenticated by the room's ephemeral P-256 key. The public
+/// verification key is a bearer-link parameter; only the host holds the private key. Keeping
+/// the serialized data intact avoids relying on JSON property ordering across C# and browsers.
+/// </summary>
+public sealed record SignedRelayMessage(int Version, string Data, string Signature) : RelayMessage;
 
 /// <param name="Paused">
 /// Carried here as well as in <see cref="RoomPausedMessage"/> because a phone joining mid-pause

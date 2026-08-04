@@ -10,6 +10,11 @@ build reports, and a test holds the two together.
 
 ## 0.4.0 — 2026-08-04
 
+- Captions now travel through an authenticated relay gateway of your own rather than a shared
+  public backend. The operator provisions `KANAL_RELAY_URL` and a host token; each room hands the
+  phones a receive-only ticket, and the join QR carries no credential that can publish. Without
+  those settings the meeting still runs — with no QR code and a warning saying so — instead of
+  falling back to a shared credential.
 - Log files. The host keeps a record of what it did — one file a day under
   `%APPDATA%/Kanal/logs`, rolled over once it passes a size you set, kept for two weeks and never
   sent anywhere. Settings → Diagnostics chooses how much detail is kept (debug, info, warning,

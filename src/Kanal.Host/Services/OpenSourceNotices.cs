@@ -38,8 +38,5 @@ public static class OpenSourceNotices
         // Shipped inside the LLamaSharp backend rather than as a package of its own, and the
         // reason local translation runs at all.
         new("llama.cpp", "MIT", "https://github.com/ggml-org/llama.cpp", []),
-        // Loaded by the mobile page, not by the host — but it is the only third-party code that
-        // runs on a participant's phone, so it belongs on the same list.
-        new("supabase-js", "MIT", "https://github.com/supabase/supabase-js", []),
     ];
 }
