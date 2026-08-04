@@ -173,6 +173,8 @@ clients resolve the canonical speaker at render time.
 | `src/Kanal.Providers.Gladia` | Gladia live-v2 session setup, WebSocket streaming, reconnect and wire normalization |
 | `src/Kanal.Providers.LocalMt` | In-process llama.cpp translation, prompts, model catalog and downloads |
 | `src/Kanal.Host` | Avalonia operator UI, pipeline planning, settings, recording, QR generation and export |
+| `tests/Kanal.Core.UnitTests` | Unit tests for audio, providers, serialization, room state, orchestration, and non-visual services |
+| `tests/Kanal.UI.UnitTests` | Headless unit tests for deterministic host view-model and application-state behavior; rendering and layout are intentionally out of scope |
 | `web/index.html` | Static mobile client; `docs/index.html` is its byte-identical GitHub Pages copy |
 | `tools/Kanal.Doctor` | Microphone and live-ASR diagnostics |
 
@@ -186,12 +188,14 @@ Build and run the complete test suite from the repository root:
 
 ```bash
 dotnet build Kanal.slnx --configuration Release
-dotnet test tests/Kanal.Tests/Kanal.Tests.csproj --configuration Release --no-build
+dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build
+dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build
 ```
 
-The suite includes unit tests for the room model, audio pipeline, providers and wire protocol, plus
-headless Avalonia tests for verifiable UI behavior. CI also enforces that the deployable web client
-and its GitHub Pages copy stay byte-identical:
+The Core suite covers the room model, audio pipeline, providers, wire protocol, orchestration, and
+non-visual services. The UI suite uses headless Avalonia only to exercise deterministic view-model
+and application-state behavior; pixel, layout, style, and window-rendering assertions are out of
+scope. CI also enforces that the deployable web client and its GitHub Pages copy stay byte-identical:
 
 ```bash
 cmp web/index.html docs/index.html

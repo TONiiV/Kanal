@@ -18,9 +18,11 @@ dotnet test
 ## Working practices
 
 - **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
-  behaviour change lands with tests in the same PR; no PR merges with a red suite. UI behaviour is
-  tested headless (`Avalonia.Headless.XUnit`, see `tests/Kanal.Tests/HostUiTests.cs`); logic that
-  touches external services is tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
+  behaviour change lands with tests in the same PR; no PR merges with a red suite. Core and service
+  logic lives in `tests/Kanal.Core.UnitTests`; deterministic view-model and application-state logic
+  lives in `tests/Kanal.UI.UnitTests` and runs headless with `Avalonia.Headless.XUnit`. Pixel, layout,
+  style, and window-rendering assertions are out of scope. Logic that touches external services is
+  tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
   worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff. **Once the
   branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
