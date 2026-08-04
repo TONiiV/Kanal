@@ -3,27 +3,40 @@ using System;
 namespace Kanal.Host.Services;
 
 /// <summary>
-/// Relay + mobile-page endpoints. Defaults point at the shared Supabase project
-/// (publishable key — public by design) and the GitHub Pages deployment of
-/// web/index.html. A custom web deployment must carry the same public Supabase
-/// configuration as its host override; the join URL itself carries no infrastructure.
+/// Public gateway/mobile endpoints plus the host bootstrap capability. Neither the repository
+/// nor a built client contains Supabase configuration; the operator provisions these two relay
+/// values outside the build and the QR carries only a short-lived reader ticket.
 /// </summary>
-public sealed record RelaySettings(string SupabaseUrl, string PublishableKey, string WebAppUrl)
+public sealed record RelaySettings(string? GatewayUrl, string? HostToken, string WebAppUrl)
 {
-    public const string DefaultSupabaseUrl = "https://muwffgozlmjafsoykqfr.supabase.co";
-
-    public const string DefaultPublishableKey =
-        "sb_publishable_oXkDmUJWWh6R0xbR2dpD-A_txxb8O35";
-
     public const string DefaultWebAppUrl = "https://toniiv.github.io/Kanal/";
 
     public static RelaySettings FromEnvironment() => new(
-        SettingsStore.ReadEnvAllScopes("KANAL_SUPABASE_URL") ?? DefaultSupabaseUrl,
-        SettingsStore.ReadEnvAllScopes("KANAL_SUPABASE_PUBLISHABLE_KEY")
-            ?? SettingsStore.ReadEnvAllScopes("KANAL_SUPABASE_ANON_KEY")
-            ?? DefaultPublishableKey,
+        SettingsStore.ReadEnvAllScopes("KANAL_RELAY_URL"),
+        SettingsStore.ReadEnvAllScopes("KANAL_RELAY_HOST_TOKEN"),
         SettingsStore.ReadEnvAllScopes("KANAL_WEB_URL") ?? DefaultWebAppUrl);
 
-    public string BuildJoinUrl(string roomId, string verificationKey) =>
-        $"{WebAppUrl.TrimEnd('#')}#room={Uri.EscapeDataString(roomId)}&vk={Uri.EscapeDataString(verificationKey)}";
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(GatewayUrl) && !string.IsNullOrWhiteSpace(HostToken);
+
+    public string BuildJoinUrl(
+        string inviteTicket,
+        string roomId,
+        string verificationKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(GatewayUrl);
+        if (!Uri.TryCreate(WebAppUrl, UriKind.Absolute, out var webApp) ||
+            (!string.Equals(webApp.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+             !(string.Equals(webApp.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+               webApp.IsLoopback)) ||
+            !string.IsNullOrEmpty(webApp.UserInfo) ||
+            !string.IsNullOrEmpty(webApp.Fragment))
+            throw new InvalidOperationException(
+                "The mobile page must use HTTPS and no fragment (HTTP is allowed only on localhost).");
+
+        return $"{WebAppUrl.TrimEnd('#')}#relay={Uri.EscapeDataString(GatewayUrl)}" +
+               $"&ticket={Uri.EscapeDataString(inviteTicket)}" +
+               $"&room={Uri.EscapeDataString(roomId)}" +
+               $"&vk={Uri.EscapeDataString(verificationKey)}";
+    }
 }

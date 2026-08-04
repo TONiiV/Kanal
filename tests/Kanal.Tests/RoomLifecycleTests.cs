@@ -107,6 +107,7 @@ public class RoomLifecycleTests
         Assert.Equal(firstRoom, announcement.Room); // published where the phones actually are
         Assert.NotEqual(firstRoom, announcement.Message.NewRoomId);
         Assert.Equal(secondKey, announcement.Message.NewVerificationKey);
+        Assert.False(string.IsNullOrWhiteSpace(announcement.Message.NewInviteTicket));
         Assert.Contains(log, e =>
             e.Room == announcement.Message.NewRoomId &&
             Verified(e.Message, secondKey) is RoomConfigMessage);

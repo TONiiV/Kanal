@@ -211,10 +211,10 @@ main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
  *
  * Transports:
  *   ?demo=1                    — scripted demo, no network
- *   #room=<capability>&vk=<key> — signed Supabase broadcast; fragment stays out of HTTP logs
+ *   #relay=<gateway>&ticket=<capability>&room=<id>&vk=<key> — authenticated relay gateway
  *
  * No external CSS or fonts: Google Fonts is blocked in mainland China and the Chinese
- * supplier is a primary reader. The Supabase SDK is the only runtime import.
+ * supplier is a primary reader. The page has no runtime dependency or project credential.
  */
 "use strict";
 
@@ -222,13 +222,10 @@ const CACHE_LIMIT = 50; // survive lock-screen reconnects without a blank page
 const STICK_SLOP = 160; // px from the bottom that still counts as "following along"
 const params = new URLSearchParams(location.search);
 const invite = new URLSearchParams(location.hash.replace(/^#/, ""));
+const relayUrlParam = invite.get("relay");
+const ticketParam = invite.get("ticket");
 const roomParam = invite.get("room");
 const verificationKeyParam = invite.get("vk");
-
-// Publishable configuration is public by design. It identifies the Supabase project; the
-// unguessable room capability controls discovery and the per-room key authenticates the host.
-const SUPABASE_URL = "https://muwffgozlmjafsoykqfr.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_oXkDmUJWWh6R0xbR2dpD-A_txxb8O35";
 
 // Cache is per room: a phone that joins meeting B must never open on meeting A's history.
 // Only a real room join touches storage — demo runs and paramless loads neither read, write,
@@ -373,7 +370,8 @@ function handle(msg) {
     case "room.snapshot": applySnapshot(msg.snapshot); break;
     case "room.config": applyConfig(msg.config); break;
     case "room.closed": applyClosed(); break;
-    case "room.moved": moveToRoom(msg.newRoomId, msg.newVerificationKey)
+    case "room.moved": moveToRoom(
+      msg.newRoomId, msg.newVerificationKey, msg.newInviteTicket)
       .catch(() => setStatus("failed")); break;
     case "room.paused": applyPaused(msg.paused); break;
     case "room.recording": applyRecording(msg.recording); break;
@@ -578,17 +576,7 @@ function startDemo() {
   })();
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error("SDK load failed: " + src));
-    document.head.appendChild(script);
-  });
-}
-
-let sb = null; // { client, channel, room, verificationKey }
+let gateway = null; // endpoint, ticket, expected room/key, socket, imported key
 
 function decodeBase64Url(value) {
   const standard = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -603,12 +591,13 @@ async function importVerificationKey(value) {
 }
 
 async function verifyEnvelope(envelope) {
-  if (!sb || !envelope || envelope.type !== "relay.signed" || envelope.version !== 1)
+  if (!gateway?.sessionReady || !envelope ||
+      envelope.type !== "relay.signed" || envelope.version !== 1)
     throw new Error("Unsigned relay message");
   const data = decodeBase64Url(envelope.data);
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
-    sb.verificationKey,
+    gateway.verificationKey,
     decodeBase64Url(envelope.signature),
     data);
   if (!valid) throw new Error("Invalid relay signature");
@@ -624,48 +613,86 @@ async function receiveEnvelope(envelope) {
   }
 }
 
-async function startSupabase(room, verificationKey) {
-  setStatus("connecting");
-  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js");
-  sb = {
-    client: window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
-    channel: null,
-    room: null,
-    verificationKey: await importVerificationKey(verificationKey),
-  };
-  subscribeRoom(room);
+function streamUrl(endpoint) {
+  const url = new URL(endpoint);
+  if (url.protocol === "https:") url.protocol = "wss:";
+  else if (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))
+    url.protocol = "ws:";
+  else throw new Error("Relay gateway must use HTTPS");
+  url.searchParams.set("action", "stream");
+  return url.toString();
 }
 
-function subscribeRoom(room) {
-  sb.room = room;
-  $("room").textContent = room;
-  const channel = sb.client.channel(room, { config: { broadcast: { self: false } } });
-  channel.on("broadcast", { event: "kanal" }, (msg) => receiveEnvelope(msg.payload));
-  channel.subscribe((status) => {
-    // late join and reconnect recover via the host's periodic room.snapshot
-    if (status === "SUBSCRIBED") setStatus(lifecycleStatus());
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setStatus("reconnecting");
-  });
-  sb.channel = channel;
+async function startGateway(endpoint, ticket, room, verificationKey) {
+  const previous = gateway;
+  if (previous) {
+    previous.reconnect = false;
+    previous.socket?.close(1000, "Room changed");
+  }
+  gateway = {
+    endpoint, ticket, room, expectedRoom: room, expectedKey: verificationKey,
+    verificationKey: await importVerificationKey(verificationKey),
+    socket: null, reconnect: true, reconnectAttempt: 0, sessionReady: false,
+  };
+  connectGateway(gateway);
+}
+
+function connectGateway(connection) {
+  if (gateway !== connection || !connection.reconnect) return;
+  if (!state.closed) setStatus(connection.reconnectAttempt ? "reconnecting" : "connecting");
+  const socket = new WebSocket(
+    streamUrl(connection.endpoint),
+    ["kanal", "ticket." + connection.ticket]);
+  connection.socket = socket;
+
+  socket.onmessage = async (event) => {
+    if (gateway !== connection || event.data === "pong") return;
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === "gateway.session") {
+        if (message.room !== connection.expectedRoom ||
+            message.verificationKey !== connection.expectedKey)
+          throw new Error("Gateway session does not match invitation");
+        connection.sessionReady = true;
+        connection.reconnectAttempt = 0;
+        connection.room = message.room;
+        $("room").textContent = message.room;
+        setStatus(lifecycleStatus());
+      } else if (message.type === "relay") {
+        await receiveEnvelope(message.payload);
+      }
+    } catch (error) {
+      console.warn("Blocked gateway message:", error);
+      setStatus("untrusted");
+    }
+  };
+  socket.onerror = () => {
+    if (gateway === connection && !state.closed) setStatus("reconnecting");
+  };
+  socket.onclose = () => {
+    if (gateway !== connection || !connection.reconnect) return;
+    connection.sessionReady = false;
+    const delay = Math.min(1000 * (2 ** connection.reconnectAttempt++), 15000);
+    setTimeout(() => connectGateway(connection), delay);
+  };
 }
 
 /* The operator restarted: the meeting continues on a new channel. Follow it rather than
    making 3-8 people rescan a QR code. The previous room's records are dropped, not merged —
    it is a different meeting, and ASR utterance ids restart at zero. */
-async function moveToRoom(newRoomId, newVerificationKey) {
-  if (!sb || !newRoomId || !newVerificationKey || newRoomId === sb.room) return;
+async function moveToRoom(newRoomId, newVerificationKey, newInviteTicket) {
+  if (!gateway || !newRoomId || !newVerificationKey || !newInviteTicket ||
+      newRoomId === gateway.room) return;
   setStatus("moved");
-
-  const verificationKey = await importVerificationKey(newVerificationKey);
-
-  if (sb.channel) sb.client.removeChannel(sb.channel);
-  sb.channel = null;
+  const endpoint = gateway.endpoint;
 
   state.speakers.clear();
   state.aliases.clear();
   state.utterances.clear();
   state.closed = false;
   state.paused = false;
+  state.recording = false;
+  setRecordingNotice();
   renderAll();
 
   CACHE_KEY = "kanal.cache::" + newRoomId;
@@ -673,11 +700,13 @@ async function moveToRoom(newRoomId, newVerificationKey) {
 
   // a pull-to-refresh must land in the new room, not the dead one
   const url = new URL(location.href);
-  url.hash = new URLSearchParams({ room: newRoomId, vk: newVerificationKey }).toString();
+  url.hash = new URLSearchParams({
+    relay: endpoint, ticket: newInviteTicket,
+    room: newRoomId, vk: newVerificationKey,
+  }).toString();
   history.replaceState(null, "", url);
 
-  sb.verificationKey = verificationKey;
-  subscribeRoom(newRoomId);
+  await startGateway(endpoint, newInviteTicket, newRoomId, newVerificationKey);
 }
 
 setLanguage(state.lang || "zh", false);
@@ -685,8 +714,8 @@ loadCache();
 if (state.utterances.size === 0) renderEmpty();
 if (params.get("demo")) {
   startDemo();
-} else if (roomParam && verificationKeyParam) {
-  startSupabase(roomParam, verificationKeyParam)
+} else if (relayUrlParam && ticketParam && roomParam && verificationKeyParam) {
+  startGateway(relayUrlParam, ticketParam, roomParam, verificationKeyParam)
     .catch(() => setStatus("failed"));
 } else {
   setStatus("missing");

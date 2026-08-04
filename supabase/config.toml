@@ -1,0 +1,7 @@
+project_id = "kanal"
+
+[edge_runtime]
+policy = "per_worker"
+
+[functions.kanal-relay]
+verify_jwt = false

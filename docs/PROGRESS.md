@@ -6,29 +6,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
-### Relay invitations are capabilities and every message is authenticated
+### Kanal traffic is behind an authenticated gateway
 
-- Replaced timestamp-only room names with 128-bit random capabilities and moved invitation data
-  into the URL fragment. QR codes now carry only the room capability and the host's ephemeral
-  P-256 verification key; Supabase project configuration no longer leaks through invitations or
-  browser/server logs.
-- Wrapped every relay payload in an ECDSA/SHA-256 signed envelope. The mobile page imports the
-  verification key from the invitation and rejects unsigned, malformed, tampered, or wrong-key
-  messages before they reach room state. Room rotation is signed by the old key and hands the
-  client the new room capability and verification key atomically.
-- Switched the built-in credential from the legacy anon JWT to Supabase's current
-  `sb_publishable_...` format and stopped sending it as an Authorization bearer token. The public
-  URL/key remain client configuration by design; a secret/service-role key must never ship in the
-  desktop or static web app. `KANAL_SUPABASE_PUBLISHABLE_KEY` is the preferred override, with the
-  old anon-key variable retained only as a compatibility fallback.
-- Audited the connected Supabase project: it is healthy and public tables have RLS enabled, but it
-  is shared with unrelated workloads. This change does not pretend a public, zero-account channel
-  is private membership: possession of the high-entropy room capability provides confidentiality,
-  signatures provide message authenticity, and a dedicated project or Auth + private-channel RLS
-  remains the route to quota isolation, revocation, and authenticated membership.
-- Added regression coverage for room entropy, invitation shape, signature verification and
-  tampering, request headers, room rotation, and parity/security behavior of the two static mobile
-  pages.
+- Removed all Supabase project URLs and client API keys from the desktop source, compiled defaults,
+  GitHub Pages, and invitation format. The operator now provisions `KANAL_RELAY_URL` and the secret
+  `KANAL_RELAY_HOST_TOKEN` at runtime; the public URL identifies the gateway but grants no project
+  access. Relay stays disabled rather than silently falling back to a shared public credential when
+  either setting is absent.
+- Added the `kanal-relay` Edge Function. A host bootstrap token can create a room and receives two
+  signed, 12-hour HMAC capabilities: a publish-only host ticket and a receive-only reader ticket.
+  Only the function holds the Supabase server credential. It publishes signed envelopes to a
+  private Realtime channel and proxies that channel to an authenticated WebSocket; reader sockets
+  cannot send relay messages.
+- Replaced direct Realtime access in `GatewayRelayPublisher` and both copies of the static mobile
+  page. The QR fragment now carries the gateway endpoint, reader ticket, 128-bit room capability,
+  and ephemeral P-256 verification key. GitHub Pages opens the ticketed WebSocket, checks that the
+  gateway's room/key claims match the invitation, then verifies every signed payload before
+  touching UI state.
+- Room rotation now includes the next reader ticket inside a message signed by the old room key, so
+  connected phones can follow a restart without receiving a reusable host credential. The bearer
+  invitation remains readable by anyone who obtains it until expiry; tickets are stateless and are
+  not individually revocable. This boundary protects Kanal without creating a second project, but
+  does not alter unrelated public access already configured elsewhere in the shared project.
+- Added regression coverage for repository/build credential absence, gateway role separation,
+  invitation shape, signature verification and tampering, room rotation, private-channel use, and
+  byte-for-byte parity of the two static mobile pages.
 
 ## 2026-08-03
 

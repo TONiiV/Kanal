@@ -47,9 +47,13 @@ public sealed record RoomClosedMessage : RelayMessage;
 /// The operator restarted: a new room id (and channel) has taken over. Published on the
 /// OLD channel so phones already holding a QR-scanned URL follow along without rescanning.
 /// A fresh room id per Start is deliberate — ASR utterance ids restart at zero, so reusing
-/// the channel would let a new meeting overwrite the previous one's records by id.
+/// the channel would let a new meeting overwrite the previous one's records by id. The new
+/// receive-only ticket travels inside this message, which is signed by the old room key.
 /// </summary>
-public sealed record RoomMovedMessage(string NewRoomId, string NewVerificationKey) : RelayMessage;
+public sealed record RoomMovedMessage(
+    string NewRoomId,
+    string NewVerificationKey,
+    string NewInviteTicket) : RelayMessage;
 
 /// <summary>
 /// The room is temporarily off the record, or back on it. A column that simply stops is

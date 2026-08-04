@@ -8,29 +8,42 @@ namespace Kanal.Tests;
 public class RelaySecurityTests
 {
     [Fact]
-    public void JoinUrlCarriesOnlyTheRoomCapabilityAndVerificationKey()
+    public void JoinUrlCarriesOnlyGatewayCapabilityData()
     {
         var settings = new RelaySettings(
-            "https://secret-project.supabase.co",
-            "sb_publishable_do-not-put-this-in-the-url",
+            "https://relay.example.test/kanal-relay",
+            "host-token-never-put-this-in-the-url",
             "https://example.test/mobile/");
 
-        var url = settings.BuildJoinUrl("kanal-room-capability", "public-verification-key");
+        var url = settings.BuildJoinUrl(
+            "reader-ticket",
+            "kanal-room-capability",
+            "public-verification-key");
 
         Assert.Equal(
-            "https://example.test/mobile/#room=kanal-room-capability&vk=public-verification-key",
+            "https://example.test/mobile/#relay=https%3A%2F%2Frelay.example.test%2Fkanal-relay" +
+            "&ticket=reader-ticket&room=kanal-room-capability&vk=public-verification-key",
             url);
         Assert.DoesNotContain("supabase", url, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("publishable", url, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("sbref", url, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("key=", url, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("host-token", url, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ShippedCredentialIsAModernPublishableKey()
+    public void RepositoryShipsNoSupabaseConfiguration()
     {
-        Assert.StartsWith("sb_publishable_", RelaySettings.DefaultPublishableKey);
-        Assert.DoesNotContain("eyJ", RelaySettings.DefaultPublishableKey);
+        var root = FindRepositoryRoot();
+        var shipped = Directory.EnumerateFiles(
+                Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(
+                Path.Combine(root, "web"), "*.html", SearchOption.AllDirectories))
+            .Concat([
+                Path.Combine(root, "docs", "index.html"),
+                Path.Combine(root, "supabase", "functions", "kanal-relay", "index.ts"),
+            ])
+            .Select(File.ReadAllText);
+
+        Assert.DoesNotContain(shipped, text => text.Contains("sb_publishable_"));
+        Assert.DoesNotContain(shipped, text => text.Contains(".supabase.co"));
     }
 
     [Fact]
@@ -59,23 +72,33 @@ public class RelaySecurityTests
     }
 
     [Fact]
-    public async Task SupabaseGetsASignedEnvelopeAndNoBearerCredential()
+    public async Task GatewayCreatesARoomThenPublishesASignedEnvelope()
     {
         var handler = new CaptureHandler();
         using var http = new HttpClient(handler);
-        await using var transport = new SupabaseRelayPublisher(
-            "https://project.supabase.co", "sb_publishable_test", "room", http);
+        var room = await GatewayRelayPublisher.CreateRoomAsync(
+            "https://relay.example.test/kanal-relay",
+            "host-bootstrap-token-with-32-bytes",
+            "room-capability",
+            "verification-key",
+            http,
+            TestContext.Current.CancellationToken);
         using var key = RelaySigningKey.Create();
-        await using var signed = new SignedRelayPublisher(transport, key);
+        await using var signed = new SignedRelayPublisher(room.Publisher, key);
 
-        await signed.PublishAsync(new RoomRecordingMessage(true));
+        await signed.PublishAsync(
+            new RoomRecordingMessage(true),
+            TestContext.Current.CancellationToken);
 
-        Assert.NotNull(handler.Request);
-        Assert.Equal("sb_publishable_test", handler.Request!.Headers.GetValues("apikey").Single());
-        Assert.Null(handler.Request.Headers.Authorization);
+        Assert.Equal("reader-ticket", room.InviteTicket);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("host-bootstrap-token-with-32-bytes", handler.Requests[0].Bearer);
+        Assert.Equal("host-room-ticket", handler.Requests[1].Bearer);
+        Assert.Equal("create", handler.Requests[0].Action);
+        Assert.Equal("publish", handler.Requests[1].Action);
 
-        using var body = JsonDocument.Parse(handler.Body!);
-        var payload = body.RootElement.GetProperty("messages")[0].GetProperty("payload");
+        using var body = JsonDocument.Parse(handler.Requests[1].Body);
+        var payload = body.RootElement.GetProperty("payload");
         var envelope = Assert.IsType<SignedRelayMessage>(
             RelayJson.Deserialize(payload.GetRawText()));
         Assert.True(RelaySigningKey.TryVerify(key.VerificationKey, envelope, out var message));
@@ -83,7 +106,22 @@ public class RelaySecurityTests
     }
 
     [Fact]
-    public void MobilePageVerifiesBeforeDispatchAndShipsNoLegacyKey()
+    public async Task GatewayRefusesToSendTheHostTokenOverPlainHttp()
+    {
+        using var http = new HttpClient(new CaptureHandler());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            GatewayRelayPublisher.CreateRoomAsync(
+                "http://relay.example.test/kanal-relay",
+                "host-bootstrap-token-with-32-bytes",
+                "room-capability",
+                "verification-key",
+                http,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void MobilePageUsesOnlyTheAuthenticatedGateway()
     {
         var root = FindRepositoryRoot();
         var web = File.ReadAllText(Path.Combine(root, "web", "index.html"));
@@ -92,9 +130,25 @@ public class RelaySecurityTests
         Assert.Equal(web, docs);
         Assert.Contains("crypto.subtle.verify", web);
         Assert.Contains("await verifyEnvelope", web);
-        Assert.DoesNotContain("params.get(\"key\")", web);
-        Assert.DoesNotContain("params.get(\"sbref\")", web);
-        Assert.DoesNotContain("eyJhbGciOiJIUzI1Ni", web);
+        Assert.Contains("new WebSocket", web);
+        Assert.Contains("invite.get(\"ticket\")", web);
+        Assert.DoesNotContain("supabase", web, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("apikey", web, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EdgeFunctionKeepsSupabaseAndHostCredentialsServerSide()
+    {
+        var root = FindRepositoryRoot();
+        var edge = File.ReadAllText(Path.Combine(
+            root, "supabase", "functions", "kanal-relay", "index.ts"));
+
+        Assert.Contains("KANAL_HOST_TOKEN", edge);
+        Assert.Contains("SUPABASE_SECRET_KEYS", edge);
+        Assert.Contains("private: true", edge);
+        Assert.Contains("ticket.", edge);
+        Assert.DoesNotContain("sb_publishable_", edge);
+        Assert.DoesNotContain(".supabase.co", edge);
     }
 
     private static string FindRepositoryRoot()
@@ -107,16 +161,25 @@ public class RelaySecurityTests
 
     private sealed class CaptureHandler : HttpMessageHandler
     {
-        public HttpRequestMessage? Request { get; private set; }
-        public string? Body { get; private set; }
+        public List<(string Action, string? Bearer, string Body)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            Request = request;
-            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.OK);
+            var action = new Uri(request.RequestUri!.AbsoluteUri).Query
+                .TrimStart('?').Split('&')
+                .Select(value => value.Split('=', 2))
+                .Single(pair => pair[0] == "action")[1];
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Requests.Add((action, request.Headers.Authorization?.Parameter, body));
+            var response = action == "create"
+                ? "{\"hostTicket\":\"host-room-ticket\",\"inviteTicket\":\"reader-ticket\"}"
+                : "{}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(response),
+            };
         }
     }
 }

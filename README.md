@@ -35,7 +35,17 @@ Modes whose providers are missing stay in the list, disabled, with the reason pr
 
 **Settings** is grouped by the same two stages. *Transcription*: multiple named Gladia keys (stored in `%APPDATA%/Kanal/settings.json`, one active at a time); the `GLADIA_API_KEY` env var (any scope) is the fallback when no stored key exists. *Translation*: which local GGUF model the local-translation modes should load, with download / delete.
 
-**Mobile clients**: on Start, the host generates a 128-bit room capability and an ephemeral P-256 signing key, publishes signed room messages to Supabase Realtime, and shows a **join QR code** containing only the mobile-page URL, capability, and public verification key. The fragment is not sent to the web host. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog. Endpoint overrides: `KANAL_SUPABASE_URL`, `KANAL_SUPABASE_PUBLISHABLE_KEY`, `KANAL_WEB_URL`; `KANAL_SUPABASE_ANON_KEY` remains a compatibility fallback.
+**Mobile clients**: on Start, the host generates a 128-bit room capability and an ephemeral P-256 signing key, asks the authenticated relay gateway for a 12-hour room ticket, and shows a **join QR code** containing only the gateway endpoint, reader ticket, room capability, and public verification key. GitHub Pages contains no Supabase project URL or API key and can only receive from the ticket's private room. The fragment is not sent to the web host. A snapshot is republished every 15 s, so late joiners and reconnecting phones recover the backlog.
+
+Relay is intentionally off until the operator supplies runtime configuration outside the build:
+
+```bash
+export KANAL_RELAY_URL="https://<project-ref>.supabase.co/functions/v1/kanal-relay"
+export KANAL_RELAY_HOST_TOKEN="<the same high-entropy secret configured on the function>"
+# optional: export KANAL_WEB_URL="https://toniiv.github.io/Kanal/"
+```
+
+`KANAL_RELAY_URL` is a public address, not a credential. Knowing it only reaches endpoints that require the host bootstrap token or a short-lived, room-scoped ticket. Never put `KANAL_RELAY_HOST_TOKEN` in source, GitHub Actions build variables, a release artifact, or the QR code.
 
 ```bash
 dotnet test
@@ -57,8 +67,8 @@ dotnet test
 - [x] Audio pipeline: resampler, WAV replay, WASAPI capture (Windows), CoreAudio capture (macOS)
 - [x] GladiaAsrProvider (wire format **needs live verification during D0-B** — adjust `GladiaWire`/`GladiaOptions.ExtraConfig`, nothing else)
 - [x] Host UI: 4 columns (language chips), rename/merge (✓ or Enter; covered by headless UI tests), demo mode, md export, settings dialog for API keys
-- [x] M0-D7: relay publisher (`SupabaseRelayPublisher`, REST broadcast — verified end to end) + join QR code in host + periodic snapshot for late join
-- [x] Mobile web client: Supabase transport + demo mode (`web/index.html`, copy in `docs/` for GitHub Pages)
+- [x] M0-D7: authenticated relay publisher (`GatewayRelayPublisher`) + private-channel Edge Function + join QR code in host + periodic snapshot for late join
+- [x] Mobile web client: receive-only gateway WebSocket + signature verification + demo mode (`web/index.html`, copy in `docs/` for GitHub Pages)
 - [ ] Hosting for `web/index.html` — pending: enable GitHub Pages (repo Settings → Pages → main `/docs`) or grant the Vercel integration project-create permission
 - [x] D0-A: **macOS** audio capture backend (`CoreAudioCapture`, AudioQueue — verified end to end with `doctor mic`)
 - [ ] D0-B: zh↔pl terminology quality check with real part numbers — **go/no-go gate**
@@ -67,9 +77,11 @@ dotnet test
 
 ## Relay notes
 
-The built-in Supabase URL and `sb_publishable_...` key are public client configuration, not secrets; never put a secret/service-role key in the app. They no longer travel in invitation URLs. The default project is shared with unrelated workloads, although its public tables currently have RLS enabled, and Kanal itself only uses Realtime broadcast. A dedicated project is still recommended for quota and blast-radius isolation and can be selected with `KANAL_SUPABASE_URL` / `KANAL_SUPABASE_PUBLISHABLE_KEY` (the deployed mobile page must use the same project).
+Kanal no longer ships any Supabase URL or client API key. The desktop talks only to `kanal-relay` with a host bootstrap secret provisioned on the operator's machine; the Edge Function keeps the Supabase server credential in its runtime environment and is the only component allowed to publish or subscribe to the private Realtime channel. GitHub Pages uses a receive-only WebSocket and a room-scoped reader ticket, while the ephemeral P-256 signature still lets it reject forged, unsigned, or wrong-room messages.
 
-Public Realtime channels remain intentionally account-free. Confidentiality is therefore based on possession of an unguessable room capability, while the ephemeral signature lets clients reject forged or unsigned messages. This is not revocation, authenticated membership, or infrastructure isolation; those require Supabase Auth plus private-channel RLS, or a dedicated relay project.
+The invitation remains a bearer capability: anyone who obtains the QR/link can read that room until its ticket expires (currently 12 hours), and the stateless ticket cannot be revoked individually before expiry. They cannot create rooms, publish messages, enumerate other rooms, or use the project's database/storage through this gateway. This protects Kanal inside the existing shared project; it does not revoke any unrelated public keys or policies that another application on the same project may already expose.
+
+Deployment and secret-provisioning commands live in [`supabase/functions/kanal-relay/README.md`](supabase/functions/kanal-relay/README.md). The function deliberately disables platform JWT verification because all three routes enforce their own role-scoped HMAC capability authentication.
 
 ## Open decisions / risks
 

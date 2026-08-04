@@ -611,7 +611,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
         var relaySettings = RelaySettings.FromEnvironment();
         var signingKey = RelaySigningKey.Create();
-        var relay = CreateRelay(config.RoomId, relaySettings, signingKey);
+        RelayConnection relayConnection;
+        try
+        {
+            relayConnection = await CreateRelayAsync(
+                config.RoomId,
+                relaySettings,
+                signingKey);
+        }
+        catch (Exception ex)
+        {
+            signingKey.Dispose();
+            await DisposeProvidersAsync();
+            Status = L.Format("status.startfailed", ex.Message);
+            return;
+        }
+        var relay = relayConnection.Publisher;
 
         // Phones hold the channel they scanned into, so the previous room has to be told
         // where the meeting went — otherwise a restart strands everyone until they rescan.
@@ -619,7 +634,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             await PublishSafeAsync(
                 _relay,
-                new RoomMovedMessage(config.RoomId, signingKey.VerificationKey));
+                new RoomMovedMessage(
+                    config.RoomId,
+                    signingKey.VerificationKey,
+                    relayConnection.InviteTicket ?? ""));
             await _relay.DisposeAsync();
         }
 
@@ -661,9 +679,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // pump below pushes audio, so nothing is missed by attaching here.
         StartRecording(session, mode, settings, config.RoomId);
 
-        if (RelayEnabled)
+        if (RelayEnabled && relayConnection.GatewayUrl is not null &&
+            relayConnection.InviteTicket is not null)
         {
-            ShowJoinInfo(relaySettings.BuildJoinUrl(config.RoomId, signingKey.VerificationKey));
+            ShowJoinInfo((relaySettings with { GatewayUrl = relayConnection.GatewayUrl }).BuildJoinUrl(
+                relayConnection.InviteTicket,
+                config.RoomId,
+                signingKey.VerificationKey));
             _snapshotTimer.Start();
         }
 
@@ -791,20 +813,42 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private IRelayPublisher CreateRelay(
+    private async Task<RelayConnection> CreateRelayAsync(
         string roomId,
         RelaySettings settings,
         RelaySigningKey signingKey)
     {
-        var transport = !RelayEnabled
-            ? new NullRelayPublisher()
-            : RelayPublisherFactory?.Invoke(roomId)
-              ?? new SupabaseRelayPublisher(
-                  settings.SupabaseUrl,
-                  settings.PublishableKey,
-                  roomId);
-        return new SignedRelayPublisher(transport, signingKey);
+        if (!RelayEnabled)
+            return new RelayConnection(
+                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
+                null,
+                null);
+
+        if (RelayPublisherFactory is not null)
+            return new RelayConnection(
+                new SignedRelayPublisher(RelayPublisherFactory(roomId), signingKey),
+                settings.GatewayUrl ?? "https://relay.test/kanal-relay",
+                "test-reader-ticket");
+
+        if (!settings.IsConfigured)
+            throw new InvalidOperationException(
+                "Set KANAL_RELAY_URL and KANAL_RELAY_HOST_TOKEN before enabling the relay.");
+
+        var room = await GatewayRelayPublisher.CreateRoomAsync(
+            settings.GatewayUrl!,
+            settings.HostToken!,
+            roomId,
+            signingKey.VerificationKey);
+        return new RelayConnection(
+            new SignedRelayPublisher(room.Publisher, signingKey),
+            settings.GatewayUrl,
+            room.InviteTicket);
     }
+
+    private sealed record RelayConnection(
+        IRelayPublisher Publisher,
+        string? GatewayUrl,
+        string? InviteTicket);
 
     private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)
     {
