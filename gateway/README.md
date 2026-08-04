@@ -57,6 +57,18 @@ curl -s -X POST "https://<worker-host>/?action=activate" \
 # -> {"deviceId":"...","deviceToken":"..."}
 ```
 
+**A code is valid for 24 hours.** Mint it when the machine is in front of you, not in advance:
+after 24 hours it is refused with the same `401 Invalid activation code` an unknown code gets,
+and you mint a new one. This is what keeps a code that leaks — shell history, a pasted message,
+a note — from still being redeemable weeks later. Nothing has to be cleaned up when a code
+expires; unredeemed codes simply stop working.
+
+`?action=activate` is unauthenticated by necessity (a new desktop has nothing to authenticate
+with), so it is rate limited to **10 attempts per 10 minutes per client address**; over that it
+answers `429 Too many activation attempts`. One machine's activation needs one attempt, so the
+budget is only reachable by fumbling a paste several times — wait out the window and retry.
+`create`, `publish` and `stream` are not affected.
+
 Provision the desktop at runtime (not during compilation or packaging):
 
 ```bash
@@ -95,7 +107,7 @@ suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the co
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
 | `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames |
-| `POST ?action=activate` | activation code | one-time exchange for a device credential |
+| `POST ?action=activate` | activation code | one-time exchange for a device credential; code expires 24 h after minting, 10 attempts / 10 min / address |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 
 The gateway never sees cleartext credentials at rest (codes and device tokens are stored as

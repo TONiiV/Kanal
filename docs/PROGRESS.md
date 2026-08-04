@@ -6,6 +6,46 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### Activation codes expire, and the one anonymous route is bounded
+
+Two hardening changes to the gateway's device-authorization flow (issue #40, item 2). Neither
+touches the `create`/`publish`/`stream` wire protocol.
+
+- **Codes are valid for 24 hours.** An unused code used to live in the registry forever, so one
+  that leaked through shell history, a pasted message or a note stayed redeemable months later —
+  and the operator had no way to know. `redeemCode` now refuses a code whose `created_at` is
+  older than 24 h. Enforcement is at redeem time and reads the `created_at` the `codes` table
+  already stored, so the **deployed registry needs no migration**: the Durable Object constructor
+  runs `CREATE TABLE IF NOT EXISTS`, which would silently not add a column to the table that
+  already exists on `kanal-relay.toniiv.workers.dev`. An expired code returns the same
+  `401 Invalid activation code` an unknown code does — a distinct status would tell someone
+  holding a leaked code that it was once real.
+- **`?action=activate` is rate limited**, 10 attempts per 10 minutes per `CF-Connecting-IP`,
+  answered with `429` over the budget. It is the only route an anonymous caller may reach and
+  therefore the only one on which an anonymous caller can make the registry Durable Object do
+  work; the limit bounds that, and bounds how fast a stolen-but-unspent code can be paired with
+  guesses. The counter lives in a new `activation_attempts` table inside the existing
+  `DeviceRegistry` — a new table is created by the existing `IF NOT EXISTS` block, unlike a new
+  column. It is durable rather than in-memory because a caller pacing requests slowly enough for
+  the object to be evicted would otherwise reset the counter for free. Rows expire with their
+  window. Chosen over the Workers `ratelimit` binding because the binding's local simulation is
+  process-memory-scoped and its periods are fixed at 10 or 60 s, i.e. not something the suite
+  could assert on honestly.
+- **What this does not close.** Neither change reduces the raw request count against the Workers
+  free-plan budget — an in-Worker limit still costs a Worker request to answer. Only an edge WAF
+  rate-limiting rule rejects before the Worker runs; the free plan allows one such rule and it
+  remains available as a dashboard-side complement, not a substitute. And an attacker who does
+  obtain a fresh code within its 24 h window still gets a device credential — what that buys is
+  the ability to create *their own* rooms, never to read anyone else's, because reader tickets
+  are room-scoped and every envelope is verified against the host's P-256 key on the phone. That
+  is the per-device design working as intended, and revocation (`?action=admin.revoke`) is the
+  answer to it.
+- 6 new vitest cases (suite 25 → 31), including an expired code that enrols nothing and cannot
+  be revived by retrying, a code just inside the window that still burns on first use, a caller
+  cut off at the budget without spending a neighbour's, and room creation, publishing and
+  streaming proven untouched by the limit. `Date.now()` advances in real time inside workerd, so
+  the TTL cases age the specific code's row through `runInDurableObject` rather than sleeping.
+
 ### Kanal traffic is behind an authenticated gateway
 
 - Removed all Supabase project URLs and client API keys from the desktop source, compiled defaults,

@@ -1,4 +1,4 @@
-import { SELF } from "cloudflare:test";
+import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -12,17 +12,68 @@ const GW = "https://gateway.test/";
 const ADMIN = "test-admin-token-0123456789-0123456789";
 const ROOM = "kanal-093015-AbCdEfGhIjKlMnOp";
 const VK = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE_fake_spki_key_material_0123456789";
+const HOUR = 60 * 60 * 1000;
+/** Must match `ACTIVATE_MAX_ATTEMPTS` in `src/index.ts`. */
+const ACTIVATE_LIMIT = 10;
+
+let clientAddress = 0;
+
+/**
+ * Cloudflare overwrites `CF-Connecting-IP` at the edge, so the activation rate limit buckets
+ * on it. Every request here comes from its own address unless a test deliberately pins one —
+ * a shared bucket would make every case in this file share one budget.
+ */
+function nextClientIp(): string {
+  clientAddress += 1;
+  return `203.0.113.${clientAddress}`;
+}
 
 function post(action: string, body: unknown, token?: string, headers?: Record<string, string>) {
   return SELF.fetch(`${GW}?action=${action}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "CF-Connecting-IP": nextClientIp(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
     body: JSON.stringify(body),
   });
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * workerd's clock advances in real time, so a 24 h code lifetime can only be exercised by
+ * moving the row backwards — never by waiting. Ages exactly one code so codes minted by
+ * other cases in this file are untouched.
+ */
+async function ageCode(code: string, ms: number): Promise<void> {
+  const codeHash = await sha256Hex(code);
+  const stub = env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
+  await runInDurableObject(stub, (_instance, state) => {
+    state.storage.sql.exec(
+      "UPDATE codes SET created_at = created_at - ? WHERE code_hash = ?",
+      ms,
+      codeHash,
+    );
+  });
+}
+
+async function mintCode(note = "test"): Promise<string> {
+  const response = await post("admin.code", { note }, ADMIN);
+  expect(response.status).toBe(200);
+  return (await response.json<{ code: string }>()).code;
+}
+
+async function deviceCount(): Promise<number> {
+  const response = await SELF.fetch(`${GW}?action=admin.devices`, {
+    headers: { Authorization: `Bearer ${ADMIN}` },
+  });
+  return (await response.json<{ devices: unknown[] }>()).devices.length;
 }
 
 /** Admin mints a one-time activation code; the desktop trades it for its own credential. */
@@ -106,6 +157,35 @@ describe("device authorization", () => {
     expect((await post("activate", { code, deviceName: "second" })).status).toBe(401);
   });
 
+  it("an activation code older than 24 h is refused and enrols nothing", async () => {
+    const code = await mintCode("forgotten-in-shell-history");
+    const before = await deviceCount();
+    await ageCode(code, 25 * HOUR);
+
+    const response = await post("activate", { code, deviceName: "late" });
+    // Deliberately the same 401 an unknown code gets: an attacker holding a leaked code
+    // must not learn from the status whether it was ever real.
+    expect(response.status).toBe(401);
+    expect(await deviceCount()).toBe(before);
+  });
+
+  it("an expired activation code cannot be revived by retrying", async () => {
+    const code = await mintCode("expired-then-hammered");
+    await ageCode(code, 25 * HOUR);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect((await post("activate", { code, deviceName: "retry" })).status).toBe(401);
+    }
+  });
+
+  it("an activation code just inside the 24 h window still works, once", async () => {
+    const code = await mintCode("same-day");
+    await ageCode(code, 23 * HOUR);
+
+    expect((await post("activate", { code, deviceName: "same-day" })).status).toBe(200);
+    expect((await post("activate", { code, deviceName: "again" })).status).toBe(401);
+  });
+
   it("a made-up activation code is rejected", async () => {
     const response = await post("activate", { code: "not-a-real-code", deviceName: "x" });
     expect(response.status).toBe(401);
@@ -142,6 +222,63 @@ describe("device authorization", () => {
     expect(mine).toBeDefined();
     expect(mine!.name).toBe("meeting-laptop");
     expect(mine!.revoked).toBe(false);
+  });
+});
+
+/**
+ * `?action=activate` is unauthenticated by necessity — a new desktop has nothing to
+ * authenticate with — and it is the only route on which an anonymous caller can reach the
+ * registry Durable Object. The limit bounds that reach per client address.
+ */
+describe("activation rate limit", () => {
+  const from = (ip: string) => ({ "CF-Connecting-IP": ip });
+
+  it("cuts a caller off after the per-address budget is spent", async () => {
+    const attacker = from("198.51.100.10");
+    for (let attempt = 0; attempt < ACTIVATE_LIMIT; attempt++) {
+      const guess = await post("activate", { code: `guess-${attempt}-0000` }, undefined, attacker);
+      expect(guess.status).toBe(401);
+    }
+    const cut = await post("activate", { code: "guess-over-the-line" }, undefined, attacker);
+    expect(cut.status).toBe(429);
+  });
+
+  it("does not spend a neighbouring caller's budget", async () => {
+    const noisy = from("198.51.100.20");
+    for (let attempt = 0; attempt <= ACTIVATE_LIMIT; attempt++) {
+      await post("activate", { code: `guess-${attempt}-000000` }, undefined, noisy);
+    }
+    const code = await mintCode("quiet-neighbour");
+    const activated = await post(
+      "activate",
+      { code, deviceName: "quiet-neighbour" },
+      undefined,
+      from("198.51.100.21"),
+    );
+    expect(activated.status).toBe(200);
+  });
+
+  it("leaves room creation, publishing and streaming alone", async () => {
+    const operator = from("198.51.100.30");
+    const { deviceToken } = await activateDevice("busy-laptop");
+    for (let attempt = 0; attempt <= ACTIVATE_LIMIT * 2; attempt++) {
+      const created = await post(
+        "create",
+        { roomId: `kanal-11000${attempt % 10}-BusyRoomAaaaaaaa`, verificationKey: VK },
+        deviceToken,
+        operator,
+      );
+      expect(created.status).toBe(200);
+      const { hostTicket, inviteTicket } = await created.json<{
+        hostTicket: string;
+        inviteTicket: string;
+      }>();
+      const published = await post("publish", { payload: signedEnvelope }, hostTicket, operator);
+      expect(published.status).toBe(200);
+      const reader = await openReader(inviteTicket);
+      expect(reader).not.toBeInstanceOf(Response);
+      (reader as Reader).socket.close();
+    }
   });
 });
 

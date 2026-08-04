@@ -21,6 +21,8 @@ import { DurableObject } from "cloudflare:workers";
  * Device authorization (operator-only, curl or a future settings pane):
  *   POST ?action=admin.code     Bearer <KANAL_ADMIN_TOKEN>  {note?} -> {code}
  *   POST ?action=activate       {code, deviceName?} -> {deviceId, deviceToken}
+ *                               codes are single-use and expire 24 h after minting; the route
+ *                               is rate limited per client address (429 once the budget is up)
  *   POST ?action=admin.revoke   Bearer <KANAL_ADMIN_TOKEN>  {deviceId}
  *   GET  ?action=admin.devices  Bearer <KANAL_ADMIN_TOKEN>
  */
@@ -38,6 +40,10 @@ const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
+/** A code is handed over for one machine; a leaked one must not still work weeks later. */
+const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+const ACTIVATE_WINDOW_MS = 10 * 60 * 1000;
+const ACTIVATE_MAX_ATTEMPTS = 10;
 
 type Role = "host" | "reader";
 
@@ -172,12 +178,29 @@ async function mintActivationCode(request: Request, env: Env): Promise<Response>
   return response({ code });
 }
 
+/**
+ * `activate` is the one route an anonymous caller may reach, so it is the one route on which
+ * an anonymous caller can make the registry do work. Cloudflare overwrites `CF-Connecting-IP`
+ * at the edge, so it is a usable bucket key; a caller arriving without one (curl against a
+ * bare workerd, an internal probe) shares a single bucket rather than escaping the limit.
+ *
+ * `admin.code` is deliberately not limited: its unauthenticated path returns 401 at the admin
+ * token check, before any Durable Object call, so flooding it costs the registry nothing —
+ * and limiting it by address would only throttle the operator, who holds the token anyway.
+ */
+function clientKey(request: Request): string {
+  return request.headers.get("CF-Connecting-IP") ?? "unknown";
+}
+
 async function activateDevice(request: Request, env: Env): Promise<Response> {
   const body = await request.json().catch(() => null) as
     | { code?: unknown; deviceName?: unknown }
     | null;
   if (!body || typeof body.code !== "string" || body.code.length < 8) {
     return response({ error: "Invalid activation code" }, 401);
+  }
+  if (!(await registry(env).allowActivationAttempt(clientKey(request)))) {
+    return response({ error: "Too many activation attempts" }, 429);
   }
   const deviceId = randomToken(8);
   const deviceToken = randomToken(32);
@@ -442,7 +465,46 @@ export class DeviceRegistry extends DurableObject<Env> {
         created_at INTEGER NOT NULL,
         revoked_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS activation_attempts (
+        client TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        attempts INTEGER NOT NULL
+      );
     `);
+  }
+
+  /**
+   * Fixed window per calling address. Durable rather than in-memory because a caller who
+   * paces requests slowly enough for this object to be evicted would otherwise reset the
+   * counter for free. Rows expire with their window, so the table stays the size of the set
+   * of addresses currently trying.
+   */
+  allowActivationAttempt(client: string): boolean {
+    const now = Date.now();
+    this.sql.exec(
+      "DELETE FROM activation_attempts WHERE window_start <= ?",
+      now - ACTIVATE_WINDOW_MS,
+    );
+    const open = this.sql
+      .exec<{ attempts: number }>(
+        "SELECT attempts FROM activation_attempts WHERE client = ?",
+        client,
+      )
+      .toArray();
+    if (open.length === 0) {
+      this.sql.exec(
+        "INSERT INTO activation_attempts (client, window_start, attempts) VALUES (?, ?, 1)",
+        client,
+        now,
+      );
+      return true;
+    }
+    if (open[0].attempts >= ACTIVATE_MAX_ATTEMPTS) return false;
+    this.sql.exec(
+      "UPDATE activation_attempts SET attempts = attempts + 1 WHERE client = ?",
+      client,
+    );
+    return true;
   }
 
   registerCode(codeHash: string, note: string): void {
@@ -454,12 +516,18 @@ export class DeviceRegistry extends DurableObject<Env> {
     );
   }
 
-  /** Atomically burns the code and enrols the device; false if the code is unknown or spent. */
+  /**
+   * Atomically burns the code and enrols the device; false if the code is unknown, spent, or
+   * older than `ACTIVATION_CODE_TTL_MS`. The age comes from the `created_at` the code was
+   * already stored with, so no schema change reaches the deployed registry.
+   */
   redeemCode(codeHash: string, deviceId: string, name: string, tokenHash: string): boolean {
+    const now = Date.now();
     const burned = this.sql.exec(
-      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL",
-      Date.now(),
+      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL AND created_at > ?",
+      now,
       codeHash,
+      now - ACTIVATION_CODE_TTL_MS,
     );
     if (burned.rowsWritten === 0) return false;
     this.sql.exec(
