@@ -78,13 +78,26 @@ async function ageActivationWindow(client: string, ms: number): Promise<void> {
   });
 }
 
+interface AttemptCost {
+  /** Rows read across every statement the attempt ran. */
+  rowsRead: number;
+  /** Statements the recorder actually saw — see `seeded` below for why this is returned. */
+  statements: number;
+  /** Rows the seed really left behind. A measurement over an empty table proves nothing. */
+  seeded: number;
+}
+
 /**
- * Rows the registry reads to serve one activation attempt while `rows` other callers hold an
- * open window. Wraps the instance's own `SqlStorage` handle and sums `rowsRead` across every
- * cursor the call opens, so the measurement follows whatever statements `allowActivationAttempt`
- * actually runs — restating its SQL here would drift the moment the queries change.
+ * What one activation attempt costs while `rows` other callers hold an open window. Wraps the
+ * instance's own `SqlStorage` handle and sums `rowsRead` across every cursor the call opens, so
+ * the measurement follows whatever statements `allowActivationAttempt` actually runs — restating
+ * its SQL here would drift the moment the queries change.
+ *
+ * `seeded` and `statements` come back so the caller can check the measurement was real before
+ * trusting it. Both guard a silent false pass: a seed that collapses (or a statement that stops
+ * going through `this.sql`) would otherwise leave the cost assertions comparing zero to zero.
  */
-async function rowsReadForOneAttempt(rows: number): Promise<number> {
+async function costOfOneAttempt(rows: number): Promise<AttemptCost> {
   const stub = env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
   return runInDurableObject(stub, (instance, state) => {
     const now = Date.now();
@@ -95,8 +108,17 @@ async function rowsReadForOneAttempt(rows: number): Promise<number> {
         now,
       );
     }
+    const seeded = state.storage.sql
+      .exec<{ rows: number }>(
+        "SELECT COUNT(*) AS rows FROM activation_attempts WHERE client LIKE 'seed-%'",
+      )
+      .toArray()[0].rows;
+
     const registry = instance as unknown as { sql: SqlStorage };
     const real = registry.sql;
+    // The wrapper can only see statements issued through this handle. Pinning the aliasing it
+    // relies on means a refactor onto `ctx.storage.sql` shows up here rather than in silence.
+    expect(real).toBe(state.storage.sql);
     const cursors: { rowsRead: number }[] = [];
     registry.sql = {
       exec: (query: string, ...bindings: unknown[]) => {
@@ -113,7 +135,11 @@ async function rowsReadForOneAttempt(rows: number): Promise<number> {
         "DELETE FROM activation_attempts WHERE client LIKE 'seed-%' OR client LIKE 'measured-%'",
       );
     }
-    return cursors.reduce((total, cursor) => total + cursor.rowsRead, 0);
+    return {
+      rowsRead: cursors.reduce((total, cursor) => total + cursor.rowsRead, 0),
+      statements: cursors.length,
+      seeded,
+    };
   });
 }
 
@@ -416,11 +442,19 @@ describe("activation rate limit", () => {
    * the abuse case worse than having no limiter at all. This pins the sweep to a constant.
    */
   it("sweeps the expired window without scanning the whole table", async () => {
-    const sparse = await rowsReadForOneAttempt(200);
-    const crowded = await rowsReadForOneAttempt(5000);
+    const sparse = await costOfOneAttempt(200);
+    const crowded = await costOfOneAttempt(5000);
 
-    expect(crowded).toBeLessThan(50);
-    expect(crowded).toBeLessThan(sparse + 25);
+    // The measurement has to be real before its flatness means anything. Without these, a seed
+    // that collapsed to one row — or statements that stopped running through the wrapped handle
+    // — would make the assertions below pass over a table that was never crowded.
+    expect(sparse.seeded).toBe(200);
+    expect(crowded.seeded).toBe(5000);
+    expect(crowded.statements).toBe(3); // sweep, then look up the window, then open it
+    expect(crowded.rowsRead).toBeGreaterThan(0);
+
+    expect(crowded.rowsRead).toBeLessThan(50);
+    expect(crowded.rowsRead).toBeLessThan(sparse.rowsRead + 25);
   });
 
   it("leaves room creation, publishing and streaming alone", async () => {

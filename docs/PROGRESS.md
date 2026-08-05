@@ -52,8 +52,12 @@ touches the `create`/`publish`/`stream` wire protocol.
   routed /48 hands out 65 536) never trips the limit and inserts a fresh row per request, so cost
   per request would grow linearly with a table he is filling and total work would be quadratic,
   on a store that bills per row read. Indexed, the same sweep reads **1** row and the plan becomes
-  `SEARCH ... USING INDEX activation_attempts_window (window_start<?)`. Chosen over scoping the
-  `DELETE` to `client = ?` and sweeping the rest from an alarm: smaller, and no new machinery.
+  `SEARCH ... USING INDEX activation_attempts_window (window_start<?)`. Precisely: it reads one
+  row per row it *retires*, so the cost is amortised-constant rather than constant — each row is
+  read and deleted exactly once in its life, total work linear in rows created instead of
+  quadratic, with a burst worst case where one attempt pays off a whole expired window. What
+  matters is that it is not proportional to a table the caller keeps growing. Chosen over scoping
+  the `DELETE` to `client = ?` and sweeping the rest from an alarm: smaller, and no new machinery.
 - **What this does not close.** Neither change reduces the raw request count against the Workers
   free-plan budget — an in-Worker limit still costs a Worker request to answer. Only an edge WAF
   rate-limiting rule rejects before the Worker runs; the free plan allows one such rule and it
@@ -66,9 +70,9 @@ touches the `create`/`publish`/`stream` wire protocol.
 - **The limiter costs the registry one extra write on every attempt.** Before this change, an
   attempt with an invalid code cost essentially a read: the single-use `UPDATE ... WHERE` matched
   no rows and wrote nothing. Now every attempt performs a guaranteed row write — the window row
-  inserted or incremented — *before* the limiter can engage. With the index above that cost is
-  **fixed**, not proportional to a table the caller controls, which is what makes it an
-  acceptable trade rather than a regression. Against one address hammering the route the limiter
+  inserted or incremented — *before* the limiter can engage. With the index above that cost does
+  not grow with a table the caller controls, which is what makes it an acceptable trade rather
+  than a regression. Against one address hammering the route the limiter
   wins decisively after the first N attempts; against a caller rotating across many addresses it
   never trips and each request costs one constant extra write more than it used to. That is the
   price of a *durable* counter and it is written down rather than discovered later: an in-memory
@@ -94,7 +98,11 @@ touches the `create`/`publish`/`stream` wire protocol.
   own `SqlStorage` handle and sums `rowsRead` across every cursor one `allowActivationAttempt`
   opens. It then asserts that serving an attempt against 5 000 open windows reads no more than a
   handful of rows, and no more than serving one against 200 — a flatness assertion that fails
-  loudly at 5 000 if the index is ever dropped, whatever the statements look like by then.
+  loudly at 5 000 if the index is ever dropped, whatever the statements look like by then. The
+  guard also checks its own premises before trusting that comparison: that the seed really left
+  5 000 rows behind (a collapsed seed would let the flat assertion pass over an empty table —
+  demonstrated, not hypothesised) and that all three statements still ran through the wrapped
+  handle (a refactor onto `ctx.storage.sql` would otherwise measure nothing and stay green).
 
 ### Kanal traffic is behind an authenticated gateway
 

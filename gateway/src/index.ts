@@ -221,10 +221,13 @@ function bucketAddress(address: string): string {
  * same all-zero /64, so bucketing them by prefix would put every such caller — who are
  * unrelated IPv4 clients — into one shared budget.
  *
- * Known and accepted: `64:ff9b::/96` (NAT64) and Teredo `2001:0::/32`, whose hextets 2-3 carry
- * the *server's* address, collapse the same way. Neither is realistically emittable as a source
- * address at the Cloudflare edge — 64:ff9b is a destination-synthesis prefix and Teredo is
- * effectively dead — so they are left to the /64 rule rather than special-cased.
+ * Known and accepted: two further prefixes also put unrelated clients in one bucket, for
+ * different reasons. Under NAT64 `64:ff9b::/96` the prefix is fixed and identical for every
+ * translated client, so they share the `64:ff9b:0:0` /64 whatever their own IPv4 is. Under
+ * Teredo `2001:0::/32` hextets 2-3 carry the *server's* IPv4, so one /64 covers every client of
+ * that server. Neither is realistically emittable as a source address at the Cloudflare edge —
+ * 64:ff9b is a destination-synthesis prefix and Teredo is effectively dead — so both are left
+ * to the /64 rule rather than special-cased.
  */
 function embeddedIpv4(hextets: number[]): string | null {
   if (!hextets.slice(0, 4).every((hextet) => hextet === 0)) return null;
@@ -549,7 +552,9 @@ export class DeviceRegistry extends DurableObject<Env> {
    * The sweep runs on `activation_attempts_window`, not as a scan. A caller rotating source
    * prefixes never trips the limit and inserts a row per request, so the table's size is his
    * to choose; an unindexed sweep would read all of it on every attempt and make the limiter
-   * worse than no limiter. Indexed, an attempt costs a constant few rows at any table size.
+   * worse than no limiter. Indexed, the sweep reads only the rows it actually retires — each
+   * row read and deleted exactly once in its life — so the cost is amortised-constant and
+   * total work is linear in rows created rather than quadratic in table size.
    */
   allowActivationAttempt(client: string): boolean {
     const now = Date.now();

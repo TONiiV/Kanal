@@ -81,15 +81,20 @@ billed against the free plan — an in-Worker limit still costs a request to ans
 edge WAF rate-limiting rule rejects before the Worker runs. And every attempt now costs the
 registry one row write: an attempt with an invalid code used to be effectively a read (the
 single-use `UPDATE` matched no rows and wrote nothing), whereas the window row is now inserted or
-incremented before the limiter can engage. That extra cost is **fixed, not proportional** — the
-window sweep runs on the `activation_attempts_window` index, so an attempt reads a constant
-handful of rows however large the table has grown. That distinction is the whole point: the
-table's size is the caller's to choose, because a caller rotating source prefixes never trips the
-limit and inserts a fresh row per request. Unindexed, every attempt would read the entire table
-and the limiter would make the abuse case worse than having no limiter at all; a vitest case pins
-the sweep's cost so that cannot silently regress. The fixed extra write is the price of a
-*durable* counter, and it is the right price: an in-memory one would be reset for free by a
-Durable Object eviction.
+incremented before the limiter can engage. That extra cost does **not** grow with the size of the
+table — the window sweep runs on the `activation_attempts_window` index, so it reads only the
+rows it actually retires and nothing more. 20 000 live windows with none expired costs one row
+read; 20 000 *expired* windows costs 20 000, because each is read as it is deleted. The cost is
+therefore **amortised**-constant: every row is read and deleted exactly once in its life, so
+total work is linear in rows created rather than quadratic, with a burst-then-silence worst case
+where one unlucky attempt pays off an entire expired window.
+
+That distinction is the whole point, because the table's size is the caller's to choose: a caller
+rotating source prefixes never trips the limit and inserts a fresh row per request. Unindexed,
+every attempt would read the *entire* table — expired or not — and the limiter would make the
+abuse case worse than having no limiter at all; a vitest case pins the sweep's cost so that
+cannot silently regress. The extra write is the price of a *durable* counter, and it is the right
+price: an in-memory one would be reset for free by a Durable Object eviction.
 
 Provision the desktop at runtime (not during compilation or packaging):
 
