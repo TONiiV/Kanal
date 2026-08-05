@@ -6,6 +6,34 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### What Kanal is built on, named on screen (issue #35, 3 of 3)
+
+An index at the bottom of Settings: project, licence, and where to read it. The people running this
+in a meeting are the ones handing the binary around, so it belongs in the application rather than
+only in a repository.
+
+- Each notice carries the NuGet ids it covers, and a test reads every shipped project file — `src/`,
+  `tools/` and the root `Directory.Build.props` — as **XML**, in both directions: a package added
+  without a credit fails, and a credit left behind after a package is dropped fails too. A regex
+  scan was tried first and let uncredited packages through whenever `Include` was not the first
+  attribute or the quotes were single, while reporting a still-shipping package as stale on an
+  attribute reorder. References excluded from the shipped build are skipped — they are not
+  distributed, so they carry no obligation.
+- What no package scan can see is listed by hand and marked as such: code that arrives inside
+  another package (Skia, HarfBuzz, ANGLE, llama.cpp) and OpenCC's conversion table, which is
+  compiled into `Kanal.Core`. ANGLE ships in every Windows build and its licence is explicit that a
+  binary redistribution reproduces the notice.
+- One entry was removed rather than guessed at: a debugging aid whose package carries no licence
+  file, no `<license>` and no `<licenseUrl>` — only a commercial copyright. Naming a licence that
+  cannot be substantiated, on a screen headed "open source", is worse than omitting the entry. It
+  is excluded from Release builds anyway.
+
+Open, and a call for the repository owner rather than a defect: this is an index, and MIT and BSD-3
+ask for the notice *text* to travel with the binary while Apache-2.0 asks for a copy of the licence.
+Discharging that means shipping a `THIRD-PARTY-NOTICES.md` of a few hundred lines and somewhere to
+read it. Until that is decided the wording here, in the README and in the code describes an index
+and claims nothing more.
+
 ### A changelog you can read in the room (issue #35, 2 of 3)
 
 The question "did something change since last week?" is asked in the room, by the person who

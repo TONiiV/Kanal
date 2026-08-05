@@ -185,5 +185,7 @@
   "settings.about.changelog": "查看更新日志",
   "changelog.title": "更新日志",
   "changelog.empty": "暂无记录。",
-  "changelog.close": "关闭"
+  "changelog.close": "关闭",
+  "settings.licenses.heading": "开源",
+  "settings.licenses.note": "Kanal 以 {0} 许可发布，并基于以下项目构建，各自遵循其自身的许可协议。"
 }

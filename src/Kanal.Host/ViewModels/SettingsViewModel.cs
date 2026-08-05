@@ -135,6 +135,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(LogNote));
         OnPropertyChanged(nameof(LogFailureNote));
         OnPropertyChanged(nameof(VersionLabel));
+        OnPropertyChanged(nameof(LicenseNote));
         foreach (var model in TranslationModels)
             model.RefreshText();
         foreach (var level in LogLevels)
@@ -450,6 +451,11 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
+
+    public IReadOnlyList<OpenSourceNotice> Notices => OpenSourceNotices.All;
+
+    public string LicenseNote =>
+        Localizer.Instance.Format("settings.licenses.note", OpenSourceNotices.OwnLicense);
 
     /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
     public string DefaultFolderNote =>
