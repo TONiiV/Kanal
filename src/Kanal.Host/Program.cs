@@ -18,10 +18,13 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Before anything else that can fail: a crash during startup is exactly the one nobody
-        // is watching the screen for, and the log is where it has to turn up.
-        LogSetup.Apply(SettingsStore.Load());
+        // A sink on defaults first, then the settings the operator actually chose. Reading the
+        // file is itself something that can fail — and a settings file that cannot be read is
+        // discarded, which costs the operator their stored key — so it must not happen before
+        // there is anywhere to record it. The second call updates the open file in place.
+        LogSetup.Apply(new AppSettings());
         WatchForUnhandledFailures();
+        LogSetup.Apply(SettingsStore.Load());
         Log.Info(Category, $"Kanal {AppVersion.Current} starting on {RuntimeInformation.OSDescription}.");
 
         try

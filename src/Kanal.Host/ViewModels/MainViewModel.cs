@@ -575,7 +575,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             SelectedMode.Unavailable = plan.Status.Unavailable;
             Status = plan.Status.Unavailable;
-            Log.Warning(RoomLog, $"Start refused: mode {mode.Id} is unavailable.");
+            // With the reason: "mode X is unavailable" is not what the operator is phoning about,
+            // "no key stored" is, and the status line carrying it is gone by the time they do.
+            Log.Warning(
+                RoomLog, $"Start refused: mode {mode.Id} is unavailable — {plan.Status.Unavailable}");
             return;
         }
 
@@ -680,8 +683,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Dispatcher.UIThread.Post(() =>
                 Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
         };
-        session.SessionEnded += reason => Dispatcher.UIThread.Post(() =>
-            Status = L.Format("status.sessionended", reason ?? L["status.done"]));
+        session.SessionEnded += reason =>
+        {
+            // The one ending nobody chose. A transcription service that closes the socket ends the
+            // session without raising an error first, so without this line a room that went deaf
+            // at minute 40 reads exactly like one the operator stopped at minute 90.
+            Log.Info(RoomLog, $"Session ended: {Bounded(reason ?? "no reason given")}.");
+            Dispatcher.UIThread.Post(() =>
+                Status = L.Format("status.sessionended", reason ?? L["status.done"]));
+        };
 
         try
         {
@@ -703,7 +713,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
-            $"relay {(RelayEnabled ? "on" : "off")}.");
+            // "on" would have meant "asked for", which is the opposite of what a reader needs when
+            // the complaint is that the QR code does not work.
+            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}.");
         var runningStatus = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
@@ -758,7 +770,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             if (_session is not null)
             {
-                await PublishSnapshotSafeAsync(); // leave a final full state on the channel
+                await PublishSnapshotSafeAsync(closing: true); // leave a final full state on the channel
                 await PublishClosedSafeAsync();   // …and say the meeting is over, so phones stop waiting
                 await _session.DisposeAsync();    // session object stays for rename/merge/export
             }
@@ -821,7 +833,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         QrImage = new Bitmap(new MemoryStream(png));
     }
 
-    private async Task PublishSnapshotSafeAsync()
+    /// <param name="closing">
+    /// Which of the two callers this is: the 15-second timer under a live room, or the final
+    /// snapshot at Stop. They fail for different reasons and read very differently in a file —
+    /// "the closing snapshot did not publish" four times a minute while the meeting is running
+    /// describes nothing that is happening.
+    /// </param>
+    private async Task PublishSnapshotSafeAsync(bool closing = false)
     {
         try
         {
@@ -836,7 +854,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
-            Log.Warning(RelayLog, "The closing snapshot did not publish.", ex);
+            Log.Warning(
+                RelayLog,
+                closing
+                    ? "The closing snapshot did not publish."
+                    : "A periodic snapshot did not publish; phones may be showing stale text.",
+                ex);
         }
     }
 
@@ -931,8 +954,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Log.Debug(AudioLog, $"Capture opened on {deviceId ?? "the default device"}.");
-
         try
         {
             var framesSinceMeter = 0;
@@ -940,6 +961,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
                 await session.PushAudioAsync(frame, ct);
+
+                // Logged off the first frame, not off the call that returns the iterator: the
+                // device is acquired inside it, so "capture opened" written above the loop
+                // asserted an open that a busy or unplugged device never performed.
+                if (frames == 0)
+                    Log.Debug(AudioLog, $"Capture running on {deviceId ?? "the default device"}.");
 
                 // A count, never a sample: the point of the Debug level is answering "was audio
                 // still arriving at 14:32", which is the question a silent transcript raises.

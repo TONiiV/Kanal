@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Providers.Testing;
 using Kanal.Core.Relay;
 using Kanal.Host.Services;
 
@@ -83,10 +84,11 @@ public class RoomLoggingTests
 
     /// <summary>
     /// A Start that never opens a room is the one the operator phones about, and the status line
-    /// carrying the reason is gone by the time they do.
+    /// carrying the reason is gone by the time they do — so the line has to carry the reason too,
+    /// not just the name of the mode that refused.
     /// </summary>
     [AvaloniaFact]
-    public async Task AStartTheModeCannotServeIsLoggedAsAWarning()
+    public async Task AStartTheModeCannotServeIsLoggedWithTheReason()
     {
         using var _ = Listening(out var sink);
         // cloud transcription with no stored key: the planner refuses before anything opens
@@ -98,6 +100,36 @@ public class RoomLoggingTests
         var refused = Assert.Single(sink.Lines, l => l.Message.Contains("Start refused"));
         Assert.Equal(LogLevel.Warning, refused.Level);
         Assert.Equal("room", refused.Category);
+        Assert.Contains(vm.SelectedMode.Unavailable!, refused.Message);
+    }
+
+    /// <summary>
+    /// The ending nobody chose. A transcription service that closes the socket ends the session
+    /// without raising an error first, so a room that went deaf at minute 40 has to be
+    /// distinguishable in the file from one the operator stopped at minute 90.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ASessionThatEndsOnItsOwnSaysSo()
+    {
+        using var _ = Listening(out var sink);
+        var vm = TestViewModels.Demo();
+        // one short line, then the script runs out and the session ends by itself
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(
+                script: [new FakeAsrProvider.Line("S01", "zh", "好")],
+                partialInterval: TimeSpan.FromMilliseconds(10),
+                loop: false),
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(1000);
+
+        var ended = Assert.Single(sink.Lines, l => l.Message.StartsWith("Session ended"));
+        Assert.Equal(LogLevel.Info, ended.Level);
+        Assert.Contains("script finished", ended.Message);
+
+        await vm.StopCommand.ExecuteAsync(null);
     }
 
     /// <summary>

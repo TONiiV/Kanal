@@ -256,7 +256,8 @@ Detailed status, benchmarks, and the next implementation steps are tracked in
 ## License
 
 Kanal is released under the [MIT License](LICENSE). The open-source projects it is built on are
-listed with their licences at the bottom of the Settings window. Downloaded translation models and
+listed at the bottom of the Settings window, each with the name of its licence and where to read
+it; the licence texts themselves are not yet shipped with the binary. Downloaded translation models and
 external services have their own licences and terms; the model catalog displays the relevant licence
 for each model, including a warning where it is not OSI-approved.
 

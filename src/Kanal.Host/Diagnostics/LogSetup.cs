@@ -12,11 +12,31 @@ namespace Kanal.Host.Diagnostics;
 /// <summary>Writes <see cref="Log"/> lines to NLog. The only place the logging vendor is named.</summary>
 internal sealed class NLogSink : ILogSink
 {
+    /// <summary>
+    /// Ceiling on one line's exception text. Providers and the gateway put whole HTTP response
+    /// bodies into exception messages — a captive portal's 20 KB error page, verbatim, per
+    /// failure — and the snapshot timer retries every 15 seconds, so an afternoon of one repeated
+    /// failure filled the file on its own. A stack trace fits comfortably under this.
+    /// </summary>
+    private const int MaxExceptionChars = 4000;
+
+    /// <summary>And on the message, which can carry a provider's text the same way.</summary>
+    private const int MaxMessageChars = 2000;
+
     public void Write(Kanal.Core.Diagnostics.LogLevel level, string category, string message, Exception? error)
     {
         var logger = LogManager.GetLogger(string.IsNullOrWhiteSpace(category) ? "kanal" : category);
-        logger.Log(Translate(level), error, message);
+        var line = Cap(message, MaxMessageChars);
+        if (error is not null)
+            line += Environment.NewLine + Cap(error.ToString(), MaxExceptionChars);
+
+        // Rendered here rather than handed to NLog as an exception: `${exception:format=tostring}`
+        // has no ceiling, which is the whole problem.
+        logger.Log(Translate(level), line);
     }
+
+    private static string Cap(string text, int max) =>
+        text.Length <= max ? text : text[..max] + $"… [{text.Length - max} more characters]";
 
     private static NLog.LogLevel Translate(Kanal.Core.Diagnostics.LogLevel level) => level switch
     {
@@ -49,12 +69,30 @@ public static class LogSetup
     /// One line, one event: when, how bad, who wrote it, what happened — and the exception if
     /// there was one, because half an error line is not worth keeping.
     /// </summary>
+    /// <remarks>
+    /// No <c>${exception}</c>: the sink renders and caps it into the message, because that
+    /// renderer has no length ceiling and the text it prints is not ours.
+    /// </remarks>
     private const string LineLayout =
-        "${longdate} ${level:uppercase=true:padding=-5} ${logger} ${message}" +
-        "${onexception:${newline}${exception:format=tostring}}";
+        "${longdate} ${level:uppercase=true:padding=-5} ${logger} ${message}";
 
     private static long ArchiveBytes(AppSettings settings) =>
         (long)SettingsStore.ResolveLogMaxFileSizeMb(settings) * 1024 * 1024;
+
+    /// <summary>Roughly how much disk the whole log folder may take before the oldest files go.</summary>
+    public const int DiskBudgetMb = 2048;
+
+    /// <summary>Never fewer than this many rollovers, however large the operator made them.</summary>
+    private const int MinArchives = 20;
+
+    /// <summary>
+    /// A count that bounds the folder without standing in for the day-based retention: at the
+    /// default 10 MB it is 204 files, which a fortnight of ordinary meetings will not approach, so
+    /// in practice age is what deletes. It bites only when something is writing in a loop, which is
+    /// exactly when a bound is wanted.
+    /// </summary>
+    private static int ArchiveCountBackstop(AppSettings settings) =>
+        Math.Max(MinArchives, DiskBudgetMb / SettingsStore.ResolveLogMaxFileSizeMb(settings));
 
     public static LoggingConfiguration BuildConfiguration(string directory, AppSettings settings)
     {
@@ -70,10 +108,13 @@ public static class LogSetup
             // never appear.
             ArchiveFileName = Path.Combine(directory, "kanal-${shortdate}.log"),
             ArchiveAboveSize = ArchiveBytes(settings),
-            // Age is the only cap. NLog's file *count* cap counts every file matching the pattern
-            // across dates, not per day: set beside a day-based retention it wins, and a busy
-            // meeting at the smallest rollover size cut the two weeks this panel promises down to
-            // hours. The promise on screen is the one that has to hold.
+            // Age is the retention policy; the count is only a runaway backstop. NLog's file-count
+            // cap counts every file matching the pattern across dates, so a small fixed number
+            // silently undercuts the two weeks this panel promises — 20 archives at the smallest
+            // rollover size cut it to hours. Dropping it altogether was worse: one loud day at 1 MB
+            // wrote 63 files and 65 MB with nothing eligible for deletion yet. So: derived from the
+            // size, sized to a disk budget no ordinary fortnight will reach.
+            MaxArchiveFiles = ArchiveCountBackstop(settings),
             MaxArchiveDays = RetentionDays,
             Layout = LineLayout,
             Encoding = Encoding.UTF8,
@@ -115,8 +156,17 @@ public static class LogSetup
     /// </remarks>
     public static void ApplyTo(string directory, AppSettings settings)
     {
+        // Installed first and outside the try: a failure below leaves the sink in place rather
+        // than leaving the process permanently unable to log anything at all.
+        Log.Install(new NLogSink());
+
         try
         {
+            // Eagerly, so an unwritable folder fails here where it is caught and can be reported,
+            // rather than inside NLog — which defers file creation and swallows the failure, so
+            // every line afterwards vanished with the panel still promising a file a day.
+            Directory.CreateDirectory(directory);
+
             var expected = Path.Combine(directory, "kanal-${shortdate}.log");
             if (LogManager.Configuration is { } live &&
                 live.FindTargetByName(TargetName) is FileTarget target &&
@@ -132,14 +182,26 @@ public static class LogSetup
                 LogManager.Configuration = BuildConfiguration(directory, settings);
             }
 
-            Log.Install(new NLogSink());
+            Writable = true;
         }
-        catch
+        catch (Exception ex)
         {
             // A log folder that cannot be created is a reason to run without a log, never a
-            // reason not to start: the meeting matters more than the record of it.
+            // reason not to start: the meeting matters more than the record of it. But the panel
+            // must stop promising a file that is not being written, which is what Writable is for.
+            Writable = false;
+            FailureReason = ex.Message;
         }
     }
+
+    /// <summary>
+    /// Whether the last <see cref="ApplyTo"/> managed to open a folder to write into. False means
+    /// every line since is gone — worth saying on the screen that offers to open that folder.
+    /// </summary>
+    public static bool Writable { get; private set; }
+
+    /// <summary>Why not, when <see cref="Writable"/> is false.</summary>
+    public static string? FailureReason { get; private set; }
 
     /// <summary>
     /// Pushes anything still buffered to disk. Deliberately not a shutdown: the host flushes on

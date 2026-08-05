@@ -186,5 +186,6 @@
   "changelog.empty": "No entries.",
   "changelog.close": "Close",
   "settings.licenses.heading": "OPEN SOURCE",
-  "settings.licenses.note": "Kanal is licensed under {0} and built on the projects below, each under its own licence."
+  "settings.licenses.note": "Kanal is licensed under {0} and built on the projects below, each under its own licence.",
+  "settings.logs.unwritable": "Nothing is being written: {0}"
 }

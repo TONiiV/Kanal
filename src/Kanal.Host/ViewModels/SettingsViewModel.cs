@@ -141,6 +141,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(ProcessingNote));
         OnPropertyChanged(nameof(DefaultFolderNote));
         OnPropertyChanged(nameof(LogNote));
+        OnPropertyChanged(nameof(LogFailureNote));
         OnPropertyChanged(nameof(VersionLabel));
         OnPropertyChanged(nameof(LicenseNote));
         foreach (var model in TranslationModels)
@@ -426,11 +427,23 @@ public partial class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// Megabytes a log file may reach before it is rolled over. Nullable to match the spin box,
-    /// which empties to null when its text is cleared — a blank box is "whatever the default is",
-    /// not a silently kept stale number.
+    /// which empties to null when its text is cleared or a letter is typed into it.
     /// </summary>
     [ObservableProperty]
     private decimal? _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
+
+    /// <summary>
+    /// The last number the box actually held. An operator on 33 MB who taps the box and clears it,
+    /// or fat-fingers a letter, must not be saved onto the default: the box goes blank, so nothing
+    /// on screen would tell them the setting had changed at all.
+    /// </summary>
+    private int _lastLogSize = AppSettings.DefaultLogMaxFileSizeMb;
+
+    partial void OnLogMaxFileSizeMbChanged(decimal? value)
+    {
+        if (value is not null)
+            _lastLogSize = (int)Math.Round(value.Value);
+    }
 
     public int LogMinSizeMb => SettingsStore.MinLogMaxFileSizeMb;
 
@@ -441,6 +454,16 @@ public partial class SettingsViewModel : ViewModelBase
 
     /// <summary>Printed beside the button: an operator reading it out over the phone needs the path.</summary>
     public string LogFolder => SettingsStore.LogsPath;
+
+    /// <summary>
+    /// False when the folder could not be opened for writing at all. Worth its own line on screen:
+    /// a panel promising "one file a day, kept 14 days" over an empty folder, with the button doing
+    /// nothing, is the one state in which the operator cannot work out that logging is dead.
+    /// </summary>
+    public bool LogIsWritable => LogSetup.Writable;
+
+    public string LogFailureNote =>
+        Localizer.Instance.Format("settings.logs.unwritable", LogSetup.FailureReason ?? "");
 
     /// <summary>
     /// The whole point of the button: the person who has to send a log is on a call, mid-meeting,
@@ -572,7 +595,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.AppLanguage = AppLanguage?.Code;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
-            ? AppSettings.DefaultLogMaxFileSizeMb
+            ? _lastLogSize
             : (int)Math.Round(LogMaxFileSizeMb.Value);
     }
 

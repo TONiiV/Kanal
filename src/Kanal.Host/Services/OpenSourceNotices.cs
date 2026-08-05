@@ -14,10 +14,17 @@ public sealed record OpenSourceNotice(
     IReadOnlyList<string> Packages);
 
 /// <summary>
-/// What is named at the bottom of Settings. An obligation before it is a feature: the MIT and BSD
-/// licences here all require their notice to travel with the binary, and the people running this
-/// in a meeting are the ones handing that binary around.
+/// What is named at the bottom of Settings: an index of what Kanal is assembled from — project,
+/// licence, and where to read it.
 /// </summary>
+/// <remarks>
+/// An index is not a notice. MIT and BSD-3 ask for the copyright and permission text itself to
+/// travel with a binary, and Apache-2.0 for a copy of the licence; none of that is shipped yet, so
+/// nothing here should be described as discharging those terms. Naming a licence that cannot be
+/// substantiated is worse than omitting the entry — every one below was checked against the
+/// upstream project, and the one that could not be (a debugging aid, excluded from Release
+/// anyway) was removed rather than guessed at.
+/// </remarks>
 public static class OpenSourceNotices
 {
     /// <summary>Kanal's own licence, stated beside the list so the whole picture is on one screen.</summary>
@@ -34,13 +41,15 @@ public static class OpenSourceNotices
     [
         new("Avalonia", "MIT", "https://github.com/AvaloniaUI/Avalonia",
             ["Avalonia", "Avalonia.Desktop", "Avalonia.Themes.Fluent"]),
-        new("Avalonia DevTools", "MIT",
-            "https://www.nuget.org/packages/AvaloniaUI.DiagnosticsSupport",
-            ["AvaloniaUI.DiagnosticsSupport"]),
-        // Avalonia draws through these and ships them beside itself; Skia is the C++ library the
-        // wrapper binds to, and its BSD notice has to travel too.
+        // Avalonia draws through these and ships them beside itself. The wrappers are MIT; the
+        // native libraries they bind to are separate works with their own notices, and Skia in
+        // turn links FreeType, libpng, libjpeg-turbo, Expat, zlib and Wuffs — see the notice file.
         new("SkiaSharp / HarfBuzzSharp", "MIT", "https://github.com/mono/SkiaSharp", []),
         new("Skia", "BSD-3-Clause", "https://github.com/google/skia", []),
+        new("HarfBuzz", "Old MIT", "https://github.com/harfbuzz/harfbuzz", []),
+        // Ships in every Windows build as av_libglesv2.dll, and its licence is explicit that a
+        // binary redistribution reproduces the notice.
+        new("ANGLE", "BSD-3-Clause", "https://github.com/google/angle", []),
         new("MicroCom", "MIT", "https://github.com/kekekeks/MicroCom", []),
         new("Tmds.DBus", "MIT", "https://github.com/tmds/Tmds.DBus", []),
         new(".NET", "MIT", "https://github.com/dotnet/runtime", []),

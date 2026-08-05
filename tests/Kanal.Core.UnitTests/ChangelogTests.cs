@@ -98,6 +98,53 @@ public class ChangelogTests
         Assert.Equal(["Something else."], releases[1].Changes);
     }
 
+    /// <summary>
+    /// A sub-bullet belongs to the entry above it; its marker is layout. Folded in raw it read
+    /// "Parent entry. - first child - second child".
+    /// </summary>
+    [Fact]
+    public void ASubBulletJoinsItsParentWithoutItsMarker()
+    {
+        var releases = Changelog.Parse("""
+            ## 0.6.0 — 2026-08-04
+
+            - Parent entry:
+              - first child,
+              - second child.
+            """);
+
+        Assert.Equal(["Parent entry: first child, second child."], releases[0].Changes);
+    }
+
+    /// <summary>
+    /// The dialog is a TextBlock, not a Markdown renderer: backticks and asterisks belong to the
+    /// file, and on screen they are punctuation in the middle of a sentence.
+    /// </summary>
+    [Fact]
+    public void InlineMarkupIsStrippedForTheScreen()
+    {
+        var releases = Changelog.Parse("""
+            ## 0.6.0 — 2026-08-04
+
+            - Logs land in `%APPDATA%/Kanal/logs`, under **Settings → Diagnostics**.
+            """);
+
+        Assert.Equal(
+            ["Logs land in %APPDATA%/Kanal/logs, under Settings → Diagnostics."],
+            releases[0].Changes);
+    }
+
+    [Fact]
+    public void NoShippedEntryCarriesRawMarkup()
+    {
+        foreach (var release in Changelog.Releases)
+        foreach (var change in release.Changes)
+        {
+            Assert.DoesNotContain('`', change);
+            Assert.DoesNotContain("**", change);
+        }
+    }
+
     [Fact]
     public void AVersionWithoutADateStillParses()
     {

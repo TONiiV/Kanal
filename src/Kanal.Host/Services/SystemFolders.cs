@@ -26,6 +26,8 @@ public static class SystemFolders
         // and names contain spaces.
         var start = new ProcessStartInfo(command) { UseShellExecute = false };
         start.ArgumentList.Add(path);
-        Process.Start(start);
+        // Disposed, not discarded: the file manager outlives this call either way, and one
+        // undisposed handle per click adds up over a long-running host.
+        using var process = Process.Start(start);
     }
 }

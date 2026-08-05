@@ -64,7 +64,7 @@ public static partial class Changelog
 
             if (Bullet().Match(line) is { Success: true } bullet)
             {
-                changes.Add(bullet.Groups["text"].Value.Trim());
+                changes.Add(Plain(bullet.Groups["text"].Value.Trim()));
                 open = true;
                 continue;
             }
@@ -75,14 +75,31 @@ public static partial class Changelog
             // A blank line closes the bullet, so a paragraph that follows one is not swallowed
             // into it.
             if (open && changes.Count > 0 && Continuation().IsMatch(line))
-                changes[^1] = $"{changes[^1]} {line.Trim()}";
+            {
+                // An indented sub-bullet is still this entry's text; its marker is layout, and
+                // folding it in raw produced "Parent entry. - first child - second child".
+                var text = line.Trim();
+                if (Bullet().Match(text) is { Success: true } nested)
+                    text = nested.Groups["text"].Value.Trim();
+                changes[^1] = $"{changes[^1]} {Plain(text)}";
+            }
             else
+            {
                 open = false;
+            }
         }
 
         Flush();
         return releases;
     }
+
+    /// <summary>
+    /// Strips the inline Markdown the dialog cannot render. `%APPDATA%` and *View changelog* are
+    /// code and emphasis in a file people read in a diff; in a TextBlock they are backticks and
+    /// asterisks sitting in the middle of a sentence.
+    /// </summary>
+    private static string Plain(string markdown) =>
+        InlineMarkup().Replace(markdown, m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
 
     private static string ReadEmbedded()
     {
@@ -98,10 +115,18 @@ public static partial class Changelog
     [GeneratedRegex(@"^##\s+v?(?<version>[0-9][^\s]*)(?:\s+[—–-]\s+(?<date>\d{4}-\d{2}-\d{2}))?\s*$")]
     private static partial Regex VersionHeading();
 
-    [GeneratedRegex(@"^\s{0,3}[-*]\s+(?<text>.+)$")]
+    /// <summary>
+    /// A new entry starts hard against the margin. An indented marker is a sub-list in Markdown —
+    /// it belongs to the entry above, and the continuation branch folds it in.
+    /// </summary>
+    [GeneratedRegex(@"^[-*]\s+(?<text>.+)$")]
     private static partial Regex Bullet();
 
     /// <summary>An indented line that is not itself a bullet: the previous bullet, wrapped.</summary>
     [GeneratedRegex(@"^\s+\S")]
     private static partial Regex Continuation();
+
+    /// <summary>Code spans and emphasis: keep what is inside, drop the marks.</summary>
+    [GeneratedRegex(@"`([^`]*)`|\*\*([^*]+)\*\*")]
+    private static partial Regex InlineMarkup();
 }

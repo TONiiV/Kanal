@@ -84,6 +84,54 @@ public class LogSettingsTests
         Assert.Equal("secret", Assert.Single(loaded.ApiKeys).Key);
     }
 
+    /// <summary>
+    /// The level converter fixed one field; every other field can still make the whole file
+    /// unreadable, and starting from defaults means the next Save writes over a stored API key.
+    /// The file is copied aside first, so the key is recoverable rather than gone.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableSettingsFileIsPutAsideBeforeTheDefaultsReplaceIt()
+    {
+        var previous = Log.Sink;
+        var recorded = new List<string>();
+        Log.Install(new DelegateSink((_, _, message, _) => recorded.Add(message)));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsStore.SettingsPath)!);
+            var original = File.Exists(SettingsStore.SettingsPath)
+                ? File.ReadAllText(SettingsStore.SettingsPath)
+                : null;
+            File.WriteAllText(SettingsStore.SettingsPath, """{"ApiKeys":[,,,"broken""");
+            try
+            {
+                var loaded = SettingsStore.Load();
+
+                Assert.Empty(loaded.ApiKeys); // defaults, as before
+                Assert.True(File.Exists(SettingsStore.SalvagedPath));
+                Assert.Contains("broken", File.ReadAllText(SettingsStore.SalvagedPath));
+                Assert.Contains(recorded, m => m.Contains(SettingsStore.SalvagedPath));
+            }
+            finally
+            {
+                File.Delete(SettingsStore.SalvagedPath);
+                if (original is null)
+                    File.Delete(SettingsStore.SettingsPath);
+                else
+                    File.WriteAllText(SettingsStore.SettingsPath, original);
+            }
+        }
+        finally
+        {
+            Log.Install(previous);
+        }
+    }
+
+    private sealed class DelegateSink(Action<LogLevel, string, string, Exception?> write) : ILogSink
+    {
+        public void Write(LogLevel level, string category, string message, Exception? error) =>
+            write(level, category, message, error);
+    }
+
     /// <summary>The four names it does understand still round-trip, in any casing.</summary>
     [Theory]
     [InlineData("\"Debug\"", LogLevel.Debug)]
@@ -145,9 +193,23 @@ public class LogSetupTests
     [Fact]
     public void TheRetentionPromiseIsNotUndercutByAFileCount()
     {
-        var target = Target(new AppSettings { LogMaxFileSizeMb = 1 }, "/logs");
+        foreach (var megabytes in new[] { 1, 10, 100 })
+        {
+            var target = Target(new AppSettings { LogMaxFileSizeMb = megabytes }, "/logs");
 
-        Assert.True(target.MaxArchiveFiles <= 0, "a file-count cap would undercut the promised days");
+            // Bounded — dropping the count entirely let one loud day write 65 MB with nothing yet
+            // old enough to delete…
+            Assert.True(target.MaxArchiveFiles > 0);
+            Assert.True(
+                (long)target.MaxArchiveFiles * megabytes <= LogSetup.DiskBudgetMb,
+                $"{megabytes} MB × {target.MaxArchiveFiles} files exceeds the disk budget");
+
+            // …but far enough above a fortnight of ordinary meetings that age, not count, is what
+            // does the deleting. A handful of rollovers a day for 14 days is the shape to clear.
+            Assert.True(
+                target.MaxArchiveFiles >= 20,
+                $"{target.MaxArchiveFiles} archives would undercut the promised {LogSetup.RetentionDays} days");
+        }
     }
 
     /// <summary>
@@ -321,6 +383,66 @@ public class LogSetupTests
         finally
         {
             Cleanup(directory);
+        }
+    }
+
+    /// <summary>
+    /// Providers and the gateway put whole HTTP response bodies into exception messages — a
+    /// captive portal's error page, verbatim, per failure — and the snapshot retry runs every 15
+    /// seconds. One repeated failure filled the file on its own; a line has a ceiling now.
+    /// </summary>
+    [Fact]
+    public void AnEnormousExceptionIsCappedRatherThanWrittenWhole()
+    {
+        var directory = TempDirectory();
+        try
+        {
+            using var scope = LogSetup.InstallFor(directory, new AppSettings());
+            var body = new string('x', 200_000);
+
+            Log.Error("test", "the gateway refused", new InvalidOperationException(body));
+            scope.Flush();
+
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            Assert.Contains("the gateway refused", written);
+            Assert.Contains("more characters]", written); // said out loud, not silently dropped
+            Assert.True(written.Length < 20_000, $"one line wrote {written.Length} characters");
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    /// <summary>
+    /// A folder that cannot be opened leaves NLog silently dropping every line — it defers file
+    /// creation and swallows the failure — while the panel goes on promising a file a day.
+    /// </summary>
+    [Fact]
+    public void AFolderThatCannotBeWrittenIsReportedRatherThanSilent()
+    {
+        var occupied = Path.Combine(Path.GetTempPath(), "kanal-log-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(occupied, "a file where the folder needs to be");
+        var previousSink = Log.Sink;
+        var previousConfig = NLog.LogManager.Configuration;
+        try
+        {
+            LogSetup.ApplyTo(occupied, new AppSettings());
+
+            Assert.False(LogSetup.Writable);
+            Assert.False(string.IsNullOrWhiteSpace(LogSetup.FailureReason));
+            // and the facade still works — a broken folder must not leave the process sinkless
+            Log.Info("test", "nowhere to go, but nothing throws");
+        }
+        finally
+        {
+            File.Delete(occupied);
+            Log.Install(previousSink);
+            NLog.LogManager.Configuration = previousConfig ?? new NLog.Config.LoggingConfiguration();
+            // put the flag back so the next test does not inherit a failed state
+            var fresh = TempDirectory();
+            LogSetup.ApplyTo(fresh, new AppSettings());
+            Cleanup(fresh);
         }
     }
 

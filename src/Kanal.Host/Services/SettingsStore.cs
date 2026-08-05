@@ -163,6 +163,9 @@ public static class SettingsStore
     public static int ResolveLogMaxFileSizeMb(AppSettings settings) =>
         Math.Clamp(settings.LogMaxFileSizeMb, MinLogMaxFileSizeMb, MaxLogMaxFileSizeMb);
 
+    /// <summary>Where an unreadable settings file is put aside before the defaults overwrite it.</summary>
+    public static string SalvagedPath => SettingsPath + ".unreadable";
+
     public static AppSettings Load()
     {
         try
@@ -171,13 +174,36 @@ public static class SettingsStore
                 return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), Options)
                        ?? new AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
-            // corrupt settings — start fresh rather than crash the host
+            // Corrupt settings — start fresh rather than crash the host. But starting fresh means
+            // the next Save writes defaults over whatever is in there, and what is in there is the
+            // operator's API key. Copy it aside first, and say so: this used to happen in complete
+            // silence, which is how a stored key disappeared over a typo.
+            Salvage(ex);
         }
 
         return new AppSettings();
     }
+
+    private static void Salvage(Exception cause)
+    {
+        try
+        {
+            File.Copy(SettingsPath, SalvagedPath, overwrite: true);
+            Log.Warning(
+                LogCategory,
+                $"{SettingsPath} could not be read and was replaced by defaults; the previous " +
+                $"file — including any stored keys — is at {SalvagedPath}.",
+                cause);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(LogCategory, $"{SettingsPath} could not be read, and could not be copied aside.", ex);
+        }
+    }
+
+    private const string LogCategory = "settings";
 
     public static void Save(AppSettings settings)
     {

@@ -110,4 +110,38 @@ public class GladiaWireTests
     {
         Assert.Empty(new GladiaWire().Parse(json));
     }
+
+    /// <summary>
+    /// An error frame carries back the request that caused it, and that request contains what was
+    /// said in the room. The message this produces is shown on screen and written to the log file,
+    /// so falling back to the raw frame put an utterance in both.
+    /// </summary>
+    [Fact]
+    public void AnErrorFrameWithNoMessageIsDescribedRatherThanQuoted()
+    {
+        var wire = new GladiaWire();
+
+        var events = wire.Parse("""
+            {"type":"error","data":{"code":422,"request":{"type":"transcript","data":
+             {"utterance":{"text":"KX-4402 的公差是正负 0.05 毫米，11 月 15 日交货"}}}}}
+            """).ToList();
+
+        var error = Assert.IsType<AsrEvent.Error>(Assert.Single(events));
+        Assert.DoesNotContain("KX-4402", error.Message);
+        Assert.DoesNotContain("0.05", error.Message);
+        Assert.Contains("422", error.Message);
+        Assert.False(error.Fatal);
+    }
+
+    /// <summary>A frame that does say what went wrong is quoted as-is: that is the diagnostic.</summary>
+    [Fact]
+    public void AnErrorFrameWithAMessageKeepsIt()
+    {
+        var wire = new GladiaWire();
+
+        var events = wire.Parse("""{"type":"error","data":{"code":429,"message":"rate limit exceeded"}}""")
+            .ToList();
+
+        Assert.Equal("rate limit exceeded", Assert.IsType<AsrEvent.Error>(Assert.Single(events)).Message);
+    }
 }

@@ -50,8 +50,14 @@ internal sealed class GladiaWire
                     break;
 
                 case "error":
+                    // The frame's own message, or a description of it — never the frame. An error
+                    // frame carries back the request that caused it, and that request contains what
+                    // was said in the room; this string is shown on screen and written to the log,
+                    // so dropping the whole frame in here put utterances in both.
                     yield return new AsrEvent.Error(
-                        GetStringAt(root, "data", "message") ?? GetString(root, "message") ?? json,
+                        GetStringAt(root, "data", "message")
+                        ?? GetString(root, "message")
+                        ?? DescribeError(root),
                         Fatal: false);
                     break;
 
@@ -143,6 +149,15 @@ internal sealed class GladiaWire
             _ => null,
         };
     }
+
+    /// <summary>
+    /// What an error frame was, for a frame that carries no message of its own: its status code if
+    /// there is one, and nothing else from it. Enough to look up, and free of anything anyone said.
+    /// </summary>
+    private static string DescribeError(JsonElement root) =>
+        GetIntAt(root, "data", "code") is { } code
+            ? $"the transcription service rejected a request ({code})"
+            : "the transcription service reported an error with no message";
 
     private static string? GetString(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object &&

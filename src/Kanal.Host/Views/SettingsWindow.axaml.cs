@@ -30,17 +30,38 @@ public partial class SettingsWindow : Window
         DataContext = viewModel;
     }
 
-    private async void OnBrowseTranscriptsClick(object? sender, RoutedEventArgs e)
+    private void OnBrowseTranscriptsClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Choosing a transcript folder", async () =>
+        {
+            if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.TranscriptFolder) is { } picked)
+                vm.TranscriptFolder = picked;
+        });
+
+    private void OnBrowseAudioClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Choosing an audio folder", async () =>
+        {
+            if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.AudioFolder) is { } picked)
+                vm.AudioFolder = picked;
+        });
+
+    /// <summary>
+    /// Every `async void` handler in this window goes through here. An exception escaping one of
+    /// them crosses back into the framework with nowhere to be caught and takes the host down —
+    /// mid-meeting, to lose a dialog.
+    /// </summary>
+    private static async void Guarded(string what, Func<Task> action)
     {
-        if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.TranscriptFolder) is { } picked)
-            vm.TranscriptFolder = picked;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(SettingsLog, $"{what} failed.", ex);
+        }
     }
 
-    private async void OnBrowseAudioClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.AudioFolder) is { } picked)
-            vm.AudioFolder = picked;
-    }
+    private const string SettingsLog = "settings";
 
     /// <summary>Opens on whatever is already in the box, falling back to the resolved default.</summary>
     private async Task<string?> PickFolderAsync(string current)
@@ -72,35 +93,42 @@ public partial class SettingsWindow : Window
     /// <summary>Guards against a second dialog while one is open — the button stays clickable.</summary>
     private bool _changelogOpen;
 
-    private async void OnChangelogClick(object? sender, RoutedEventArgs e)
-    {
-        if (_changelogOpen)
-            return;
+    private void OnChangelogClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Opening the changelog", async () =>
+        {
+            if (_changelogOpen)
+                return;
 
-        _changelogOpen = true;
-        try
-        {
-            await new ChangelogWindow().ShowDialog(this);
-        }
-        catch (Exception ex)
-        {
-            // async void: an exception escaping here takes the host down mid-meeting rather than
-            // losing a dialog nobody needs. Same hardening as the folder pickers above.
-            Log.Warning("settings", "The changelog window did not open.", ex);
-        }
-        finally
-        {
-            _changelogOpen = false;
-        }
-    }
+            _changelogOpen = true;
+            try
+            {
+                await new ChangelogWindow().ShowDialog(this);
+            }
+            finally
+            {
+                _changelogOpen = false;
+            }
+        });
 
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
-        // The level and the size the operator just chose apply to the next line written, not to
-        // the next launch: the reason someone turns Debug on is that something is going wrong now.
-        // Applied from what Save returned rather than by re-reading the file — see Save.
-        if ((DataContext as SettingsViewModel)?.Save() is { } saved)
-            LogSetup.Apply(saved);
+        try
+        {
+            // The level and the size the operator just chose apply to the next line written, not
+            // to the next launch: the reason someone turns Debug on is that something is going
+            // wrong now. Applied from what Save returned rather than by re-reading the file.
+            if ((DataContext as SettingsViewModel)?.Save() is { } saved)
+                LogSetup.Apply(saved);
+        }
+        catch (Exception ex)
+        {
+            // A locked or read-only profile directory — roaming sync, antivirus, a full disk.
+            // The dialog closing on a write that did not happen is bad; the dialog staying open
+            // with no explanation while the button appears dead is worse, and it is what an
+            // unguarded throw out of this handler produced.
+            Log.Error(SettingsLog, "Settings could not be saved.", ex);
+        }
+
         Close();
     }
 

@@ -117,10 +117,23 @@ public class OpenSourceNoticeTests
     private static IEnumerable<string> PackageIds(string projectFile) =>
         XDocument.Load(projectFile)
             .Descendants()
-            .Where(e => e.Name.LocalName == "PackageReference")
+            .Where(e => e.Name.LocalName == "PackageReference" && Distributed(e))
             .Select(e => (string?)e.Attribute("Include") ?? (string?)e.Attribute("Update"))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id!.Trim());
+
+    /// <summary>
+    /// A reference kept out of the shipped build — a debugging aid excluded from Release — is not
+    /// handed to anyone, so it carries no notice obligation for the binary. Crediting it anyway
+    /// would mean publishing a licence claim about a package nobody receives, which is how a
+    /// licence this list could not substantiate ended up on a screen headed "open source".
+    /// </summary>
+    private static bool Distributed(XElement reference) =>
+        !reference.Elements().Any(child =>
+            (child.Name.LocalName == "IncludeAssets" &&
+             child.Value.Contains("None", StringComparison.OrdinalIgnoreCase)) ||
+            (child.Name.LocalName == "PrivateAssets" &&
+             child.Value.Contains("All", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Walks up from the test binary until the solution file turns up.</summary>
     private static string RepoRoot()

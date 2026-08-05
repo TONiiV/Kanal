@@ -248,6 +248,13 @@
                                Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
                 </StackPanel>
 
+                <!-- The one state the note above cannot describe: there is no file at all. Alarm
+                     ink, because everything else in this section is a promise that is not being
+                     kept while this is showing. -->
+                <TextBlock Text="{Binding LogFailureNote}" IsVisible="{Binding !LogIsWritable}"
+                           FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Foreground="{StaticResource Alarm}" />
+
                 <!-- Which build this is, and what changed in it. Asked in the room, by the person
                      who noticed something moved — so it is answered here rather than in a
                      repository nobody has open. -->
@@ -260,9 +267,8 @@
                 <Button Content="{l:T settings.about.changelog}" HorizontalAlignment="Left"
                         Click="OnChangelogClick" />
 
-                <!-- Last, because it is an obligation rather than a control: the licences here
-                     require their notice to travel with the binary, and the people running this in
-                     a meeting are the ones handing that binary around. -->
+                <!-- Last, because it is a reference rather than a control: what this is built
+                     on, under what licence, and where to read it. -->
                 <TextBlock Text="{l:T settings.licenses.heading}" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
                 <TextBlock Text="{Binding LicenseNote}" FontSize="11.5" TextWrapping="Wrap"
