@@ -37,6 +37,21 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
+/**
+ * Bounds on a room's replay buffer (one snapshot plus the frames published after it). Each frame
+ * is already capped at `MAX_PAYLOAD_BYTES` on the way in; these cap the buffer as a whole.
+ *
+ * Every relay message is one publish — partials included, nothing coalesced — so 15 s of
+ * continuous speech is roughly 35-80 frames at a streaming ASR's usual 2-5 partials/s, plus one
+ * `translation.upsert` per final. That makes 256 frames about 3-7x a busy heartbeat interval, and
+ * the frame cap, not the byte cap, is what binds: a partial envelope runs 0.4-1 KB, so 256 of them
+ * is a quarter of 1 MiB. The margin is thinner than it looks but the overflow is a degrade, not a
+ * failure — no replay until the next snapshot. Raising the frame cap is cheap in memory and is
+ * worth doing once the mobile page serialises `onmessage`; until then it would only enlarge a
+ * burst the client cannot yet order correctly.
+ */
+const MAX_REPLAY_FRAMES = 256;
+const MAX_REPLAY_BYTES = 4 * MAX_PAYLOAD_BYTES;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
 
 type Role = "host" | "reader";
@@ -125,6 +140,24 @@ async function verifyTicket(env: Env, ticket: string, role: Role): Promise<Ticke
       typeof claims.room !== "string" || typeof claims.vk !== "string"
     ) return null;
     return claims;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The discriminator of the relay message inside a signed envelope, or null if it cannot be
+ * read. Envelopes are signed, not encrypted, so this is a plain base64url decode — the gateway
+ * learns nothing it was not already forwarding. It also does not have to trust the answer: the
+ * phone verifies the host's P-256 signature on every frame, so a mislabelled or forged envelope
+ * costs at most one discarded frame and can never inject content.
+ */
+function envelopeType(payload: unknown): string | null {
+  const data = (payload as { data?: unknown }).data;
+  if (typeof data !== "string") return null;
+  try {
+    const message = JSON.parse(decoder.decode(decodeBase64Url(data))) as { type?: unknown };
+    return typeof message.type === "string" ? message.type : null;
   } catch {
     return null;
   }
@@ -334,6 +367,28 @@ export default {
  * of compute, and nothing ever forces the phones to reconnect.
  */
 export class RoomRelay extends DurableObject<Env> {
+  /**
+   * The last `room.snapshot` frame followed by every frame published since, verbatim and in
+   * order, replayed to each reader that arrives after them. A phone that reconnects otherwise
+   * shows its `localStorage` copy until the host's next snapshot heartbeat, up to 15 s later.
+   *
+   * The tail is the whole point. The phone's `applySnapshot()` clears its speakers, aliases, and
+   * utterances before repopulating, and it caches every incremental frame as it arrives — so a
+   * phone reconnecting between heartbeats holds newer state than the snapshot alone, and a
+   * snapshot replayed without its tail would delete up to 15 s of transcript in front of the
+   * room. Replaying the sequence gives a reconnecting reader exactly what a reader connected
+   * the whole time saw.
+   *
+   * Held in memory, not in storage: the host republishes a snapshot every 15 s and each publish
+   * wakes this object, so a buffer lost to eviction refills within one heartbeat — the worst case
+   * is exactly the pre-replay behaviour. Storage would instead put a write on the fan-out path of
+   * every frame for the whole meeting.
+   */
+  private replay: string[] = [];
+  private replayBytes = 0;
+  /** A closed or moved room is over: its buffer is final and takes nothing further. */
+  private terminal = false;
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return response({ error: "WebSocket upgrade required" }, 426);
@@ -343,17 +398,34 @@ export class RoomRelay extends DurableObject<Env> {
     const verificationKey = url.searchParams.get("vk") ?? "";
     const expiresAt = Number(url.searchParams.get("exp") ?? "0");
 
+    // Before the socket exists, because this is the only await in the method and everything after
+    // `acceptWebSocket` must reach the wire as one uninterrupted run: the accepted socket is in
+    // `getWebSockets()` at once, so a concurrent publish resuming across a yield here could fan a
+    // live frame out ahead of `gateway.session` and the replay. Nothing in it needs the socket.
+    await this.scheduleExpiry(expiresAt);
+
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ expiresAt });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
-    await this.scheduleExpiry(expiresAt);
 
     // Same contract as before: the reader treats the session message as proof it is
     // subscribed to the room it was invited to, before trusting any relayed envelope.
     server.send(JSON.stringify({ type: "gateway.session", room, verificationKey, expiresAt }));
+    // Ordinary relay frames, indistinguishable from live ones — the phone verifies and applies
+    // them through the same path, so late join needs no client change.
+    for (const frame of this.replay) {
+      try {
+        server.send(frame);
+      } catch {
+        // Same containment as the fan-out loop, and for the same reason: a send that throws
+        // must cost this reader its replay, not its connection. Escaping here would turn the
+        // 101 into a 500. Once one send fails the socket is gone, so stop rather than continue.
+        break;
+      }
+    }
 
     return new Response(null, {
       status: 101,
@@ -365,6 +437,7 @@ export class RoomRelay extends DurableObject<Env> {
   /** Fan a signed envelope out to every live reader. Called over RPC from the Worker. */
   async publish(payload: unknown): Promise<void> {
     const message = JSON.stringify({ type: "relay", payload });
+    this.buffer(message, envelopeType(payload));
     const now = Math.floor(Date.now() / 1000);
     for (const socket of this.ctx.getWebSockets()) {
       if (this.expired(socket, now)) continue;
@@ -397,6 +470,87 @@ export class RoomRelay extends DurableObject<Env> {
       }
     }
     if (Number.isFinite(next)) await this.ctx.storage.setAlarm(next * 1000);
+  }
+
+  /**
+   * Fold one published frame into the replay buffer.
+   *
+   * A snapshot supersedes the previous one and its tail: the heartbeat already contains
+   * everything those frames said. Anything else extends the tail, but only once a snapshot has
+   * anchored it — a frame on its own is not something a phone that has never seen this room can
+   * apply.
+   *
+   * `room.closed` and `room.moved` end the buffer instead of clearing it, which is the reverse of
+   * this code's first cut. That version dropped the buffer on both, reasoning that a late reader
+   * must not be greeted with a finished meeting rendered as live — but dropping is what *produces*
+   * that. The host publishes a final snapshot, then the announcement, then stops (`MainViewModel`),
+   * so a reader arriving afterwards received only `gateway.session` and fell back to its own
+   * `localStorage`: truncated to `CACHE_LIMIT` utterances and flagged `closed:false`, a finished
+   * meeting shown as live, with nothing left running to correct it. Replaying
+   * snapshot → tail → announcement is what prevents it — `applyClosed()` puts the phone in
+   * "ended", `moveToRoom()` takes it to the room the meeting continues in.
+   */
+  private buffer(message: string, type: string | null): void {
+    switch (type) {
+      case "room.closed":
+      case "room.moved":
+        // A later announcement supersedes an earlier one rather than stacking on it, because a
+        // closed room can legitimately receive one more: `MainViewModel` keeps `_relay` alive
+        // past `StopAsync` ("Outlives its session: the next Start uses it to redirect phones to
+        // the new room"), so a restart publishes `room.moved` on the room it already closed. A
+        // phone locked across the restart must follow the meeting, not sit on "ended" for good.
+        // Bounded at one terminal frame per dead room: `_relay` is disposed straight afterwards.
+        if (this.terminal) this.dropLast();
+        // The caps apply to an announcement like any other frame, but it is the one frame that
+        // must outlive them: nothing follows it to make good its loss. If it does not fit, the
+        // snapshot and tail go and it stands alone. That is safe where a lone snapshot is not —
+        // neither client handler rebuilds the transcript from the announcement's own contents:
+        // `applyClosed()` sets a flag and leaves the records untouched, and `moveToRoom()` clears
+        // deliberately and resubscribes, so a full snapshot follows from the new room.
+        if (!this.remember(message)) {
+          // remember() emptied the buffer on overflow; one frame on its own always fits.
+          this.remember(message);
+        }
+        this.terminal = true;
+        break;
+      // Everything else stops at a terminal room: the host has moved on, and a frame published
+      // to a room it no longer drives is not part of any state a late reader should be given.
+      case "room.snapshot":
+        if (this.terminal) break;
+        this.forgetReplay();
+        this.remember(message);
+        break;
+      default:
+        if (!this.terminal && this.replay.length > 0) this.remember(message);
+    }
+  }
+
+  /** Drop the frame at the end of the buffer, keeping the byte count honest. */
+  private dropLast(): void {
+    const last = this.replay.pop();
+    if (last !== undefined) this.replayBytes -= encoder.encode(last).byteLength;
+  }
+
+  /**
+   * Append one frame; drop the buffer whole and return false if it no longer fits. Truncating the
+   * tail is not an option: a snapshot delivered without the frames that followed it is precisely
+   * the rollback this buffer exists to prevent, whereas an empty buffer only degrades to the
+   * pre-replay behaviour — the phone renders its own cache and waits for the next heartbeat,
+   * which starts a fresh buffer.
+   */
+  private remember(message: string): boolean {
+    this.replay.push(message);
+    this.replayBytes += encoder.encode(message).byteLength;
+    if (this.replay.length <= MAX_REPLAY_FRAMES && this.replayBytes <= MAX_REPLAY_BYTES) {
+      return true;
+    }
+    this.forgetReplay();
+    return false;
+  }
+
+  private forgetReplay(): void {
+    this.replay = [];
+    this.replayBytes = 0;
   }
 
   private expired(socket: WebSocket, now: number): boolean {

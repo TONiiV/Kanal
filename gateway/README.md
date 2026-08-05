@@ -10,8 +10,53 @@ meeting. Hibernated Durable Object sockets have no wall-clock limit and are incl
 Functions (no WebSockets) would forcibly disconnect every phone every few minutes.
 
 No backing store is involved: the Worker holds no Supabase/database URL or key, messages are
-fanned out in memory and never stored, and the repository, desktop build, and mobile page
+fanned out in memory and never written to disk — a room holds only a bounded in-memory replay
+buffer, to greet a reconnecting phone — and the repository, desktop build, and mobile page
 contain no server credential of any kind.
+
+## Replay to a reconnecting reader
+
+A room keeps the latest `room.snapshot` envelope **and every frame published after it**, and
+sends that sequence to a newly accepted reader right after `gateway.session`. A phone that
+locks, roams, or joins late sees exactly what a phone connected the whole time saw, instead of
+waiting up to 15 s for the host's next snapshot heartbeat.
+
+The tail is not optional. The mobile page replaces its whole transcript when it applies a
+snapshot, and caches every incremental frame as it arrives, so a phone reconnecting between
+heartbeats already holds newer state than the snapshot — a snapshot replayed alone would delete
+up to 15 s of transcript on screen.
+
+`room.closed` and `room.moved` are appended and make the room terminal: no ordinary frame is
+buffered afterwards. This is the case the replay matters most for — the host publishes a final
+snapshot, then the announcement, then stops, so a phone that was locked when the meeting ended has
+nothing left running to correct it. Replaying snapshot → tail → announcement lands it in "ended",
+or follows the move to the room the meeting continues in.
+
+A *later* announcement supersedes an earlier one rather than stacking on it. A closed room can
+legitimately receive one more: the host's publisher outlives its session, so a restart announces
+`room.moved` on the room it already closed. Superseding means a phone locked across a stop-then-
+restart follows the meeting instead of sitting on "ended" for good, and the buffer still holds at
+most one terminal frame per dead room.
+
+The buffer is bounded at 256 frames and 1 MiB (4 × the per-frame `MAX_PAYLOAD_BYTES`). On
+overflow it is **dropped whole, snapshot and tail together**, rather than truncated: a snapshot
+without its tail is the rollback above, whereas an empty buffer only degrades to no replay at
+all, and the next `room.snapshot` starts a fresh one. The one exception is a terminal
+announcement, which survives an overflow and stands alone if it has to — unlike a snapshot, it
+does not rewrite the transcript from its own contents, so on its own it can only add the true
+fact that the room ended or moved.
+
+Headroom is thinner than the caps suggest. Every relay message is one publish, partials included
+and nothing coalesced, so 15 s of continuous speech is roughly 35–80 frames at a streaming ASR's
+usual 2–5 partials/s plus one `translation.upsert` per final — about 3–7× under the 256-frame cap,
+and it is the frame cap rather than the byte cap that binds (256 partial envelopes at 0.4–1 KB is
+a quarter of 1 MiB). Raising the frame cap costs almost nothing in memory and is worth doing —
+but only once the mobile page serialises `onmessage`, since a larger cap means a larger replay
+burst arriving at a client that does not yet apply frames in arrival order.
+
+The buffer lives in the object's memory, not in Durable Object storage: an evicted object refills
+it within one 15 s heartbeat, whereas storage would put a write on the fan-out path of every
+frame for the whole meeting.
 
 ## Deploy (once)
 
@@ -88,13 +133,25 @@ curl -s -X POST "https://<worker-host>/?action=admin.revoke" \
 ## Wire protocol
 
 Frozen against `src/Kanal.Core/Relay/GatewayRelayPublisher.cs` and `web/index.html`; the vitest
-suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract:
+suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract.
+
+The five tests that fill the replay buffer to a cap carry an explicit `CAP_TIMEOUT_MS` instead of
+vitest's 5 s default. **Leave them.** A per-test timeout that fires mid-request corrupts
+`vitest-pool-workers`' isolated-storage teardown, and the resulting failures are reported against
+unrelated tests: the symptom is `Isolated storage failed… Expected .sqlite, got …sqlite-shm` on
+cases that have nothing to do with the change you made. The suite passes on a fast laptop and fails
+on CI, which is what makes it expensive to diagnose.
+
+Give any new test the same treatment if its runtime scales with a loop count, a payload size, or a
+cap — those grow on a slower runner and again if a cap is ever raised. Do not reach for
+`isolatedStorage: false`: it drops storage isolation for the whole suite and leaves the timeouts in
+place.
 
 | Route | Auth | Purpose |
 |---|---|---|
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
-| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames |
+| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the room's replay buffer first, if it has one |
 | `POST ?action=activate` | activation code | one-time exchange for a device credential |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 
