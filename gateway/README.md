@@ -67,7 +67,20 @@ expires; unredeemed codes simply stop working.
 with), so it is rate limited to **10 attempts per 10 minutes per client address**; over that it
 answers `429 Too many activation attempts`. One machine's activation needs one attempt, so the
 budget is only reachable by fumbling a paste several times — wait out the window and retry.
-`create`, `publish` and `stream` are not affected.
+`create`, `publish` and `stream` are not affected. IPv4 callers are counted per address; IPv6
+callers are counted per **/64**, since the smallest prefix an ordinary subscriber holds is a /64
+and counting per address would hand one caller 2^64 budgets.
+
+Two things the limit deliberately does not do. It does not reduce the Worker requests billed
+against the free plan — an in-Worker limit still costs a request to answer, and only an edge WAF
+rate-limiting rule rejects before the Worker runs. And it makes every attempt cost the registry a
+write: before the limit, an attempt with an invalid code was effectively a read (the single-use
+`UPDATE` matched no rows and wrote nothing), whereas now the window row is expired and then
+inserted or incremented before the limiter can engage. Against one address hammering the route
+that trade is decisive — everything past the budget is refused. Against a caller rotating across
+many addresses the limit never trips, and each request now costs the Durable Object strictly more
+than it did before. That is the price of a *durable* counter, and it is the right price: an
+in-memory one would be reset for free by a Durable Object eviction.
 
 Provision the desktop at runtime (not during compilation or packaging):
 
@@ -107,7 +120,7 @@ suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the co
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
 | `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames |
-| `POST ?action=activate` | activation code | one-time exchange for a device credential; code expires 24 h after minting, 10 attempts / 10 min / address |
+| `POST ?action=activate` | activation code | one-time exchange for a device credential; code expires 24 h after minting, 10 attempts / 10 min / address (IPv6: per /64) |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 
 The gateway never sees cleartext credentials at rest (codes and device tokens are stored as

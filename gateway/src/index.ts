@@ -22,7 +22,8 @@ import { DurableObject } from "cloudflare:workers";
  *   POST ?action=admin.code     Bearer <KANAL_ADMIN_TOKEN>  {note?} -> {code}
  *   POST ?action=activate       {code, deviceName?} -> {deviceId, deviceToken}
  *                               codes are single-use and expire 24 h after minting; the route
- *                               is rate limited per client address (429 once the budget is up)
+ *                               is rate limited per client address, per /64 for IPv6
+ *                               (429 once the budget is up)
  *   POST ?action=admin.revoke   Bearer <KANAL_ADMIN_TOKEN>  {deviceId}
  *   GET  ?action=admin.devices  Bearer <KANAL_ADMIN_TOKEN>
  */
@@ -40,10 +41,13 @@ const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
-/** A code is handed over for one machine; a leaked one must not still work weeks later. */
-const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
-const ACTIVATE_WINDOW_MS = 10 * 60 * 1000;
-const ACTIVATE_MAX_ATTEMPTS = 10;
+/**
+ * A code is handed over for one machine; a leaked one must not still work weeks later.
+ * Exported so the suite asserts against these numbers rather than copies of them.
+ */
+export const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+export const ACTIVATE_WINDOW_MS = 10 * 60 * 1000;
+export const ACTIVATE_MAX_ATTEMPTS = 10;
 
 type Role = "host" | "reader";
 
@@ -189,7 +193,48 @@ async function mintActivationCode(request: Request, env: Env): Promise<Response>
  * and limiting it by address would only throttle the operator, who holds the token anyway.
  */
 function clientKey(request: Request): string {
-  return request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const address = request.headers.get("CF-Connecting-IP");
+  return address ? bucketAddress(address.trim()) : "unknown";
+}
+
+/**
+ * IPv4 buckets on the whole address. IPv6 buckets on the /64, because the smallest prefix an
+ * ordinary subscriber is handed is a /64 — keying on the exact address would give one caller
+ * 2^64 budgets and leave the limit inert. An `::ffff:a.b.c.d` mapped address carries a real
+ * IPv4 client and buckets on that instead: its /64 is all zeros for everyone, so collapsing it
+ * would put every mapped caller into a single shared budget.
+ */
+function bucketAddress(address: string): string {
+  if (!address.includes(":")) return address;
+  const hextets = expandIpv6(address.split("%")[0].toLowerCase());
+  if (!hextets) return address;
+  if (hextets[5] === 0xffff && hextets.slice(0, 5).every((hextet) => hextet === 0)) {
+    return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+  }
+  return `${hextets.slice(0, 4).map((hextet) => hextet.toString(16)).join(":")}::/64`;
+}
+
+/** The eight hextets of an IPv6 address, accepting `::` and a trailing dotted quad; null if malformed. */
+function expandIpv6(address: string): number[] | null {
+  let text = address;
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (dotted) {
+    const octets = dotted.slice(1).map(Number);
+    if (octets.some((octet) => octet > 255)) return null;
+    const pair = [(octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]];
+    text = text.slice(0, dotted.index) + pair.map((v) => v.toString(16)).join(":");
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  const groups = halves.length === 2
+    ? [...head, ...Array<string>(missing).fill("0"), ...tail]
+    : head;
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
 }
 
 async function activateDevice(request: Request, env: Env): Promise<Response> {

@@ -1,5 +1,10 @@
 import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import {
+  ACTIVATE_MAX_ATTEMPTS,
+  ACTIVATE_WINDOW_MS,
+  ACTIVATION_CODE_TTL_MS,
+} from "../src/index";
 
 /**
  * The wire protocol under test is the one the desktop (`GatewayRelayPublisher`) and the
@@ -13,8 +18,6 @@ const ADMIN = "test-admin-token-0123456789-0123456789";
 const ROOM = "kanal-093015-AbCdEfGhIjKlMnOp";
 const VK = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE_fake_spki_key_material_0123456789";
 const HOUR = 60 * 60 * 1000;
-/** Must match `ACTIVATE_MAX_ATTEMPTS` in `src/index.ts`. */
-const ACTIVATE_LIMIT = 10;
 
 let clientAddress = 0;
 
@@ -59,6 +62,18 @@ async function ageCode(code: string, ms: number): Promise<void> {
       "UPDATE codes SET created_at = created_at - ? WHERE code_hash = ?",
       ms,
       codeHash,
+    );
+  });
+}
+
+/** The same trick as `ageCode`, for the limiter's fixed window: one caller, moved back. */
+async function ageActivationWindow(client: string, ms: number): Promise<void> {
+  const stub = env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
+  await runInDurableObject(stub, (_instance, state) => {
+    state.storage.sql.exec(
+      "UPDATE activation_attempts SET window_start = window_start - ? WHERE client = ?",
+      ms,
+      client,
     );
   });
 }
@@ -160,7 +175,7 @@ describe("device authorization", () => {
   it("an activation code older than 24 h is refused and enrols nothing", async () => {
     const code = await mintCode("forgotten-in-shell-history");
     const before = await deviceCount();
-    await ageCode(code, 25 * HOUR);
+    await ageCode(code, ACTIVATION_CODE_TTL_MS + HOUR);
 
     const response = await post("activate", { code, deviceName: "late" });
     // Deliberately the same 401 an unknown code gets: an attacker holding a leaked code
@@ -171,7 +186,7 @@ describe("device authorization", () => {
 
   it("an expired activation code cannot be revived by retrying", async () => {
     const code = await mintCode("expired-then-hammered");
-    await ageCode(code, 25 * HOUR);
+    await ageCode(code, ACTIVATION_CODE_TTL_MS + HOUR);
 
     for (let attempt = 0; attempt < 3; attempt++) {
       expect((await post("activate", { code, deviceName: "retry" })).status).toBe(401);
@@ -180,7 +195,7 @@ describe("device authorization", () => {
 
   it("an activation code just inside the 24 h window still works, once", async () => {
     const code = await mintCode("same-day");
-    await ageCode(code, 23 * HOUR);
+    await ageCode(code, ACTIVATION_CODE_TTL_MS - HOUR);
 
     expect((await post("activate", { code, deviceName: "same-day" })).status).toBe(200);
     expect((await post("activate", { code, deviceName: "again" })).status).toBe(401);
@@ -235,7 +250,7 @@ describe("activation rate limit", () => {
 
   it("cuts a caller off after the per-address budget is spent", async () => {
     const attacker = from("198.51.100.10");
-    for (let attempt = 0; attempt < ACTIVATE_LIMIT; attempt++) {
+    for (let attempt = 0; attempt < ACTIVATE_MAX_ATTEMPTS; attempt++) {
       const guess = await post("activate", { code: `guess-${attempt}-0000` }, undefined, attacker);
       expect(guess.status).toBe(401);
     }
@@ -245,7 +260,7 @@ describe("activation rate limit", () => {
 
   it("does not spend a neighbouring caller's budget", async () => {
     const noisy = from("198.51.100.20");
-    for (let attempt = 0; attempt <= ACTIVATE_LIMIT; attempt++) {
+    for (let attempt = 0; attempt <= ACTIVATE_MAX_ATTEMPTS; attempt++) {
       await post("activate", { code: `guess-${attempt}-000000` }, undefined, noisy);
     }
     const code = await mintCode("quiet-neighbour");
@@ -258,10 +273,69 @@ describe("activation rate limit", () => {
     expect(activated.status).toBe(200);
   });
 
+  it("hands the budget back once the window has passed", async () => {
+    const caller = "198.51.100.40";
+    for (let attempt = 0; attempt <= ACTIVATE_MAX_ATTEMPTS; attempt++) {
+      await post("activate", { code: `guess-${attempt}-0000000` }, undefined, from(caller));
+    }
+    const cut = await post("activate", { code: "still-inside-window" }, undefined, from(caller));
+    expect(cut.status).toBe(429);
+
+    await ageActivationWindow(caller, ACTIVATE_WINDOW_MS + 1000);
+
+    const code = await mintCode("after-the-window");
+    const activated = await post(
+      "activate",
+      { code, deviceName: "after-the-window" },
+      undefined,
+      from(caller),
+    );
+    expect(activated.status).toBe(200);
+  });
+
+  /** Spends the whole budget from one address and returns the status of the attempt after it. */
+  async function spendBudgetFrom(address: string, label: string): Promise<number> {
+    for (let attempt = 0; attempt < ACTIVATE_MAX_ATTEMPTS; attempt++) {
+      await post("activate", { code: `guess-${label}-${attempt}` }, undefined, from(address));
+    }
+    return (await post("activate", { code: `guess-${label}-over` }, undefined, from(address)))
+      .status;
+  }
+
+  /** Returns 200 only if `address` still has budget left to redeem a fresh code with. */
+  async function activateFrom(address: string, label: string): Promise<number> {
+    const code = await mintCode(label);
+    return (await post("activate", { code, deviceName: label }, undefined, from(address))).status;
+  }
+
+  it("shares one budget across an IPv6 caller's whole /64", async () => {
+    // One subscriber prefix, three spellings: fully expanded with leading zeros, and two
+    // compressed forms. Keying on the exact address would give the same caller 2^64 budgets.
+    expect(await spendBudgetFrom("2001:0db8:0001:0002:0000:0000:0000:0001", "same64")).toBe(429);
+    expect(await activateFrom("2001:db8:1:2::beef", "sibling-in-prefix")).toBe(429);
+    expect(await activateFrom("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "another-in-prefix")).toBe(429);
+  });
+
+  it("gives a different IPv6 /64 its own budget", async () => {
+    expect(await spendBudgetFrom("2001:db8:1:3::1", "noisy64")).toBe(429);
+    expect(await activateFrom("2001:db8:1:4::1", "quiet64")).toBe(200);
+  });
+
+  it("keeps every IPv4 caller on its own budget", async () => {
+    expect(await spendBudgetFrom("198.51.100.50", "v4")).toBe(429);
+    expect(await activateFrom("198.51.100.51", "neighbour-v4")).toBe(200);
+  });
+
+  it("keeps IPv4-mapped callers apart instead of collapsing them into one /64", async () => {
+    // ::ffff:a.b.c.d carries a real IPv4 client; its /64 is all zeros for everyone.
+    expect(await spendBudgetFrom("::ffff:192.0.2.7", "mapped")).toBe(429);
+    expect(await activateFrom("::ffff:192.0.2.8", "neighbour-mapped")).toBe(200);
+  });
+
   it("leaves room creation, publishing and streaming alone", async () => {
     const operator = from("198.51.100.30");
     const { deviceToken } = await activateDevice("busy-laptop");
-    for (let attempt = 0; attempt <= ACTIVATE_LIMIT * 2; attempt++) {
+    for (let attempt = 0; attempt <= ACTIVATE_MAX_ATTEMPTS * 2; attempt++) {
       const created = await post(
         "create",
         { roomId: `kanal-11000${attempt % 10}-BusyRoomAaaaaaaa`, verificationKey: VK },

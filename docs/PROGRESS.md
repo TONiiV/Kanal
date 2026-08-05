@@ -31,6 +31,13 @@ touches the `create`/`publish`/`stream` wire protocol.
   window. Chosen over the Workers `ratelimit` binding because the binding's local simulation is
   process-memory-scoped and its periods are fixed at 10 or 60 s, i.e. not something the suite
   could assert on honestly.
+- **The bucket key is the /64, not the address.** An IPv4 caller is counted per address, but the
+  smallest prefix an ordinary IPv6 subscriber is handed is a /64, so keying IPv6 on the exact
+  address would give one caller 2^64 budgets and leave the limit inert against every IPv6 source.
+  `clientKey` normalises IPv6 to its first four hextets, accepting the forms Cloudflare can emit:
+  fully expanded, `::`-compressed, leading-zero, and zone-suffixed. `::ffff:a.b.c.d` is the
+  exception and buckets on the embedded IPv4 — its /64 is all zeros for everyone, so collapsing
+  it would push every IPv4-mapped caller into one shared budget.
 - **What this does not close.** Neither change reduces the raw request count against the Workers
   free-plan budget — an in-Worker limit still costs a Worker request to answer. Only an edge WAF
   rate-limiting rule rejects before the Worker runs; the free plan allows one such rule and it
@@ -40,11 +47,25 @@ touches the `create`/`publish`/`stream` wire protocol.
   are room-scoped and every envelope is verified against the host's P-256 key on the phone. That
   is the per-device design working as intended, and revocation (`?action=admin.revoke`) is the
   answer to it.
-- 6 new vitest cases (suite 25 → 31), including an expired code that enrols nothing and cannot
-  be revived by retrying, a code just inside the window that still burns on first use, a caller
-  cut off at the budget without spending a neighbour's, and room creation, publishing and
-  streaming proven untouched by the limit. `Date.now()` advances in real time inside workerd, so
-  the TTL cases age the specific code's row through `runInDurableObject` rather than sleeping.
+- **The limiter costs the registry a write on every attempt.** Before this change, an attempt
+  with an invalid code cost essentially a read: the single-use `UPDATE ... WHERE` matched no rows
+  and wrote nothing. Now every attempt performs a guaranteed SQL write — the window `DELETE`
+  plus an `INSERT` or `UPDATE` — *before* the limiter can engage. Against one address hammering
+  the route the limiter still wins decisively after the first N attempts. Against a caller
+  rotating across many addresses it never trips, and each request now costs the Durable Object
+  strictly more than it did before. That is an acceptable trade for durability, and it is written
+  down rather than discovered later: an in-memory counter would cost nothing extra and be reset
+  for free by an eviction. Deliberately *not* mitigated with an in-memory pre-check, which would
+  re-introduce exactly the eviction hole the durable counter closes.
+- 11 new vitest cases (suite 25 → 36): an expired code that enrols nothing and cannot be revived
+  by retrying, a code just inside the window that still burns on first use, a caller cut off at
+  the budget without spending a neighbour's, the budget returning once the window passes, one
+  budget shared across three spellings of a single /64 while a neighbouring /64 and both plain
+  and IPv4-mapped v4 addresses keep their own, and room creation, publishing and streaming proven
+  untouched by the limit. `Date.now()` advances in real time inside workerd, so the TTL and
+  window cases age the specific row through `runInDurableObject` rather than sleeping. The suite
+  imports `ACTIVATION_CODE_TTL_MS`, `ACTIVATE_WINDOW_MS` and `ACTIVATE_MAX_ATTEMPTS` from the
+  Worker instead of restating them — a constant kept in step by a comment drifts.
 
 ### Kanal traffic is behind an authenticated gateway
 
