@@ -135,11 +135,17 @@ curl -s -X POST "https://<worker-host>/?action=admin.revoke" \
 Frozen against `src/Kanal.Core/Relay/GatewayRelayPublisher.cs` and `web/index.html`; the vitest
 suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract.
 
-Give any test with a long publish loop its own timeout — `it("…", async () => {…}, 60_000)`. A
-per-test timeout that fires mid-request corrupts `vitest-pool-workers`' isolated-storage teardown,
-which then cascades into unrelated tests: the symptom is `Isolated storage failed… Expected
-.sqlite, got …sqlite-shm` reported against tests that have nothing to do with the change you made.
-Raise the timeout; the failures are not what they point at.
+The five tests that fill the replay buffer to a cap carry an explicit `CAP_TIMEOUT_MS` instead of
+vitest's 5 s default. **Leave them.** A per-test timeout that fires mid-request corrupts
+`vitest-pool-workers`' isolated-storage teardown, and the resulting failures are reported against
+unrelated tests: the symptom is `Isolated storage failed… Expected .sqlite, got …sqlite-shm` on
+cases that have nothing to do with the change you made. The suite passes on a fast laptop and fails
+on CI, which is what makes it expensive to diagnose.
+
+Give any new test the same treatment if its runtime scales with a loop count, a payload size, or a
+cap — those grow on a slower runner and again if a cap is ever raised. Do not reach for
+`isolatedStorage: false`: it drops storage isolation for the whole suite and leaves the timeouts in
+place.
 
 | Route | Auth | Purpose |
 |---|---|---|

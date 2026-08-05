@@ -356,6 +356,15 @@ describe("snapshot replay", () => {
   );
   /** Mirrors `MAX_REPLAY_BYTES` in `gateway/src/index.ts`. */
   const MAX_REPLAY_BYTES = 4 * 256 * 1024;
+  /**
+   * Every test that fills the buffer to a cap gets this instead of vitest's 5 s default. Their
+   * runtime is a function of `MAX_REPLAY_FRAMES` / `MAX_REPLAY_BYTES` and of how fast the machine
+   * answers a publish, so a CI runner slower than a laptop — or anyone raising a cap — pushes them
+   * over. That matters more than a slow test: a per-test timeout firing mid-request corrupts
+   * `vitest-pool-workers`' isolated-storage teardown and takes unrelated tests down with it, so the
+   * suite fails somewhere else entirely. Do not remove these as noise; see `gateway/README.md`.
+   */
+  const CAP_TIMEOUT_MS = 60_000;
   /** The bytes the room accounts for one envelope: the frame it fans out, in UTF-8. */
   const frameBytes = (payload: unknown) =>
     new TextEncoder().encode(JSON.stringify({ type: "relay", payload })).byteLength;
@@ -490,7 +499,7 @@ describe("snapshot replay", () => {
     await until(() => reader.messages.length >= 1);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(reader.messages.length).toBe(1);
-  });
+  }, CAP_TIMEOUT_MS);
 
   it("drops the snapshot with its tail when the buffer outgrows the frame cap", async () => {
     const { deviceToken } = await activateDevice();
@@ -508,7 +517,7 @@ describe("snapshot replay", () => {
     await until(() => reader.messages.length >= 1);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(reader.messages.length).toBe(1);
-  });
+  }, CAP_TIMEOUT_MS);
 
   it("replays again from the next snapshot after an overflow", async () => {
     const { deviceToken } = await activateDevice();
@@ -528,7 +537,7 @@ describe("snapshot replay", () => {
       { type: "relay", payload: laterSnapshot },
       { type: "relay", payload: utterance },
     ]);
-  });
+  }, CAP_TIMEOUT_MS);
 
   it("replays the close announcement after the snapshot and its tail", async () => {
     const { deviceToken } = await activateDevice();
@@ -632,7 +641,7 @@ describe("snapshot replay", () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(reader.messages.length).toBe(2);
     expect(reader.messages[1]).toEqual({ type: "relay", payload: closed });
-  });
+  }, CAP_TIMEOUT_MS);
 
   it("keeps the close announcement even when the buffer has already overflowed", async () => {
     const { deviceToken } = await activateDevice();
@@ -650,7 +659,7 @@ describe("snapshot replay", () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(reader.messages.length).toBe(2);
     expect(reader.messages[1]).toEqual({ type: "relay", payload: closed });
-  });
+  }, CAP_TIMEOUT_MS);
 
   it("never replays one room's snapshot into another room", async () => {
     const { deviceToken } = await activateDevice();
