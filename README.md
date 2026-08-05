@@ -117,7 +117,8 @@ Most configuration is available from the in-app **Settings** window:
 - local WAV recording on/off;
 - operator-interface language; and
 - how much detail the log keeps, the size at which a log file is rolled over, and a button that
-  opens the log folder.
+  opens the log folder; and
+- the version and its changelog.
 
 Preferences are written to `Kanal/settings.json` beneath the operating system's application-data
 directory. Downloaded models live in the adjacent `Kanal/models` directory, and log files in
@@ -257,3 +258,6 @@ Detailed status, benchmarks, and the next implementation steps are tracked in
 Kanal is released under the [MIT License](LICENSE). Downloaded translation models and external
 services have their own licences and terms; the model catalog displays the relevant licence for
 each model, including a warning where it is not OSI-approved.
+
+Release notes live in [`CHANGELOG.md`](CHANGELOG.md) and are readable from inside the application
+under Settings → Version.

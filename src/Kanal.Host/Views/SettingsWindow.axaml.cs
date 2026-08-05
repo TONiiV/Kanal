@@ -81,6 +81,25 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private bool _changelogOpen;
+
+    private void OnChangelogClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Opening the changelog", async () =>
+        {
+            if (_changelogOpen)
+                return;
+
+            _changelogOpen = true;
+            try
+            {
+                await new ChangelogWindow().ShowDialog(this);
+            }
+            finally
+            {
+                _changelogOpen = false;
+            }
+        });
+
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
         try
