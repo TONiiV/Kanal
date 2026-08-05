@@ -133,7 +133,13 @@ curl -s -X POST "https://<worker-host>/?action=admin.revoke" \
 ## Wire protocol
 
 Frozen against `src/Kanal.Core/Relay/GatewayRelayPublisher.cs` and `web/index.html`; the vitest
-suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract:
+suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract.
+
+Give any test with a long publish loop its own timeout — `it("…", async () => {…}, 60_000)`. A
+per-test timeout that fires mid-request corrupts `vitest-pool-workers`' isolated-storage teardown,
+which then cascades into unrelated tests: the symptom is `Isolated storage failed… Expected
+.sqlite, got …sqlite-shm` reported against tests that have nothing to do with the change you made.
+Raise the timeout; the failures are not what they point at.
 
 | Route | Auth | Purpose |
 |---|---|---|
