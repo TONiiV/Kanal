@@ -37,6 +37,15 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
+/**
+ * Bounds on a room's replay buffer (one snapshot plus the frames published after it). Each frame
+ * is already capped at `MAX_PAYLOAD_BYTES` on the way in; these cap the buffer as a whole. The
+ * host snapshots every 15 s and a busy 15 s window is tens of frames, so 256 frames / 1 MiB is
+ * about an order of magnitude of headroom over a normal heartbeat interval while keeping a room's
+ * memory bounded if the host ever publishes without snapshotting.
+ */
+const MAX_REPLAY_FRAMES = 256;
+const MAX_REPLAY_BYTES = 4 * MAX_PAYLOAD_BYTES;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
 
 type Role = "host" | "reader";
@@ -353,16 +362,24 @@ export default {
  */
 export class RoomRelay extends DurableObject<Env> {
   /**
-   * The last `room.snapshot` frame, verbatim, replayed to every reader that arrives after it.
-   * A phone that reconnects otherwise shows its `localStorage` copy until the host's next
-   * snapshot heartbeat, up to 15 s later.
+   * The last `room.snapshot` frame followed by every frame published since, verbatim and in
+   * order, replayed to each reader that arrives after them. A phone that reconnects otherwise
+   * shows its `localStorage` copy until the host's next snapshot heartbeat, up to 15 s later.
+   *
+   * The tail is the whole point. The phone's `applySnapshot()` clears its speakers, aliases, and
+   * utterances before repopulating, and it caches every incremental frame as it arrives — so a
+   * phone reconnecting between heartbeats holds newer state than the snapshot alone, and a
+   * snapshot replayed without its tail would delete up to 15 s of transcript in front of the
+   * room. Replaying the sequence gives a reconnecting reader exactly what a reader connected
+   * the whole time saw.
    *
    * Held in memory, not in storage: the host republishes a snapshot every 15 s and each publish
-   * wakes this object, so a cache lost to eviction refills within one heartbeat — the worst case
-   * is exactly today's behaviour. Storage would instead put a write on the fan-out path of every
-   * snapshot for the whole meeting.
+   * wakes this object, so a buffer lost to eviction refills within one heartbeat — the worst case
+   * is exactly the pre-replay behaviour. Storage would instead put a write on the fan-out path of
+   * every frame for the whole meeting.
    */
-  private lastSnapshot: string | null = null;
+  private replay: string[] = [];
+  private replayBytes = 0;
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
@@ -373,20 +390,25 @@ export class RoomRelay extends DurableObject<Env> {
     const verificationKey = url.searchParams.get("vk") ?? "";
     const expiresAt = Number(url.searchParams.get("exp") ?? "0");
 
+    // Before the socket exists, because this is the only await in the method and everything after
+    // `acceptWebSocket` must reach the wire as one uninterrupted run: the accepted socket is in
+    // `getWebSockets()` at once, so a concurrent publish resuming across a yield here could fan a
+    // live frame out ahead of `gateway.session` and the replay. Nothing in it needs the socket.
+    await this.scheduleExpiry(expiresAt);
+
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ expiresAt });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
-    await this.scheduleExpiry(expiresAt);
 
     // Same contract as before: the reader treats the session message as proof it is
     // subscribed to the room it was invited to, before trusting any relayed envelope.
     server.send(JSON.stringify({ type: "gateway.session", room, verificationKey, expiresAt }));
-    // An ordinary relay frame, indistinguishable from a live one — the phone verifies and
-    // applies it through the same path, so late join needs no client change.
-    if (this.lastSnapshot) server.send(this.lastSnapshot);
+    // Ordinary relay frames, indistinguishable from live ones — the phone verifies and applies
+    // them through the same path, so late join needs no client change.
+    for (const frame of this.replay) server.send(frame);
 
     return new Response(null, {
       status: 101,
@@ -398,17 +420,23 @@ export class RoomRelay extends DurableObject<Env> {
   /** Fan a signed envelope out to every live reader. Called over RPC from the Worker. */
   async publish(payload: unknown): Promise<void> {
     const message = JSON.stringify({ type: "relay", payload });
-    // A snapshot supersedes the previous one. A room that has ended or moved must not greet a
-    // late reader with a finished meeting rendered as live — nothing is published here any more
-    // to correct it — so those two announcements drop the cache instead.
+    // A snapshot supersedes the previous one and its tail: the heartbeat already contains
+    // everything those frames said. A room that has ended or moved must not greet a late reader
+    // with a finished meeting rendered as live — nothing is published here any more to correct
+    // it — so those two announcements drop the buffer instead. Anything else extends the tail,
+    // but only once a snapshot has anchored it: a frame on its own is not something a phone that
+    // has never seen this room can apply.
     switch (envelopeType(payload)) {
       case "room.snapshot":
-        this.lastSnapshot = message;
+        this.forgetReplay();
+        this.remember(message);
         break;
       case "room.closed":
       case "room.moved":
-        this.lastSnapshot = null;
+        this.forgetReplay();
         break;
+      default:
+        if (this.replay.length > 0) this.remember(message);
     }
     const now = Math.floor(Date.now() / 1000);
     for (const socket of this.ctx.getWebSockets()) {
@@ -442,6 +470,26 @@ export class RoomRelay extends DurableObject<Env> {
       }
     }
     if (Number.isFinite(next)) await this.ctx.storage.setAlarm(next * 1000);
+  }
+
+  /**
+   * Append one frame, and drop the buffer whole if it no longer fits. Truncating the tail is not
+   * an option: a snapshot delivered without the frames that followed it is precisely the rollback
+   * this buffer exists to prevent, whereas an empty buffer only degrades to the pre-replay
+   * behaviour — the phone renders its own cache and waits for the next heartbeat, which starts a
+   * fresh buffer.
+   */
+  private remember(message: string): void {
+    this.replay.push(message);
+    this.replayBytes += encoder.encode(message).byteLength;
+    if (this.replay.length > MAX_REPLAY_FRAMES || this.replayBytes > MAX_REPLAY_BYTES) {
+      this.forgetReplay();
+    }
+  }
+
+  private forgetReplay(): void {
+    this.replay = [];
+    this.replayBytes = 0;
   }
 
   private expired(socket: WebSocket, now: number): boolean {

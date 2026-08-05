@@ -335,14 +335,26 @@ describe("origin policy", () => {
 
 /**
  * A phone that reconnects mid-meeting must not stare at its `localStorage` cache until the
- * host's next 15 s snapshot heartbeat. The room remembers the last snapshot envelope and
- * replays it right after `gateway.session` — one ordinary `{type:"relay"}` frame, which the
- * phone already verifies and applies like any other.
+ * host's next 15 s snapshot heartbeat. The room remembers the last snapshot envelope *and every
+ * frame published after it*, and replays that sequence right after `gateway.session` — ordinary
+ * `{type:"relay"}` frames, which the phone already verifies and applies like any other.
+ *
+ * The tail is not optional. `applySnapshot()` on the phone clears its speakers, aliases, and
+ * utterances before repopulating, while every incremental frame is written straight to
+ * `localStorage`. A phone reconnecting between heartbeats therefore holds *newer* state than the
+ * snapshot, and a snapshot replayed alone would visibly delete up to 15 s of transcript.
  */
 describe("snapshot replay", () => {
   const snapshot = envelope({ type: "room.snapshot", snapshot: { utterances: [] } }, "c25hcDE");
   const laterSnapshot = envelope({ type: "room.snapshot", snapshot: { utterances: [1] } }, "c25hcDI");
   const utterance = envelope({ type: "utterance.upsert", utterance: { id: "u1" } }, "dXR0");
+  const secondUtterance = envelope({ type: "utterance.upsert", utterance: { id: "u2" } }, "dXR0Mg");
+  /** ~200 KiB on the wire: under the per-frame `MAX_PAYLOAD_BYTES`, six of them over the buffer cap. */
+  const bulky = (index: number) =>
+    envelope(
+      { type: "utterance.upsert", utterance: { id: `big-${index}`, text: "x".repeat(150_000) } },
+      `Ymln${index}`,
+    );
 
   it("greets a reader that joins after a snapshot with that snapshot", async () => {
     const { deviceToken } = await activateDevice();
@@ -392,7 +404,7 @@ describe("snapshot replay", () => {
     expect(reader.messages[1]).toEqual({ type: "relay", payload: laterSnapshot });
   });
 
-  it("does not cache envelopes that are not snapshots", async () => {
+  it("ignores frames published before the first snapshot", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110004-ReplayUtterOnly");
     await post("publish", { payload: utterance }, room.hostTicket);
@@ -403,23 +415,99 @@ describe("snapshot replay", () => {
     expect(reader.messages.length).toBe(1);
   });
 
-  it("keeps the snapshot as the replayed frame when later utterances arrive", async () => {
+  it("replays the snapshot and every frame published after it, in order", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110005-ReplayThenUtter");
     await post("publish", { payload: snapshot }, room.hostTicket);
     await post("publish", { payload: utterance }, room.hostTicket);
+    await post("publish", { payload: secondUtterance }, room.hostTicket);
 
+    // Exactly the sequence a reader connected the whole time saw — no rollback, no gap.
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 4);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(4);
+    expect(reader.messages.slice(1)).toEqual([
+      { type: "relay", payload: snapshot },
+      { type: "relay", payload: utterance },
+      { type: "relay", payload: secondUtterance },
+    ]);
+  });
+
+  it("starts a fresh tail at each new snapshot", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110012-ReplayTailReset");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
+    await post("publish", { payload: laterSnapshot }, room.hostTicket);
+
+    // The heartbeat already contains that utterance; replaying it again would be noise.
     const reader = (await openReader(room.inviteTicket)) as Reader;
     await until(() => reader.messages.length >= 2);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(reader.messages.length).toBe(2);
-    expect(reader.messages[1]).toEqual({ type: "relay", payload: snapshot });
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: laterSnapshot });
   });
 
-  it("forgets the snapshot once the room is closed", async () => {
+  it("drops the snapshot with its tail when the buffer outgrows the byte cap", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110013-ReplayByteCap");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    for (let index = 0; index < 6; index++) {
+      expect((await post("publish", { payload: bulky(index) }, room.hostTicket)).status).toBe(200);
+    }
+
+    // Truncating the tail would resurrect the rollback bug; dropping everything only degrades
+    // to waiting for the next heartbeat, which is what the phone did before replay existed.
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("drops the snapshot with its tail when the buffer outgrows the frame cap", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110014-ReplayFrameCap");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    for (let index = 0; index < 257; index++) {
+      await post(
+        "publish",
+        { payload: envelope({ type: "utterance.upsert", utterance: { id: `u${index}` } }, "dGFpbA") },
+        room.hostTicket,
+      );
+    }
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(1);
+  });
+
+  it("replays again from the next snapshot after an overflow", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110015-ReplayAfterFlood");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    for (let index = 0; index < 6; index++) {
+      await post("publish", { payload: bulky(index) }, room.hostTicket);
+    }
+    await post("publish", { payload: laterSnapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 3);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(3);
+    expect(reader.messages.slice(1)).toEqual([
+      { type: "relay", payload: laterSnapshot },
+      { type: "relay", payload: utterance },
+    ]);
+  });
+
+  it("forgets the snapshot and its tail once the room is closed", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110006-ReplayAfterEnd");
     await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
     await post("publish", { payload: envelope({ type: "room.closed" }, "Y2xz") }, room.hostTicket);
 
     const reader = (await openReader(room.inviteTicket)) as Reader;
@@ -428,10 +516,11 @@ describe("snapshot replay", () => {
     expect(reader.messages.length).toBe(1);
   });
 
-  it("forgets the snapshot once the room has moved", async () => {
+  it("forgets the snapshot and its tail once the room has moved", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110007-ReplayAfterMove");
     await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
     const moved = envelope(
       { type: "room.moved", newRoomId: "kanal-110008-ReplayMoveTarget" },
       "bXZk",

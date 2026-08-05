@@ -10,9 +10,32 @@ meeting. Hibernated Durable Object sockets have no wall-clock limit and are incl
 Functions (no WebSockets) would forcibly disconnect every phone every few minutes.
 
 No backing store is involved: the Worker holds no Supabase/database URL or key, messages are
-fanned out in memory and never written to disk — a room holds only the latest `room.snapshot`
-envelope, in memory, to greet a reconnecting phone — and the repository, desktop build, and
-mobile page contain no server credential of any kind.
+fanned out in memory and never written to disk — a room holds only a bounded in-memory replay
+buffer, to greet a reconnecting phone — and the repository, desktop build, and mobile page
+contain no server credential of any kind.
+
+## Replay to a reconnecting reader
+
+A room keeps the latest `room.snapshot` envelope **and every frame published after it**, and
+sends that sequence to a newly accepted reader right after `gateway.session`. A phone that
+locks, roams, or joins late sees exactly what a phone connected the whole time saw, instead of
+waiting up to 15 s for the host's next snapshot heartbeat.
+
+The tail is not optional. The mobile page replaces its whole transcript when it applies a
+snapshot, and caches every incremental frame as it arrives, so a phone reconnecting between
+heartbeats already holds newer state than the snapshot — a snapshot replayed alone would delete
+up to 15 s of transcript on screen.
+
+The buffer is bounded at 256 frames and 1 MiB (4 × the per-frame `MAX_PAYLOAD_BYTES`). On
+overflow it is **dropped whole, snapshot and tail together**, rather than truncated: a snapshot
+without its tail is the rollback above, whereas an empty buffer only degrades to no replay at
+all, and the next `room.snapshot` starts a fresh one. `room.closed` and `room.moved` also drop
+it — after either, the host has stopped publishing there and nothing would arrive to correct a
+finished or relocated meeting rendered as live.
+
+The buffer lives in the object's memory, not in Durable Object storage: an evicted object refills
+it within one 15 s heartbeat, whereas storage would put a write on the fan-out path of every
+frame for the whole meeting.
 
 ## Deploy (once)
 
@@ -95,7 +118,7 @@ suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the co
 |---|---|---|
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
-| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the last `room.snapshot` first, if the room has one |
+| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the room's replay buffer first, if it has one |
 | `POST ?action=activate` | activation code | one-time exchange for a device credential |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 

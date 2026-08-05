@@ -8,28 +8,45 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### A reconnecting phone gets the room state at once, not at the next heartbeat
 
-- The room Durable Object now keeps the most recent `room.snapshot` envelope and sends it to a
-  reader immediately after `gateway.session`. A phone that locks, roams, or joins late used to
-  render its `localStorage` copy and then wait up to 15 s for the host's next snapshot heartbeat
-  before the live meeting appeared; that gap is now ~0. Issue #40, item 1.
-- Nothing on the wire changed for either client. The replay is an ordinary `{type:"relay"}` frame
-  carrying the exact bytes the host published, so the phone verifies and applies it through the
-  path it already uses, and the desktop is not involved at all.
+- The room Durable Object now keeps the most recent `room.snapshot` envelope **and every frame
+  published after it**, and sends that sequence to a reader immediately after `gateway.session`. A
+  phone that locks, roams, or joins late used to render its `localStorage` copy and then wait up to
+  15 s for the host's next snapshot heartbeat before the live meeting appeared; that gap is now ~0.
+  Issue #40, item 1.
+- The tail is what makes the replay safe. The phone's `applySnapshot()` clears its speakers,
+  aliases, and utterances before repopulating, and every incremental frame is cached as it
+  arrives — so a phone reconnecting between heartbeats holds *newer* state than the snapshot, and a
+  snapshot replayed on its own would visibly delete up to 15 s of transcript mid-meeting. Replaying
+  snapshot → tail in the original order gives a reconnecting reader exactly the sequence a reader
+  connected the whole time saw.
+- The buffer is bounded: 256 frames and 1 MiB, four times the per-frame `MAX_PAYLOAD_BYTES` and
+  about an order of magnitude of headroom over a busy 15 s heartbeat interval. On overflow it is
+  dropped **whole, snapshot and tail together**, never truncated — a snapshot without its tail is
+  precisely the rollback above, whereas an empty buffer only degrades to no replay at all, which is
+  what the phone did before. The next `room.snapshot` starts a fresh buffer.
+- Nothing on the wire changed for either client. The replayed frames are ordinary `{type:"relay"}`
+  frames carrying the exact bytes the host published, so the phone verifies and applies them
+  through the path it already uses, and the desktop is not involved at all.
 - To recognise a snapshot the gateway base64url-decodes the envelope's `data` and reads the `type`
   discriminator. Envelopes are signed, not encrypted — this reveals nothing the gateway was not
   already forwarding — and the gateway does not have to trust what it reads, because the phone
   verifies the host's P-256 signature on every frame regardless. A mislabelled envelope costs one
   discarded frame; it cannot inject content.
-- The cache lives in the object's memory rather than in Durable Object storage. A hibernated
+- The buffer lives in the object's memory rather than in Durable Object storage. A hibernated
   object can be evicted and lose it, but the host republishes a snapshot every 15 s and each
-  publish wakes the object, so the cache refills within one heartbeat and the worst case is
-  exactly the behaviour being replaced. Storage would instead add a write to the fan-out path of
-  every snapshot for the whole meeting.
-- `room.closed` and `room.moved` drop the cache. Both mean the host has stopped publishing on that
-  room, so a snapshot replayed afterwards would present a finished or relocated meeting as live
-  with nothing arriving to correct it. A reader arriving after either announcement now gets only
+  publish wakes the object, so it refills within one heartbeat and the worst case is exactly the
+  behaviour being replaced. Storage would instead add a write to the fan-out path of every frame
+  for the whole meeting.
+- `room.closed` and `room.moved` drop the buffer. Both mean the host has stopped publishing on that
+  room, so a replay afterwards would present a finished or relocated meeting as live with nothing
+  arriving to correct it. A reader arriving after either announcement now gets only
   `gateway.session`, the same as a room that has never published.
-- Gateway suite: 25 → 35 vitest cases.
+- `scheduleExpiry()` now runs *before* `acceptWebSocket()`. It was the only `await` between
+  accepting the socket — which puts it in `getWebSockets()` immediately — and finishing the
+  session and replay sends, so a concurrent `publish()` resuming across that yield could reach the
+  new reader ahead of `gateway.session`. Nothing in `scheduleExpiry()` needs the socket, and with
+  it moved there is no yield point left in that window.
+- Gateway suite: 25 → 39 vitest cases.
 
 ### Kanal traffic is behind an authenticated gateway
 
