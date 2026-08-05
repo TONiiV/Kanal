@@ -26,11 +26,17 @@ snapshot, and caches every incremental frame as it arrives, so a phone reconnect
 heartbeats already holds newer state than the snapshot — a snapshot replayed alone would delete
 up to 15 s of transcript on screen.
 
-`room.closed` and `room.moved` are appended and end the buffer: the room is terminal, so nothing
-published afterwards is buffered. This is the case the replay matters most for — the host
-publishes a final snapshot, then the announcement, then stops, so a phone that was locked when
-the meeting ended has nothing left running to correct it. Replaying snapshot → tail →
-announcement lands it in "ended", or follows the move to the room the meeting continues in.
+`room.closed` and `room.moved` are appended and make the room terminal: no ordinary frame is
+buffered afterwards. This is the case the replay matters most for — the host publishes a final
+snapshot, then the announcement, then stops, so a phone that was locked when the meeting ended has
+nothing left running to correct it. Replaying snapshot → tail → announcement lands it in "ended",
+or follows the move to the room the meeting continues in.
+
+A *later* announcement supersedes an earlier one rather than stacking on it. A closed room can
+legitimately receive one more: the host's publisher outlives its session, so a restart announces
+`room.moved` on the room it already closed. Superseding means a phone locked across a stop-then-
+restart follows the meeting instead of sitting on "ended" for good, and the buffer still holds at
+most one terminal frame per dead room.
 
 The buffer is bounded at 256 frames and 1 MiB (4 × the per-frame `MAX_PAYLOAD_BYTES`). On
 overflow it is **dropped whole, snapshot and tail together**, rather than truncated: a snapshot

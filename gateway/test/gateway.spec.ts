@@ -354,6 +354,28 @@ describe("snapshot replay", () => {
     { type: "room.moved", newRoomId: "kanal-110008-ReplayMoveTarget" },
     "bXZk",
   );
+  /** Mirrors `MAX_REPLAY_BYTES` in `gateway/src/index.ts`. */
+  const MAX_REPLAY_BYTES = 4 * 256 * 1024;
+  /** The bytes the room accounts for one envelope: the frame it fans out, in UTF-8. */
+  const frameBytes = (payload: unknown) =>
+    new TextEncoder().encode(JSON.stringify({ type: "relay", payload })).byteLength;
+  /**
+   * The largest utterance envelope whose frame still fits in `bytes`. Base64 makes the mapping
+   * from text length to frame size non-linear, so the length is searched rather than computed;
+   * it lands within a byte or two of the target.
+   */
+  function sizedEnvelope(id: string, bytes: number) {
+    const at = (length: number) =>
+      envelope({ type: "utterance.upsert", utterance: { id, text: "x".repeat(length) } }, "ZmlsbA");
+    let low = 0;
+    let high = bytes;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (frameBytes(at(mid)) <= bytes) low = mid;
+      else high = mid - 1;
+    }
+    return at(low);
+  }
   /** ~200 KiB on the wire: under the per-frame `MAX_PAYLOAD_BYTES`, six of them over the buffer cap. */
   const bulky = (index: number) =>
     envelope(
@@ -561,7 +583,58 @@ describe("snapshot replay", () => {
     ]);
   });
 
-  it("keeps the close announcement even when the buffer has overflowed", async () => {
+  it("replays the restart's move in place of the close it followed", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110018-ReplayRestart");
+    // The real Stop → Start sequence. `_relay` outlives its session by design
+    // (`MainViewModel`: "Outlives its session: the next Start uses it to redirect phones to the
+    // new room"), so StopAsync publishes the final snapshot and `room.closed` here, and the next
+    // StartAsync publishes `room.moved` on this same, already-closed room before disposing it.
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: utterance }, room.hostTicket);
+    await post("publish", { payload: closed }, room.hostTicket);
+    await post("publish", { payload: moved }, room.hostTicket);
+
+    // A phone locked across the restart must follow it, not sit on "ended" for good. The move
+    // supersedes the close: the room it names is where the meeting actually is.
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 4);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(4);
+    expect(reader.messages.slice(1)).toEqual([
+      { type: "relay", payload: snapshot },
+      { type: "relay", payload: utterance },
+      { type: "relay", payload: moved },
+    ]);
+  });
+
+  it("keeps the close announcement when the announcement is what overflows the buffer", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110019-ReplayEndAtCap");
+    // Fill to the byte cap exactly, so the announcement is the frame that pushes the buffer
+    // over — the production path. Overflowing beforehand, as the test below does, leaves the
+    // announcement arriving at an empty buffer and never exercises the retry at all.
+    let used = frameBytes(snapshot);
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    for (let index = 0; index < 5; index++) {
+      const filler = bulky(index);
+      used += frameBytes(filler);
+      await post("publish", { payload: filler }, room.hostTicket);
+    }
+    const last = sizedEnvelope("last", MAX_REPLAY_BYTES - used);
+    await post("publish", { payload: last }, room.hostTicket);
+    // Within a byte or two of the cap, and an announcement is ~150 bytes: it cannot fit.
+    expect(MAX_REPLAY_BYTES - used - frameBytes(last)).toBeLessThan(frameBytes(closed));
+    await post("publish", { payload: closed }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 2);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(2);
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: closed });
+  });
+
+  it("keeps the close announcement even when the buffer has already overflowed", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110017-ReplayEndOverflow");
     await post("publish", { payload: snapshot }, room.hostTicket);

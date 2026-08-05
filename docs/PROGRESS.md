@@ -32,8 +32,8 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   a failure, so 256 stands for now, but raising it is nearly free in memory and worth doing once
   the mobile page serialises `onmessage` — until then a larger cap only enlarges a burst the client
   cannot yet apply in arrival order.
-- `room.closed` and `room.moved` are appended to the buffer and make the room terminal: nothing
-  published afterwards is buffered. The first cut of this change dropped the buffer on both, and
+- `room.closed` and `room.moved` are appended to the buffer and make the room terminal: no ordinary
+  frame is buffered afterwards. The first cut of this change dropped the buffer on both, and
   had the rationale exactly inverted — dropping is what produced the outcome it was trying to
   avoid. The host publishes a final snapshot, then the announcement, then stops
   (`MainViewModel.StopAsync`), so a phone locked when the meeting ended reconnected, got only
@@ -44,6 +44,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   fixed it. Replaying snapshot → tail → announcement now puts the phone in "ended" via
   `applyClosed()`, or follows the relocation via `moveToRoom()`, which re-subscribes to the new
   room and receives a fresh snapshot there.
+- A later announcement supersedes an earlier one instead of stacking on it, because a closed room
+  can legitimately receive one more. `MainViewModel` keeps `_relay` alive past `StopAsync` — the
+  field's own comment says "Outlives its session: the next Start uses it to redirect phones to the
+  new room" — so a restart publishes `room.moved` on the room it already closed. Gating that frame
+  out would leave a phone locked across a stop-then-restart sitting on "ended" permanently while
+  every phone that stayed awake followed the move. The buffer still holds at most one terminal
+  frame per dead room: `_relay` is disposed immediately after the move is published.
 - A terminal announcement is the one frame exempt from the overflow rule: if it does not fit, the
   snapshot and tail are dropped and it stands alone. Safe where a lone snapshot is not, because
   neither client handler rebuilds the transcript from the announcement's own contents —
@@ -66,10 +73,15 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   would otherwise escape `fetch()` and turn the 101 into a 500 — the reader would fail to connect
   at all rather than merely miss its replay.
 - Known residual: the buffer is in memory, so an eviction between `room.closed` and a phone's
-  reconnect still leaves that phone on a stale cache with no correction coming. Closing it fully
-  would mean persisting the terminal frame to Durable Object storage and reading it back in
-  `fetch()` — which reintroduces exactly the `await` between accept and replay that this PR
-  removed. Not worth trading a certain race for an unlikely eviction.
+  reconnect still leaves that phone on a stale cache with no correction coming. Persisting the
+  terminal frame would close that gap, and an earlier draft of this entry gave the wrong reason for
+  not doing it — it claimed reading the frame back would reintroduce the `await` between accepting
+  the socket and replaying. It would not: the Durable Object idiom is to hydrate in the constructor
+  under `ctx.blockConcurrencyWhile()`, which completes before any `fetch()` or RPC is delivered, so
+  that window stays await-free. Nor does the write-on-the-fan-out-path objection apply — a terminal
+  frame is one `storage.put` per room, at close, not one per frame. The real reason is scope: the
+  in-memory buffer is the right shape for the live path, and persistence is a separate concern that
+  deserves its own design and tests rather than being appended to this one.
 - `scheduleExpiry()` now runs *before* `acceptWebSocket()`. It was the only `await` between
   accepting the socket — which puts it in `getWebSockets()` immediately — and finishing the
   session and replay sends, so a concurrent `publish()` resuming across that yield could reach the

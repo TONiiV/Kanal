@@ -437,7 +437,7 @@ export class RoomRelay extends DurableObject<Env> {
   /** Fan a signed envelope out to every live reader. Called over RPC from the Worker. */
   async publish(payload: unknown): Promise<void> {
     const message = JSON.stringify({ type: "relay", payload });
-    if (!this.terminal) this.buffer(message, envelopeType(payload));
+    this.buffer(message, envelopeType(payload));
     const now = Math.floor(Date.now() / 1000);
     for (const socket of this.ctx.getWebSockets()) {
       if (this.expired(socket, now)) continue;
@@ -492,12 +492,15 @@ export class RoomRelay extends DurableObject<Env> {
    */
   private buffer(message: string, type: string | null): void {
     switch (type) {
-      case "room.snapshot":
-        this.forgetReplay();
-        this.remember(message);
-        break;
       case "room.closed":
       case "room.moved":
+        // A later announcement supersedes an earlier one rather than stacking on it, because a
+        // closed room can legitimately receive one more: `MainViewModel` keeps `_relay` alive
+        // past `StopAsync` ("Outlives its session: the next Start uses it to redirect phones to
+        // the new room"), so a restart publishes `room.moved` on the room it already closed. A
+        // phone locked across the restart must follow the meeting, not sit on "ended" for good.
+        // Bounded at one terminal frame per dead room: `_relay` is disposed straight afterwards.
+        if (this.terminal) this.dropLast();
         // The caps apply to an announcement like any other frame, but it is the one frame that
         // must outlive them: nothing follows it to make good its loss. If it does not fit, the
         // snapshot and tail go and it stands alone. That is safe where a lone snapshot is not —
@@ -510,9 +513,22 @@ export class RoomRelay extends DurableObject<Env> {
         }
         this.terminal = true;
         break;
+      // Everything else stops at a terminal room: the host has moved on, and a frame published
+      // to a room it no longer drives is not part of any state a late reader should be given.
+      case "room.snapshot":
+        if (this.terminal) break;
+        this.forgetReplay();
+        this.remember(message);
+        break;
       default:
-        if (this.replay.length > 0) this.remember(message);
+        if (!this.terminal && this.replay.length > 0) this.remember(message);
     }
+  }
+
+  /** Drop the frame at the end of the buffer, keeping the byte count honest. */
+  private dropLast(): void {
+    const last = this.replay.pop();
+    if (last !== undefined) this.replayBytes -= encoder.encode(last).byteLength;
   }
 
   /**
