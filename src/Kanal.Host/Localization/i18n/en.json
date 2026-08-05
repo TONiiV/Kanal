@@ -178,5 +178,13 @@
   "log.level.info": "Info",
   "log.level.warning": "Warning",
   "log.level.error": "Error",
-  "settings.logs.unwritable": "Nothing is being written: {0}"
+  "settings.logs.unwritable": "Nothing is being written: {0}",
+  "settings.about.heading": "VERSION",
+  "settings.about.version": "Version {0}",
+  "settings.about.note": "What changed in this build, and in the ones before it.",
+  "settings.about.changelog": "View changelog",
+  "changelog.title": "Changelog",
+  "changelog.empty": "No entries.",
+  "changelog.unreleased": "Not released yet",
+  "changelog.close": "Close"
 }

@@ -30,6 +30,10 @@ dotnet test
   `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
+- **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
+  bullet to [`CHANGELOG.md`](CHANGELOG.md) under the heading being worked towards — written for the
+  operator, not the committer. Refactors, tests and docs add nothing. A version heading gets its
+  date only when that version is released.
 
 ## Architecture invariants
 

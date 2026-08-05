@@ -243,6 +243,14 @@
                            FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
                            Foreground="{StaticResource Alarm}" />
 
+                <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
+                <TextBlock Text="{Binding VersionLabel}" FontSize="12.5" FontWeight="SemiBold"
+                           Margin="0,0,0,4" />
+                <TextBlock Text="{l:T settings.about.note}" FontSize="11.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                <Button Content="{l:T settings.about.changelog}" HorizontalAlignment="Left"
+                        Click="OnChangelogClick" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

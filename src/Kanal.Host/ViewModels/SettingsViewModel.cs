@@ -134,6 +134,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(DefaultFolderNote));
         OnPropertyChanged(nameof(LogNote));
         OnPropertyChanged(nameof(LogFailureNote));
+        OnPropertyChanged(nameof(VersionLabel));
         foreach (var model in TranslationModels)
             model.RefreshText();
         foreach (var level in LogLevels)
@@ -447,6 +448,8 @@ public partial class SettingsViewModel : ViewModelBase
             Log.Warning("settings", $"Could not open {SettingsStore.LogsPath}.", ex);
         }
     }
+
+    public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
 
     /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
     public string DefaultFolderNote =>
