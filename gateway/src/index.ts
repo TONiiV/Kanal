@@ -21,6 +21,9 @@ import { DurableObject } from "cloudflare:workers";
  * Device authorization (operator-only, curl or a future settings pane):
  *   POST ?action=admin.code     Bearer <KANAL_ADMIN_TOKEN>  {note?} -> {code}
  *   POST ?action=activate       {code, deviceName?} -> {deviceId, deviceToken}
+ *                               codes are single-use and expire 24 h after minting; the route
+ *                               is rate limited per client address, per /64 for IPv6
+ *                               (429 once the budget is up)
  *   POST ?action=admin.revoke   Bearer <KANAL_ADMIN_TOKEN>  {deviceId}
  *   GET  ?action=admin.devices  Bearer <KANAL_ADMIN_TOKEN>
  */
@@ -38,6 +41,13 @@ const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
+/**
+ * A code is handed over for one machine; a leaked one must not still work weeks later.
+ * Exported so the suite asserts against these numbers rather than copies of them.
+ */
+export const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+export const ACTIVATE_WINDOW_MS = 10 * 60 * 1000;
+export const ACTIVATE_MAX_ATTEMPTS = 10;
 
 type Role = "host" | "reader";
 
@@ -172,12 +182,93 @@ async function mintActivationCode(request: Request, env: Env): Promise<Response>
   return response({ code });
 }
 
+/**
+ * `activate` is the one route an anonymous caller may reach, so it is the one route on which
+ * an anonymous caller can make the registry do work. Cloudflare overwrites `CF-Connecting-IP`
+ * at the edge, so it is a usable bucket key; a caller arriving without one (curl against a
+ * bare workerd, an internal probe) shares a single bucket rather than escaping the limit.
+ *
+ * `admin.code` is deliberately not limited: its unauthenticated path returns 401 at the admin
+ * token check, before any Durable Object call, so flooding it costs the registry nothing —
+ * and limiting it by address would only throttle the operator, who holds the token anyway.
+ */
+function clientKey(request: Request): string {
+  const address = request.headers.get("CF-Connecting-IP");
+  // Truncated before parsing: the longest textual IPv6 address is 45 characters, and an
+  // unparseable value is used verbatim as a durable primary key. Cloudflare overwrites the
+  // header so this is not client-reachable, but the cap is what makes that safe to rely on.
+  return address ? bucketAddress(address.trim().slice(0, 64)) : "unknown";
+}
+
+/**
+ * IPv4 buckets on the whole address. IPv6 buckets on the /64, because the smallest prefix an
+ * ordinary subscriber is handed is a /64 — keying on the exact address would give one caller
+ * 2^64 budgets and leave the limit inert. The prefixes that carry an IPv4 client in their last
+ * two hextets bucket on that IPv4 instead, which also makes every spelling of one IPv4 caller
+ * a single bucket.
+ */
+function bucketAddress(address: string): string {
+  if (!address.includes(":")) return address;
+  const hextets = expandIpv6(address.split("%")[0].toLowerCase());
+  if (!hextets) return address;
+  return embeddedIpv4(hextets)
+    ?? `${hextets.slice(0, 4).map((hextet) => hextet.toString(16)).join(":")}::/64`;
+}
+
+/**
+ * The IPv4 address carried by `::ffff:a.b.c.d` (mapped), `::a.b.c.d` (compatible, deprecated)
+ * and `::ffff:0:a.b.c.d` (translated, RFC 2765); null for anything else. All three sit in the
+ * same all-zero /64, so bucketing them by prefix would put every such caller — who are
+ * unrelated IPv4 clients — into one shared budget.
+ *
+ * Known and accepted: two further prefixes also put unrelated clients in one bucket, for
+ * different reasons. Under NAT64 `64:ff9b::/96` the prefix is fixed and identical for every
+ * translated client, so they share the `64:ff9b:0:0` /64 whatever their own IPv4 is. Under
+ * Teredo `2001:0::/32` hextets 2-3 carry the *server's* IPv4, so one /64 covers every client of
+ * that server. Neither is realistically emittable as a source address at the Cloudflare edge —
+ * 64:ff9b is a destination-synthesis prefix and Teredo is effectively dead — so both are left
+ * to the /64 rule rather than special-cased.
+ */
+function embeddedIpv4(hextets: number[]): string | null {
+  if (!hextets.slice(0, 4).every((hextet) => hextet === 0)) return null;
+  const carrier = (hextets[4] === 0 && (hextets[5] === 0 || hextets[5] === 0xffff)) ||
+    (hextets[4] === 0xffff && hextets[5] === 0);
+  if (!carrier) return null;
+  return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+}
+
+/** The eight hextets of an IPv6 address, accepting `::` and a trailing dotted quad; null if malformed. */
+function expandIpv6(address: string): number[] | null {
+  let text = address;
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (dotted) {
+    const octets = dotted.slice(1).map(Number);
+    if (octets.some((octet) => octet > 255)) return null;
+    const pair = [(octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]];
+    text = text.slice(0, dotted.index) + pair.map((v) => v.toString(16)).join(":");
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  const groups = halves.length === 2
+    ? [...head, ...Array<string>(missing).fill("0"), ...tail]
+    : head;
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
+}
+
 async function activateDevice(request: Request, env: Env): Promise<Response> {
   const body = await request.json().catch(() => null) as
     | { code?: unknown; deviceName?: unknown }
     | null;
   if (!body || typeof body.code !== "string" || body.code.length < 8) {
     return response({ error: "Invalid activation code" }, 401);
+  }
+  if (!(await registry(env).allowActivationAttempt(clientKey(request)))) {
+    return response({ error: "Too many activation attempts" }, 429);
   }
   const deviceId = randomToken(8);
   const deviceToken = randomToken(32);
@@ -442,7 +533,55 @@ export class DeviceRegistry extends DurableObject<Env> {
         created_at INTEGER NOT NULL,
         revoked_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS activation_attempts (
+        client TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        attempts INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS activation_attempts_window
+        ON activation_attempts (window_start);
     `);
+  }
+
+  /**
+   * Fixed window per calling address. Durable rather than in-memory because a caller who
+   * paces requests slowly enough for this object to be evicted would otherwise reset the
+   * counter for free. Rows expire with their window, so the table stays the size of the set
+   * of addresses currently trying.
+   *
+   * The sweep runs on `activation_attempts_window`, not as a scan. A caller rotating source
+   * prefixes never trips the limit and inserts a row per request, so the table's size is his
+   * to choose; an unindexed sweep would read all of it on every attempt and make the limiter
+   * worse than no limiter. Indexed, the sweep reads only the rows it actually retires — each
+   * row read and deleted exactly once in its life — so the cost is amortised-constant and
+   * total work is linear in rows created rather than quadratic in table size.
+   */
+  allowActivationAttempt(client: string): boolean {
+    const now = Date.now();
+    this.sql.exec(
+      "DELETE FROM activation_attempts WHERE window_start <= ?",
+      now - ACTIVATE_WINDOW_MS,
+    );
+    const open = this.sql
+      .exec<{ attempts: number }>(
+        "SELECT attempts FROM activation_attempts WHERE client = ?",
+        client,
+      )
+      .toArray();
+    if (open.length === 0) {
+      this.sql.exec(
+        "INSERT INTO activation_attempts (client, window_start, attempts) VALUES (?, ?, 1)",
+        client,
+        now,
+      );
+      return true;
+    }
+    if (open[0].attempts >= ACTIVATE_MAX_ATTEMPTS) return false;
+    this.sql.exec(
+      "UPDATE activation_attempts SET attempts = attempts + 1 WHERE client = ?",
+      client,
+    );
+    return true;
   }
 
   registerCode(codeHash: string, note: string): void {
@@ -454,12 +593,18 @@ export class DeviceRegistry extends DurableObject<Env> {
     );
   }
 
-  /** Atomically burns the code and enrols the device; false if the code is unknown or spent. */
+  /**
+   * Atomically burns the code and enrols the device; false if the code is unknown, spent, or
+   * older than `ACTIVATION_CODE_TTL_MS`. The age comes from the `created_at` the code was
+   * already stored with, so no schema change reaches the deployed registry.
+   */
   redeemCode(codeHash: string, deviceId: string, name: string, tokenHash: string): boolean {
+    const now = Date.now();
     const burned = this.sql.exec(
-      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL",
-      Date.now(),
+      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL AND created_at > ?",
+      now,
       codeHash,
+      now - ACTIVATION_CODE_TTL_MS,
     );
     if (burned.rowsWritten === 0) return false;
     this.sql.exec(
