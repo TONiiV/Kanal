@@ -65,22 +65,31 @@ expires; unredeemed codes simply stop working.
 
 `?action=activate` is unauthenticated by necessity (a new desktop has nothing to authenticate
 with), so it is rate limited to **10 attempts per 10 minutes per client address**; over that it
-answers `429 Too many activation attempts`. One machine's activation needs one attempt, so the
-budget is only reachable by fumbling a paste several times — wait out the window and retry.
-`create`, `publish` and `stream` are not affected. IPv4 callers are counted per address; IPv6
-callers are counted per **/64**, since the smallest prefix an ordinary subscriber holds is a /64
-and counting per address would hand one caller 2^64 budgets.
+answers `429 Too many activation attempts`. The budget is checked *before* the code is looked up,
+so **successful activations spend it too** — provisioning an eleventh machine from one office
+address inside ten minutes gets a `429`, as does fumbling a paste eleven times. Either way, wait
+out the window and retry. `create`, `publish` and `stream` are not affected.
 
-Two things the limit deliberately does not do. It does not reduce the Worker requests billed
-against the free plan — an in-Worker limit still costs a request to answer, and only an edge WAF
-rate-limiting rule rejects before the Worker runs. And it makes every attempt cost the registry a
-write: before the limit, an attempt with an invalid code was effectively a read (the single-use
-`UPDATE` matched no rows and wrote nothing), whereas now the window row is expired and then
-inserted or incremented before the limiter can engage. Against one address hammering the route
-that trade is decisive — everything past the budget is refused. Against a caller rotating across
-many addresses the limit never trips, and each request now costs the Durable Object strictly more
-than it did before. That is the price of a *durable* counter, and it is the right price: an
-in-memory one would be reset for free by a Durable Object eviction.
+IPv4 callers are counted per address. IPv6 callers are counted per **/64**, since the smallest
+prefix an ordinary subscriber holds is a /64 and counting per address would hand one caller 2^64
+budgets. The prefixes that carry an IPv4 address in their low bits (`::ffff:a.b.c.d` and its
+deprecated and translated siblings) count as that IPv4, so every spelling of one caller is one
+bucket instead of all of them sharing the all-zero /64.
+
+One thing the limit does not do, and one thing it costs. It does not reduce the Worker requests
+billed against the free plan — an in-Worker limit still costs a request to answer, and only an
+edge WAF rate-limiting rule rejects before the Worker runs. And every attempt now costs the
+registry one row write: an attempt with an invalid code used to be effectively a read (the
+single-use `UPDATE` matched no rows and wrote nothing), whereas the window row is now inserted or
+incremented before the limiter can engage. That extra cost is **fixed, not proportional** — the
+window sweep runs on the `activation_attempts_window` index, so an attempt reads a constant
+handful of rows however large the table has grown. That distinction is the whole point: the
+table's size is the caller's to choose, because a caller rotating source prefixes never trips the
+limit and inserts a fresh row per request. Unindexed, every attempt would read the entire table
+and the limiter would make the abuse case worse than having no limiter at all; a vitest case pins
+the sweep's cost so that cannot silently regress. The fixed extra write is the price of a
+*durable* counter, and it is the right price: an in-memory one would be reset for free by a
+Durable Object eviction.
 
 Provision the desktop at runtime (not during compilation or packaging):
 

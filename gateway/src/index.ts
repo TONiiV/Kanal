@@ -194,24 +194,44 @@ async function mintActivationCode(request: Request, env: Env): Promise<Response>
  */
 function clientKey(request: Request): string {
   const address = request.headers.get("CF-Connecting-IP");
-  return address ? bucketAddress(address.trim()) : "unknown";
+  // Truncated before parsing: the longest textual IPv6 address is 45 characters, and an
+  // unparseable value is used verbatim as a durable primary key. Cloudflare overwrites the
+  // header so this is not client-reachable, but the cap is what makes that safe to rely on.
+  return address ? bucketAddress(address.trim().slice(0, 64)) : "unknown";
 }
 
 /**
  * IPv4 buckets on the whole address. IPv6 buckets on the /64, because the smallest prefix an
  * ordinary subscriber is handed is a /64 — keying on the exact address would give one caller
- * 2^64 budgets and leave the limit inert. An `::ffff:a.b.c.d` mapped address carries a real
- * IPv4 client and buckets on that instead: its /64 is all zeros for everyone, so collapsing it
- * would put every mapped caller into a single shared budget.
+ * 2^64 budgets and leave the limit inert. The prefixes that carry an IPv4 client in their last
+ * two hextets bucket on that IPv4 instead, which also makes every spelling of one IPv4 caller
+ * a single bucket.
  */
 function bucketAddress(address: string): string {
   if (!address.includes(":")) return address;
   const hextets = expandIpv6(address.split("%")[0].toLowerCase());
   if (!hextets) return address;
-  if (hextets[5] === 0xffff && hextets.slice(0, 5).every((hextet) => hextet === 0)) {
-    return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
-  }
-  return `${hextets.slice(0, 4).map((hextet) => hextet.toString(16)).join(":")}::/64`;
+  return embeddedIpv4(hextets)
+    ?? `${hextets.slice(0, 4).map((hextet) => hextet.toString(16)).join(":")}::/64`;
+}
+
+/**
+ * The IPv4 address carried by `::ffff:a.b.c.d` (mapped), `::a.b.c.d` (compatible, deprecated)
+ * and `::ffff:0:a.b.c.d` (translated, RFC 2765); null for anything else. All three sit in the
+ * same all-zero /64, so bucketing them by prefix would put every such caller — who are
+ * unrelated IPv4 clients — into one shared budget.
+ *
+ * Known and accepted: `64:ff9b::/96` (NAT64) and Teredo `2001:0::/32`, whose hextets 2-3 carry
+ * the *server's* address, collapse the same way. Neither is realistically emittable as a source
+ * address at the Cloudflare edge — 64:ff9b is a destination-synthesis prefix and Teredo is
+ * effectively dead — so they are left to the /64 rule rather than special-cased.
+ */
+function embeddedIpv4(hextets: number[]): string | null {
+  if (!hextets.slice(0, 4).every((hextet) => hextet === 0)) return null;
+  const carrier = (hextets[4] === 0 && (hextets[5] === 0 || hextets[5] === 0xffff)) ||
+    (hextets[4] === 0xffff && hextets[5] === 0);
+  if (!carrier) return null;
+  return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
 }
 
 /** The eight hextets of an IPv6 address, accepting `::` and a trailing dotted quad; null if malformed. */
@@ -515,6 +535,8 @@ export class DeviceRegistry extends DurableObject<Env> {
         window_start INTEGER NOT NULL,
         attempts INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS activation_attempts_window
+        ON activation_attempts (window_start);
     `);
   }
 
@@ -523,6 +545,11 @@ export class DeviceRegistry extends DurableObject<Env> {
    * paces requests slowly enough for this object to be evicted would otherwise reset the
    * counter for free. Rows expire with their window, so the table stays the size of the set
    * of addresses currently trying.
+   *
+   * The sweep runs on `activation_attempts_window`, not as a scan. A caller rotating source
+   * prefixes never trips the limit and inserts a row per request, so the table's size is his
+   * to choose; an unindexed sweep would read all of it on every attempt and make the limiter
+   * worse than no limiter. Indexed, an attempt costs a constant few rows at any table size.
    */
   allowActivationAttempt(client: string): boolean {
     const now = Date.now();

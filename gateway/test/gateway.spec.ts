@@ -78,6 +78,45 @@ async function ageActivationWindow(client: string, ms: number): Promise<void> {
   });
 }
 
+/**
+ * Rows the registry reads to serve one activation attempt while `rows` other callers hold an
+ * open window. Wraps the instance's own `SqlStorage` handle and sums `rowsRead` across every
+ * cursor the call opens, so the measurement follows whatever statements `allowActivationAttempt`
+ * actually runs — restating its SQL here would drift the moment the queries change.
+ */
+async function rowsReadForOneAttempt(rows: number): Promise<number> {
+  const stub = env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
+  return runInDurableObject(stub, (instance, state) => {
+    const now = Date.now();
+    for (let index = 0; index < rows; index++) {
+      state.storage.sql.exec(
+        "INSERT OR REPLACE INTO activation_attempts (client, window_start, attempts) VALUES (?, ?, 1)",
+        `seed-${index}`,
+        now,
+      );
+    }
+    const registry = instance as unknown as { sql: SqlStorage };
+    const real = registry.sql;
+    const cursors: { rowsRead: number }[] = [];
+    registry.sql = {
+      exec: (query: string, ...bindings: unknown[]) => {
+        const cursor = real.exec(query, ...bindings);
+        cursors.push(cursor);
+        return cursor;
+      },
+    } as unknown as SqlStorage;
+    try {
+      instance.allowActivationAttempt(`measured-${rows}`);
+    } finally {
+      registry.sql = real;
+      state.storage.sql.exec(
+        "DELETE FROM activation_attempts WHERE client LIKE 'seed-%' OR client LIKE 'measured-%'",
+      );
+    }
+    return cursors.reduce((total, cursor) => total + cursor.rowsRead, 0);
+  });
+}
+
 async function mintCode(note = "test"): Promise<string> {
   const response = await post("admin.code", { note }, ADMIN);
   expect(response.status).toBe(200);
@@ -330,6 +369,58 @@ describe("activation rate limit", () => {
     // ::ffff:a.b.c.d carries a real IPv4 client; its /64 is all zeros for everyone.
     expect(await spendBudgetFrom("::ffff:192.0.2.7", "mapped")).toBe(429);
     expect(await activateFrom("::ffff:192.0.2.8", "neighbour-mapped")).toBe(200);
+  });
+
+  it("keeps IPv4-translated callers apart instead of collapsing them into one /64", async () => {
+    // ::ffff:0:a.b.c.d (RFC 2765) carries an IPv4 client in its last two hextets exactly as the
+    // mapped form does, and its /64 is all zeros for everyone just the same.
+    expect(await spendBudgetFrom("::ffff:0:192.0.2.17", "translated")).toBe(429);
+    expect(await activateFrom("::ffff:0:192.0.2.18", "neighbour-translated")).toBe(200);
+  });
+
+  it("keeps IPv4-compatible callers apart instead of collapsing them into one /64", async () => {
+    // ::a.b.c.d is deprecated but shares the same all-zero /64, and so do :: and ::1.
+    expect(await spendBudgetFrom("::192.0.2.27", "compatible")).toBe(429);
+    expect(await activateFrom("::192.0.2.28", "neighbour-compatible")).toBe(200);
+    expect(await spendBudgetFrom("::1", "loopback")).toBe(429);
+    expect(await activateFrom("::", "unspecified")).toBe(200);
+  });
+
+  it("treats every encoding of one IPv4 client as the same caller", async () => {
+    expect(await spendBudgetFrom("192.0.2.33", "encodings")).toBe(429);
+    expect(await activateFrom("::ffff:192.0.2.33", "mapped-same")).toBe(429);
+    expect(await activateFrom("::ffff:0:192.0.2.33", "translated-same")).toBe(429);
+    expect(await activateFrom("::192.0.2.33", "compatible-same")).toBe(429);
+  });
+
+  /**
+   * `bucketAddress` falls back to the raw string when it cannot parse an address, and that
+   * string becomes a durable `TEXT PRIMARY KEY`. Cloudflare overwrites `CF-Connecting-IP`, so
+   * this is not client-reachable in production — but nothing in the code enforces that.
+   */
+  it("caps the stored bucket key rather than trusting the header's length", async () => {
+    await post("activate", { code: "bloat-probe-0000" }, undefined, from(`${"9".repeat(5000)}:1`));
+
+    const stub = env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
+    const widest = await runInDurableObject(stub, (_instance, state) =>
+      state.storage.sql
+        .exec<{ width: number }>("SELECT MAX(LENGTH(client)) AS width FROM activation_attempts")
+        .toArray()[0].width);
+    expect(widest).toBeLessThanOrEqual(64);
+  });
+
+  /**
+   * The size of `activation_attempts` is set by the caller, not by us: rotating source prefixes
+   * inserts a fresh row per request and never trips the limit. If the window sweep scans, the
+   * cost of every attempt grows with a table the attacker is filling — the limiter would make
+   * the abuse case worse than having no limiter at all. This pins the sweep to a constant.
+   */
+  it("sweeps the expired window without scanning the whole table", async () => {
+    const sparse = await rowsReadForOneAttempt(200);
+    const crowded = await rowsReadForOneAttempt(5000);
+
+    expect(crowded).toBeLessThan(50);
+    expect(crowded).toBeLessThan(sparse + 25);
   });
 
   it("leaves room creation, publishing and streaming alone", async () => {

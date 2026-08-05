@@ -35,9 +35,25 @@ touches the `create`/`publish`/`stream` wire protocol.
   smallest prefix an ordinary IPv6 subscriber is handed is a /64, so keying IPv6 on the exact
   address would give one caller 2^64 budgets and leave the limit inert against every IPv6 source.
   `clientKey` normalises IPv6 to its first four hextets, accepting the forms Cloudflare can emit:
-  fully expanded, `::`-compressed, leading-zero, and zone-suffixed. `::ffff:a.b.c.d` is the
-  exception and buckets on the embedded IPv4 — its /64 is all zeros for everyone, so collapsing
-  it would push every IPv4-mapped caller into one shared budget.
+  fully expanded, `::`-compressed, leading-zero, and zone-suffixed. The three prefixes that carry
+  an IPv4 client in their low bits are the exception and bucket on that IPv4 — mapped
+  (`::ffff:a.b.c.d`), compatible (`::a.b.c.d`, deprecated) and translated (`::ffff:0:a.b.c.d`,
+  RFC 2765) all sit in the same all-zero /64, so prefix-bucketing them would push every such
+  caller — unrelated IPv4 clients, plus `::` and `::1` — into one shared budget. It also makes
+  every spelling of one IPv4 caller a single bucket. `64:ff9b::/96` (NAT64) and Teredo
+  `2001:0::/32` collapse the same way and are recorded in the source as known and accepted:
+  neither is realistically emittable as a *source* address at the Cloudflare edge.
+- **The window sweep is indexed.** `activation_attempts` gained
+  `CREATE INDEX IF NOT EXISTS activation_attempts_window ON activation_attempts (window_start)`,
+  provisioned on the deployed registry for the same reason the table itself is. Without it the
+  sweep is a `SCAN`: measured inside a real Durable Object, one attempt read 1 000 / 10 000 /
+  50 000 rows against a table of that size and usually deleted nothing. That is the wrong shape
+  entirely, because the table's size belongs to the attacker — a caller rotating source /64s (a
+  routed /48 hands out 65 536) never trips the limit and inserts a fresh row per request, so cost
+  per request would grow linearly with a table he is filling and total work would be quadratic,
+  on a store that bills per row read. Indexed, the same sweep reads **1** row and the plan becomes
+  `SEARCH ... USING INDEX activation_attempts_window (window_start<?)`. Chosen over scoping the
+  `DELETE` to `client = ?` and sweeping the rest from an alarm: smaller, and no new machinery.
 - **What this does not close.** Neither change reduces the raw request count against the Workers
   free-plan budget — an in-Worker limit still costs a Worker request to answer. Only an edge WAF
   rate-limiting rule rejects before the Worker runs; the free plan allows one such rule and it
@@ -47,25 +63,38 @@ touches the `create`/`publish`/`stream` wire protocol.
   are room-scoped and every envelope is verified against the host's P-256 key on the phone. That
   is the per-device design working as intended, and revocation (`?action=admin.revoke`) is the
   answer to it.
-- **The limiter costs the registry a write on every attempt.** Before this change, an attempt
-  with an invalid code cost essentially a read: the single-use `UPDATE ... WHERE` matched no rows
-  and wrote nothing. Now every attempt performs a guaranteed SQL write — the window `DELETE`
-  plus an `INSERT` or `UPDATE` — *before* the limiter can engage. Against one address hammering
-  the route the limiter still wins decisively after the first N attempts. Against a caller
-  rotating across many addresses it never trips, and each request now costs the Durable Object
-  strictly more than it did before. That is an acceptable trade for durability, and it is written
-  down rather than discovered later: an in-memory counter would cost nothing extra and be reset
-  for free by an eviction. Deliberately *not* mitigated with an in-memory pre-check, which would
-  re-introduce exactly the eviction hole the durable counter closes.
-- 11 new vitest cases (suite 25 → 36): an expired code that enrols nothing and cannot be revived
+- **The limiter costs the registry one extra write on every attempt.** Before this change, an
+  attempt with an invalid code cost essentially a read: the single-use `UPDATE ... WHERE` matched
+  no rows and wrote nothing. Now every attempt performs a guaranteed row write — the window row
+  inserted or incremented — *before* the limiter can engage. With the index above that cost is
+  **fixed**, not proportional to a table the caller controls, which is what makes it an
+  acceptable trade rather than a regression. Against one address hammering the route the limiter
+  wins decisively after the first N attempts; against a caller rotating across many addresses it
+  never trips and each request costs one constant extra write more than it used to. That is the
+  price of a *durable* counter and it is written down rather than discovered later: an in-memory
+  counter would cost nothing extra and be reset for free by an eviction. Deliberately *not*
+  mitigated with an in-memory pre-check, which would re-introduce exactly the eviction hole the
+  durable counter closes. The bucket key is also capped at 64 characters before parsing — an
+  unparseable address is used verbatim as a durable primary key, and Cloudflare overwriting
+  `CF-Connecting-IP` is an assumption the code should not depend on silently.
+- 16 new vitest cases (suite 25 → 41): an expired code that enrols nothing and cannot be revived
   by retrying, a code just inside the window that still burns on first use, a caller cut off at
   the budget without spending a neighbour's, the budget returning once the window passes, one
-  budget shared across three spellings of a single /64 while a neighbouring /64 and both plain
-  and IPv4-mapped v4 addresses keep their own, and room creation, publishing and streaming proven
-  untouched by the limit. `Date.now()` advances in real time inside workerd, so the TTL and
-  window cases age the specific row through `runInDurableObject` rather than sleeping. The suite
-  imports `ACTIVATION_CODE_TTL_MS`, `ACTIVATE_WINDOW_MS` and `ACTIVATE_MAX_ATTEMPTS` from the
-  Worker instead of restating them — a constant kept in step by a comment drifts.
+  budget shared across three spellings of a single /64 while a neighbouring /64 keeps its own,
+  plain / mapped / compatible / translated IPv4 callers each keeping their own budget while every
+  spelling of *one* IPv4 caller shares a single one, a bucket key that stays capped however long
+  the header is, and room creation, publishing and streaming proven untouched by the limit.
+  `Date.now()` advances in real time inside workerd, so the TTL and window cases age the specific
+  row through `runInDurableObject` rather than sleeping. The suite imports
+  `ACTIVATION_CODE_TTL_MS`, `ACTIVATE_WINDOW_MS` and `ACTIVATE_MAX_ATTEMPTS` from the Worker
+  instead of restating them — a constant kept in step by a comment drifts.
+- The sweep's cost has its own regression guard. Rather than restate the sweep's SQL in the test
+  (which would drift from the query it is meant to pin) or assert on an `EXPLAIN QUERY PLAN`
+  string (which pins the plan's wording, not the cost), the case wraps the registry instance's
+  own `SqlStorage` handle and sums `rowsRead` across every cursor one `allowActivationAttempt`
+  opens. It then asserts that serving an attempt against 5 000 open windows reads no more than a
+  handful of rows, and no more than serving one against 200 — a flatness assertion that fails
+  loudly at 5 000 if the index is ever dropped, whatever the statements look like by then.
 
 ### Kanal traffic is behind an authenticated gateway
 
