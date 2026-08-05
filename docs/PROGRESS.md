@@ -19,11 +19,36 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   snapshot replayed on its own would visibly delete up to 15 s of transcript mid-meeting. Replaying
   snapshot → tail in the original order gives a reconnecting reader exactly the sequence a reader
   connected the whole time saw.
-- The buffer is bounded: 256 frames and 1 MiB, four times the per-frame `MAX_PAYLOAD_BYTES` and
-  about an order of magnitude of headroom over a busy 15 s heartbeat interval. On overflow it is
-  dropped **whole, snapshot and tail together**, never truncated — a snapshot without its tail is
-  precisely the rollback above, whereas an empty buffer only degrades to no replay at all, which is
-  what the phone did before. The next `room.snapshot` starts a fresh buffer.
+- The buffer is bounded: 256 frames and 1 MiB, four times the per-frame `MAX_PAYLOAD_BYTES`. On
+  overflow it is dropped **whole, snapshot and tail together**, never truncated — a snapshot
+  without its tail is precisely the rollback above, whereas an empty buffer only degrades to no
+  replay at all, which is what the phone did before. The next `room.snapshot` starts a fresh buffer.
+- Headroom under those caps is ~3–7×, not the order of magnitude first claimed here. Every relay
+  message is one publish (`MeetingSession.PublishSafeAsync`), partials included and nothing
+  coalesced, so 15 s of continuous speech is roughly 35–80 frames at a streaming ASR's usual 2–5
+  partials/s, plus one `translation.upsert` per final — one per final, not per language, since
+  `TranslateAsync` sends every target in a single message. The frame cap binds before the byte cap:
+  256 partial envelopes at 0.4–1 KB is about a quarter of 1 MiB. Overflow is a degrade rather than
+  a failure, so 256 stands for now, but raising it is nearly free in memory and worth doing once
+  the mobile page serialises `onmessage` — until then a larger cap only enlarges a burst the client
+  cannot yet apply in arrival order.
+- `room.closed` and `room.moved` are appended to the buffer and make the room terminal: nothing
+  published afterwards is buffered. The first cut of this change dropped the buffer on both, and
+  had the rationale exactly inverted — dropping is what produced the outcome it was trying to
+  avoid. The host publishes a final snapshot, then the announcement, then stops
+  (`MainViewModel.StopAsync`), so a phone locked when the meeting ended reconnected, got only
+  `gateway.session`, and rendered its own `localStorage`: truncated to `CACHE_LIMIT` = 50
+  utterances and flagged `closed:false`, which makes `lifecycleStatus()` return `""` and hides the
+  status bar entirely. A finished, truncated meeting presented as live, with the host stopped and
+  nothing ever arriving to correct it — and the room was holding the two frames that would have
+  fixed it. Replaying snapshot → tail → announcement now puts the phone in "ended" via
+  `applyClosed()`, or follows the relocation via `moveToRoom()`, which re-subscribes to the new
+  room and receives a fresh snapshot there.
+- A terminal announcement is the one frame exempt from the overflow rule: if it does not fit, the
+  snapshot and tail are dropped and it stands alone. Safe where a lone snapshot is not, because
+  neither client handler rebuilds the transcript from the announcement's own contents —
+  `applyClosed()` sets a flag and leaves the records untouched, `moveToRoom()` clears deliberately
+  and resubscribes. A lone announcement can only add the true fact that the room ended or moved.
 - Nothing on the wire changed for either client. The replayed frames are ordinary `{type:"relay"}`
   frames carrying the exact bytes the host published, so the phone verifies and applies them
   through the path it already uses, and the desktop is not involved at all.
@@ -37,10 +62,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   publish wakes the object, so it refills within one heartbeat and the worst case is exactly the
   behaviour being replaced. Storage would instead add a write to the fan-out path of every frame
   for the whole meeting.
-- `room.closed` and `room.moved` drop the buffer. Both mean the host has stopped publishing on that
-  room, so a replay afterwards would present a finished or relocated meeting as live with nothing
-  arriving to correct it. A reader arriving after either announcement now gets only
-  `gateway.session`, the same as a room that has never published.
+- The replay loop is wrapped like the fan-out loop it mirrors. A `send()` that throws mid-replay
+  would otherwise escape `fetch()` and turn the 101 into a 500 — the reader would fail to connect
+  at all rather than merely miss its replay.
+- Known residual: the buffer is in memory, so an eviction between `room.closed` and a phone's
+  reconnect still leaves that phone on a stale cache with no correction coming. Closing it fully
+  would mean persisting the terminal frame to Durable Object storage and reading it back in
+  `fetch()` — which reintroduces exactly the `await` between accept and replay that this PR
+  removed. Not worth trading a certain race for an unlikely eviction.
 - `scheduleExpiry()` now runs *before* `acceptWebSocket()`. It was the only `await` between
   accepting the socket — which puts it in `getWebSockets()` immediately — and finishing the
   session and replay sends, so a concurrent `publish()` resuming across that yield could reach the

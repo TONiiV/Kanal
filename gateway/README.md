@@ -26,12 +26,27 @@ snapshot, and caches every incremental frame as it arrives, so a phone reconnect
 heartbeats already holds newer state than the snapshot — a snapshot replayed alone would delete
 up to 15 s of transcript on screen.
 
+`room.closed` and `room.moved` are appended and end the buffer: the room is terminal, so nothing
+published afterwards is buffered. This is the case the replay matters most for — the host
+publishes a final snapshot, then the announcement, then stops, so a phone that was locked when
+the meeting ended has nothing left running to correct it. Replaying snapshot → tail →
+announcement lands it in "ended", or follows the move to the room the meeting continues in.
+
 The buffer is bounded at 256 frames and 1 MiB (4 × the per-frame `MAX_PAYLOAD_BYTES`). On
 overflow it is **dropped whole, snapshot and tail together**, rather than truncated: a snapshot
 without its tail is the rollback above, whereas an empty buffer only degrades to no replay at
-all, and the next `room.snapshot` starts a fresh one. `room.closed` and `room.moved` also drop
-it — after either, the host has stopped publishing there and nothing would arrive to correct a
-finished or relocated meeting rendered as live.
+all, and the next `room.snapshot` starts a fresh one. The one exception is a terminal
+announcement, which survives an overflow and stands alone if it has to — unlike a snapshot, it
+does not rewrite the transcript from its own contents, so on its own it can only add the true
+fact that the room ended or moved.
+
+Headroom is thinner than the caps suggest. Every relay message is one publish, partials included
+and nothing coalesced, so 15 s of continuous speech is roughly 35–80 frames at a streaming ASR's
+usual 2–5 partials/s plus one `translation.upsert` per final — about 3–7× under the 256-frame cap,
+and it is the frame cap rather than the byte cap that binds (256 partial envelopes at 0.4–1 KB is
+a quarter of 1 MiB). Raising the frame cap costs almost nothing in memory and is worth doing —
+but only once the mobile page serialises `onmessage`, since a larger cap means a larger replay
+burst arriving at a client that does not yet apply frames in arrival order.
 
 The buffer lives in the object's memory, not in Durable Object storage: an evicted object refills
 it within one 15 s heartbeat, whereas storage would put a write on the fan-out path of every

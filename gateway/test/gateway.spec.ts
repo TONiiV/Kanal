@@ -349,6 +349,11 @@ describe("snapshot replay", () => {
   const laterSnapshot = envelope({ type: "room.snapshot", snapshot: { utterances: [1] } }, "c25hcDI");
   const utterance = envelope({ type: "utterance.upsert", utterance: { id: "u1" } }, "dXR0");
   const secondUtterance = envelope({ type: "utterance.upsert", utterance: { id: "u2" } }, "dXR0Mg");
+  const closed = envelope({ type: "room.closed" }, "Y2xz");
+  const moved = envelope(
+    { type: "room.moved", newRoomId: "kanal-110008-ReplayMoveTarget" },
+    "bXZk",
+  );
   /** ~200 KiB on the wire: under the per-frame `MAX_PAYLOAD_BYTES`, six of them over the buffer cap. */
   const bulky = (index: number) =>
     envelope(
@@ -503,34 +508,75 @@ describe("snapshot replay", () => {
     ]);
   });
 
-  it("forgets the snapshot and its tail once the room is closed", async () => {
+  it("replays the close announcement after the snapshot and its tail", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110006-ReplayAfterEnd");
+    // The host's stop sequence: a final snapshot, then the announcement (MainViewModel.cs).
     await post("publish", { payload: snapshot }, room.hostTicket);
     await post("publish", { payload: utterance }, room.hostTicket);
-    await post("publish", { payload: envelope({ type: "room.closed" }, "Y2xz") }, room.hostTicket);
+    await post("publish", { payload: closed }, room.hostTicket);
 
+    // A phone locked when the meeting ended reconnects to a stopped host: nothing will ever
+    // arrive to correct it, so the two frames it missed are the two it most needs.
     const reader = (await openReader(room.inviteTicket)) as Reader;
-    await until(() => reader.messages.length >= 1);
+    await until(() => reader.messages.length >= 4);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(reader.messages.length).toBe(1);
+    expect(reader.messages.length).toBe(4);
+    expect(reader.messages.slice(1)).toEqual([
+      { type: "relay", payload: snapshot },
+      { type: "relay", payload: utterance },
+      { type: "relay", payload: closed },
+    ]);
   });
 
-  it("forgets the snapshot and its tail once the room has moved", async () => {
+  it("replays the move announcement so a reader on the dead room follows it", async () => {
     const { deviceToken } = await activateDevice();
     const room = await createRoom(deviceToken, "kanal-110007-ReplayAfterMove");
     await post("publish", { payload: snapshot }, room.hostTicket);
-    await post("publish", { payload: utterance }, room.hostTicket);
-    const moved = envelope(
-      { type: "room.moved", newRoomId: "kanal-110008-ReplayMoveTarget" },
-      "bXZk",
-    );
     await post("publish", { payload: moved }, room.hostTicket);
 
     const reader = (await openReader(room.inviteTicket)) as Reader;
-    await until(() => reader.messages.length >= 1);
+    await until(() => reader.messages.length >= 3);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(reader.messages.length).toBe(1);
+    expect(reader.messages.length).toBe(3);
+    expect(reader.messages[2]).toEqual({ type: "relay", payload: moved });
+  });
+
+  it("buffers nothing more once the room is terminal", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110016-ReplayTerminal");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    await post("publish", { payload: closed }, room.hostTicket);
+    // The host has stopped; nothing legitimate follows the announcement.
+    await post("publish", { payload: utterance }, room.hostTicket);
+    await post("publish", { payload: laterSnapshot }, room.hostTicket);
+
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 3);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(3);
+    expect(reader.messages.slice(1)).toEqual([
+      { type: "relay", payload: snapshot },
+      { type: "relay", payload: closed },
+    ]);
+  });
+
+  it("keeps the close announcement even when the buffer has overflowed", async () => {
+    const { deviceToken } = await activateDevice();
+    const room = await createRoom(deviceToken, "kanal-110017-ReplayEndOverflow");
+    await post("publish", { payload: snapshot }, room.hostTicket);
+    for (let index = 0; index < 6; index++) {
+      await post("publish", { payload: bulky(index) }, room.hostTicket);
+    }
+    await post("publish", { payload: closed }, room.hostTicket);
+
+    // A lone announcement is safe where a lone snapshot is not: `applyClosed()` sets a flag and
+    // leaves the transcript alone, so the phone's own cache stays, correctly marked ended.
+    const reader = (await openReader(room.inviteTicket)) as Reader;
+    await until(() => reader.messages.length >= 2);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(reader.messages.length).toBe(2);
+    expect(reader.messages[1]).toEqual({ type: "relay", payload: closed });
   });
 
   it("never replays one room's snapshot into another room", async () => {
