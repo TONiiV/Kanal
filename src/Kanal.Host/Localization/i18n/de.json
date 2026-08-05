@@ -167,5 +167,16 @@
   "settings.browse.title": "Ordner wählen",
   "settings.record": "Den Raum während der Besprechung auf die Festplatte aufnehmen",
   "settings.record.note": "Eine Datei je Besprechung, benannt nach dem Raum. Etwa 115 MB pro Stunde. Die Aufnahme verlässt diesen Rechner nicht und wird während einer Pause nicht geschrieben.",
-  "export.dialog.title": "Protokoll speichern"
+  "export.dialog.title": "Protokoll speichern",
+  "settings.logs.heading": "DIAGNOSE",
+  "settings.logs.title": "Logdateien",
+  "settings.logs.note": "Eine Datei pro Tag, ab der unten eingestellten Größe rotiert, {0} Tage aufbewahrt. Die Logs bleiben auf diesem Rechner — nichts daraus wird irgendwohin gesendet.",
+  "settings.logs.level": "Aufgezeichnete Details",
+  "settings.logs.size": "Rotation ab (MB)",
+  "settings.logs.open": "Log-Ordner öffnen",
+  "log.level.debug": "Debug",
+  "log.level.info": "Info",
+  "log.level.warning": "Warnung",
+  "log.level.error": "Fehler",
+  "settings.logs.unwritable": "Es wird nichts geschrieben: {0}"
 }

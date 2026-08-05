@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Kanal.Core.Diagnostics;
+using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
@@ -12,22 +14,45 @@ namespace Kanal.Host.Views;
 public partial class SettingsWindow : Window
 {
     public SettingsWindow()
+        : this(new SettingsViewModel())
+    {
+    }
+
+    // Constructor-injected: assigning DataContext afterwards still ran the production view model.
+    public SettingsWindow(SettingsViewModel viewModel)
     {
         InitializeComponent();
-        DataContext = new SettingsViewModel();
+        DataContext = viewModel;
     }
 
-    private async void OnBrowseTranscriptsClick(object? sender, RoutedEventArgs e)
+    private void OnBrowseTranscriptsClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Choosing a transcript folder", async () =>
+        {
+            if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.TranscriptFolder) is { } picked)
+                vm.TranscriptFolder = picked;
+        });
+
+    private void OnBrowseAudioClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Choosing an audio folder", async () =>
+        {
+            if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.AudioFolder) is { } picked)
+                vm.AudioFolder = picked;
+        });
+
+    // Every async void handler goes through here: a throw out of one takes the host down.
+    private static async void Guarded(string what, Func<Task> action)
     {
-        if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.TranscriptFolder) is { } picked)
-            vm.TranscriptFolder = picked;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(SettingsLog, $"{what} failed.", ex);
+        }
     }
 
-    private async void OnBrowseAudioClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.AudioFolder) is { } picked)
-            vm.AudioFolder = picked;
-    }
+    private const string SettingsLog = "settings";
 
     /// <summary>Opens on whatever is already in the box, falling back to the resolved default.</summary>
     private async Task<string?> PickFolderAsync(string current)
@@ -58,7 +83,16 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
-        (DataContext as SettingsViewModel)?.Save();
+        try
+        {
+            if ((DataContext as SettingsViewModel)?.Save() is { } saved)
+                LogSetup.Apply(saved);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(SettingsLog, "Settings could not be saved.", ex);
+        }
+
         Close();
     }
 

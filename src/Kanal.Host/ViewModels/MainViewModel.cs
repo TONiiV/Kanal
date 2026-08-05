@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
@@ -574,6 +575,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             SelectedMode.Unavailable = plan.Status.Unavailable;
             Status = plan.Status.Unavailable;
+            Log.Warning(
+                RoomLog, $"Start refused: mode {mode.Id} is unavailable — {plan.Status.Unavailable}");
             return;
         }
 
@@ -608,6 +611,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 await DisposeProvidersAsync();
                 Status = L.Format("status.modelloadfailed", ex.Message);
+                Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
                 return;
             }
             finally
@@ -640,6 +644,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 null,
                 null,
                 ex.Message);
+            Log.Warning(RelayLog, "The relay could not be set up; the room is running without a QR code.", ex);
         }
         var relay = relayConnection.Publisher;
 
@@ -665,10 +670,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
-        session.ErrorOccurred += e => Dispatcher.UIThread.Post(() =>
-            Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
-        session.SessionEnded += reason => Dispatcher.UIThread.Post(() =>
-            Status = L.Format("status.sessionended", reason ?? L["status.done"]));
+        session.ErrorOccurred += e =>
+        {
+            Log.Write(
+                e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
+            Dispatcher.UIThread.Post(() =>
+                Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
+        };
+        session.SessionEnded += reason =>
+        {
+            Log.Info(RoomLog, $"Session ended: {Bounded(reason ?? "no reason given")}.");
+            Dispatcher.UIThread.Post(() =>
+                Status = L.Format("status.sessionended", reason ?? L["status.done"]));
+        };
 
         try
         {
@@ -677,6 +691,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.startfailed", ex.Message);
+            Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
             await session.DisposeAsync();
             _relay = null;
             await relay.DisposeAsync();
@@ -686,6 +701,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         _session = session;
         IsRunning = true;
+        Log.Info(
+            RoomLog,
+            $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
+            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}.");
         var runningStatus = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
@@ -740,7 +759,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             if (_session is not null)
             {
-                await PublishSnapshotSafeAsync(); // leave a final full state on the channel
+                await PublishSnapshotSafeAsync(closing: true); // leave a final full state on the channel
                 await PublishClosedSafeAsync();   // …and say the meeting is over, so phones stop waiting
                 await _session.DisposeAsync();    // session object stays for rename/merge/export
             }
@@ -755,6 +774,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = _lastRecording.Length > 0
                 ? L.Format("status.stopped.audio", _lastRecording)
                 : L["status.stopped"];
+            Log.Info(RoomLog, "Room closed.");
         }
         finally
         {
@@ -802,16 +822,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         QrImage = new Bitmap(new MemoryStream(png));
     }
 
-    private async Task PublishSnapshotSafeAsync()
+    private async Task PublishSnapshotSafeAsync(bool closing = false)
     {
         try
         {
             if (_session is not null)
+            {
                 await _session.PublishSnapshotAsync();
+                Log.Debug(RelayLog, "Snapshot published.");
+            }
         }
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
+            Log.Warning(
+                RelayLog,
+                closing
+                    ? "The closing snapshot did not publish."
+                    : "A periodic snapshot did not publish; phones may be showing stale text.",
+                ex);
         }
     }
 
@@ -825,6 +854,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.closefailed", ex.Message));
+            Log.Warning(RelayLog, "The room-closed message did not publish; phones may still be waiting.", ex);
         }
     }
 
@@ -837,8 +867,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.publishfailed", ex.Message));
+            Log.Warning(RelayLog, $"A {message.GetType().Name} did not publish.", ex);
         }
     }
+
+    private const string RoomLog = "room";
+    private const string RelayLog = "relay";
+    private const string AudioLog = "audio";
+
+    // A provider's error text is passed through verbatim and can carry a whole rejected payload.
+    private static string Bounded(string message) =>
+        message.Length <= 300 ? message : message[..300] + "…";
 
     private async Task<RelayConnection> CreateRelayAsync(
         string roomId,
@@ -893,9 +932,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             var framesSinceMeter = 0;
+            var frames = 0L;
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
                 await session.PushAudioAsync(frame, ct);
+
+                // On the first frame, not before the loop: the device is acquired inside it.
+                if (frames == 0)
+                    Log.Debug(AudioLog, $"Capture running on {deviceId ?? "the default device"}.");
+
+                if (++frames % 500 == 0)
+                    Log.Debug(AudioLog, $"{frames} frames captured.");
 
                 // input level meter ~4×/s — "is the mic alive" must be visible at a glance
                 if (++framesSinceMeter >= 3)
@@ -911,6 +958,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
+            Log.Error(AudioLog, "Capture stopped; the room is live with no audio arriving.", ex);
             Dispatcher.UIThread.Post(() => Status = L.Format("status.audiofailed", ex.Message));
         }
         finally
@@ -998,6 +1046,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // they believe is being recorded when it is not.
             var note = L.Format("status.notrecording", ex.Message);
             Status = $"{Status} {note}";
+            Log.Warning(AudioLog, $"The room is not being recorded: {path} could not be opened.", ex);
         }
     }
 
@@ -1084,6 +1133,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // Losing the transcript at the last step is the worst possible moment for a throw
             // out of a command nothing is awaiting: read-only folder, full disk, revoked rights.
             Status = L.Format("status.exportfailed", ex.Message);
+            Log.Error(RoomLog, $"The transcript could not be written to {path}.", ex);
         }
     }
 
