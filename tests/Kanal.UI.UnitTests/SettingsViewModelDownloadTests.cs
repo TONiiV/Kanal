@@ -59,7 +59,7 @@ public class SettingsViewModelDownloadTests
         var item = new TranslationModelItemViewModel(
             LocalModelCatalog.Models[0], new ModelDownloadManager(dir, new HttpClient(handler)));
 
-        var vm = new SettingsViewModel(new AppSettings());
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
         vm.TranslationModels.Clear();
         vm.TranslationModels.Add(item);
 

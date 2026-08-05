@@ -167,5 +167,16 @@
   "settings.browse.title": "Choose a folder",
   "settings.record": "Record the room to disk while a meeting runs",
   "settings.record.note": "One file per meeting, named after the room. About 115 MB an hour. The recording never leaves this machine and is not written while the meeting is paused.",
-  "export.dialog.title": "Save transcript"
+  "export.dialog.title": "Save transcript",
+  "settings.logs.heading": "DIAGNOSTICS",
+  "settings.logs.title": "Log files",
+  "settings.logs.note": "One file a day, rolled over once it passes the size below, kept {0} days. Logs stay on this machine — nothing in them is sent anywhere.",
+  "settings.logs.level": "Detail kept",
+  "settings.logs.size": "Roll over at (MB)",
+  "settings.logs.open": "Open log folder",
+  "log.level.debug": "Debug",
+  "log.level.info": "Info",
+  "log.level.warning": "Warning",
+  "log.level.error": "Error",
+  "settings.logs.unwritable": "Nothing is being written: {0}"
 }

@@ -167,5 +167,16 @@
   "settings.browse.title": "选择文件夹",
   "settings.record": "会议进行时把会场录到磁盘",
   "settings.record.note": "每场会议一个文件，以房间号命名。约每小时 115 MB。录音不会离开本机，暂停期间也不写入。",
-  "export.dialog.title": "保存会议记录"
+  "export.dialog.title": "保存会议记录",
+  "settings.logs.heading": "诊断",
+  "settings.logs.title": "日志文件",
+  "settings.logs.note": "每天一个文件，超过下方设定的大小后滚动归档，保留 {0} 天。日志只留在这台机器上——其中的内容不会发送到任何地方。",
+  "settings.logs.level": "记录的详细程度",
+  "settings.logs.size": "滚动阈值（MB）",
+  "settings.logs.open": "打开日志文件夹",
+  "log.level.debug": "调试",
+  "log.level.info": "信息",
+  "log.level.warning": "警告",
+  "log.level.error": "错误",
+  "settings.logs.unwritable": "当前没有写入任何日志：{0}"
 }

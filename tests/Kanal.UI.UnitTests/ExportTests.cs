@@ -149,7 +149,7 @@ public class SettingsViewModelFolderTests
             AudioFolder = @"D:\b",
             RecordAudio = false,
         };
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, () => null);
 
         Assert.Equal(@"D:\a", vm.TranscriptFolder);
         Assert.Equal(@"D:\b", vm.AudioFolder);

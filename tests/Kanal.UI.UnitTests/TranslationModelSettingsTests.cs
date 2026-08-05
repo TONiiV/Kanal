@@ -9,7 +9,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void NoLocalModelIsTheDefaultActiveChoice()
     {
-        var vm = new SettingsViewModel(new AppSettings());
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
 
         Assert.Equal(LocalModelCatalog.Models.Count + 1, vm.TranslationModels.Count);
         var none = vm.TranslationModels[0];
@@ -22,7 +22,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void StoredSelectionIsRestored()
     {
-        var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "qwen3.5-4b" });
+        var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "qwen3.5-4b" }, () => null);
 
         var active = Assert.Single(vm.TranslationModels, m => m.IsActive);
         Assert.Equal("qwen3.5-4b", active.ModelId);
@@ -31,7 +31,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void UnknownStoredSelectionFallsBackToNone()
     {
-        var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "gone-model" });
+        var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "gone-model" }, () => null);
 
         var active = Assert.Single(vm.TranslationModels, m => m.IsActive);
         Assert.False(active.IsLocal);
@@ -40,7 +40,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void ApplyToPersistsTheSelectedModel()
     {
-        var vm = new SettingsViewModel(new AppSettings());
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
         var qwen = vm.TranslationModels.First(m => m.ModelId == "qwen3.5-4b");
         foreach (var m in vm.TranslationModels)
             m.IsActive = ReferenceEquals(m, qwen);
@@ -76,7 +76,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void TheNoneRowHasNoDownloadControls()
     {
-        var none = new SettingsViewModel(new AppSettings()).TranslationModels[0];
+        var none = new SettingsViewModel(new AppSettings(), () => null).TranslationModels[0];
         Assert.False(none.CanDownload);
         Assert.False(none.CanDelete);
         Assert.Equal("", none.StatusLabel);
@@ -85,7 +85,7 @@ public class TranslationModelSettingsTests
     [Fact]
     public void LicenseNoteSurfacesForNonPermissiveModels()
     {
-        var vm = new SettingsViewModel(new AppSettings());
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
         var gemma = vm.TranslationModels.First(m => m.ModelId == "gemma-3-4b");
         Assert.True(gemma.HasLicenseNote);
         var qwen = vm.TranslationModels.First(m => m.ModelId == "qwen3.5-4b");
