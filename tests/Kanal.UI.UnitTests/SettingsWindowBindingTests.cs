@@ -35,6 +35,21 @@ public class SettingsWindowBindingTests
     }
 
     [AvaloniaFact]
+    public void EveryOpenSourceNoticeIsOnScreen()
+    {
+        var window = new SettingsWindow(
+            new SettingsViewModel(new AppSettings(), () => null, openFolder: _ => { }));
+        window.Show();
+
+        var rendered = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text)
+            .ToHashSet();
+        Assert.All(OpenSourceNotices.All, notice => Assert.Contains(notice.Name, rendered));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheChangelogWindowShowsEveryReleaseAndItsChanges()
     {
         var window = new ChangelogWindow();

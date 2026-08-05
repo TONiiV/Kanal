@@ -118,7 +118,8 @@ Most configuration is available from the in-app **Settings** window:
 - operator-interface language; and
 - how much detail the log keeps, the size at which a log file is rolled over, and a button that
   opens the log folder; and
-- the version and its changelog.
+- the version and its changelog; and
+- the open-source projects Kanal is built on.
 
 Preferences are written to `Kanal/settings.json` beneath the operating system's application-data
 directory. Downloaded models live in the adjacent `Kanal/models` directory, and log files in
@@ -255,7 +256,9 @@ Detailed status, benchmarks, and the next implementation steps are tracked in
 
 ## License
 
-Kanal is released under the [MIT License](LICENSE). Downloaded translation models and external
+Kanal is released under the [MIT License](LICENSE). The open-source projects it is built on are
+listed at the bottom of the Settings window, each with the name of its licence and where to read
+it; the licence texts themselves are not yet shipped with the binary. Downloaded translation models and external
 services have their own licences and terms; the model catalog displays the relevant licence for
 each model, including a warning where it is not OSI-approved.
 

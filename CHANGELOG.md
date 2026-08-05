@@ -22,6 +22,8 @@ build reports, and a test holds the two together.
   application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written now all leave a line behind, with the exception attached.
+- The list of open-source projects Kanal is built on, with their licences, at the bottom of
+  Settings.
 - This changelog, readable from Settings.
 
 ## 0.3.0 — 2026-08-03
