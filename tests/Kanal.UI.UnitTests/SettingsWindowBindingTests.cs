@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -31,5 +32,38 @@ public class SettingsWindowBindingTests
         Assert.True(size.ClipValueToMinMax);
 
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheChangelogWindowShowsEveryReleaseAndItsChanges()
+    {
+        var window = new ChangelogWindow();
+        window.Show();
+
+        var rendered = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text)
+            .ToHashSet();
+        Assert.All(Changelog.Releases, release => Assert.Contains(release.Version, rendered));
+        Assert.Contains(Changelog.Releases[0].Changes[0], rendered);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheChangelogDateIsTheSameInEveryCalendar()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("th-TH");
+            var entry = new ChangelogEntryViewModel(
+                new ChangelogRelease("9.9.9", new DateOnly(2026, 8, 4), ["something"]));
+
+            Assert.Equal("2026-08-04", entry.Date);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 }

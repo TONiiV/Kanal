@@ -178,5 +178,12 @@
   "log.level.info": "Info",
   "log.level.warning": "Warnung",
   "log.level.error": "Fehler",
-  "settings.logs.unwritable": "Es wird nichts geschrieben: {0}"
+  "settings.logs.unwritable": "Es wird nichts geschrieben: {0}",
+  "settings.about.heading": "PROGRAMMVERSION",
+  "settings.about.version": "Programmversion {0}",
+  "settings.about.note": "Was sich in dieser Fassung und in den vorherigen geändert hat.",
+  "settings.about.changelog": "Änderungen anzeigen",
+  "changelog.title": "Änderungsprotokoll",
+  "changelog.empty": "Keine Einträge.",
+  "changelog.close": "Schließen"
 }

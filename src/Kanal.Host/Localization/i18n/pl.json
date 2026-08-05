@@ -178,5 +178,12 @@
   "log.level.info": "Informacje",
   "log.level.warning": "Ostrzeżenia",
   "log.level.error": "Błędy",
-  "settings.logs.unwritable": "Nic nie jest zapisywane: {0}"
+  "settings.logs.unwritable": "Nic nie jest zapisywane: {0}",
+  "settings.about.heading": "WERSJA",
+  "settings.about.version": "Wersja {0}",
+  "settings.about.note": "Co zmieniło się w tej wersji i w poprzednich.",
+  "settings.about.changelog": "Zobacz dziennik zmian",
+  "changelog.title": "Dziennik zmian",
+  "changelog.empty": "Brak wpisów.",
+  "changelog.close": "Zamknij"
 }

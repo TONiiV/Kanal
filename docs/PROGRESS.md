@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### A changelog you can read in the room (issue #35, 2 of 3)
+
+The question "did something change since last week?" is asked in the room, by the person who
+noticed — and the laptop running a meeting is not the machine anybody browses a repository on.
+
+- `CHANGELOG.md` is embedded in the executable and parsed for a dialog behind Settings → Version.
+  The file stays plain Markdown, readable on GitHub and in a diff, rather than becoming a data
+  format only this parser understands: `## <version> — <date>` headings with ordinary bullets.
+  Wrapped lines fold into their bullet, sub-bullets lose their markers, and inline code and
+  emphasis are stripped — a dialog is a TextBlock, not a renderer, and the first cut put
+  half-sentences and stray backticks on screen.
+- `<Version>` in the host project is what the About section shows, and a test holds it against the
+  newest changelog heading, so releasing is "write the entry, bump the version" and cannot be
+  half-done. Dates are ISO and invariant: against the ambient culture a Thai or Umm al-Qura locale
+  printed a year matching nothing in the repository.
+- The changelog is a host surface like any other, so the unbranded rule reaches it: a test fails if
+  a release entry names a vendor.
+- Earlier entries were reconstructed from the history; this build is 0.4.0.
+
+Left for the repository owner to decide: the entries are English on every language setting.
+Translating release notes into four languages is a standing cost on every release, not a bug fix.
+
 ### The host keeps a record of itself (issue #35, 1 of 3)
 
 A meeting cannot be replayed. Whatever went wrong happened once, in a room, with the other side of

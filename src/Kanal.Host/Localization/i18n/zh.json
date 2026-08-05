@@ -178,5 +178,12 @@
   "log.level.info": "信息",
   "log.level.warning": "警告",
   "log.level.error": "错误",
-  "settings.logs.unwritable": "当前没有写入任何日志：{0}"
+  "settings.logs.unwritable": "当前没有写入任何日志：{0}",
+  "settings.about.heading": "版本",
+  "settings.about.version": "版本 {0}",
+  "settings.about.note": "本次构建以及此前版本的变更。",
+  "settings.about.changelog": "查看更新日志",
+  "changelog.title": "更新日志",
+  "changelog.empty": "暂无记录。",
+  "changelog.close": "关闭"
 }
