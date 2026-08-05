@@ -101,6 +101,15 @@ public static class LogSetup
     private static int ArchiveCountBackstop(AppSettings settings) =>
         Math.Max(MinArchives, DiskBudgetMb / SettingsStore.ResolveLogMaxFileSizeMb(settings));
 
+    /// <summary>
+    /// The most the folder can hold before something is deleted: the archives the backstop allows,
+    /// plus the file being written. Public because the operator picks the size that determines it
+    /// and has no other way to find out what they picked — at the largest rollover the panel offers
+    /// this is twenty gigabytes, which is a number worth seeing before it is on the disk.
+    /// </summary>
+    public static int MaxFolderMb(AppSettings settings) =>
+        (ArchiveCountBackstop(settings) + 1) * SettingsStore.ResolveLogMaxFileSizeMb(settings);
+
     public static LoggingConfiguration BuildConfiguration(string directory, AppSettings settings)
     {
         var target = new FileTarget(TargetName)

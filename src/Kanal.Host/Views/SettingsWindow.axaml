@@ -249,6 +249,14 @@
                                    ClipValueToMinMax="True" Increment="1" FormatString="0" />
                 </Grid>
 
+                <!-- Under the control that decides it, because that is where the choice is made.
+                     The archive count is derived from the size — it has to be, or it undercuts the
+                     fortnight promised two lines up — so the largest rollover on offer costs twenty
+                     gigabytes against the default's two, and nobody picking the number can be
+                     expected to derive that. -->
+                <TextBlock Text="{Binding LogDiskNote}" FontSize="11.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource Ink3}" Margin="0,-2,0,10" />
+
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <Button Content="{l:T settings.logs.open}" Command="{Binding OpenLogFolderCommand}" />
                     <TextBlock Text="{Binding LogFolder}" FontSize="11" TextWrapping="Wrap"

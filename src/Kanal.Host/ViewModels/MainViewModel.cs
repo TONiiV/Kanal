@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -648,7 +650,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 ex.Message);
             // "The QR code doesn't work" is the likeliest call this tool will ever generate, and
             // the warning it produces on screen is gone the moment the next status line lands.
-            Log.Warning(RelayLog, "The relay could not be set up; the room is running without a QR code.", ex);
+            Log.Warning(
+                RelayLog,
+                "The relay could not be set up; the room is running without a QR code: " +
+                $"{Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RelayLog, "The relay setup failure:", ex);
         }
         var relay = relayConnection.Publisher;
 
@@ -674,8 +680,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
+        // Read by the session-ended line below, to tell an ending that followed a reported failure
+        // from one that arrived out of nowhere. Both handlers run on the session's pump thread.
+        var fatalReported = false;
         session.ErrorOccurred += e =>
         {
+            fatalReported |= e.Fatal;
             // Logged off the dispatcher: a fatal error that stops the room must be on disk even
             // if the UI thread never gets round to showing it.
             //
@@ -698,10 +708,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         session.SessionEnded += reason =>
         {
-            // The one ending nobody chose. A transcription service that closes the socket ends the
-            // session without raising an error first, so without this line a room that went deaf
-            // at minute 40 reads exactly like one the operator stopped at minute 90.
-            Log.Info(RoomLog, $"Session ended: {Bounded(reason ?? "no reason given")}.");
+            // The one ending nobody chose: reaching here at all means the transcriber stopped, not
+            // the operator — Stop cancels the pump instead, and never raises this. That is the part
+            // worth the record, and it is ours to say. The reason string is the provider's, and can
+            // be an exception message carrying back the request that was rejected, so it goes to
+            // Debug with the rest of the verbatim material.
+            //
+            // Whether a fatal error preceded it is the other half a reader needs: went deaf at
+            // minute 40 with a reason, or simply stopped. Both events are raised from the session's
+            // own pump, on one thread, so the flag needs no synchronisation.
+            Log.Info(
+                RoomLog,
+                fatalReported
+                    ? "The session ended after the error above — the operator did not stop it."
+                    : "The session ended on its own — the operator did not stop it.");
+            Log.Debug(RoomLog, $"Session end reason: {Bounded(reason ?? "none given")}.");
             Dispatcher.UIThread.Post(() =>
                 Status = L.Format("status.sessionended", reason ?? L["status.done"]));
         };
@@ -713,7 +734,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.startfailed", ex.Message);
-            Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
+            // Classified rather than attached: what reaches here is a transcriber refusing to open
+            // a session or a gateway refusing the room, and both put their whole response body into
+            // the message. Nothing has been said in the room yet at this point, but the shape of
+            // the exposure is identical and the reader is better served by our own words anyway.
+            Log.Error(RoomLog, $"Room {config.RoomId} failed to start: {Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RoomLog, "The failure that stopped the start:", ex);
             await session.DisposeAsync();
             _relay = null;
             await relay.DisposeAsync();
@@ -808,7 +834,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsRunning = false;
             IsPaused = false;
             Status = L.Format("status.stopfailed", ex.Message);
-            Log.Error(RoomLog, "The room did not close cleanly.", ex);
+            Log.Error(RoomLog, $"The room did not close cleanly: {Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RoomLog, "The failure that interrupted the teardown:", ex);
         }
         finally
         {
@@ -880,12 +907,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
+            // A snapshot is the whole room — every utterance in it — and a gateway that refuses one
+            // quotes the body back in its response. So the classification goes on the record and
+            // the gateway's own text goes to Debug, like every other verbatim string.
             Log.Warning(
                 RelayLog,
-                closing
-                    ? "The closing snapshot did not publish."
-                    : "A periodic snapshot did not publish; phones may be showing stale text.",
-                ex);
+                (closing
+                    ? "The closing snapshot did not publish"
+                    : "A periodic snapshot did not publish; phones may be showing stale text") +
+                $": {Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RelayLog, "The snapshot publish failure:", ex);
         }
     }
 
@@ -899,7 +930,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.closefailed", ex.Message));
-            Log.Warning(RelayLog, "The room-closed message did not publish; phones may still be waiting.", ex);
+            Log.Warning(
+                RelayLog,
+                "The room-closed message did not publish; phones may still be waiting: " +
+                $"{Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RelayLog, "The room-closed publish failure:", ex);
         }
     }
 
@@ -912,7 +947,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Status = L.Format("status.warning", L.Format("status.publishfailed", ex.Message));
-            Log.Warning(RelayLog, $"A {message.GetType().Name} did not publish.", ex);
+            Log.Warning(RelayLog, $"A {message.GetType().Name} did not publish: {Classify(ex)}.");
+            Log.Write(LogLevel.Debug, RelayLog, "The publish failure:", ex);
         }
     }
 
@@ -929,6 +965,35 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private static string Bounded(string message) =>
         message.Length <= 300 ? message : message[..300] + "…";
+
+    /// <summary>
+    /// What went wrong, in words this file chose. Everything a provider or a gateway writes quotes
+    /// the request it refused, and the request is the meeting — so those strings never go on the
+    /// record, only into the Debug line beside it. The fallback is a type name, which is ours by
+    /// construction: whatever is added upstream, nothing here can start echoing a payload.
+    /// </summary>
+    /// <remarks>
+    /// The machine's own failures are the exception, deliberately. An <see cref="IOException"/>
+    /// carries a path and a reason written by the operating system this is running on, never a
+    /// response body — and "there is not enough space on the disk" at Error is exactly what the
+    /// operator needs to see without being told to turn Debug on and do it again.
+    /// </remarks>
+    private static string Classify(Exception error) => error switch
+    {
+        RelayPublishException { StatusCode: 401 or 403 } =>
+            "the gateway refused the host credential",
+        RelayPublishException { StatusCode: var code } =>
+            $"the gateway rejected it ({code})",
+        HttpRequestException =>
+            "the gateway or the provider could not be reached",
+        OperationCanceledException =>
+            "it timed out or was cancelled",
+        JsonException =>
+            "a response could not be read",
+        IOException or UnauthorizedAccessException =>
+            error.Message,
+        _ => $"an unexpected {error.GetType().Name}",
+    };
 
     private async Task<RelayConnection> CreateRelayAsync(
         string roomId,

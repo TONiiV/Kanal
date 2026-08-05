@@ -47,7 +47,7 @@ overwrote. Three things that belong to a tool people other than its author run n
   "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
   entries were reconstructed from the history.
 
-86 new tests (299 → 385), including headless loads of both dialogs — the bindings are
+99 new tests (299 → 392), including headless loads of both dialogs — the bindings are
 reflection-based, so a mistyped path or a value that will not convert to the control's type fails at
 runtime with an empty control rather than at build time. No assertions about pixels, layout or style.
 
@@ -64,13 +64,27 @@ runtime with an empty control rather than at build time. No assertions about pix
   rollover size instead. What that actually guarantees is `MaxArchiveFiles × size ≤ max(2 GB,
   20 × size)` — the 2 GB budget holds up to roughly 102 MB a file, above which the 20-archive floor
   wins and retention is what is being protected. At the panel's largest setting that is a 20 GB
-  bound, reachable only by a deliberate choice.
+  bound, reachable only by a deliberate choice — and since the operator is the one making that
+  choice, the Settings panel now states the ceiling under the size control, derived from
+  `LogSetup.MaxFolderMb` so the number on screen cannot drift from the one NLog is given.
 - **Nothing said in the room reaches the file.** Utterances are never logged, and neither is text a
-  provider wrote: a rejected request is echoed back with its payload, and the payload is the meeting.
-  Provider and gateway error text is written at Debug only — turned on deliberately, by someone who
-  has decided reproducing the fault is worth more — while the default-level line records that the
-  session errored and how badly. Every logged message and exception is capped in the sink, and the
-  layout carries no `${exception}` renderer, which has no ceiling.
+  provider or the gateway wrote: a rejected request is quoted back with its payload, and the payload
+  is the meeting. The split is *our classification at Info/Error, their verbatim string at Debug* —
+  `Classify` turns an exception into words this repository chose (`the gateway refused the host
+  credential`, `the gateway or the provider could not be reached`), falling back to a type name, so
+  nothing added upstream can start echoing a payload onto the record. Operating-system failures are
+  the deliberate exception: an `IOException` carries a path and a reason written by the machine, and
+  "there is not enough space on the disk" belongs at Error where the operator will read it. Every
+  door that can carry outside text goes through the split — the session's error and end events, a
+  start that fails, and all four relay publish paths, whose payload *is* the room. Two are
+  independently useful and stay at default level in our own words: a session that ends reports that
+  the operator did not stop it and whether a fatal error preceded it. The guarantee is tested as a
+  property of the log rather than per site (`NoPathWritesAProvidersOwnWordsAboveDebug`), so a new
+  site that leaks fails the suite. Every logged message and exception is also capped in the sink,
+  and the layout carries no `${exception}` renderer, which has no ceiling.
+- **The gateway throws `RelayPublishException`, which carries the status code apart from the body.**
+  That is what makes the classification structural rather than a string scraped off a message: the
+  code is ours to log, the body is not.
 - **A room that ends leaves a line whichever way it ends.** Stop, a service closing the socket, and a
   teardown that throws (Dispose rewrites the WAV header, which a full disk refuses) all reach
   `Room closed.` — a room that opened and never closed is indistinguishable from a crash.

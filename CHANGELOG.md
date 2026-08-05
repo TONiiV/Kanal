@@ -22,6 +22,9 @@ build reports, and a test holds the two together.
   application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written now all leave a line behind, with the exception attached.
+- The log size control now says how much disk the setting can cost. The number of files kept
+  follows from the size you choose, so the largest setting can fill about 20 GB where the default
+  fills 2.
 - Settings now tells you when it could not save. A locked or read-only settings folder used to
   close the dialog as though the change had been written, and the first sign was the next Start
   refusing a key you had just entered.

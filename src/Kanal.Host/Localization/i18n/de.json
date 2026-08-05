@@ -175,6 +175,7 @@
   "settings.logs.note": "Eine Datei pro Tag, ab der unten eingestellten Größe rotiert, {0} Tage aufbewahrt. Die Logs bleiben auf diesem Rechner — nichts daraus wird irgendwohin gesendet.",
   "settings.logs.level": "Aufgezeichnete Details",
   "settings.logs.size": "Rotation ab (MB)",
+  "settings.logs.disk": "Bei dieser Größe kann der Ordner auf etwa {0} GB anwachsen, bevor alte Dateien entfernt werden.",
   "settings.logs.open": "Log-Ordner öffnen",
   "log.level.debug": "Debug",
   "log.level.info": "Info",

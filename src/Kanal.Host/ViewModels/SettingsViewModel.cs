@@ -141,6 +141,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(ProcessingNote));
         OnPropertyChanged(nameof(DefaultFolderNote));
         OnPropertyChanged(nameof(LogNote));
+        OnPropertyChanged(nameof(LogDiskNote));
         OnPropertyChanged(nameof(LogFailureNote));
         OnPropertyChanged(nameof(VersionLabel));
         OnPropertyChanged(nameof(LicenseNote));
@@ -430,6 +431,7 @@ public partial class SettingsViewModel : ViewModelBase
     /// which empties to null when its text is cleared or a letter is typed into it.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LogDiskNote))]
     private decimal? _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
 
     /// <summary>
@@ -451,6 +453,23 @@ public partial class SettingsViewModel : ViewModelBase
 
     /// <summary>What the files are and how long they last, in one line under the two controls.</summary>
     public string LogNote => Localizer.Instance.Format("settings.logs.note", LogSetup.RetentionDays);
+
+    /// <summary>
+    /// What the size above costs, under the control that sets it. The count of archives kept is
+    /// derived from the size — it has to be, or it undercuts the retention promised in the line
+    /// above — so the largest rollover the box offers occupies twenty gigabytes rather than the two
+    /// the default does. Nobody picking that number can be expected to work that out, and bigger
+    /// sounds safer until it is measured.
+    /// </summary>
+    public string LogDiskNote => Localizer.Instance.Format(
+        "settings.logs.disk",
+        Math.Round(
+            LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = ChosenLogSize }) / 1024.0)
+            .ToString("0"));
+
+    /// <summary>The number the box holds, or the last one it held — a blank box is not a setting.</summary>
+    private int ChosenLogSize =>
+        LogMaxFileSizeMb is null ? _lastLogSize : (int)Math.Round(LogMaxFileSizeMb.Value);
 
     /// <summary>Printed beside the button: an operator reading it out over the phone needs the path.</summary>
     public string LogFolder => SettingsStore.LogsPath;

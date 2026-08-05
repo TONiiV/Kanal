@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Kanal.Core.Diagnostics;
+using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
@@ -107,4 +108,39 @@ public class LogSettingsPanelTests
         Assert.Contains(nameof(vm.LogIsWritable), raised);
         Assert.Contains(nameof(vm.LogFailureNote), raised);
     }
+    /// <summary>
+    /// The operator picks the rollover size; what it costs on their disk follows from it and from
+    /// the archive floor that keeps the fortnight honest. Twenty files at the largest size the box
+    /// offers is twenty gigabytes on a laptop, and nothing on the panel said so — bigger sounds
+    /// safer right up until it is measured.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
+    public void TheDiskNoteFollowsTheChosenSize(int megabytes)
+    {
+        var vm = Panel(new AppSettings());
+        vm.LogMaxFileSizeMb = megabytes;
+
+        // derived from the same function the target is built from, so the number on screen cannot
+        // drift from the number NLog is actually given
+        var gigabytes = Math.Round(
+            LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = megabytes }) / 1024.0);
+        Assert.Contains(gigabytes.ToString("0"), vm.LogDiskNote);
+    }
+
+    /// <summary>A number that changes while the dialog is open has to take the note with it.</summary>
+    [AvaloniaFact]
+    public void ChangingTheSizeAnnouncesTheDiskNote()
+    {
+        var vm = Panel(new AppSettings());
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.LogMaxFileSizeMb = SettingsStore.MaxLogMaxFileSizeMb;
+
+        Assert.Contains(nameof(vm.LogDiskNote), raised);
+    }
+
 }

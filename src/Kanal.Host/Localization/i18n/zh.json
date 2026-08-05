@@ -175,6 +175,7 @@
   "settings.logs.note": "每天一个文件，超过下方设定的大小后滚动归档，保留 {0} 天。日志只留在这台机器上——其中的内容不会发送到任何地方。",
   "settings.logs.level": "记录的详细程度",
   "settings.logs.size": "滚动阈值（MB）",
+  "settings.logs.disk": "按此大小，该文件夹在开始删除旧文件前最多约占用 {0} GB。",
   "settings.logs.open": "打开日志文件夹",
   "log.level.debug": "调试",
   "log.level.info": "信息",

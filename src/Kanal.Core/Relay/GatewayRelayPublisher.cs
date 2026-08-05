@@ -6,6 +6,19 @@ using System.Text.Json;
 namespace Kanal.Core.Relay;
 
 /// <summary>
+/// A gateway that refused. The status code is carried apart from the message so a caller can say
+/// what happened without repeating what the gateway said: its body quotes the payload back, and
+/// the payload is the meeting. Derived from <see cref="InvalidOperationException"/> because that
+/// is what this used to throw and nothing should have to change to keep catching it.
+/// </summary>
+public sealed class RelayPublishException(int statusCode, string message)
+    : InvalidOperationException(message)
+{
+    /// <summary>The HTTP status the gateway answered with — ours to log, unlike its body.</summary>
+    public int StatusCode { get; } = statusCode;
+}
+
+/// <summary>
 /// Publishes through the authenticated Kanal gateway. The desktop authenticates room creation
 /// with its per-device credential and receives a short-lived, room-scoped host ticket; no
 /// backing-store URL or key ever reaches a client.
@@ -61,7 +74,8 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
             using var response = await http.SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException(
+                throw new RelayPublishException(
+                    (int)response.StatusCode,
                     $"Relay room creation failed ({(int)response.StatusCode}): {body}");
 
             var created = JsonSerializer.Deserialize<CreateRoomResponse>(body, RelayJson.Options)
@@ -96,7 +110,8 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
         if (!response.IsSuccessStatusCode)
         {
             var detail = await response.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException(
+            throw new RelayPublishException(
+                (int)response.StatusCode,
                 $"Relay publish failed ({(int)response.StatusCode}): {detail}");
         }
     }

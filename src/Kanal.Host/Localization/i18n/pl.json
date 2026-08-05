@@ -175,6 +175,7 @@
   "settings.logs.note": "Jeden plik dziennie, przełączany po przekroczeniu rozmiaru poniżej, przechowywany przez {0} dni. Dzienniki zostają na tym komputerze — nic z nich nigdzie nie trafia.",
   "settings.logs.level": "Zapisywane szczegóły",
   "settings.logs.size": "Przełącz po (MB)",
+  "settings.logs.disk": "Przy tym rozmiarze folder może urosnąć do około {0} GB, zanim stare pliki zostaną usunięte.",
   "settings.logs.open": "Otwórz folder dzienników",
   "log.level.debug": "Debugowanie",
   "log.level.info": "Informacje",

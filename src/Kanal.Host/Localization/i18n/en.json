@@ -175,6 +175,7 @@
   "settings.logs.note": "One file a day, rolled over once it passes the size below, kept {0} days. Logs stay on this machine — nothing in them is sent anywhere.",
   "settings.logs.level": "Detail kept",
   "settings.logs.size": "Roll over at (MB)",
+  "settings.logs.disk": "At this size the folder can grow to about {0} GB before old files are removed.",
   "settings.logs.open": "Open log folder",
   "log.level.debug": "Debug",
   "log.level.info": "Info",
