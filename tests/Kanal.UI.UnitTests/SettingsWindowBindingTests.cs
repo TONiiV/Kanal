@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Kanal.Core.Diagnostics;
+using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -75,6 +76,28 @@ public class SettingsWindowBindingTests
             .ToHashSet();
         Assert.All(Changelog.Releases, release => Assert.Contains(release.Version, rendered));
         Assert.Contains(Changelog.Releases[0].Changes[0], rendered);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The one string the whole classification design rests on. Everything else in the panel is
+    /// written in words this application chose; Debug is the setting under which the file also
+    /// keeps what a transcription service and the gateway said back, which can be an utterance —
+    /// and an operator handing that folder to someone has to be able to have known before they
+    /// chose it. Nothing referenced this string, so deleting the line was silent.
+    /// </summary>
+    [AvaloniaFact]
+    public void ThePanelSaysWhatDebugRecords()
+    {
+        var window = new SettingsWindow(
+            new SettingsViewModel(new AppSettings(), () => null, openFolder: _ => { }));
+        window.Show();
+
+        var rendered = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text)
+            .ToHashSet();
+        Assert.Contains(Localizer.Instance["settings.logs.debug"], rendered);
 
         window.Close();
     }

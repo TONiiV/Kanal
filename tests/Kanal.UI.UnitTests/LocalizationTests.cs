@@ -187,7 +187,15 @@ public class LocalizationTests
     [InlineData("pl", "bez sieci", "nic nie jest wysyłane", "nigdy nie opuszcza")]
     public void HelpNeverOverstatesPrivacyInAnyLanguage(string code, params string[] falseAbsolutes)
     {
-        foreach (var (key, text) in Table(code).Where(e => e.Key.StartsWith("mode.") && e.Key.EndsWith(".help")))
+        // The diagnostics strings are held to the same rule, and for a sharper reason: the log
+        // folder note used to promise that nothing in it "is sent anywhere" while the button
+        // beside it exists to hand the folder to whoever asked. An absolute that is false in
+        // English is false in four languages.
+        var guarded = Table(code).Where(e =>
+            (e.Key.StartsWith("mode.") && e.Key.EndsWith(".help")) ||
+            e.Key.StartsWith("settings.logs."));
+
+        foreach (var (key, text) in guarded)
         foreach (var phrase in falseAbsolutes)
             Assert.False(
                 text.Contains(phrase, StringComparison.OrdinalIgnoreCase),

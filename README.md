@@ -125,7 +125,10 @@ directory. Downloaded models live in the adjacent `Kanal/models` directory, and 
 `Kanal/logs`. Transcript exports and recordings default to `Documents/Kanal`.
 
 Logs are written with NLog: one file per day (`kanal-<date>.log`), rolled over once it passes the
-configured size, kept for two weeks, and never sent anywhere.
+configured size, kept for two weeks. Nothing is sent from the host; the folder belongs to the
+operator, and a log leaves the machine only when they send it. At the Debug level the file also
+keeps what the transcription service and the relay gateway sent back word for word, which can
+include what was said in the room — every other level records failures in Kanal's own words.
 
 Environment variables override connection defaults:
 

@@ -47,7 +47,7 @@ overwrote. Three things that belong to a tool people other than its author run n
   "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
   entries were reconstructed from the history.
 
-112 new tests (299 → 405), including headless loads of both dialogs — the bindings are
+107 new tests (299 → 406), including headless loads of both dialogs — the bindings are
 reflection-based, so a mistyped path or a value that will not convert to the control's type fails at
 runtime with an empty control rather than at build time. No assertions about pixels, layout or style.
 
@@ -69,7 +69,9 @@ runtime with an empty control rather than at build time. No assertions about pix
   control. `LogSetup.MaxFolderMb` derives it, a test holds it against the built `FileTarget` so it
   cannot drift from what NLog is given, and it is rounded **up**: a ceiling displayed lower than it
   is defeats the point of displaying it (rounding to the nearest whole gigabyte showed a true
-  10.5 GB as "10").
+  10.5 GB as "10"). The panel's numbers are asserted against literals worked out by hand — a test
+  that computes its expectation from the function under test agrees with whatever that function
+  says, which is how a note reading "about 102.1 GB" passed a whole green suite.
 - **Nothing said in the room reaches the file.** Utterances are never logged, and neither is text a
   provider or the gateway wrote: a rejected request is quoted back with its payload, and the payload
   is the meeting. The split is *our classification at Info/Error, their verbatim string at Debug* —
@@ -102,9 +104,14 @@ runtime with an empty control rather than at build time. No assertions about pix
   `Room closed.` — a room that opened and never closed is indistinguishable from a crash.
 - **The panel says what Debug costs, where Debug is chosen.** The whole classification-at-default,
   verbatim-at-Debug design assumes the operator knows that one setting changes what the file
-  contains; no string said so. The diagnostics note also claimed nothing in the log "is sent
-  anywhere" while the button beside it exists to hand the folder to someone — reworded to what is
-  true: nothing is sent from here, and the folder goes on only if the operator sends it.
+  contains; no string said so, and a headline string nothing referenced could be deleted in silence,
+  so a binding test pins it. The diagnostics note also claimed nothing in the log "is sent anywhere"
+  while the button beside it exists to hand the folder to someone — reworded in all four languages
+  to what is true: nothing is sent from here, and the folder goes on only if the operator sends it.
+  The same claim sat in `CHANGELOG.md`, which is embedded and rendered in the same dialog, and in
+  the README and `LogSetup`'s own class doc; all four now say the same thing, and
+  `HelpNeverOverstatesPrivacyInAnyLanguage` covers `settings.logs.*` so the next edit cannot put
+  the absolute back.
 - **A Save that cannot be written keeps the dialog open and says so.** It used to close as if it had
   worked; the operator found out at the next Start, from a refusal about a key they had just pasted
   in. The unreadable-settings salvage copy (`settings.json.unreadable`) is a plaintext key beside the

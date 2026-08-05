@@ -49,10 +49,17 @@ internal sealed class NLogSink : ILogSink
 
 /// <summary>
 /// The host's log files: one per day, rolled over at a size the operator sets, kept for a fixed
-/// number of days and never sent anywhere. A meeting cannot be replayed — whatever went wrong
-/// happened once, in a room, with the other side of the table waiting — so this file is the only
-/// place the answer can still be found the next morning.
+/// number of days. A meeting cannot be replayed — whatever went wrong happened once, in a room,
+/// with the other side of the table waiting — so this file is the only place the answer can still
+/// be found the next morning.
 /// </summary>
+/// <remarks>
+/// Nothing here is sent anywhere by the host, which is not the same as saying it never leaves the
+/// machine: the folder exists to be handed to whoever is asked to look at it, and Settings has a
+/// button that opens it for exactly that. What it contains is therefore a promise to the operator
+/// rather than an internal detail — see <c>MainViewModel.Classify</c>, which keeps every string a
+/// provider or the gateway wrote out of the file except at Debug.
+/// </remarks>
 /// <remarks>
 /// Built in code rather than from <c>NLog.config</c>: the operator changes the level in Settings
 /// and it has to take effect without a restart, and a config file beside the executable is one

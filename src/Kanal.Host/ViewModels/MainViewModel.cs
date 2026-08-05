@@ -736,7 +736,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Status = L.Format("status.startfailed", ex.Message);
+            // Classified on the masthead too, for the same reason it is classified in the file:
+            // session.StartAsync publishes the room config through the gateway, so a refusal
+            // arrives here with the gateway's response body inside its message.
+            Status = L.Format("status.startfailed", Classify(ex));
             // Classified rather than attached: what reaches here is a transcriber refusing to open
             // a session or a gateway refusing the room, and both put their whole response body into
             // the message. Nothing has been said in the room yet at this point, but the shape of

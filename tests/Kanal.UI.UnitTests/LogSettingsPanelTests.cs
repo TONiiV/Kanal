@@ -115,23 +115,42 @@ public class LogSettingsPanelTests
     /// offers is twenty gigabytes on a laptop, and nothing on the panel said so — bigger sounds
     /// safer right up until it is measured.
     /// </summary>
+    /// <remarks>
+    /// The expected strings are literals, worked out by hand from
+    /// <c>(max(20, 2048 / size) + 1) × size</c> rounded up to a tenth of a gigabyte — 1 MB → 2049 MB
+    /// → 2.1, 10 MB → 2050 MB → 2.1, 121 MB → 2541 MB → 2.5, 512 MB → 10752 MB → 10.5,
+    /// 1024 MB → 21504 MB → 21. Deriving them from <c>DiskCeilingGb</c> instead pinned only that the
+    /// box reaches the function: adding 100 GB to it, so the default read "about 102.1 GB", passed
+    /// the whole suite. A test that computes its expectation from the code under test agrees with
+    /// whatever that code says.
+    /// </remarks>
     [AvaloniaTheory]
-    [InlineData(1)]
-    [InlineData(10)]
-    [InlineData(121)]
-    [InlineData(512)]
-    [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
-    public void TheDiskNoteFollowsTheChosenSize(int megabytes)
+    [InlineData(1, "2.1")]
+    [InlineData(10, "2.1")]
+    [InlineData(121, "2.5")]
+    [InlineData(512, "10.5")]
+    [InlineData(SettingsStore.MaxLogMaxFileSizeMb, "21")]
+    public void TheDiskNoteFollowsTheChosenSize(int megabytes, string gigabytes)
     {
-        var vm = Panel(new AppSettings());
-        vm.LogMaxFileSizeMb = megabytes;
+        // The separator is the operator's, the digits are not: pinned here so a de-DE run asserts
+        // the same number it asserts anywhere else.
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        try
+        {
+            var vm = Panel(new AppSettings());
+            vm.LogMaxFileSizeMb = megabytes;
 
-        // The whole note, not a substring of it: "2" is inside "21", so a note hard-coded to any
-        // one size passed a Contains assertion at every other size.
-        var expected = Localizer.Instance.Format(
-            "settings.logs.disk",
-            SettingsViewModel.DiskCeilingGb(megabytes));
-        Assert.Equal(expected, vm.LogDiskNote);
+            // The whole note, not a substring of it: "2" is inside "21", so a note hard-coded to any
+            // one size passed a Contains assertion at every other size.
+            Assert.Equal(
+                Localizer.Instance.Format("settings.logs.disk", gigabytes),
+                vm.LogDiskNote);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     /// <summary>

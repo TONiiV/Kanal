@@ -16,10 +16,10 @@ build reports, and a test holds the two together.
   those settings the meeting still runs — with no QR code and a warning saying so — instead of
   falling back to a shared credential.
 - Log files. The host keeps a record of what it did — one file a day under
-  `%APPDATA%/Kanal/logs`, rolled over once it passes a size you set, kept for two weeks and never
-  sent anywhere. Settings → Diagnostics chooses how much detail is kept (debug, info, warning,
-  error) and opens the folder in one click, so a log can be found without knowing where an
-  application hides things.
+  `%APPDATA%/Kanal/logs`, rolled over once it passes a size you set, kept for two weeks. Nothing is
+  sent from here; the folder is yours, and goes on only if you send it. Settings → Diagnostics
+  chooses how much detail is kept (debug, info, warning, error) and opens the folder in one click,
+  so a log can be found without knowing where an application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written now all leave a line behind, with the exception attached.
 - Settings says what the Debug level records. At that level the file also keeps what the
@@ -28,8 +28,8 @@ build reports, and a test holds the two together.
   claims nothing is ever sent from it, since sending it to whoever asks is the point of the button
   beside it.
 - The log size control now says how much disk the setting can cost. The number of files kept
-  follows from the size you choose, so the largest setting can fill about 20 GB where the default
-  fills 2.
+  follows from the size you choose, so the largest setting can fill about 21 GB where the default
+  fills 2.1.
 - Settings now tells you when it could not save. A locked or read-only settings folder used to
   close the dialog as though the change had been written, and the first sign was the next Start
   refusing a key you had just entered.
