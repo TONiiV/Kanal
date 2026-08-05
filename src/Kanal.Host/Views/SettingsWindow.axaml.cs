@@ -113,17 +113,10 @@ public partial class SettingsWindow : Window
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
         var viewModel = DataContext as SettingsViewModel;
+        AppSettings saved;
         try
         {
-            // The level and the size the operator just chose apply to the next line written, not
-            // to the next launch: the reason someone turns Debug on is that something is going
-            // wrong now. Applied from what Save returned rather than by re-reading the file.
-            if (viewModel?.Save() is { } saved)
-            {
-                LogSetup.Apply(saved);
-                viewModel.RefreshLogState();
-                viewModel.SaveError = "";
-            }
+            saved = viewModel?.Save()!;
         }
         catch (Exception ex)
         {
@@ -131,12 +124,31 @@ public partial class SettingsWindow : Window
             // Closing here was closing on a write that did not happen: the operator pasted a key,
             // saw the dialog accept it, and found out at the next Start from a refusal about a key
             // they had just entered. So the dialog stays, with the reason on it.
+            //
+            // Only the write is inside this try. Everything after it runs on a file that is
+            // already on disk, and a failure there saying "nothing has been written" would be a
+            // lie about the one thing the operator needs to know.
             Log.Error(SettingsLog, "Settings could not be saved.", ex);
             if (viewModel is not null)
             {
                 viewModel.SaveError = Localizer.Instance.Format("settings.save.failed", ex.Message);
                 return;
             }
+
+            Close();
+            return;
+        }
+
+        if (viewModel is not null && saved is not null)
+        {
+            // The level and the size the operator just chose apply to the next line written, not
+            // to the next launch: the reason someone turns Debug on is that something is going
+            // wrong now. Applied from what Save returned rather than by re-reading the file.
+            // ApplyTo catches its own failures — an unwritable folder is reported through
+            // LogIsWritable, not by throwing.
+            LogSetup.Apply(saved);
+            viewModel.RefreshLogState();
+            viewModel.SaveError = "";
         }
 
         Close();

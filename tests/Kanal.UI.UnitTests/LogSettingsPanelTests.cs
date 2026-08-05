@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using System.Globalization;
 using Kanal.Core.Diagnostics;
 using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
@@ -117,17 +118,43 @@ public class LogSettingsPanelTests
     [AvaloniaTheory]
     [InlineData(1)]
     [InlineData(10)]
+    [InlineData(121)]
+    [InlineData(512)]
     [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
     public void TheDiskNoteFollowsTheChosenSize(int megabytes)
     {
         var vm = Panel(new AppSettings());
         vm.LogMaxFileSizeMb = megabytes;
 
-        // derived from the same function the target is built from, so the number on screen cannot
-        // drift from the number NLog is actually given
-        var gigabytes = Math.Round(
-            LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = megabytes }) / 1024.0);
-        Assert.Contains(gigabytes.ToString("0"), vm.LogDiskNote);
+        // The whole note, not a substring of it: "2" is inside "21", so a note hard-coded to any
+        // one size passed a Contains assertion at every other size.
+        var expected = Localizer.Instance.Format(
+            "settings.logs.disk",
+            SettingsViewModel.DiskCeilingGb(megabytes));
+        Assert.Equal(expected, vm.LogDiskNote);
+    }
+
+    /// <summary>
+    /// A ceiling that is displayed lower than it is defeats the point of displaying it. Rounding to
+    /// the nearest whole gigabyte showed 512 MB — a true 10.5 GB — as "10", and 121 MB as "2"
+    /// against a true 2.48 GB, a fifth under. The number on screen may overstate; it may never
+    /// understate.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheDiskCeilingIsNeverShownLowerThanItIs()
+    {
+        for (var megabytes = SettingsStore.MinLogMaxFileSizeMb;
+             megabytes <= SettingsStore.MaxLogMaxFileSizeMb;
+             megabytes++)
+        {
+            var shown = double.Parse(
+                SettingsViewModel.DiskCeilingGb(megabytes), CultureInfo.CurrentCulture);
+            var real = LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = megabytes }) / 1024.0;
+
+            Assert.True(
+                shown >= real,
+                $"{megabytes} MB: the panel says {shown} GB where the folder can reach {real:0.###} GB");
+        }
     }
 
     /// <summary>A number that changes while the dialog is open has to take the note with it.</summary>

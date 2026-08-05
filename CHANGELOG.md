@@ -22,6 +22,11 @@ build reports, and a test holds the two together.
   application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written now all leave a line behind, with the exception attached.
+- Settings says what the Debug level records. At that level the file also keeps what the
+  transcription service and the gateway sent back word for word, which can include what was said in
+  the room — so the panel says so where the level is chosen. The note about the log folder no longer
+  claims nothing is ever sent from it, since sending it to whoever asks is the point of the button
+  beside it.
 - The log size control now says how much disk the setting can cost. The number of files kept
   follows from the size you choose, so the largest setting can fill about 20 GB where the default
   fills 2.

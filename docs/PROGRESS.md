@@ -47,7 +47,7 @@ overwrote. Three things that belong to a tool people other than its author run n
   "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
   entries were reconstructed from the history.
 
-99 new tests (299 → 392), including headless loads of both dialogs — the bindings are
+112 new tests (299 → 405), including headless loads of both dialogs — the bindings are
 reflection-based, so a mistyped path or a value that will not convert to the control's type fails at
 runtime with an empty control rather than at build time. No assertions about pixels, layout or style.
 
@@ -64,30 +64,47 @@ runtime with an empty control rather than at build time. No assertions about pix
   rollover size instead. What that actually guarantees is `MaxArchiveFiles × size ≤ max(2 GB,
   20 × size)` — the 2 GB budget holds up to roughly 102 MB a file, above which the 20-archive floor
   wins and retention is what is being protected. At the panel's largest setting that is a 20 GB
-  bound, reachable only by a deliberate choice — and since the operator is the one making that
-  choice, the Settings panel now states the ceiling under the size control, derived from
-  `LogSetup.MaxFolderMb` so the number on screen cannot drift from the one NLog is given.
+  bound on the archives, 21 GB counting the file being written — reachable only by a deliberate
+  choice, and since the operator is the one making it, the panel states that ceiling under the size
+  control. `LogSetup.MaxFolderMb` derives it, a test holds it against the built `FileTarget` so it
+  cannot drift from what NLog is given, and it is rounded **up**: a ceiling displayed lower than it
+  is defeats the point of displaying it (rounding to the nearest whole gigabyte showed a true
+  10.5 GB as "10").
 - **Nothing said in the room reaches the file.** Utterances are never logged, and neither is text a
   provider or the gateway wrote: a rejected request is quoted back with its payload, and the payload
   is the meeting. The split is *our classification at Info/Error, their verbatim string at Debug* —
   `Classify` turns an exception into words this repository chose (`the gateway refused the host
   credential`, `the gateway or the provider could not be reached`), falling back to a type name, so
   nothing added upstream can start echoing a payload onto the record. Operating-system failures are
-  the deliberate exception: an `IOException` carries a path and a reason written by the machine, and
-  "there is not enough space on the disk" belongs at Error where the operator will read it. Every
-  door that can carry outside text goes through the split — the session's error and end events, a
-  start that fails, and all four relay publish paths, whose payload *is* the room. Two are
-  independently useful and stay at default level in our own words: a session that ends reports that
-  the operator did not stop it and whether a fatal error preceded it. The guarantee is tested as a
-  property of the log rather than per site (`NoPathWritesAProvidersOwnWordsAboveDebug`), so a new
-  site that leaks fails the suite. Every logged message and exception is also capped in the sink,
-  and the layout carries no `${exception}` renderer, which has no ceiling.
+  the deliberate exception, **by exact type**: a plain `IOException` from a file write carries a path
+  and an errno written by this machine, and "there is not enough space on the disk" belongs at Error
+  where the operator will read it. The exactness is the point — `HttpIOException` derives from
+  `IOException` while `HttpRequestException` derives from neither, so an arm written as
+  `is IOException` would pass a half-read response body straight to the record.
+  Every door that can carry outside text goes through the split: the session's error and end
+  events, a start that fails, a teardown that throws, the relay setup, and all three publish paths —
+  whose payload *is* the room, and whose room-moved message is a join credential. The same
+  classification goes to the screen, not just the file: the relay warning is printed beside the QR
+  code the participants are looking at, and the publish-failure statuses sat on the operator's
+  masthead. Two endings stay useful at default level in our own words: a session that ends reports
+  that the operator did not stop it, and whether a fatal error preceded it.
+  The guarantee is tested as a property of the log rather than per site
+  (`NoPathWritesAProvidersOwnWordsAboveDebug`), one case per site, each pinned to wording only that
+  site produces — assertions matched against *any* Debug line or *any* non-Debug line were being
+  satisfied by a neighbouring site, so three of them were passing blind. A mutation matrix over
+  every site is the check on the check. Every logged message and exception is also capped in the
+  sink, and the layout carries no `${exception}` renderer, which has no ceiling.
 - **The gateway throws `RelayPublishException`, which carries the status code apart from the body.**
   That is what makes the classification structural rather than a string scraped off a message: the
   code is ours to log, the body is not.
 - **A room that ends leaves a line whichever way it ends.** Stop, a service closing the socket, and a
   teardown that throws (Dispose rewrites the WAV header, which a full disk refuses) all reach
   `Room closed.` — a room that opened and never closed is indistinguishable from a crash.
+- **The panel says what Debug costs, where Debug is chosen.** The whole classification-at-default,
+  verbatim-at-Debug design assumes the operator knows that one setting changes what the file
+  contains; no string said so. The diagnostics note also claimed nothing in the log "is sent
+  anywhere" while the button beside it exists to hand the folder to someone — reworded to what is
+  true: nothing is sent from here, and the folder goes on only if the operator sends it.
 - **A Save that cannot be written keeps the dialog open and says so.** It used to close as if it had
   worked; the operator found out at the next Start, from a refusal about a key they had just pasted
   in. The unreadable-settings salvage copy (`settings.json.unreadable`) is a plaintext key beside the

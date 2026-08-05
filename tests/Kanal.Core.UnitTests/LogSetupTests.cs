@@ -287,6 +287,30 @@ public class LogSetupTests
     }
 
     /// <summary>
+    /// The number the Settings panel prints is derived from this, and the panel claims it cannot
+    /// drift from what NLog is given — which was true of the arithmetic and untested against the
+    /// target. Held against the built <c>FileTarget</c>, so a change to the backstop that forgot
+    /// the note fails here.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(121)]
+    [InlineData(512)]
+    [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
+    public void TheFolderCeilingIsTheOneTheTargetActuallyEnforces(int megabytes)
+    {
+        var settings = new AppSettings { LogMaxFileSizeMb = megabytes };
+        var target = Target(settings, "/logs");
+
+        // the archives the target will keep, plus the file being written into
+        Assert.Equal(
+            (target.MaxArchiveFiles + 1) * megabytes,
+            LogSetup.MaxFolderMb(settings));
+        Assert.Equal(megabytes * 1024L * 1024L, target.ArchiveAboveSize);
+    }
+
+    /// <summary>
     /// `{#}` is NLog 5's archive placeholder. NLog 6 strips it instead of substituting it, so a
     /// name written with one describes files that never appear.
     /// </summary>

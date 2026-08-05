@@ -83,9 +83,10 @@ public static class LogSetup
     /// How much disk the archive count aims to bound the folder to. A target, not a ceiling: past
     /// roughly 102 MB per file it can no longer be met without dropping below
     /// <see cref="MinArchives"/>, and retention wins that argument. What is actually guaranteed is
-    /// <c>MaxArchiveFiles × size ≤ max(DiskBudgetMb, MinArchives × size)</c> — 2 GB at the default,
-    /// 20 GB at the largest rollover the panel offers, which is a size only a deliberate choice
-    /// reaches.
+    /// <c>MaxArchiveFiles × size ≤ max(DiskBudgetMb, MinArchives × size)</c> — 2 GB of archives at
+    /// the default, 20 GB at the largest rollover the panel offers, which is a size only a
+    /// deliberate choice reaches. <see cref="MaxFolderMb"/> is the folder including the file being
+    /// written, which is the number the operator is shown: 21 GB at that setting.
     /// </summary>
     public const int DiskBudgetMb = 2048;
 
@@ -105,7 +106,7 @@ public static class LogSetup
     /// The most the folder can hold before something is deleted: the archives the backstop allows,
     /// plus the file being written. Public because the operator picks the size that determines it
     /// and has no other way to find out what they picked — at the largest rollover the panel offers
-    /// this is twenty gigabytes, which is a number worth seeing before it is on the disk.
+    /// this is twenty-one gigabytes, which is a number worth seeing before it is on the disk.
     /// </summary>
     public static int MaxFolderMb(AppSettings settings) =>
         (ArchiveCountBackstop(settings) + 1) * SettingsStore.ResolveLogMaxFileSizeMb(settings);

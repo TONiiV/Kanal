@@ -457,15 +457,23 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>
     /// What the size above costs, under the control that sets it. The count of archives kept is
     /// derived from the size — it has to be, or it undercuts the retention promised in the line
-    /// above — so the largest rollover the box offers occupies twenty gigabytes rather than the two
-    /// the default does. Nobody picking that number can be expected to work that out, and bigger
-    /// sounds safer until it is measured.
+    /// above — so the largest rollover the box offers occupies twenty-one gigabytes rather than the
+    /// two the default does. Nobody picking that number can be expected to work that out, and
+    /// bigger sounds safer until it is measured.
     /// </summary>
-    public string LogDiskNote => Localizer.Instance.Format(
-        "settings.logs.disk",
-        Math.Round(
-            LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = ChosenLogSize }) / 1024.0)
-            .ToString("0"));
+    public string LogDiskNote =>
+        Localizer.Instance.Format("settings.logs.disk", DiskCeilingGb(ChosenLogSize));
+
+    /// <summary>
+    /// The folder's ceiling in gigabytes, rounded <em>up</em> to a tenth. Rounding to the nearest
+    /// whole one printed 512 MB — a true 10.5 GB — as "10", and 121 MB as "2" against a real
+    /// 2.48 GB. A number whose only job is to stop the operator being surprised may overstate; it
+    /// may never understate.
+    /// </summary>
+    public static string DiskCeilingGb(int megabytes) =>
+        (Math.Ceiling(LogSetup.MaxFolderMb(new AppSettings { LogMaxFileSizeMb = megabytes })
+                      * 10.0 / 1024.0) / 10.0)
+            .ToString("0.#");
 
     /// <summary>The number the box holds, or the last one it held — a blank box is not a setting.</summary>
     private int ChosenLogSize =>

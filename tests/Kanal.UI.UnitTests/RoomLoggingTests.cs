@@ -1,5 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using System.Net.Http;
+using System.Text;
 using Kanal.Core.Diagnostics;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
@@ -224,7 +226,11 @@ public class RoomLoggingTests
             throw new IOException("There is not enough space on the disk.");
     }
 
-    /// <summary>Every door a provider's or the gateway's own words can come through.</summary>
+    /// <summary>
+    /// Every door an outside string can come through, one per call site. Separate cases rather than
+    /// one "relay" case: three publish paths collapsed into a single scenario meant a mutation to
+    /// any one of them was covered by whichever of the other two still fired.
+    /// </summary>
     public enum Verbatim
     {
         /// <summary>The transcriber reports an error mid-meeting.</summary>
@@ -236,9 +242,38 @@ public class RoomLoggingTests
         /// <summary>The transcriber refuses to open a session at all.</summary>
         StartFailure,
 
-        /// <summary>The gateway refuses a publish — and the publish is the meeting.</summary>
-        RelayPublish,
+        /// <summary>The gateway refuses to create the room, so there is no QR code.</summary>
+        RelaySetup,
+
+        /// <summary>The gateway refuses the closing snapshot — which is every utterance in it.</summary>
+        RelaySnapshot,
+
+        /// <summary>The gateway refuses the room-closed message.</summary>
+        RelayClosed,
+
+        /// <summary>
+        /// The gateway refuses the room-moved message on a second Start. Its payload is the new
+        /// room's verification key and invite ticket, so what leaks here is a join credential.
+        /// </summary>
+        RelayMoved,
     }
+
+    /// <summary>
+    /// Which line each site writes. Pinning both halves to wording only that site produces is what
+    /// makes a mutation red the case that covers it and no other: assertions matched on any
+    /// non-Debug line, or any Debug line, were satisfied by a neighbouring site instead.
+    /// </summary>
+    private static (string OnTheRecord, string AtDebug) Wording(Verbatim path) => path switch
+    {
+        Verbatim.SessionError => ("The session reported an error", "Session error:"),
+        Verbatim.SessionEnded => ("The session ended on its own", "Session end reason:"),
+        Verbatim.StartFailure => ("failed to start", "The failure that stopped the start:"),
+        Verbatim.RelaySetup => ("The relay could not be set up", "The relay setup failure:"),
+        Verbatim.RelaySnapshot => ("The closing snapshot did not publish", "The snapshot publish failure:"),
+        Verbatim.RelayClosed => ("The room-closed message did not publish", "The room-closed publish failure:"),
+        Verbatim.RelayMoved => ("A RoomMovedMessage did not publish", "The publish failure:"),
+        _ => throw new ArgumentOutOfRangeException(nameof(path)),
+    };
 
     /// <summary>
     /// The guarantee, as a property of the log rather than of one call site. A provider or a
@@ -250,12 +285,16 @@ public class RoomLoggingTests
     [InlineData(Verbatim.SessionError)]
     [InlineData(Verbatim.SessionEnded)]
     [InlineData(Verbatim.StartFailure)]
-    [InlineData(Verbatim.RelayPublish)]
+    [InlineData(Verbatim.RelaySetup)]
+    [InlineData(Verbatim.RelaySnapshot)]
+    [InlineData(Verbatim.RelayClosed)]
+    [InlineData(Verbatim.RelayMoved)]
     public async Task NoPathWritesAProvidersOwnWordsAboveDebug(Verbatim path)
     {
         // shaped like what a rejected request carries back: a part number and a delivery date
         const string spoken = "这批支架的料号是 KX-4402，8月29日前发货";
         var echoed = $"400 rejected: {{\"text\":\"{spoken}\"}}";
+        var refusal = new RelayPublishException(403, $"Relay publish failed (403): {echoed}");
 
         using var _ = Listening(out var sink);
         var vm = TestViewModels.Demo();
@@ -270,9 +309,24 @@ public class RoomLoggingTests
             case Verbatim.StartFailure:
                 vm.PlanFilter = plan => plan with { Asr = FaultingAsr.RefusingToStart(echoed) };
                 break;
-            case Verbatim.RelayPublish:
+            case Verbatim.RelaySetup:
+                // A factory that throws stands in for CreateRoomAsync being refused: the same
+                // exception reaches the same catch, without a socket.
                 vm.RelayEnabled = true;
-                vm.RelayPublisherFactory = _ => new RefusingRelayPublisher(echoed);
+                vm.RelayPublisherFactory = _ => throw new RelayPublishException(
+                    403, $"Relay room creation failed (403): {echoed}");
+                break;
+            default:
+                // One message kind each, so exactly one publish site runs per case.
+                vm.RelayEnabled = true;
+                vm.RelayPublisherFactory = _ => new SelectivelyRefusingRelayPublisher(
+                    path switch
+                    {
+                        Verbatim.RelaySnapshot => typeof(RoomSnapshotMessage),
+                        Verbatim.RelayClosed => typeof(RoomClosedMessage),
+                        _ => typeof(RoomMovedMessage),
+                    },
+                    refusal);
                 break;
         }
 
@@ -280,41 +334,104 @@ public class RoomLoggingTests
         await PumpAsync(400);
         await vm.StopCommand.ExecuteAsync(null);
 
-        var carrying = sink.Lines.Where(l => $"{l.Message} {l.Error}".Contains(spoken)).ToList();
-        var loud = carrying.Where(l => l.Level != LogLevel.Debug).ToList();
+        if (path == Verbatim.RelayMoved)
+        {
+            // The room-moved message is only published when a room is already open — the second
+            // Start telling the phones on the old channel where the meeting went. One Start never
+            // reaches that line at all, which is how this site went uncovered.
+            await vm.StartCommand.ExecuteAsync(null);
+            await PumpAsync(200);
+            await vm.StopCommand.ExecuteAsync(null);
+        }
+
+        var (onTheRecord, atDebug) = Wording(path);
+        bool Carries(Line l) => $"{l.Message} {l.Error}".Contains(spoken);
+
+        // (a) nothing the room said, at any level the operator did not opt into
+        var loud = sink.Lines.Where(l => l.Level != LogLevel.Debug && Carries(l)).ToList();
         Assert.True(
             loud.Count == 0,
             $"{path} put what was said in the room on disk at {string.Join(", ", loud.Select(l => l.Level))}: " +
             $"{loud.FirstOrDefault()?.Message}");
 
-        // …and it is still reachable where the operator asked for it
-        Assert.True(carrying.Count > 0, $"{path} dropped the detail rather than moving it to Debug");
+        // (b) still reachable at Debug — from this site's own line, not a neighbour's
+        Assert.True(
+            sink.Lines.Any(l => l.Level == LogLevel.Debug && l.Message.Contains(atDebug) && Carries(l)),
+            $"{path} wrote no Debug line of its own (\"{atDebug}\") carrying the detail");
 
-        // …and what happened is still on the record at the default level, in our own words
-        var ours = path switch
-        {
-            Verbatim.SessionError => "reported an error",
-            Verbatim.SessionEnded => "ended on its own",
-            Verbatim.StartFailure => "failed to start",
-            _ => "did not publish",
-        };
-        Assert.Contains(
-            sink.Lines,
-            l => l.Level != LogLevel.Debug && l.Message.Contains(ours));
+        // (c) and what happened is on the record at the default level, in this site's own words
+        Assert.True(
+            sink.Lines.Any(l => l.Level != LogLevel.Debug && l.Message.Contains(onTheRecord)),
+            $"{path} left nothing on the record saying \"{onTheRecord}\"");
     }
 
-    /// <summary>A gateway that refuses everything, quoting back the payload it refused.</summary>
-    private sealed class RefusingRelayPublisher(string echoed) : IRelayPublisher
+    /// <summary>
+    /// Also on screen. The relay warning is printed beside the QR code the participants are looking
+    /// at, and it was the gateway's response body verbatim.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ARefusedRelayDoesNotPutTheGatewaysWordsBesideTheQrCode()
     {
-        private int _published;
+        const string spoken = "这批支架的料号是 KX-4402";
+        using var _ = Listening(out var _sink);
+        var vm = TestViewModels.Demo();
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = _ => throw new RelayPublishException(
+            403, $"Relay room creation failed (403): {spoken}");
 
-        // The first publish is the room config, inside StartAsync. Letting that one through means
-        // the room actually opens, so the snapshot, room-closed and generic publish paths are
-        // exercised too instead of the run stopping at the start-failure line.
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+
+        Assert.DoesNotContain(spoken, vm.JoinError);
+        Assert.DoesNotContain(spoken, vm.Status);
+        Assert.Contains("credential", vm.JoinError); // the classification, in our own words
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>
+    /// The carve-out that keeps an operating system's own words on the record is by exact type, not
+    /// by assignability. <c>HttpIOException</c> derives from <c>IOException</c> and is written by
+    /// whatever answered the request — a body read that fails halfway through carries whatever
+    /// arrived, which is the payload again.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnHttpFailureIsNotMistakenForTheMachinesOwnWords()
+    {
+        const string spoken = "这批支架的料号是 KX-4402";
+        using var _ = Listening(out var sink);
+        var vm = TestViewModels.Demo();
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = _ => throw new HttpIOException(
+            HttpRequestError.ResponseEnded, $"The response ended prematurely: {spoken}");
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var loud = sink.Lines
+            .Where(l => l.Level != LogLevel.Debug && $"{l.Message} {l.Error}".Contains(spoken))
+            .ToList();
+        Assert.True(loud.Count == 0, $"an HttpIOException reached the record: {loud.FirstOrDefault()?.Message}");
+    }
+
+    /// <summary>Refuses one kind of message and passes the rest, so one site runs per case.</summary>
+    private sealed class SelectivelyRefusingRelayPublisher(Type refused, Exception refusal) : IRelayPublisher
+    {
         public Task PublishAsync(RelayMessage message, CancellationToken ct = default) =>
-            Interlocked.Increment(ref _published) == 1
-                ? Task.CompletedTask
-                : throw new RelayPublishException(403, $"Relay publish failed (403): {echoed}");
+            Unwrap(message).GetType() == refused ? throw refusal : Task.CompletedTask;
+
+        // What reaches a publisher is the signed envelope; the kind being refused is inside it.
+        private static RelayMessage Unwrap(RelayMessage message)
+        {
+            if (message is not SignedRelayMessage signed)
+                return message;
+
+            var encoded = signed.Data.Replace('-', '+').Replace('_', '/');
+            encoded = encoded.PadRight(encoded.Length + ((4 - encoded.Length % 4) % 4), '=');
+            return RelayJson.Deserialize(Encoding.UTF8.GetString(Convert.FromBase64String(encoded)))
+                ?? throw new InvalidOperationException("Signed test message had no payload.");
+        }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

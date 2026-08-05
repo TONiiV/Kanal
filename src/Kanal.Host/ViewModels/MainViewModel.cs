@@ -643,11 +643,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // unreachable, or rejected gateway must remove the QR, not prevent transcription.
             // There is deliberately no public Supabase fallback: the null publisher keeps the
             // secure boundary while the operator gets an explicit degraded-mode warning.
+            // Classified, not quoted: this string is printed beside the QR code the participants
+            // are looking at, and a refused create-room answers with a body that can carry back
+            // whatever it was sent. The screen is not the log, but it is the same data.
             relayConnection = new RelayConnection(
                 new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
                 null,
                 null,
-                ex.Message);
+                Classify(ex));
             // "The QR code doesn't work" is the likeliest call this tool will ever generate, and
             // the warning it produces on screen is gone the moment the next status line lands.
             Log.Warning(
@@ -906,7 +909,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Status = L.Format("status.warning", L.Format("status.snapshotfailed", ex.Message));
+            Status = L.Format("status.warning", L.Format("status.snapshotfailed", Classify(ex)));
             // A snapshot is the whole room — every utterance in it — and a gateway that refuses one
             // quotes the body back in its response. So the classification goes on the record and
             // the gateway's own text goes to Debug, like every other verbatim string.
@@ -929,7 +932,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Status = L.Format("status.warning", L.Format("status.closefailed", ex.Message));
+            Status = L.Format("status.warning", L.Format("status.closefailed", Classify(ex)));
             Log.Warning(
                 RelayLog,
                 "The room-closed message did not publish; phones may still be waiting: " +
@@ -946,7 +949,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Status = L.Format("status.warning", L.Format("status.publishfailed", ex.Message));
+            Status = L.Format("status.warning", L.Format("status.publishfailed", Classify(ex)));
             Log.Warning(RelayLog, $"A {message.GetType().Name} did not publish: {Classify(ex)}.");
             Log.Write(LogLevel.Debug, RelayLog, "The publish failure:", ex);
         }
@@ -973,10 +976,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// construction: whatever is added upstream, nothing here can start echoing a payload.
     /// </summary>
     /// <remarks>
-    /// The machine's own failures are the exception, deliberately. An <see cref="IOException"/>
-    /// carries a path and a reason written by the operating system this is running on, never a
-    /// response body — and "there is not enough space on the disk" at Error is exactly what the
-    /// operator needs to see without being told to turn Debug on and do it again.
+    /// The machine's own failures are the exception, deliberately: a plain <see cref="IOException"/>
+    /// from a file write carries a path and a reason written by the operating system this is
+    /// running on, and "there is not enough space on the disk" at Error is exactly what the operator
+    /// needs without being told to turn Debug on and do it again.
+    /// <para>
+    /// By exact type, not by assignability, and that is the whole point of the check.
+    /// <c>HttpIOException</c> derives from <c>IOException</c> while <c>HttpRequestException</c> does
+    /// not derive from either — so an arm written as <c>is IOException</c> would let a body read
+    /// that failed halfway through print whatever had arrived, which is the payload again. Only the
+    /// two exact types below are the machine's; everything else is classified.
+    /// </para>
     /// </remarks>
     private static string Classify(Exception error) => error switch
     {
@@ -990,7 +1000,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             "it timed out or was cancelled",
         JsonException =>
             "a response could not be read",
-        IOException or UnauthorizedAccessException =>
+        _ when error.GetType() == typeof(IOException) ||
+               error.GetType() == typeof(UnauthorizedAccessException) =>
             error.Message,
         _ => $"an unexpected {error.GetType().Name}",
     };
