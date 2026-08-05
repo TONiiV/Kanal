@@ -14,16 +14,25 @@ public sealed record OpenSourceNotice(
     IReadOnlyList<string> Packages);
 
 /// <summary>
-/// What is named at the bottom of Settings: an index of what Kanal is assembled from — project,
-/// licence, and where to read it.
+/// What is named at the bottom of Settings: an index of what the host binary is assembled
+/// from — project, licence, and where to read it.
 /// </summary>
 /// <remarks>
+/// The scope is the binary and nothing else, because that is what the notice obligations attach to.
+/// It does not cover <c>gateway/package.json</c> — wrangler, vitest and typescript are
+/// devDependencies of a worker nobody is handed — nor the Supabase JS SDK that
+/// <c>web/index.html</c> imports at runtime, which the participant's browser fetches from its own
+/// origin and Kanal never redistributes. Widening this list would mean publishing licence claims
+/// about works that do not travel with the build; if either of those ever ships inside something,
+/// it needs its own list, not a line in this one.
+/// <para>
 /// An index is not a notice. MIT and BSD-3 ask for the copyright and permission text itself to
 /// travel with a binary, and Apache-2.0 for a copy of the licence; none of that is shipped yet, so
 /// nothing here should be described as discharging those terms. Naming a licence that cannot be
 /// substantiated is worse than omitting the entry — every one below was checked against the
 /// upstream project, and the one that could not be (a debugging aid, excluded from Release
 /// anyway) was removed rather than guessed at.
+/// </para>
 /// </remarks>
 public static class OpenSourceNotices
 {

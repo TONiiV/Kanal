@@ -566,12 +566,39 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Why the last Save did not happen, empty when it did. On screen beside the button rather
+    /// than in the log: the dialog used to close on a failed write, and the operator learnt of it
+    /// at the next Start, from a refusal about a key they had just pasted in.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveError))]
+    private string _saveError = "";
+
+    public bool HasSaveError => SaveError.Length > 0;
+
+    /// <summary>
+    /// Re-reads the two properties that mirror <see cref="LogSetup"/>'s static state, which the
+    /// level and size just saved can have changed under them. Without it the "nothing is being
+    /// written" line was decided once, when the dialog opened, and never again.
+    /// </summary>
+    public void RefreshLogState()
+    {
+        OnPropertyChanged(nameof(LogIsWritable));
+        OnPropertyChanged(nameof(LogFailureNote));
+    }
+
+    /// <summary>
     /// Writes the edited state to disk and hands it back. The caller needs the object rather than
     /// re-reading the file: a settings file locked for the instant between the write and the read
     /// comes back as blank defaults, and the level the operator just chose reverts with nothing on
     /// screen saying so.
     /// </summary>
-    public AppSettings Save()
+    /// <remarks>
+    /// <c>virtual</c> as a test seam: the dialog's behaviour on a write that fails is what
+    /// <c>SettingsWindow</c> has to get right, and a read-only profile cannot be arranged from a
+    /// headless test any other way.
+    /// </remarks>
+    public virtual AppSettings Save()
     {
         var settings = SettingsStore.Load();
         ApplyTo(settings);

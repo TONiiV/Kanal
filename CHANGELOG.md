@@ -22,6 +22,9 @@ build reports, and a test holds the two together.
   application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written now all leave a line behind, with the exception attached.
+- Settings now tells you when it could not save. A locked or read-only settings folder used to
+  close the dialog as though the change had been written, and the first sign was the next Start
+  refusing a key you had just entered.
 - The list of open-source projects Kanal is built on, with their licences, at the bottom of
   Settings.
 - This changelog, readable from Settings.

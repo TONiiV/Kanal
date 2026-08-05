@@ -33,8 +33,8 @@ overwrote. Three things that belong to a tool people other than its author run n
   not be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
   platform branching, injected into `SettingsViewModel` so a headless test never launches Explorer.
 - **The open-source list, at the bottom of Settings.** An index of what Kanal is assembled from:
-  project, licence name, and where to read it. Not the licence texts themselves — see the note at
-  the end of this section for what that leaves open. Each notice carries the NuGet ids it covers, and a test reads every shipped project file — `src/`, `tools/` and the root
+  project, licence name, and where to read it. Not the licence texts themselves — see the note below
+  for what that leaves open. Each notice carries the NuGet ids it covers, and a test reads every shipped project file — `src/`, `tools/` and the root
   `Directory.Build.props` — as XML, in both directions: a package added without a credit fails, and
   a credit left behind after a package is dropped fails too. What that test *cannot* see is
   listed by hand and marked as such: code arriving inside another package (Skia, llama.cpp) and
@@ -47,122 +47,50 @@ overwrote. Three things that belong to a tool people other than its author run n
   "write the entry, bump `<Version>`" and cannot be half-done. This build is `0.4.0`; the earlier
   entries were reconstructed from the history.
 
-73 new tests (299 → 372), including headless loads of both dialogs — the bindings are
+86 new tests (299 → 385), including headless loads of both dialogs — the bindings are
 reflection-based, so a mistyped path or a value that will not convert to the control's type fails at
 runtime with an empty control rather than at build time. No assertions about pixels, layout or style.
 
-### What three review passes over the above found, and what changed
+### Decisions in that work a maintainer needs to keep
 
-Reviewed by three agents — one on the logging layer, one on the UI and the four language tables, one
-on the tests and the repo's own rules. Everything below was reproduced before it was fixed; the
-fixes are in this same branch.
-
-- **Saving Settings mid-meeting destroyed a block of the log.** `Apply` handed NLog a second
-  `FileTarget` over the file the first one still held open; the new one opened at a stale offset and
-  overwrote a contiguous block of what had already been flushed — a few hundred lines in the run I
-  measured, at the exact moment an operator turns Debug on because something is going wrong. The
-  target is now updated in place (`ReconfigExistingLoggers`), which measures at zero lines lost.
-  (A second reviewer could not reproduce it in their harness, so the size of the loss depends on
-  timing; the in-place path is correct either way and removes the question.)
-- **The changelog dialog showed half-sentences.** The bullet parser kept only the first physical
-  line, and most entries in the file are hard-wrapped — 14 of the 19 as it stands — so they stopped
-  mid-clause: "…kept for two weeks and never". Wrapped lines now fold into their bullet, and a test
-  asserts every shipped entry ends as a whole sentence.
-- **A hand-edited log level cost the operator their API key.** Anything but the four exact names
-  threw, `Load` caught it and started fresh, and the next Save wrote the defaults over the file —
-  "Warn" being the obvious thing to type. A forgiving converter now costs one wrong level and
-  nothing else.
-- **"Kept 14 days" was false.** NLog's file-count cap counts across dates, not per day, so 20
-  archives at the smallest rollover size cut two weeks to hours. Age is now the only cap.
-- **`{#}` in the archive name was NLog 5 syntax**, silently dropped by 6 — the naming the comment
-  described was fiction that happened to match the default.
-- **`Shutdown()` in `Main`'s `finally` swallowed the teardown lines**, which are the ones explaining
-  a crash on the way out. It flushes now.
-- **The size box rejected out-of-range entries instead of clamping them** and left the typed number
-  on screen: type 2000, see 2000, save, get 10. `ClipValueToMinMax`, and a cleared box now means the
-  default rather than a silently kept stale value.
-- **Debug was a level that did nothing** — no call site in the host wrote one. Capture open, frames
-  counted, snapshots published now do, and a test fails if Debug stops carrying anything Info does not.
-- **German called the log folder "Protokollordner"**, which is what this same window already calls
-  the *transcript* folder — an operator asked to send a log would have opened the meeting
-  transcripts. Now "Logdateien" / "Log-Ordner", and "Rotation" rather than "Umbruch", which is a
-  typographic line break.
-- **The licence guard passed on uncredited packages**: its regex needed `Include` to be the first
-  attribute and double-quoted, and it never looked at `tools/` or `Directory.Build.props`. It also
-  reported a still-shipping package as stale when the attributes were merely reordered. It reads XML
-  now, and the list gained the components that genuinely ship and were missing — including OpenCC's
-  Apache-2.0 conversion table, which no package scan could ever have found.
-- **Two window tests ran the production view model** before replacing its `DataContext`, reading the
-  developer's real settings and registering a native hot-plug listener that outlived the window —
-  the exact thing `SettingsViewModel` documents as forbidden. The window now takes its view model as
-  a constructor argument.
-- **Nothing tested that any of this was written down.** Five tests now drive the real view model and
-  read the sink: a room opening and closing, a refused Start, an export that cannot be written, that
-  Debug carries something, and that nothing said in the room — and no key — ever reaches the file.
-- Smaller: the changelog date is invariant rather than the operator's calendar; the changelog dialog
-  is guarded against naming a vendor, like every other surface; error text from a provider or the
-  gateway is bounded before it is logged; the relay failing to set up is logged at all; `Log`'s sink
-  field is `volatile`; the Close button no longer wears the accent reserved for committing actions;
-  and 0.3.0's changelog entry carries the date its work actually landed.
-
-One thing was left undone deliberately: the changelog's prose is English on every language setting.
-Translating release notes into four languages is a standing cost on every release, not a bug fix,
-and it is the operator's call whether it is worth it.
-
-### And what a second review pass found
-
-Three more agents, one of them pointed at the repairs above rather than at the original code.
-
-- **A room that dies on its own left no line at all.** `SessionEnded` was the one session event
-  without a `Log` call — and a transcription service that closes the socket ends the session
-  *without* raising an error first. A meeting that went deaf at minute 40 read exactly like one
-  stopped at minute 90. It is logged now, with the reason, and tested against a script that runs out.
-- **The 300-character cap covered one of eight paths.** Every other site passed the exception
-  object, and the layout's `${exception:format=tostring}` has no ceiling: a gateway behind a captive
-  portal put a 20 KB HTML error page into a single line, and the snapshot retry runs every 15
-  seconds — about 7 MB in a 90-minute meeting, from one repeated failure. The cap moved into the
-  sink, where it covers message and exception alike and says how much it dropped.
-- **A log folder that cannot be written was completely silent.** NLog defers file creation and
-  swallows the failure, so `ApplyTo` returned as if fine, every line vanished, and the panel went on
-  promising a file a day while the Open button did nothing. The folder is created eagerly now, and
-  when that fails the panel says so in alarm ink instead of the operator finding out from an empty
-  directory.
-- **The settings file could still be discarded whole** — the level converter fixed one field, but a
-  quoted number or a trailing comma anywhere else still cost the operator their stored key. The
-  unreadable file is copied to `settings.json.unreadable` before the defaults replace it, and that
-  is now logged, which meant installing the sink *before* reading settings rather than after.
-- **`AvaloniaUI.DiagnosticsSupport` was credited as MIT, which nobody can substantiate**: its
-  package carries no licence file, no `<license>`, no `<licenseUrl>`, only a commercial copyright.
-  Asserting a licence on a screen headed "open source" is worse than omitting it — and it is a
-  debugging aid excluded from Release, so it is not distributed at all. Removed, and the guard now
-  skips references excluded from the shipped build.
-- **ANGLE ships in every Windows build and was uncredited** (`av_libglesv2.dll`), under a BSD-3
-  clause that is explicit about binary redistribution reproducing the notice. Added, with HarfBuzz
-  as its own entry — upstream calls its licence "Old MIT", not MIT.
-- Smaller: `Capture opened` was written before the device was actually acquired, so it asserted an
-  open that an unplugged headset never performed; a failing periodic snapshot was logged as "the
-  closing snapshot"; `relay on` meant "asked for" rather than "working"; Save was the one dialog
-  handler doing disk I/O without a guard, while a comment claimed hardening the folder pickers did
-  not have; and `Process.Start`'s handle was dropped on the floor once per click.
-- **And one regression of my own, found by the pass aimed at the repairs:** dropping NLog's
-  file-count cap to keep the 14-day promise honest removed the only bound on total size — one loud
-  day at a 1 MB rollover wrote 63 files and 65 MB, none of it old enough to delete. The count is
-  back as a runaway backstop derived from the file size (a ~2 GB folder budget, never fewer than 20
-  archives), which is far above what a fortnight of meetings reaches, so age still does the
-  deleting.
-- **A real leak of room speech, which the "nothing said reaches the log" test could not see.** The
-  transcription wire fell back to putting a whole error *frame* into the error message when the
-  frame carried no message of its own — and that frame quotes the request that caused it, which is
-  an utterance. It now describes the error by its status code. The test that claimed this invariant
-  only ever ran the scripted demo, where no error path executes at all.
-- A blank size box no longer saves the default over what was there: it keeps the last number the
-  box actually held, because a blank box tells the operator nothing about what was written.
+- **The log target is reconfigured in place, never replaced.** Handing NLog a second `FileTarget`
+  over the file the first still holds open loses a contiguous block of what was already flushed —
+  the new one opens at a stale offset. `ApplyTo` updates the live target's size, its archive count
+  and the rule levels, and both `Program.Main`'s two applies and every Save go through that path.
+- **Age is the retention policy; the archive count is only a runaway backstop.** NLog's file-count
+  cap counts every file matching the pattern across dates, so a small fixed number silently cuts the
+  14 days the panel promises down to hours; dropping it entirely let one loud day at a 1 MB rollover
+  write 63 files and 65 MB with nothing yet eligible for deletion. The count is derived from the
+  rollover size instead. What that actually guarantees is `MaxArchiveFiles × size ≤ max(2 GB,
+  20 × size)` — the 2 GB budget holds up to roughly 102 MB a file, above which the 20-archive floor
+  wins and retention is what is being protected. At the panel's largest setting that is a 20 GB
+  bound, reachable only by a deliberate choice.
+- **Nothing said in the room reaches the file.** Utterances are never logged, and neither is text a
+  provider wrote: a rejected request is echoed back with its payload, and the payload is the meeting.
+  Provider and gateway error text is written at Debug only — turned on deliberately, by someone who
+  has decided reproducing the fault is worth more — while the default-level line records that the
+  session errored and how badly. Every logged message and exception is capped in the sink, and the
+  layout carries no `${exception}` renderer, which has no ceiling.
+- **A room that ends leaves a line whichever way it ends.** Stop, a service closing the socket, and a
+  teardown that throws (Dispose rewrites the WAV header, which a full disk refuses) all reach
+  `Room closed.` — a room that opened and never closed is indistinguishable from a crash.
+- **A Save that cannot be written keeps the dialog open and says so.** It used to close as if it had
+  worked; the operator found out at the next Start, from a refusal about a key they had just pasted
+  in. The unreadable-settings salvage copy (`settings.json.unreadable`) is a plaintext key beside the
+  file it came from, so it is removed on the next successful Save rather than kept forever.
+- **The open-source list is scoped to the host binary.** Not `gateway/package.json` (devDependencies
+  of a worker nobody is handed) and not the Supabase JS SDK the mobile page imports at runtime. A
+  test holds it against every shipped project file read as XML, in both directions, and evaluates the
+  `Condition` on an `IncludeAssets`/`PrivateAssets` exclusion rather than reading its text alone —
+  the inverse condition would exempt a package that does ship.
 
 Still open, and a call for the repository owner rather than a defect to fix quietly: the notices
 list is an index — name, SPDX identifier, URL — and MIT, BSD-3 and Apache-2.0 all ask for the
 notice *text* to travel with the binary. Discharging that properly means shipping the licence texts
 themselves, which is a `THIRD-PARTY-NOTICES.md` of a few hundred lines and a place to read it. The
-wording here and in the README has been pulled back to describe an index until that is decided.
+wording here and in the README describes an index until that is decided. The changelog's prose is
+also English on every language setting: translating release notes into four languages is a standing
+cost on every release, not a bug fix.
 
 ### Kanal traffic is behind an authenticated gateway
 

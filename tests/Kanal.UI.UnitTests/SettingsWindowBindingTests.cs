@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Kanal.Core.Diagnostics;
 using Kanal.Host.Services;
@@ -76,6 +77,41 @@ public class SettingsWindowBindingTests
         Assert.Contains(Changelog.Releases[0].Changes[0], rendered);
 
         window.Close();
+    }
+
+    /// <summary>
+    /// A Save that cannot be written. A read-only profile, a roaming-sync lock, a full disk — the
+    /// throw was caught, written to a log the operator is not reading, and the dialog closed as if
+    /// it had worked. They found out at the next Start, from a message about a key they had just
+    /// pasted in, with nothing connecting the two.
+    /// </summary>
+    [AvaloniaFact]
+    public void ASaveThatCannotBeWrittenKeepsTheDialogOpenAndSaysWhy()
+    {
+        var viewModel = new UnwritableSettingsViewModel();
+        var window = new SettingsWindow(viewModel);
+        window.Show();
+
+        var save = Assert.Single(
+            window.GetLogicalDescendants().OfType<Button>(), b => b.Classes.Contains("accent"));
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        Assert.True(window.IsVisible, "the dialog closed on a write that did not happen");
+        Assert.Contains("read-only", viewModel.SaveError);
+        // and on screen, not only on the view model
+        Assert.Contains(
+            window.GetLogicalDescendants().OfType<TextBlock>(),
+            t => t.Text == viewModel.SaveError);
+
+        window.Close();
+    }
+
+    /// <summary>Stands in for the profile directory nobody can write to.</summary>
+    private sealed class UnwritableSettingsViewModel()
+        : SettingsViewModel(new AppSettings(), () => null, openFolder: _ => { })
+    {
+        public override AppSettings Save() =>
+            throw new UnauthorizedAccessException("The settings folder is read-only.");
     }
 
     /// <summary>

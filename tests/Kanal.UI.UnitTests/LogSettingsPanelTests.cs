@@ -88,4 +88,23 @@ public class LogSettingsPanelTests
 
     /// <summary>How long a file is kept — stated in the note, so the number cannot drift from it.</summary>
     private static int LogSettingsPanelRetention => Kanal.Host.Diagnostics.LogSetup.RetentionDays;
+
+    /// <summary>
+    /// The alarm line under the two controls was decided once, when the dialog opened:
+    /// <c>LogIsWritable</c> announced nothing, so a Save that changed where the log goes left it
+    /// saying whatever it had said before — including still promising a file after the folder
+    /// stopped being writable.
+    /// </summary>
+    [AvaloniaFact]
+    public void RereadingTheLogStateAnnouncesBothPropertiesThatMirrorIt()
+    {
+        var vm = Panel(new AppSettings());
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.RefreshLogState();
+
+        Assert.Contains(nameof(vm.LogIsWritable), raised);
+        Assert.Contains(nameof(vm.LogFailureNote), raised);
+    }
 }

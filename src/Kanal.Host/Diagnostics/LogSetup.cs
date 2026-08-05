@@ -79,11 +79,18 @@ public static class LogSetup
     private static long ArchiveBytes(AppSettings settings) =>
         (long)SettingsStore.ResolveLogMaxFileSizeMb(settings) * 1024 * 1024;
 
-    /// <summary>Roughly how much disk the whole log folder may take before the oldest files go.</summary>
+    /// <summary>
+    /// How much disk the archive count aims to bound the folder to. A target, not a ceiling: past
+    /// roughly 102 MB per file it can no longer be met without dropping below
+    /// <see cref="MinArchives"/>, and retention wins that argument. What is actually guaranteed is
+    /// <c>MaxArchiveFiles × size ≤ max(DiskBudgetMb, MinArchives × size)</c> — 2 GB at the default,
+    /// 20 GB at the largest rollover the panel offers, which is a size only a deliberate choice
+    /// reaches.
+    /// </summary>
     public const int DiskBudgetMb = 2048;
 
     /// <summary>Never fewer than this many rollovers, however large the operator made them.</summary>
-    private const int MinArchives = 20;
+    public const int MinArchives = 20;
 
     /// <summary>
     /// A count that bounds the folder without standing in for the day-based retention: at the
@@ -173,6 +180,11 @@ public static class LogSetup
                 target.FileName.ToString() == expected)
             {
                 target.ArchiveAboveSize = ArchiveBytes(settings);
+                // With the size and without it, or the backstop stays derived from whatever size
+                // the previous apply saw. Program.Main applies the defaults and then the stored
+                // settings, so that is not a mid-meeting edge case — it is every launch, and at
+                // 1 MB it left 204 archives standing in for the 2048 the budget intends.
+                target.MaxArchiveFiles = ArchiveCountBackstop(settings);
                 foreach (var rule in live.LoggingRules)
                     rule.SetLoggingLevels(Floor(settings.LogLevel), NLog.LogLevel.Fatal);
                 LogManager.ReconfigExistingLoggers();
@@ -183,6 +195,9 @@ public static class LogSetup
             }
 
             Writable = true;
+            // Cleared with it: a reason left standing beside a folder that now opens is a
+            // contradiction the next reader of either one has to untangle.
+            FailureReason = null;
         }
         catch (Exception ex)
         {

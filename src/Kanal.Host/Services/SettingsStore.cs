@@ -209,6 +209,30 @@ public static class SettingsStore
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, Options));
+        DiscardSalvagedCopy();
+    }
+
+    /// <summary>
+    /// The salvage copy is a plaintext API key sitting beside the file it came from, and nothing
+    /// used to remove it: one typo in a level left a second copy of the key on disk for the life of
+    /// the install. A settings file the operator has just written over is the moment it has done
+    /// its job — what was in it has been re-entered by now or is not coming back.
+    /// </summary>
+    private static void DiscardSalvagedCopy()
+    {
+        try
+        {
+            if (File.Exists(SalvagedPath))
+            {
+                File.Delete(SalvagedPath);
+                Log.Info(LogCategory, $"The salvaged copy at {SalvagedPath} was removed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // A copy that will not delete is not a reason to fail the save the operator asked for.
+            Log.Warning(LogCategory, $"{SalvagedPath} could not be removed.", ex);
+        }
     }
 
     /// <summary>

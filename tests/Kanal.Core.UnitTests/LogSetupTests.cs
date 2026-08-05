@@ -126,6 +126,39 @@ public class LogSettingsTests
         }
     }
 
+    /// <summary>
+    /// And it does not stay there. The copy is the stored API key in plaintext, beside the file it
+    /// was copied from, and nothing ever removed it — one typo in a level left a second copy of the
+    /// key on disk for the life of the install. The next Save that succeeds is the moment it has
+    /// done its job: whatever was in it has been re-entered by then or is not coming back.
+    /// </summary>
+    [Fact]
+    public void TheSalvagedCopyGoesOnTheNextSuccessfulSave()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsStore.SettingsPath)!);
+        var original = File.Exists(SettingsStore.SettingsPath)
+            ? File.ReadAllText(SettingsStore.SettingsPath)
+            : null;
+        File.WriteAllText(SettingsStore.SalvagedPath, """{"ApiKeys":[,,,"broken""");
+        try
+        {
+            SettingsStore.Save(new AppSettings());
+
+            Assert.False(
+                File.Exists(SettingsStore.SalvagedPath),
+                "the salvaged copy of the key outlived the settings it was salvaged from");
+        }
+        finally
+        {
+            if (File.Exists(SettingsStore.SalvagedPath))
+                File.Delete(SettingsStore.SalvagedPath);
+            if (original is null)
+                File.Delete(SettingsStore.SettingsPath);
+            else
+                File.WriteAllText(SettingsStore.SettingsPath, original);
+        }
+    }
+
     private sealed class DelegateSink(Action<LogLevel, string, string, Exception?> write) : ILogSink
     {
         public void Write(LogLevel level, string category, string message, Exception? error) =>
@@ -190,25 +223,66 @@ public class LogSetupTests
     /// smallest rollover size silently cuts the two weeks the settings panel promises down to hours.
     /// The promise on screen is the one that has to hold.
     /// </summary>
-    [Fact]
-    public void TheRetentionPromiseIsNotUndercutByAFileCount()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(100)]
+    [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
+    public void TheRetentionPromiseIsNotUndercutByAFileCount(int megabytes)
     {
-        foreach (var megabytes in new[] { 1, 10, 100 })
+        var target = Target(new AppSettings { LogMaxFileSizeMb = megabytes }, "/logs");
+
+        // Bounded — dropping the count entirely let one loud day write 65 MB with nothing yet
+        // old enough to delete…
+        Assert.True(target.MaxArchiveFiles > 0);
+
+        // …bounded by the budget wherever the budget and the floor can both be met, and by the
+        // floor where they cannot. Past ~102 MB a file the two are in conflict and retention wins:
+        // a count below the floor is the bug this whole guard exists to catch, so the budget is
+        // documented as a target rather than quietly cutting the promised fortnight to two files.
+        var bound = Math.Max(LogSetup.DiskBudgetMb, (long)LogSetup.MinArchives * megabytes);
+        Assert.True(
+            (long)target.MaxArchiveFiles * megabytes <= bound,
+            $"{megabytes} MB × {target.MaxArchiveFiles} files exceeds {bound} MB");
+
+        // The floor itself: far enough above a fortnight of ordinary meetings that age, not count,
+        // is what does the deleting. A handful of rollovers a day for 14 days is the shape to clear.
+        Assert.True(
+            target.MaxArchiveFiles >= LogSetup.MinArchives,
+            $"{target.MaxArchiveFiles} archives would undercut the promised {LogSetup.RetentionDays} days");
+    }
+
+    /// <summary>
+    /// <c>Program.Main</c> applies the defaults and then the stored settings, so the second apply
+    /// is always the in-place one — the operator's configured size reaches the target through that
+    /// branch on every launch, not only on a mid-meeting change. A branch that updated the
+    /// rollover size but left the count derived from the default cut the folder to 204 archives at
+    /// 1 MB where 2048 were intended: hours of retention against the fortnight on screen.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(SettingsStore.MaxLogMaxFileSizeMb)]
+    public void AnInPlaceApplyCarriesBothTheSizeAndTheCountItImplies(int megabytes)
+    {
+        var directory = TempDirectory();
+        try
         {
-            var target = Target(new AppSettings { LogMaxFileSizeMb = megabytes }, "/logs");
+            var settings = new AppSettings { LogMaxFileSizeMb = megabytes };
+            using var scope = LogSetup.InstallFor(directory, new AppSettings());
 
-            // Bounded — dropping the count entirely let one loud day write 65 MB with nothing yet
-            // old enough to delete…
-            Assert.True(target.MaxArchiveFiles > 0);
-            Assert.True(
-                (long)target.MaxArchiveFiles * megabytes <= LogSetup.DiskBudgetMb,
-                $"{megabytes} MB × {target.MaxArchiveFiles} files exceeds the disk budget");
+            LogSetup.ApplyTo(directory, settings);
 
-            // …but far enough above a fortnight of ordinary meetings that age, not count, is what
-            // does the deleting. A handful of rollovers a day for 14 days is the shape to clear.
-            Assert.True(
-                target.MaxArchiveFiles >= 20,
-                $"{target.MaxArchiveFiles} archives would undercut the promised {LogSetup.RetentionDays} days");
+            var live = Assert.IsType<FileTarget>(
+                NLog.LogManager.Configuration!.FindTargetByName(LogSetup.TargetName));
+            // the freshly built configuration is the oracle: the two branches must not disagree
+            var fresh = Target(settings, directory);
+            Assert.Equal(fresh.ArchiveAboveSize, live.ArchiveAboveSize);
+            Assert.Equal(fresh.MaxArchiveFiles, live.MaxArchiveFiles);
+        }
+        finally
+        {
+            Cleanup(directory);
         }
     }
 
@@ -443,6 +517,34 @@ public class LogSetupTests
             var fresh = TempDirectory();
             LogSetup.ApplyTo(fresh, new AppSettings());
             Cleanup(fresh);
+        }
+    }
+
+    /// <summary>
+    /// The folder that worked on the second try leaves no reason behind. A reason kept beside
+    /// <see cref="LogSetup.Writable"/> being true is a contradiction waiting for the next reader of
+    /// either one.
+    /// </summary>
+    [Fact]
+    public void AFolderThatOpensClearsTheEarlierFailure()
+    {
+        var occupied = Path.Combine(Path.GetTempPath(), "kanal-log-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(occupied, "a file where the folder needs to be");
+        var directory = TempDirectory();
+        try
+        {
+            LogSetup.ApplyTo(occupied, new AppSettings());
+            Assert.False(LogSetup.Writable);
+
+            LogSetup.ApplyTo(directory, new AppSettings());
+
+            Assert.True(LogSetup.Writable);
+            Assert.Null(LogSetup.FailureReason);
+        }
+        finally
+        {
+            File.Delete(occupied);
+            Cleanup(directory);
         }
     }
 

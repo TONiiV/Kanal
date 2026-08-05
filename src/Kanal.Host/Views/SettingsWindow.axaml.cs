@@ -112,21 +112,31 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
+        var viewModel = DataContext as SettingsViewModel;
         try
         {
             // The level and the size the operator just chose apply to the next line written, not
             // to the next launch: the reason someone turns Debug on is that something is going
             // wrong now. Applied from what Save returned rather than by re-reading the file.
-            if ((DataContext as SettingsViewModel)?.Save() is { } saved)
+            if (viewModel?.Save() is { } saved)
+            {
                 LogSetup.Apply(saved);
+                viewModel.RefreshLogState();
+                viewModel.SaveError = "";
+            }
         }
         catch (Exception ex)
         {
             // A locked or read-only profile directory — roaming sync, antivirus, a full disk.
-            // The dialog closing on a write that did not happen is bad; the dialog staying open
-            // with no explanation while the button appears dead is worse, and it is what an
-            // unguarded throw out of this handler produced.
+            // Closing here was closing on a write that did not happen: the operator pasted a key,
+            // saw the dialog accept it, and found out at the next Start from a refusal about a key
+            // they had just entered. So the dialog stays, with the reason on it.
             Log.Error(SettingsLog, "Settings could not be saved.", ex);
+            if (viewModel is not null)
+            {
+                viewModel.SaveError = Localizer.Instance.Format("settings.save.failed", ex.Message);
+                return;
+            }
         }
 
         Close();

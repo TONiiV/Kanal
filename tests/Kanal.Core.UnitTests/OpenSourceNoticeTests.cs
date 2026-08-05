@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Kanal.Host.Services;
 
@@ -130,10 +131,79 @@ public class OpenSourceNoticeTests
     /// </summary>
     private static bool Distributed(XElement reference) =>
         !reference.Elements().Any(child =>
-            (child.Name.LocalName == "IncludeAssets" &&
-             child.Value.Contains("None", StringComparison.OrdinalIgnoreCase)) ||
-            (child.Name.LocalName == "PrivateAssets" &&
-             child.Value.Contains("All", StringComparison.OrdinalIgnoreCase)));
+            AppliesToTheShippedBuild(child) &&
+            ((child.Name.LocalName == "IncludeAssets" &&
+              child.Value.Contains("None", StringComparison.OrdinalIgnoreCase)) ||
+             (child.Name.LocalName == "PrivateAssets" &&
+              child.Value.Contains("All", StringComparison.OrdinalIgnoreCase))));
+
+    /// <summary>The configuration an operator is handed, and the only one this list answers for.</summary>
+    private const string ShippedConfiguration = "Release";
+
+    /// <summary>
+    /// Whether an exclusion applies to that build. <c>Condition</c> is the whole difference between
+    /// "kept out of Release" and "kept out of Debug", so it is evaluated rather than ignored — only
+    /// the one shape the repository writes, and anything else counts as shipping: a package
+    /// credited needlessly costs a line, one missed costs the obligation.
+    /// </summary>
+    private static bool AppliesToTheShippedBuild(XElement element)
+    {
+        var condition = (string?)element.Attribute("Condition");
+        if (string.IsNullOrWhiteSpace(condition))
+            return true;
+
+        var comparison = Regex.Match(
+            condition, @"^\s*'\$\(Configuration\)'\s*(==|!=)\s*'([^']*)'\s*$");
+        if (!comparison.Success)
+            return false;
+
+        var names = string.Equals(
+            comparison.Groups[2].Value, ShippedConfiguration, StringComparison.OrdinalIgnoreCase);
+        return comparison.Groups[1].Value == "==" ? names : !names;
+    }
+
+    /// <summary>
+    /// The exemption reads an element's text; the <c>Condition</c> beside it decides whether that
+    /// element applies to the build anyone is handed. The two forms differ by one operator, and
+    /// ignoring the attribute reports the shipping one exempt — an uncredited package under a list
+    /// that reads as complete, which is the failure this whole guard exists to prevent.
+    /// </summary>
+    [Fact]
+    public void AnExclusionThatDoesNotApplyToTheShippedBuildIsNoExemption()
+    {
+        // What Kanal.Host writes: kept out of everything that is not Debug, so out of Release.
+        Assert.False(Distributed(XElement.Parse(
+            """
+            <PackageReference Include="DebuggingAid" Version="1.0">
+              <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+            </PackageReference>
+            """)));
+
+        // The inverse: kept out of Debug, shipped in Release.
+        Assert.True(Distributed(XElement.Parse(
+            """
+            <PackageReference Include="Shipped" Version="1.0">
+              <PrivateAssets Condition="'$(Configuration)' == 'Debug'">All</PrivateAssets>
+            </PackageReference>
+            """)));
+
+        // A condition this guard cannot read counts as shipping: a package credited needlessly
+        // costs a line, one missed costs the obligation.
+        Assert.True(Distributed(XElement.Parse(
+            """
+            <PackageReference Include="Unreadable" Version="1.0">
+              <IncludeAssets Condition="'$(Foo)' == 'bar' And '$(Baz)' != ''">None</IncludeAssets>
+            </PackageReference>
+            """)));
+
+        // And the plain unconditional exclusion is still an exemption.
+        Assert.False(Distributed(XElement.Parse(
+            """
+            <PackageReference Include="Analyzer" Version="1.0">
+              <PrivateAssets>all</PrivateAssets>
+            </PackageReference>
+            """)));
+    }
 
     /// <summary>Walks up from the test binary until the solution file turns up.</summary>
     private static string RepoRoot()

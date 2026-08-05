@@ -678,8 +678,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             // Logged off the dispatcher: a fatal error that stops the room must be on disk even
             // if the UI thread never gets round to showing it.
+            //
+            // Without the provider's own words, though. A cloud transcriber that rejects a request
+            // echoes the request back inside its error — and the request is what was said in the
+            // room, so a bounded 300 characters of it is still a part number and a delivery date on
+            // disk, in the file the operator is told to send on. The default-level line records
+            // that the session errored and how badly; the text goes to Debug, which is turned on
+            // deliberately and by someone who has decided that reproducing the fault is worth more.
             Log.Write(
-                e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
+                e.Fatal ? LogLevel.Error : LogLevel.Warning,
+                RoomLog,
+                e.Fatal
+                    ? "The session failed fatally; the provider's own text is at Debug."
+                    : "The session reported an error; the provider's own text is at Debug.",
+                error: null);
+            Log.Debug(RoomLog, $"Session error: {Bounded(e.Message)}");
             Dispatcher.UIThread.Post(() =>
                 Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
         };
@@ -785,12 +798,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = _lastRecording.Length > 0
                 ? L.Format("status.stopped.audio", _lastRecording)
                 : L["status.stopped"];
-            Log.Info(RoomLog, "Room closed.");
+        }
+        catch (Exception ex)
+        {
+            // Teardown fails for real: Dispose rewrites the WAV header, which a full disk refuses,
+            // ninety minutes in. That used to leave a corrupt recording, a faulted task and not one
+            // line — a room that opened and never closed reads exactly like a crash, which is the
+            // silence this file exists to end. The room is over either way; say why.
+            IsRunning = false;
+            IsPaused = false;
+            Status = L.Format("status.stopfailed", ex.Message);
+            Log.Error(RoomLog, "The room did not close cleanly.", ex);
         }
         finally
         {
-            // whatever went wrong above, the operator gets their buttons back — a host stuck
-            // with Start and Stop both greyed out cannot be recovered without a restart
+            // Both in the finally: the record that the room ended is the line whose absence is
+            // indistinguishable from a crash, and whatever went wrong above, the operator gets
+            // their buttons back — a host stuck with Start and Stop both greyed out cannot be
+            // recovered without a restart.
+            Log.Info(RoomLog, "Room closed.");
             IsStopping = false;
         }
     }

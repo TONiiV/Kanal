@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
 using Kanal.Core.Relay;
 using Kanal.Host.Services;
@@ -176,6 +177,110 @@ public class RoomLoggingTests
         await vm.StopCommand.ExecuteAsync(null);
 
         Assert.NotEmpty(sink.Lines.Where(l => l.Level == LogLevel.Debug));
+    }
+
+    /// <summary>
+    /// A teardown that throws. Stop flushes and rewrites the WAV header, which fails on a full
+    /// disk — and the "Room closed" line was the last statement in the try, so the operator got a
+    /// corrupt recording, a faulted task, and a file showing a room that opened and never closed:
+    /// indistinguishable from a crash, which is the silence this feature exists to end.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AStopThatThrowsMidTeardownStillRecordsThatTheRoomEnded()
+    {
+        using var _ = Listening(out var sink);
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with { Asr = new ThrowingTeardownAsr(plan.Asr!) };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var room = sink.Lines.Where(l => l.Category == "room").ToList();
+        var failed = Assert.Single(room, l => l.Level == LogLevel.Error);
+        Assert.Contains("not enough space", failed.Error?.Message ?? "");
+        Assert.Contains(room, l => l.Message.Contains("Room closed."));
+        // and the buttons come back, as they did before
+        Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    /// <summary>Stands in for the recorder failing to rewrite the WAV header on a full disk.</summary>
+    private sealed class ThrowingTeardownAsr(IAsrProvider inner) : IAsrProvider, IAsyncDisposable
+    {
+        public string Id => inner.Id;
+
+        public AsrCapabilities Caps => inner.Caps;
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            inner.StartAsync(options, ct);
+
+        public ValueTask DisposeAsync() =>
+            throw new IOException("There is not enough space on the disk.");
+    }
+
+    /// <summary>
+    /// The cloud path's way in. A provider that rejects a request and echoes the text it rejected
+    /// puts what was said in the room into its own error message, and that message used to be
+    /// written at Error or Warning — on disk, in a file the operator is told to send on. Only the
+    /// level the operator turns on deliberately carries a provider's own words now.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AProviderErrorEchoingWhatWasSaidIsOnlyWrittenAtDebug()
+    {
+        const string spoken = "这批支架的料号是 KX-4402";
+        using var _ = Listening(out var sink);
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new ErroringAsr($"400 rejected: {{\"text\":\"{spoken}\"}}"),
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(400);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var carrying = sink.Lines
+            .Where(l => $"{l.Message} {l.Error}".Contains(spoken))
+            .ToList();
+        // the detail is still reachable…
+        Assert.True(carrying.Count > 0, "the provider's text was dropped rather than moved to Debug");
+        Assert.All(carrying, l => Assert.Equal(LogLevel.Debug, l.Level)); // …and only there
+
+        // the failure itself is still on the record at the default level
+        Assert.Contains(sink.Lines, l => l.Level == LogLevel.Warning && l.Category == "room");
+    }
+
+    /// <summary>An ASR provider whose only event is an error carrying the caller's own text.</summary>
+    private sealed class ErroringAsr(string message) : IAsrProvider
+    {
+        public string Id => "erroring";
+
+        public AsrCapabilities Caps { get; } = new(
+            Streaming: true,
+            Diarization: false,
+            Translation: false,
+            AutoLanguageDetect: false,
+            Languages: new HashSet<string> { "zh", "de", "pl", "en" },
+            Latency: LatencyClass.Realtime);
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            Task.FromResult<IAsrSession>(new Session(message));
+
+        private sealed class Session(string message) : IAsrSession
+        {
+            public IAsyncEnumerable<AsrEvent> Events => Emit();
+
+            public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default) =>
+                ValueTask.CompletedTask;
+
+            private async IAsyncEnumerable<AsrEvent> Emit()
+            {
+                await Task.Yield();
+                yield return new AsrEvent.Error(message, Fatal: false);
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>Nothing a participant said, and no credential, may end up in the file.</summary>

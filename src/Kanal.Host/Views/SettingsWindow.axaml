@@ -16,6 +16,13 @@
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
+        <!-- Directly above the button, because a Save that did not happen has to be readable from
+             where the click was. Alarm ink: everything the operator just typed is still only in
+             this dialog while this is showing. -->
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding SaveError}"
+                   IsVisible="{Binding HasSaveError}" FontSize="11.5" TextWrapping="Wrap"
+                   Margin="0,14,0,0" Foreground="{StaticResource Alarm}" />
+
         <!-- The scrollbar takes layout space instead of floating over the content: an overlay
              bar sat on top of the rightmost controls and section rules. The margin keeps the
              ragged right edge clear of the bar even while it is being dragged. -->
