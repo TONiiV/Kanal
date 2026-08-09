@@ -114,12 +114,17 @@ Most configuration is available from the in-app **Settings** window:
 - local translation model download, selection, and deletion;
 - microphone selection and level/noise check;
 - transcript and audio output folders;
-- local WAV recording on/off; and
-- operator-interface language.
+- local WAV recording on/off;
+- operator-interface language; and
+- how much detail the log keeps, the size at which a log file is rolled over, and a button that
+  opens the log folder.
 
 Preferences are written to `Kanal/settings.json` beneath the operating system's application-data
-directory. Downloaded models live in the adjacent `Kanal/models` directory. Transcript exports and
-recordings default to `Documents/Kanal`.
+directory. Downloaded models live in the adjacent `Kanal/models` directory, and log files in
+`Kanal/logs`. Transcript exports and recordings default to `Documents/Kanal`.
+
+Logs are written with NLog: one file per day (`kanal-<date>.log`), rolled over once it passes the
+configured size, kept for two weeks, and never sent anywhere.
 
 Environment variables override connection defaults:
 

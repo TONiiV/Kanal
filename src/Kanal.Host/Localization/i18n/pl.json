@@ -167,5 +167,16 @@
   "settings.browse.title": "Wybierz folder",
   "settings.record": "Nagrywaj salę na dysk podczas spotkania",
   "settings.record.note": "Jeden plik na spotkanie, nazwany od pokoju. Około 115 MB na godzinę. Nagranie nie opuszcza tej maszyny i nie jest zapisywane, gdy spotkanie jest wstrzymane.",
-  "export.dialog.title": "Zapisz zapis spotkania"
+  "export.dialog.title": "Zapisz zapis spotkania",
+  "settings.logs.heading": "DIAGNOSTYKA",
+  "settings.logs.title": "Pliki dziennika",
+  "settings.logs.note": "Jeden plik dziennie, przełączany po przekroczeniu rozmiaru poniżej, przechowywany przez {0} dni. Dzienniki zostają na tym komputerze — nic z nich nigdzie nie trafia.",
+  "settings.logs.level": "Zapisywane szczegóły",
+  "settings.logs.size": "Przełącz po (MB)",
+  "settings.logs.open": "Otwórz folder dzienników",
+  "log.level.debug": "Debugowanie",
+  "log.level.info": "Informacje",
+  "log.level.warning": "Ostrzeżenia",
+  "log.level.error": "Błędy",
+  "settings.logs.unwritable": "Nic nie jest zapisywane: {0}"
 }

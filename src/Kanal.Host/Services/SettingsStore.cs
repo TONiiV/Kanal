@@ -3,10 +3,40 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Kanal.Core.Diagnostics;
 
 namespace Kanal.Host.Services;
 
 public sealed record ApiKeyEntry(string Name, string Provider, string Key);
+
+// Falls back to Info rather than throwing: the stock converter's throw cost the whole file.
+public sealed class LogLevelConverter : JsonConverter<LogLevel>
+{
+    public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.String:
+                return Enum.TryParse<LogLevel>(reader.GetString(), ignoreCase: true, out var byName)
+                       && Enum.IsDefined(byName)
+                    ? byName
+                    : LogLevel.Info;
+            case JsonTokenType.Number:
+                return reader.TryGetInt32(out var ordinal) && Enum.IsDefined((LogLevel)ordinal)
+                    ? (LogLevel)ordinal
+                    : LogLevel.Info;
+            case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                reader.Skip(); // whatever this is, it is not a level — step over it intact
+                return LogLevel.Info;
+            default:
+                return LogLevel.Info;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, LogLevel value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
+}
 
 public sealed class AppSettings
 {
@@ -41,6 +71,13 @@ public sealed class AppSettings
     /// driving the laptop is often not one of the people being translated for.
     /// </summary>
     public string? AppLanguage { get; set; }
+
+    [JsonConverter(typeof(LogLevelConverter))]
+    public LogLevel LogLevel { get; set; } = LogLevel.Info;
+
+    public int LogMaxFileSizeMb { get; set; } = DefaultLogMaxFileSizeMb;
+
+    public const int DefaultLogMaxFileSizeMb = 10;
 }
 
 /// <summary>
@@ -53,7 +90,11 @@ public static class SettingsStore
 {
     public const string GladiaEnvVar = "GLADIA_API_KEY";
 
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
 
     public static string SettingsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "settings.json");
@@ -61,6 +102,9 @@ public static class SettingsStore
     /// <summary>Where downloaded GGUF translation models live.</summary>
     public static string ModelsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
+
+    public static string LogsPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "logs");
 
     /// <summary>
     /// Where a meeting's artefacts go when nothing is configured. Documents rather than
@@ -79,6 +123,15 @@ public static class SettingsStore
     /// <summary>A cleared text box is not a folder: writing to "" is a failure, not a default.</summary>
     private static bool Blank(string? path) => string.IsNullOrWhiteSpace(path);
 
+    public const int MinLogMaxFileSizeMb = 1;
+
+    public const int MaxLogMaxFileSizeMb = 1024;
+
+    public static int ResolveLogMaxFileSizeMb(AppSettings settings) =>
+        Math.Clamp(settings.LogMaxFileSizeMb, MinLogMaxFileSizeMb, MaxLogMaxFileSizeMb);
+
+    public static string SalvagedPath => SettingsPath + ".unreadable";
+
     public static AppSettings Load()
     {
         try
@@ -87,13 +140,33 @@ public static class SettingsStore
                 return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), Options)
                        ?? new AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
-            // corrupt settings — start fresh rather than crash the host
+            Salvage(ex);
         }
 
         return new AppSettings();
     }
+
+    // The next Save writes defaults over whatever could not be read — including the stored key.
+    private static void Salvage(Exception cause)
+    {
+        try
+        {
+            File.Copy(SettingsPath, SalvagedPath, overwrite: true);
+            Log.Warning(
+                LogCategory,
+                $"{SettingsPath} could not be read and was replaced by defaults; the previous " +
+                $"file — including any stored keys — is at {SalvagedPath}.",
+                cause);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(LogCategory, $"{SettingsPath} could not be read, and could not be copied aside.", ex);
+        }
+    }
+
+    private const string LogCategory = "settings";
 
     public static void Save(AppSettings settings)
     {

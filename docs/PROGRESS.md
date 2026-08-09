@@ -6,6 +6,51 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-08-04
 
+### The host keeps a record of itself (issue #35, 1 of 3)
+
+A meeting cannot be replayed. Whatever went wrong happened once, in a room, with the other side of
+the table waiting — and until now the only trace was a status line that the next status line
+overwrote.
+
+- **A log facade in the core, NLog in the host.** `Kanal.Core.Diagnostics` defines four levels, an
+  `ILogSink` and a static `Log` — the same rule as the provider abstractions: the core states the
+  capability, the host names the vendor. Nothing is written until a host installs a sink, so tests,
+  `Kanal.Doctor` and any future embedder stay silent by default, and a sink that throws never
+  reaches the caller. `LogSetup` builds the configuration in code rather than from `NLog.config`:
+  the level has to change without a restart, and a config file beside the executable is one more
+  thing that can go missing from a published build.
+- **One file a day, rolled over at a size the operator sets.** `kanal-<date>.log` under the
+  application-data directory keeps a stable name all day, so "send me today's log" names one file;
+  rollovers are numbered beside it. Age is the retention policy (14 days) and a count derived from
+  the file size is a runaway backstop only, bounding the folder at roughly 2 GB without standing in
+  for the days — a fixed count silently undercut the promise, and no count at all let one loud day
+  write 65 MB with nothing yet old enough to delete.
+- **Changing the level mid-meeting keeps what is already written.** Handing NLog a fresh
+  `FileTarget` over the open file made the new one open at a stale offset and overwrite a
+  contiguous block of what had been flushed; the target is updated in place instead.
+- **What actually gets logged.** Startup with version and OS, unhandled and unobserved exceptions,
+  rooms opening and closing with their mode and languages, a session that ends on its own, a
+  refused Start with the reason, a model that will not load, a relay that cannot be set up, relay
+  publishes that fail, capture that stops under a live room, a recording that cannot be opened, an
+  export that cannot be written, and a settings file that could not be read. Debug adds capture
+  running, a frame count and snapshot publishes — counts, never content.
+- **Nothing said in the room reaches the file.** Every line is capped, message and exception alike:
+  a gateway behind a captive portal was writing its whole 20 KB error page per failure, retried
+  every 15 seconds. And the transcription wire no longer falls back to putting a whole error
+  *frame* into the error message — that frame quotes the request that caused it, which is an
+  utterance.
+- **One click to the folder**, because the person who has to send a log is on a call and will not
+  be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
+  platform branching, injected so a headless test never launches Explorer. If the folder cannot be
+  written at all the panel says so — NLog defers file creation and swallows that failure, so the
+  alternative was an empty directory under a promise of one file a day.
+- **A hand-edited settings file no longer costs the operator their API key.** The level reads
+  leniently, and anything else unreadable is copied to `settings.json.unreadable` before the
+  defaults replace it — logged, which is why the sink is installed before settings are read.
+
+Two of three: the changelog viewer and the open-source list follow on their own branches, since
+they are independent of this one beyond sharing a dialog.
+
 ### Kanal traffic is behind an authenticated gateway
 
 - Removed all Supabase project URLs and client API keys from the desktop source, compiled defaults,
