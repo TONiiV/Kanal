@@ -4,6 +4,26 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-05
+
+### A comment now has to earn its place
+
+- `CLAUDE.md` gains a comment policy under **Working practices**: the default is no comment, and one
+  survives only by carrying what the code cannot — a trap that would be "fixed" back if unrecorded,
+  an external constraint or licence attribution, or a counter-intuitive decision whose rejected
+  alternative looks better at a glance. XML doc that restates a signature, narration of the lines
+  below it, atmospheric description, divider banners, and commented-out code go.
+- Rationale that needs a paragraph now has a stated home: this log and the PRD, where design history
+  is already kept and maintained, rather than a source file nobody re-reads on the next edit.
+- No project sets `GenerateDocumentationFile` or `DocumentationFile`, and none escalates warnings to
+  errors, so removing XML doc cannot break the build; no test asserts on comment text or doc
+  presence. `RelaySecurityTests` scans `src/**/*.cs`, but only for the absence of credential
+  strings.
+- Documentation only. The codebase sweep the rule will be judged against is a separate PR; no
+  comment was deleted here.
+
+---
+
 ## 2026-08-04
 
 ### What Kanal is built on, named on screen (issue #35, 3 of 3)

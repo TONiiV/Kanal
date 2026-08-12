@@ -28,6 +28,22 @@ dotnet test
   branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
   the branch; a leftover worktree keeps a merged branch checked out, which blocks
   `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+- **Comments are the exception.** Prose in a source file is prose nobody re-reads when the code
+  beneath it changes, so the default is no comment — in C#, TypeScript, and the JavaScript inside
+  `web/index.html` alike. Keep one only if it carries what a competent reader cannot derive from the
+  code: a **trap** that gets "fixed" back if it is not recorded (Avalonia's reflection binding
+  listens for the indexer name `"Item"`, never WPF's `"Item[]"` — see `Localizer.IndexerName`;
+  without the note, every bound string silently freezes on the next language switch); an **external
+  constraint or attribution** (the OpenCC `TSCharacters` table is Apache-2.0 —
+  `Kanal.Core/Text/SimplifiedChinese.cs`); or a **counter-intuitive decision** whose rejected
+  alternative looks better at a glance. One line, stating the constraint — not the story. Delete
+  everything else: XML doc restating the signature (`/// <summary>ISO code of the language the
+  chrome is currently in.</summary>` over `CurrentLanguage`), prose narrating the lines below it,
+  atmospheric description on enum members (`LevelMeter`'s "lost in the room"), divider banners,
+  commented-out code. Kanal is an application, not a published library — XML doc is no API contract
+  here, and no project sets `GenerateDocumentationFile`, so deleting it cannot break the build. A
+  rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.3.md`, where design
+  history is already kept and will actually be maintained — not in the source file.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
 - **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
