@@ -33,6 +33,14 @@ revocable link. Rebased onto main and amended for that, rather than rewritten.
 - **The microphone prompt speaks the operator's language.** `NSMicrophoneUsageDescription` is the
   one piece of Kanal's text macOS renders rather than the app, asked in a room whose premise is that
   nobody shares a language. zh-Hans, de and pl `InfoPlist.strings` are staged beside the icon.
+- **The signing path was wrong, and the first run with a real certificate is what said so.** It
+  signed the Mach-O files it could find and left the ~200 managed `.dll` assemblies beside them
+  alone — but `codesign` treats all of `Contents/MacOS` as nested code, so sealing the bundle failed
+  with `code object is not signed at all` naming a `.dll`. Everything in that directory is signed
+  now, batched through `xargs` so 240 files do not each pay a timestamp round-trip, with the apphost
+  excluded because signing the main executable alone makes codesign seal the bundle prematurely.
+  `sign.sh` also asserts the Authority, timestamp and runtime flag afterwards: `codesign --verify`
+  passes on an ad-hoc signature, which is exactly the one Gatekeeper refuses.
 - 4 new test cases (12 total in `InstallerLayoutTests`, now under `Kanal.Core.UnitTests` after the
   test split): the three localised prompts, and staging clearing what an earlier build left behind.
 

@@ -129,9 +129,16 @@ hardened-runtime counterpart to the Info.plist string; both are required.
 
 ### Signing and notarisation order
 
-LLamaSharp ships native libraries (`libllama.dylib`, `libggml*.dylib`) inside the publish output.
-Every Mach-O binary must be signed or notarisation rejects the whole submission, so nested binaries
-are signed first, the bundle last.
+LLamaSharp ships native libraries (`libllama.dylib`, `libggml*.dylib`) inside the publish output,
+and .NET adds its own plus helpers like `createdump`. Nested code is signed first, the bundle last.
+
+**"Nested code" is the whole of `Contents/MacOS`, not just its Mach-O files** — corrected
+2026-09-02, after the first real signed run failed. `codesign` treats that directory as code
+wholesale, so a self-contained publish's ~200 managed `.dll` assemblies are in scope too: leave one
+unsigned and sealing the bundle fails with `code object is not signed at all` naming a `.dll`. The
+apphost is the exception, excluded because it is the bundle's *main* executable — signing it alone
+makes `codesign` try to seal the bundle around it before the assemblies beside it are signed. This
+cannot be caught by an unsigned build, which is why it survived to the first run with a certificate.
 
 ```
 codesign (inside-out, --options runtime, --timestamp)
