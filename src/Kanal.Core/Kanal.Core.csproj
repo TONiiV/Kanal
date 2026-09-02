@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- OpenCC t2s character table (Apache-2.0), see Text/SimplifiedChinese.cs -->
+    <EmbeddedResource Include="Text/TSCharacters.txt" />
+  </ItemGroup>
+
 </Project>

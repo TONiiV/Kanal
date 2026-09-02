@@ -7,7 +7,8 @@
     <Project Path="src/Kanal.Providers.LocalMt/Kanal.Providers.LocalMt.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Kanal.Tests/Kanal.Tests.csproj" />
+    <Project Path="tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj" />
+    <Project Path="tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Kanal.Doctor/Kanal.Doctor.csproj" />

@@ -1,6 +1,7 @@
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
+using Kanal.Core.Text;
 
 namespace Kanal.Core.Room;
 
@@ -17,15 +18,27 @@ public sealed class MeetingSession : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly List<Task> _pendingTranslations = new();
     private readonly object _gate = new();
+    private readonly TimeSpan _translationGrace;
+    private int _recording;
     private IAsrSession? _session;
     private Task? _pump;
     private int _disposed;
+    private int _paused;
 
-    public MeetingSession(IAsrProvider asr, IMtProvider? mt, IRelayPublisher relay, RoomConfig config)
+    /// <summary>How long shutdown waits for translations already in flight before cancelling them.</summary>
+    public static readonly TimeSpan DefaultTranslationGrace = TimeSpan.FromSeconds(2);
+
+    public MeetingSession(
+        IAsrProvider asr,
+        IMtProvider? mt,
+        IRelayPublisher relay,
+        RoomConfig config,
+        TimeSpan? translationGrace = null)
     {
         _asr = asr;
         _mt = mt;
         _relay = relay;
+        _translationGrace = translationGrace ?? DefaultTranslationGrace;
         Room = new RoomState(config);
 
         if (!asr.Caps.Translation && mt is null)
@@ -37,6 +50,14 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
+
+    /// <summary>
+    /// Raised for audio the session actually accepted — so never while paused. The recorder
+    /// hangs off this rather than off the capture loop: pause is a promise that nothing said in
+    /// that minute is kept, and a second copy of the pause check somewhere else is a second
+    /// place for that promise to quietly stop being true.
+    /// </summary>
+    public event Action<ReadOnlyMemory<byte>>? AudioAccepted;
 
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -51,9 +72,53 @@ public sealed class MeetingSession : IAsyncDisposable
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
     }
 
+    /// <summary>
+    /// True while the room is off the record. Pause is a privacy control before it is a
+    /// convenience one — the operator steps out of a negotiation to talk to their own side —
+    /// so it stops the audio at the door rather than hiding the transcript afterwards.
+    /// </summary>
+    public bool IsPaused => Volatile.Read(ref _paused) == 1;
+
+    /// <summary>
+    /// Takes the room off the record, or puts it back on. Announced to clients, since a column
+    /// that simply stops looks exactly like a connection that broke. A no-op when the state is
+    /// already what was asked for, so a repeated press does not fill the channel.
+    /// </summary>
+    public async Task SetPausedAsync(bool paused, CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _paused, paused ? 1 : 0) == (paused ? 1 : 0))
+            return;
+
+        await PublishSafeAsync(new RoomPausedMessage(paused));
+    }
+
+    public bool IsRecording => Volatile.Read(ref _recording) == 1;
+
+    /// <summary>
+    /// Tells the room that its audio is, or is no longer, being written to a file. The host is
+    /// the only place that knows; the participants are the ones it concerns. Announced on the
+    /// same terms as pause — a no-op when nothing changed — and carried in the snapshot, since
+    /// a phone that joins mid-meeting never saw the announcement.
+    /// </summary>
+    public async Task SetRecordingAsync(bool recording, CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _recording, recording ? 1 : 0) == (recording ? 1 : 0))
+            return;
+
+        await PublishSafeAsync(new RoomRecordingMessage(recording));
+    }
+
     public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default)
     {
         var session = _session ?? throw new InvalidOperationException("Session not started.");
+
+        // Dropping the transcript but still streaming the room to a cloud transcriber would
+        // mean the private conversation left the building and only the record of it was
+        // hidden — worse than offering no pause at all.
+        if (IsPaused)
+            return ValueTask.CompletedTask;
+
+        AudioAccepted?.Invoke(pcm16);
         return session.PushAudioAsync(pcm16, ct);
     }
 
@@ -73,7 +138,10 @@ public sealed class MeetingSession : IAsyncDisposable
 
     /// <summary>Publish the full state — served on late join and client reconnect.</summary>
     public Task PublishSnapshotAsync(CancellationToken ct = default) =>
-        _relay.PublishAsync(new RoomSnapshotMessage(Room.Snapshot()), ct);
+        _relay.PublishAsync(
+            new RoomSnapshotMessage(
+                Room.Snapshot() with { Paused = IsPaused, Recording = IsRecording }),
+            ct);
 
     /// <summary>Announce that this room is over, so clients stop presenting themselves as live.</summary>
     public Task PublishClosedAsync(CancellationToken ct = default) =>
@@ -89,10 +157,19 @@ public sealed class MeetingSession : IAsyncDisposable
                 switch (e)
                 {
                     case AsrEvent.Transcript t:
-                        var utterance = Room.ApplyTranscript(t);
+                        // While paused, a sentence that began on the record may still finish on
+                        // it, but nothing new may begin. The audio gate means a real transcriber
+                        // can only be flushing pre-pause audio here — dropping that would leave
+                        // the last on-record sentence a muted partial forever, and untranslated.
+                        // The known-id rule is also what keeps a provider that generates its own
+                        // audio (the scripted one) off the record while it talks through a pause.
+                        if (IsPaused && !Room.Contains(t.UtteranceId))
+                            break;
+
+                        var utterance = Room.ApplyTranscript(NormalizeChinese(t));
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)
-                            TrackTranslation(TranslateAsync(utterance, ct));
+                            TrackTranslation(() => TranslateAsync(utterance, ct));
                         break;
 
                     case AsrEvent.Error error:
@@ -127,8 +204,8 @@ public sealed class MeetingSession : IAsyncDisposable
                 return;
 
             var context = Room.RecentFinals(8, excludeId: utterance.Id);
-            var translations = await _mt!.TranslateAsync(
-                utterance.SrcText, utterance.SrcLang, targets, context, ct);
+            var translations = NormalizeChinese(await _mt!.TranslateAsync(
+                utterance.SrcText, utterance.SrcLang, targets, context, ct))!;
 
             var updated = Room.ApplyTranslations(utterance.Id, utterance.Revision, translations);
             if (updated is not null)
@@ -143,12 +220,82 @@ public sealed class MeetingSession : IAsyncDisposable
         }
     }
 
-    private void TrackTranslation(Task task)
+    /// <summary>
+    /// The host is the single authority, so script normalization happens here — once,
+    /// before text enters <see cref="RoomState"/> or the relay — never on the clients.
+    /// Gladia only knows a single "zh" and tends to emit Traditional characters; the
+    /// primary Chinese participant is a mainland supplier who reads Simplified.
+    /// Non-Chinese text passes through as the same instance at the cost of one
+    /// language-code check, so the Latin/Polish path stays allocation-free.
+    /// </summary>
+    private static AsrEvent.Transcript NormalizeChinese(AsrEvent.Transcript t)
     {
+        var text = SimplifiedChinese.IsChinese(t.SrcLang)
+            ? SimplifiedChinese.Normalize(t.Text)
+            : t.Text;
+        var translations = NormalizeChinese(t.Translations);
+        return ReferenceEquals(text, t.Text) && ReferenceEquals(translations, t.Translations)
+            ? t
+            : t with { Text = text, Translations = translations };
+    }
+
+    private static IReadOnlyDictionary<string, string>? NormalizeChinese(
+        IReadOnlyDictionary<string, string>? translations)
+    {
+        if (translations is null || translations.Count == 0)
+            return translations;
+
+        Dictionary<string, string>? copy = null;
+        foreach (var (lang, text) in translations)
+        {
+            if (!SimplifiedChinese.IsChinese(lang))
+                continue;
+
+            var normalized = SimplifiedChinese.Normalize(text);
+            if (ReferenceEquals(normalized, text))
+                continue;
+
+            copy ??= new Dictionary<string, string>(translations);
+            copy[lang] = normalized;
+        }
+
+        return copy ?? translations;
+    }
+
+    /// <summary>
+    /// Registers a translation as pending <em>before</em> starting it. Handing
+    /// <c>TranslateAsync(…)</c> straight to a tracking method looked equivalent and was not: the
+    /// call runs synchronously into the provider before the returned task is ever added to the
+    /// list, so a shutdown landing in that window saw no pending work and dropped a translation
+    /// that had in fact already begun.
+    /// </summary>
+    private void TrackTranslation(Func<Task> work)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
             _pendingTranslations.RemoveAll(t => t.IsCompleted);
-            _pendingTranslations.Add(task);
+            _pendingTranslations.Add(completion.Task);
+        }
+
+        _ = RunAsync();
+        return;
+
+        async Task RunAsync()
+        {
+            try
+            {
+                await work();
+            }
+            catch
+            {
+                // TranslateAsync already reports through ErrorOccurred; nothing observes this
+                // task, so a fault escaping here would surface as an unobserved exception
+            }
+            finally
+            {
+                completion.TrySetResult();
+            }
         }
     }
 
@@ -172,8 +319,9 @@ public sealed class MeetingSession : IAsyncDisposable
         if (Interlocked.Exchange(ref _disposed, 1) == 1)
             return;
 
-        // stop the event source first, then let in-flight translations land,
-        // then cancel as a backstop so the pump is guaranteed to exit
+        // stop the event source first, then give in-flight translations a bounded moment to
+        // land, then cancel — which both unblocks whatever is still decoding and guarantees
+        // the pump exits
         if (_session is not null)
             await _session.DisposeAsync();
 
@@ -183,9 +331,18 @@ public sealed class MeetingSession : IAsyncDisposable
             pending = _pendingTranslations.ToArray();
         }
 
+        var landed = Task.WhenAll(pending);
         try
         {
-            await Task.WhenAll(pending);
+            // The grace is for a translation that is nearly done. Waiting on it unconditionally
+            // — which is what this did — hands the operator's Stop button to the translator:
+            // one local decode is seconds, and a model that spends its whole token budget
+            // reasoning held Stop for twenty of them with the window frozen.
+            if (_translationGrace > TimeSpan.Zero)
+                await landed.WaitAsync(_translationGrace);
+        }
+        catch (TimeoutException)
+        {
         }
         catch
         {
@@ -193,8 +350,37 @@ public sealed class MeetingSession : IAsyncDisposable
         }
 
         _cts.Cancel();
+
+        try
+        {
+            await landed; // cancelled ones unwind here
+        }
+        catch
+        {
+        }
+
         if (_pump is not null)
             await _pump;
+
+        // The snapshot above was taken while the pump could still be draining finals buffered
+        // before shutdown, and anything it tracked since is cancelled now but absent from
+        // `landed`. The pump has exited, so the list is final: wait for the stragglers too, or
+        // disposal returns with a decode still unwinding behind it and a _cts about to be
+        // disposed under whoever touches it next.
+        Task[] stragglers;
+        lock (_gate)
+        {
+            stragglers = _pendingTranslations.ToArray();
+        }
+
+        try
+        {
+            await Task.WhenAll(stragglers);
+        }
+        catch
+        {
+        }
+
         _cts.Dispose();
     }
 }

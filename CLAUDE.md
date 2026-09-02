@@ -18,9 +18,11 @@ dotnet test
 ## Working practices
 
 - **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
-  behaviour change lands with tests in the same PR; no PR merges with a red suite. UI behaviour is
-  tested headless (`Avalonia.Headless.XUnit`, see `tests/Kanal.Tests/HostUiTests.cs`); logic that
-  touches external services is tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
+  behaviour change lands with tests in the same PR; no PR merges with a red suite. Core and service
+  logic lives in `tests/Kanal.Core.UnitTests`; deterministic view-model and application-state logic
+  lives in `tests/Kanal.UI.UnitTests` and runs headless with `Avalonia.Headless.XUnit`. Pixel, layout,
+  style, and window-rendering assertions are out of scope. Logic that touches external services is
+  tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
   worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff. **Once the
   branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
@@ -28,6 +30,10 @@ dotnet test
   `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
+- **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
+  bullet to [`CHANGELOG.md`](CHANGELOG.md) under the heading being worked towards — written for the
+  operator, not the committer. Refactors, tests and docs add nothing. A version heading gets its
+  date only when that version is released.
 
 ## Architecture invariants
 

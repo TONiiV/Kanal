@@ -4,6 +4,307 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-08-04
+
+### What Kanal is built on, named on screen (issue #35, 3 of 3)
+
+An index at the bottom of Settings: project, licence, and where to read it. The people running this
+in a meeting are the ones handing the binary around, so it belongs in the application rather than
+only in a repository.
+
+- Each notice carries the NuGet ids it covers, so the list can be read against the project files by
+  hand. References excluded from the shipped build are left out — they are not distributed, so they
+  carry no obligation. **Nothing enforces this**: a coverage test was written and then dropped on
+  the owner's call, so adding a dependency means adding its entry in the same PR, and the list goes
+  stale silently if that is forgotten.
+- What no package scan can see is listed by hand and marked as such: code that arrives inside
+  another package (Skia, HarfBuzz, ANGLE, llama.cpp) and OpenCC's conversion table, which is
+  compiled into `Kanal.Core`. ANGLE ships in every Windows build and its licence is explicit that a
+  binary redistribution reproduces the notice.
+- One entry was removed rather than guessed at: a debugging aid whose package carries no licence
+  file, no `<license>` and no `<licenseUrl>` — only a commercial copyright. Naming a licence that
+  cannot be substantiated, on a screen headed "open source", is worse than omitting the entry. It
+  is excluded from Release builds anyway.
+
+Open, and a call for the repository owner rather than a defect: this is an index, and MIT and BSD-3
+ask for the notice *text* to travel with the binary while Apache-2.0 asks for a copy of the licence.
+Discharging that means shipping a `THIRD-PARTY-NOTICES.md` of a few hundred lines and somewhere to
+read it. Until that is decided the wording here, in the README and in the code describes an index
+and claims nothing more.
+
+### A changelog you can read in the room (issue #35, 2 of 3)
+
+The question "did something change since last week?" is asked in the room, by the person who
+noticed — and the laptop running a meeting is not the machine anybody browses a repository on.
+
+- `CHANGELOG.md` is embedded in the executable and parsed for a dialog behind Settings → Version.
+  The file stays plain Markdown, readable on GitHub and in a diff, rather than becoming a data
+  format only this parser understands: `## <version> — <date>` headings with ordinary bullets.
+  Wrapped lines fold into their bullet, sub-bullets lose their markers, and inline code and
+  emphasis are stripped — a dialog is a TextBlock, not a renderer, and the first cut put
+  half-sentences and stray backticks on screen.
+- `<Version>` in the host project is what the About section shows, and a test holds it against the
+  newest changelog heading, so releasing is "write the entry, bump the version" and cannot be
+  half-done. Dates are ISO and invariant: against the ambient culture a Thai or Umm al-Qura locale
+  printed a year matching nothing in the repository.
+- The changelog is a host surface like any other, so the unbranded rule reaches it: a test fails if
+  a release entry names a vendor.
+- **A version is not a release.** Nothing has shipped yet, so the file carries one heading —
+  `1.0.1`, everything Kanal does on the day it ships — rather than a history reconstructed from
+  commits that no operator ever received. The heading stays undated until the release is cut, and
+  the dialog says so in the operator's language instead of leaving the line blank. From here each
+  PR that adds a feature, fixes a bug or makes something measurably better appends its own bullet;
+  refactors, tests and docs append nothing. The convention is in `CLAUDE.md` next to the progress
+  log, and only the newest heading is allowed to be undated.
+
+Left for the repository owner to decide: the entries are English on every language setting.
+Translating release notes into four languages is a standing cost on every release, not a bug fix.
+
+### The host keeps a record of itself (issue #35, 1 of 3)
+
+A meeting cannot be replayed. Whatever went wrong happened once, in a room, with the other side of
+the table waiting — and until now the only trace was a status line that the next status line
+overwrote.
+
+- **A log facade in the core, NLog in the host.** `Kanal.Core.Diagnostics` defines four levels, an
+  `ILogSink` and a static `Log` — the same rule as the provider abstractions: the core states the
+  capability, the host names the vendor. Nothing is written until a host installs a sink, so tests,
+  `Kanal.Doctor` and any future embedder stay silent by default, and a sink that throws never
+  reaches the caller. `LogSetup` builds the configuration in code rather than from `NLog.config`:
+  the level has to change without a restart, and a config file beside the executable is one more
+  thing that can go missing from a published build.
+- **One file a day, rolled over at a size the operator sets.** `kanal-<date>.log` under the
+  application-data directory keeps a stable name all day, so "send me today's log" names one file;
+  rollovers are numbered beside it. Age is the retention policy (14 days) and a count derived from
+  the file size is a runaway backstop only, bounding the folder at roughly 2 GB without standing in
+  for the days — a fixed count silently undercut the promise, and no count at all let one loud day
+  write 65 MB with nothing yet old enough to delete.
+- **Changing the level mid-meeting keeps what is already written.** Handing NLog a fresh
+  `FileTarget` over the open file made the new one open at a stale offset and overwrite a
+  contiguous block of what had been flushed; the target is updated in place instead.
+- **What actually gets logged.** Startup with version and OS, unhandled and unobserved exceptions,
+  rooms opening and closing with their mode and languages, a session that ends on its own, a
+  refused Start with the reason, a model that will not load, a relay that cannot be set up, relay
+  publishes that fail, capture that stops under a live room, a recording that cannot be opened, an
+  export that cannot be written, and a settings file that could not be read. Debug adds capture
+  running, a frame count and snapshot publishes — counts, never content.
+- **Nothing said in the room reaches the file.** Every line is capped, message and exception alike:
+  a gateway behind a captive portal was writing its whole 20 KB error page per failure, retried
+  every 15 seconds. And the transcription wire no longer falls back to putting a whole error
+  *frame* into the error message — that frame quotes the request that caused it, which is an
+  utterance.
+- **One click to the folder**, because the person who has to send a log is on a call and will not
+  be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
+  platform branching, injected so a headless test never launches Explorer. If the folder cannot be
+  written at all the panel says so — NLog defers file creation and swallows that failure, so the
+  alternative was an empty directory under a promise of one file a day.
+- **A hand-edited settings file no longer costs the operator their API key.** The level reads
+  leniently, and anything else unreadable is copied to `settings.json.unreadable` before the
+  defaults replace it — logged, which is why the sink is installed before settings are read.
+
+Two of three: the changelog viewer and the open-source list follow on their own branches, since
+they are independent of this one beyond sharing a dialog.
+
+### Kanal traffic is behind an authenticated gateway
+
+- Removed all Supabase project URLs and client API keys from the desktop source, compiled defaults,
+  GitHub Pages, and invitation format. The operator now provisions `KANAL_RELAY_URL` and the secret
+  `KANAL_RELAY_HOST_TOKEN` at runtime; the public URL identifies the gateway but grants no project
+  access. Relay stays disabled rather than silently falling back to a shared public credential when
+  either setting is absent.
+- Added the `kanal-relay` gateway as a **Cloudflare Worker with Durable Objects** (`gateway/`).
+  An authorised desktop can create a room and receives two signed, 12-hour HMAC capabilities: a
+  publish-only host ticket and a receive-only reader ticket. Fan-out happens inside one Durable
+  Object per room over hibernated WebSockets; reader sockets cannot send relay messages. The
+  first draft of this PR was a Supabase Edge Function, rejected on a measured platform limit:
+  Edge Functions cap wall clock at 150 s on the free plan (400 s paid), which would have forced
+  every phone to reconnect every 2.5 minutes of a 90-minute meeting, and `EdgeRuntime.waitUntil`
+  does not lift that cap. Vercel was rejected because its functions cannot hold WebSockets at
+  all. Hibernated Durable Object sockets have no wall-clock limit and are on the Workers Free
+  plan — and once a Durable Object does the fan-out, Supabase Realtime became a redundant hop,
+  so no Supabase (or any backing-store) credential exists anywhere in the system any more.
+- Replaced the single shared host bootstrap token with **per-device credentials**: the operator
+  mints a one-time activation code (`?action=admin.code`), the desktop trades it for its own
+  token (`?action=activate`), and a lost laptop is revoked alone (`?action=admin.revoke`)
+  without rotating anyone else. The registry is a SQLite Durable Object storing only SHA-256
+  hashes of codes and tokens. The wire protocol toward the desktop and the phone is unchanged.
+- The gateway has its own test suite: 25 vitest cases running in real workerd via
+  `@cloudflare/vitest-pool-workers` (`gateway/npm test`, wired into CI) covering the device
+  lifecycle, role separation, envelope filtering, size limits, per-room isolation, subprotocol
+  negotiation, ping/pong, receive-only enforcement, and the browser origin policy.
+- Known reachability caveat, recorded in the README: `*.workers.dev` is blocked in mainland
+  China, and a participant roaming through a Chinese carrier tunnels through the Chinese
+  network even abroad — for that participant the Worker must sit on a custom domain.
+- Replaced direct Realtime access in `GatewayRelayPublisher` and both copies of the static mobile
+  page. The QR fragment now carries the gateway endpoint, reader ticket, 128-bit room capability,
+  and ephemeral P-256 verification key. GitHub Pages opens the ticketed WebSocket, checks that the
+  gateway's room/key claims match the invitation, then verifies every signed payload before
+  touching UI state.
+- Room rotation now includes the next reader ticket inside a message signed by the old room key, so
+  connected phones can follow a restart without receiving a reusable host credential. The bearer
+  invitation remains readable by anyone who obtains it until expiry; tickets are stateless and are
+  not individually revocable before their 12-hour expiry.
+- Added regression coverage for repository/build credential absence, gateway role separation,
+  invitation shape, signature verification and tampering, room rotation, and byte-for-byte
+  parity of the two static mobile pages.
+- Fixed the first integration regression: relay configuration was optional in the UI but a missing
+  gateway was treated as a fatal Start error. Relay setup now fails closed to a signed null
+  transport, keeps the meeting running without a QR code, and shows a localized degraded-mode
+  warning. No public Supabase fallback was reintroduced.
+
+### Unit-test projects now follow the Core/UI boundary
+
+- Replaced the former mixed test assembly with `tests/Kanal.Core.UnitTests` for core,
+  audio, provider, serialization, orchestration, and non-visual service tests, plus
+  `tests/Kanal.UI.UnitTests` for deterministic view-model and host application-state behavior.
+- The UI suite no longer treats Avalonia rendering as a unit-test contract. Tests for palette
+  values, control geometry, visual-tree content, icon resources, automation labels, and synthetic
+  pointer/keyboard input were removed; mixed tests now drive commands and observable view-model
+  state directly.
+- Solution membership, provider friend-assembly declarations, CI commands, and contributor docs
+  now name the two projects explicitly so either boundary can be built and tested independently.
+
+---
+
+### README is now the open-source project entry point
+
+The root README was a compact architecture inventory followed by milestone checklists, relay
+deployment notes, and a live risk log. That made it useful to the project owner but left a new user
+to reconstruct what Kanal is, which modes work, what crosses the network, and how to try it.
+
+- Reframed it around the user problem, working features, a keyless demo, live-room setup, and the
+  desktop/mobile experience. Detailed milestones, measurements, and decision history remain here
+  and in the PRD instead of being duplicated on the project landing page.
+- Made the two privacy boundaries explicit: a mode describes where speech processing runs, while
+  captions and room state still use the Supabase relay in every production mode. The README also
+  documents the default local WAV recording, plain-JSON key storage, and self-hosting overrides.
+- Derived the availability table, configuration names, settings locations, project map, supported
+  capture platforms, and contribution invariants from the current code and CI configuration. The
+  quick-start and `Kanal.Doctor` examples now use the executable command shape actually accepted by
+  the projects.
+- Added a concise limitations/roadmap section linking back to this log: local ASR and standalone
+  cloud MT remain missing, Linux has no live-capture backend, and real Chinese↔Polish terminology
+  validation remains the go/no-go gate.
+
+---
+
+## 2026-08-03
+
+### Every `{l:T}` string now follows the language switch, and the tables live in JSON
+
+- **Bug — `{l:T}` bindings never refreshed on a language change.** `Localizer` raised
+  `PropertyChanged("Item[]")`, which is **WPF's** indexer notification name; Avalonia's reflection
+  binding listens for `CommonPropertyNames.IndexerName` — `"Item"` — and never matched it. Every
+  string set straight from XAML (Start, MODE, section headings, window titles) stayed frozen in
+  the language its window opened in, while every view-model INPC property switched correctly,
+  which left one screen speaking two languages. One-line fix: raise `"Item"`, now the
+  `Localizer.IndexerName` constant, shared by the two view models that were string-matching
+  `"Item[]"` on their own. Guarded by a headless test that opens `MainWindow`, flips
+  `Localizer.Instance.Current`, and asserts the rendered `TextBlock` re-reads. The three
+  localisation tests that switch the language off the UI thread became `[AvaloniaFact]`s — with
+  the fix in place a switch genuinely reaches live bindings, so it must happen on the thread the
+  bindings live on, exactly as in production.
+- **Last hard-coded operator string.** The export status ("Exported to …") was composed inline in
+  `MainViewModel`; it now uses the `status.exported` / `status.exported.audio` keys that already
+  existed in all four languages. An audit of every remaining literal in `src/Kanal.Host` found
+  nothing else user-visible outside the tables.
+- **Tables migrated to `Localization/i18n/{en,zh,de,pl}.json`** — flat JSON, one file per
+  language, embedded resources loaded once by `Strings` through `System.Text.Json` (no new
+  package). `Localizer`'s API — indexer, `Format`, fallback to English then to the key — is
+  unchanged, and all existing guards (identical key sets, placeholder parity, nothing left in
+  English, no vendor names) keep running against the loaded tables.
+- **Two new guards.** A repo-scanning test forbids literal user-visible text in `.axaml`
+  (`Text=`, `Content=`, `ToolTip.Tip=`, `Title=`, …) outside a small whitelist of glyphs and the
+  product name, so a hard-coded string can no longer slip past the language switch unnoticed; and
+  `HelpNeverOverstatesPrivacy` gained a four-language twin — no translation of the mode help may
+  promise "不联网", "nichts wird gesendet" or "bez sieci" any more than English may promise
+  "no network".
+
+### Input device hot-plug
+
+The device dropdowns (main window and Settings) enumerated once at construction, so a USB
+microphone plugged in after launch — the normal order of events when the mic lives in the
+meeting-room drawer — never appeared without reopening the window.
+
+- **`IAudioDeviceWatcher`** (Kanal.Audio): raises a payload-free `DevicesChanged` when the input
+  set may have changed; the one correct reaction is to re-enumerate, and a device list on the
+  event would invite acting on a stale one. `AudioCaptureFactory.TryCreateDeviceWatcher()` picks
+  the platform implementation, and returns null rather than throwing when registration fails —
+  a dropdown that misses a hot-plug is degraded, a start-up that dies over it is broken.
+- **macOS**: `CoreAudioDeviceWatcher`, an `AudioObjectAddPropertyListener` on
+  `kAudioObjectSystemObject` for `kAudioHardwarePropertyDevices` ('dev#') and
+  `kAudioHardwarePropertyDefaultInputDevice` ('dIn ') — the default matters because
+  `CoreAudioCapture` floats it to the top of the list. Removed symmetrically on dispose.
+- **Windows**: `WasapiDeviceWatcher` via NAudio's `IMMNotificationClient` — no degradation
+  needed, NAudio.Wasapi 2.3.0 already ships the interface. Add/remove/state/default-changed all
+  refresh (a USB unplug often surfaces as a state change, not `OnDeviceRemoved`);
+  `OnPropertyValueChanged` deliberately does not — it fires per property on every volume move.
+- **View models**: both `MainViewModel` and `SettingsViewModel` re-enumerate on the event,
+  marshalled through `Dispatcher.UIThread.Post` (callbacks arrive on CoreAudio/COM threads).
+  The selection survives a refresh by its stable device id — enumeration builds fresh instances
+  every time — and an unplugged selection falls back to the list head, which the backends order
+  default-first. A capture already running keeps the device it opened: the dropdown updates, the
+  meeting does not switch microphones mid-sentence. Listeners are released with the window that
+  shows the list (`MainWindow.OnClosed` → `MainViewModel.Dispose`, `SettingsWindow.OnClosed` →
+  `CancelDownloads`), since a native listener firing into a dead dialog would live forever.
+- **Tests** (`DeviceHotplugTests`): the refresh/keep/fall-back logic runs against a hand-fired
+  fake watcher over a mutable fake device list. The native wrappers are deliberately thin; the
+  headless suite proves only that real registration and removal survive
+  (`TheRealWatcherRegistersAndUnregistersCleanly` — a wrong P/Invoke signature dies there, not
+  in a meeting). Firing them is a manual test: plug and unplug a USB microphone while the main
+  window and Settings are open, on each platform.
+
+### Chinese comes out Simplified, wherever it was produced
+
+**Finding.** Chinese transcripts (and translations into Chinese) reached the room in Traditional
+characters, but the primary Chinese participant is a mainland supplier who reads Simplified.
+Gladia offers no knob for this: both `TranscriptionLanguageCodeEnum` and
+`TranslationLanguageCodeEnum` know a single `zh` — no `zh-Hans`/`zh-Hant`, nothing in
+`language_config` or `translation_config` selects a script. So the fix cannot live in the request
+body; it has to live on the host.
+
+**Fix.** `SimplifiedChinese` (`Kanal.Core/Text`): Traditional→Simplified normalization applied by
+`MeetingSession` — the host is the single authority, so text is normalized once, before it enters
+`RoomState` or the relay, and clients never convert. It covers all three ways Chinese text is
+produced: transcript partials/finals with `SrcLang: zh`, translations arriving inside Gladia
+transcript events, and `IMtProvider` results. The local-MT prompt now also asks for "Simplified
+Chinese" outright — steering word choice at the source (信息 not 資訊), which character mapping
+cannot fix after the fact.
+
+**Trade-offs.** No dependency: OpenCC's `TSCharacters.txt` (Apache-2.0, ~5 000 single-character
+mappings) is embedded as a resource instead of pulling in an OpenCC binding (OpenCCSharp is
+prerelease and its trie/data packages are more moving parts than this needs). Conversion is
+character-level and pure dictionary lookups; text below the CJK range skips the lookup entirely and
+unchanged strings return the same instance, so the Latin/Polish path and the already-Simplified
+common case allocate nothing — safe at partial frequency. **Limitation:** one-to-many characters
+(乾/幹/干, 髮/发…) take OpenCC's first, most common mapping, and there is no phrase-level
+disambiguation — acceptable here because the input is overwhelmingly machine-emitted Traditional
+forms of Simplified-intended speech, not literary text.
+
+### UI polish (fix/ui-polish)
+
+Four small host-UI fixes from screenshot review, one PR:
+
+- **Transport buttons share one width.** Start/Pause/Stop sized independently, and the Pause
+  label carried a `Width="50"` hack that fit English only. The three buttons now sit in a
+  `SharedSizeGroup` (scope on the transport StackPanel), so the widest label in the current
+  chrome language sizes all three — "Zakończ" and "Weiter" included. This was originally guarded
+  by a headless geometry assertion, removed when unit tests were split by the Core/UI boundary.
+- **Masthead no longer repeats the pipeline status.** The `Transcription: … | Translation: …`
+  pair duplicated what the mode selector already says, so the block is gone; the old
+  corresponding rendering checks went with it. The `TranscriptionStatus` / `TranslationStatus`
+  view-model properties stay — their label logic is still covered by
+  `TranslationStatusTests` and mode-switch tests, and a future surface (status line, tooltip)
+  is the likely place they resurface.
+- **Settings scrollbar takes layout space.** The overlay scrollbar sat on top of the rightmost
+  controls and section rules; `AllowAutoHide="False"` puts it in the layout, plus a 14 px right
+  margin on the content so the ragged right edge clears the bar.
+- **Model-row Delete matches its neighbours.** It was the only `ghost` (borderless) button in a
+  row of outlined ones (Download / Cancel); it now wears the default outlined face. The last
+  two are style-only changes verified by the existing suite.
+
+---
+
 ## 2026-08-01
 
 ### Installers
@@ -98,6 +399,43 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 
 ### Fixes
 
+- **Local translation produced nothing at all, and Stop took twenty seconds.** Both were the same
+  cause. Qwen3.5 reasons by default; given the 512-token budget a translation needs, the whole
+  budget went to `<think>` and the block never closed, so `MtOutputCleaner` correctly found no
+  translation in it and every column sat on `…` for the whole meeting with nothing printed
+  anywhere. Measured against the 2B on this machine: **40 s per call, empty string out.**
+  Prefilling an already-closed think block skips the reasoning turn: **1 s per call, and a usable
+  sentence.** (Qwen's documented `/no_think` marker was tried first and did not work — the model
+  reasoned anyway.) The prefill is data on the catalog entry (`LocalModelInfo.AssistantPrefill`),
+  not a switch, so a new model family declares its own convention and nothing branches on a
+  vendor. End-to-end through the shipping path afterwards: **2.0–5.3 s per utterance for two
+  target languages**, part numbers (`KX-4402`) and standards (`ISO 7599`) preserved.
+
+  Stop was slow because those 40-second decodes were exactly what shutdown waited for:
+  `MeetingSession.DisposeAsync` awaited every pending translation with no cancellation at all, so
+  the operator's Stop button belonged to the translator. There is now a bounded grace
+  (`DefaultTranslationGrace`, 2 s) for a translation that is nearly done, after which the token
+  is cancelled and the decode unwinds — measured cancel-and-dispose: **0.7 s**. The masthead says
+  `Stopping…` for the duration and both transport buttons are refused, since a second press used
+  to race the first.
+
+  Two further defects surfaced while fixing this. Translations were registered as pending *after*
+  the call had already entered the provider, so a shutdown landing in that window saw no pending
+  work and abandoned a translation that had in fact begun; registration now happens before the
+  work starts. And a translator returning nothing for *every* target was silent — indistinguishable
+  on screen from a slow one — which is what made this a rehearsal-length mystery rather than a
+  warning line; total failure is now reported through the existing non-fatal error path. Partial
+  failure stays quiet on purpose: the languages that worked are worth more than a warning about
+  the one that did not.
+
+  Review of the fix found a third window of the same shape: the pending snapshot is taken while
+  the pump may still be draining finals buffered before Stop, so a translation tracked during the
+  grace was cancelled with the rest but awaited by nobody — disposal could return, and the caller
+  free the native weights, while that decode was still unwinding, with the freshly disposed
+  cancellation source firing a spurious "Relay publish failed" behind it. Once the pump has
+  exited nothing can register any more, so disposal now takes the pending list a second time at
+  that point and waits for the stragglers; they are already cancelled, so Stop stays bounded.
+
 - **Multi-room isolation.** Two hosts starting in the same second used to land on the same
   broadcast channel (room id was `kanal-HHmmss`); ids now carry a random 4-char suffix
   (`RoomIds.New`, e.g. `kanal-093005-x7kq`). The mobile page's localStorage cache is now keyed
@@ -114,6 +452,180 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   rewrite their URL and cache key, and drop the previous meeting's records. A fresh room id per
   Start stays deliberate — ASR utterance ids restart at zero, so reusing a channel would let a
   new meeting overwrite the old one's records by id.
+
+- **Transport: Start · Pause/Resume · Stop, with icons.** The host had two buttons and no way to
+  take the room off the record without ending the meeting. Pause is designed as a **privacy
+  control** first — in a negotiation the operator steps out to talk to their own side — so it
+  stops the audio at the door (`MeetingSession.PushAudioAsync` returns early while paused) rather
+  than hiding the transcript afterwards. Dropping the transcript while still streaming the room to
+  a cloud transcriber would mean the private conversation left the building and only the record of
+  it was hidden, which is worse than offering no pause at all. A provider that generates its own
+  audio (the scripted one) is handled at the other end too: nothing it says while paused is
+  recorded.
+
+  Pausing is announced to the room (`room.paused`) and carried in `room.snapshot`, so a phone
+  joining mid-pause lands in the same state as everyone else. A column that simply stops is
+  indistinguishable from a broken connection, and "is my next sentence being recorded" is not a
+  question to answer by inference. On the host the same state is an inverted ink band across the
+  full width — the heaviest statement available without spending colour, which belongs to
+  speakers. The bottom status line alone was not enough: at a metre it is easy to miss, on exactly
+  the state where being wrong is expensive.
+
+  Icons are drawn as geometry rather than set as characters (▶ ❚❚ ■). The font stack here is
+  chosen to carry three scripts at once, and which face ends up supplying a symbol out of it is
+  not worth leaving to chance on the one row of controls used mid-meeting. Settings is three
+  sliders rather than a gear, drawn from the same rules-and-blocks vocabulary as the rest of the
+  screen. A glyph is not text and does not inherit `TextElement.Foreground`, so every button state
+  states what its icon is painted with — an icon left ink-on-ink during a hover fill disappears.
+
+  Review follow-up: while paused, a sentence that **began on the record may still finish on it**.
+  The pump originally dropped every transcript during a pause, including the final of a sentence
+  whose partial was already on every phone — and the audio gate means a real transcriber can only
+  be flushing pre-pause, on-record audio at that point, so the last sentence before the pause was
+  left a muted partial forever and its translation never requested. Nothing new may begin while
+  paused; that unchanged rule is what still keeps the scripted provider off the record.
+
+- **Mode availability was invisible.** Whether a mode could run was carried only by the row's
+  contrast — the same signal the grey second line already uses — so five unequal choices read as
+  five equal ones and the operator found out at Start. Each row now carries a marker (filled
+  square = runs now, hollow = blocked) and states its status in words, and a **help flyout** next
+  to the dropdown lays all five out side by side with what each one does, what it sends off this
+  machine, and what is blocking it. The flyout is generated from the same `Modes` collection the
+  dropdown binds to, so the help cannot drift from the list. Three of five modes cannot run yet;
+  the list is as much roadmap as control, which is why a row nobody can pick still explains itself
+  — and, like every other string here, without naming a company.
+
+  Rendering it caught a defect the assertions could not: `FlyoutPresenter`'s default `MaxWidth` is
+  narrower than a readable measure of body text, and content wider than it is **clipped, not
+  wrapped** — the first version lost the right-hand third of every line, and ran past the bottom
+  of the window. Both are now set explicitly, as with every other Fluent default here, and the
+  flyout content sits in a `ScrollViewer` so growth past `MaxHeight` scrolls instead of silently
+  clipping.
+
+  Review then caught the help **overstating privacy**: Demo promised "no network" while the demo's
+  stated purpose — checking the join QR and the phones — runs over the relay, and local · local
+  promised "nothing is sent anywhere" while the captions themselves cross the network in every
+  mode. The relay fact now lives once in the flyout's introduction, each mode's help claims only
+  what its *pipeline* sends out, and a test bans the false absolutes outright. The same review
+  closed a hermeticity hole the PR itself had documented: the mode list read the ambient
+  `GLADIA_API_KEY`, so "unavailable without a key" was untestable on a machine that has one —
+  the key resolver is now injected like the other two test seams.
+
+- **A meeting now produces both artefacts, where the operator chose.** Export wrote to
+  `Documents\<roomid>.md` and printed the path in a status line nobody was looking at. It now
+  opens a save dialog on the configured transcript folder with the room id as the name — both
+  only suggestions. A cancelled dialog writes nothing; a failed write (read-only folder, full
+  disk) is reported rather than thrown out of a command nothing awaits, because losing the
+  transcript at the last step is the worst possible moment for that.
+
+  The room's audio is written to disk as the meeting runs (`WavWriter`, one file per meeting
+  named after the room, ~115 MB an hour). Streamed rather than assembled at the end — an hour in
+  memory means a crash costs all of it — and the RIFF lengths are patched every ~2 s, so a host
+  that dies mid-meeting still leaves a file that plays. A WAV with zero lengths is not a
+  truncated recording; it is one most players refuse to open.
+
+  **Recording hangs off `MeetingSession.AudioAccepted`, a tap that only fires for audio the
+  session actually took.** Reading `IsPaused` a second time in the capture loop would have worked
+  today and given the pause promise a second place to quietly stop being true. Pause says nothing
+  said in that minute is kept; that is now structural. The status bar states `RECORDING` while it
+  runs and `RECORDING HELD` while paused — the file outlives the meeting, and nobody should find
+  out about it afterwards. Settings carries both folders and an off switch.
+
+  Review then asked the question the host-side indicator could not answer: the operator knows,
+  but the people whose voices are in the file read a phone, and two of the three languages in
+  the room are spoken where recording a private conversation without the other side knowing is
+  a criminal matter, not an etiquette one. Recording is now a room state like pause —
+  `room.recording` on the wire, carried in `room.snapshot` because a phone that scans the QR ten
+  minutes in never saw the announcement, and cached, because the notice has to survive a
+  lock-screen reconnect. The mobile page states it in all four languages, and says where the
+  audio stays.
+
+  Rendering it caught the defect the assertions could not: the notice was in the flow, and the
+  feed follows the newest utterance, so a participant spends the meeting scrolled to the bottom
+  with the notice a few thousand pixels above them. It lives inside the sticky masthead now.
+  During a pause it is held rather than hidden — the file exists and resumes, and a notice that
+  vanished would read as "it stopped". It is ink on paper with a hairline, not the alarm wash:
+  a standing fact about the room, not an error.
+
+- **Microphone test in Settings, and an honest answer about noise suppression.** There was no way
+  to find out whether the room's microphone worked until the meeting had started and the columns
+  were filling with nothing. Settings now opens with an `INPUT` section: pick a device, press
+  Test, speak from where people will sit, and get a verdict — *nothing is arriving* / *too quiet*
+  / *clipping* / *the room is nearly as loud as the speaker* / *good* — each with what to do about
+  it. Level logic lives in `LevelMeter` and is tested against generated audio rather than a room.
+
+  The measurement that earns its place is the **margin**: how far speech sits above the room's own
+  noise floor, taken as the 10th percentile of recent frames (between sentences a meeting room is
+  at its floor). A loud microphone in a loud room passes every single-number check and still
+  transcribes badly; only the distance between the two predicts that.
+
+  On noise suppression the answer is **Kanal has none**. `WasapiAudioCapture` opens a plain shared
+  -mode stream, so whatever the device and Windows do — suppression, echo cancellation, automatic
+  gain — happens before Kanal sees a sample and is configured per device in Windows. A level
+  slider here would have controlled nothing, so the panel states this and measures the result
+  instead.
+
+  Rendering it caught a misleading number: with digitally silent gaps the panel reported *"speech
+  sits 81 dB above the room"*, a margin measured against the dB clamp rather than against
+  anything real. Digital silence between sentences means a device delivering zeros or gating
+  hard, not a very quiet room, and it is now reported as such.
+
+  Review fixes, after the fact. Every piece of advice named Windows, on a tool whose development
+  machine is a Mac — and macOS answers a denied microphone permission with exactly what a dead
+  device answers, zeros, so the one actionable cause was the one cause never mentioned. The
+  wording now follows the platform and names Privacy & Security where it applies. A second fix:
+  the capture loop wrote into the meter *field*, so a frame the old device still had in flight
+  when the operator pressed Stop landed in the next test's meter — one full-scale straggler and
+  a perfectly good second microphone was condemned as clipping until yet another restart. The
+  loop now writes only into the meter it was started with, and every update back to the UI
+  checks it still speaks for the current session.
+
+- **The host speaks four languages.** Chrome, messages and mode descriptions in English, 简体中文,
+  Deutsch and Polski, chosen in Settings and remembered. Separate from the room's languages by
+  design: the person driving the laptop is often not one of the people the meeting is being
+  translated for, and a German buyer running a session between a Chinese supplier and a Polish
+  contractor should not have to read English labels to do it.
+
+  A `Localizer` singleton with an indexer, reached from XAML through an `{l:T key}` markup
+  extension that produces a *binding* rather than a value. Switching therefore reaches windows
+  that are already open — mid-meeting, without restarting a room. Modes carry keys rather than
+  text for the same reason: built once at construction, they would otherwise have stayed in
+  whatever language the application started in. Missing keys fall back to English and then to the
+  key itself, so a gap shows up as a visible identifier rather than as a blank control.
+
+  Three tests keep it honest: the other three languages must carry **exactly** the English key
+  set, no string may still be the English one (bar a handful that genuinely are the same word —
+  "Start" and "Pause" are ordinary German), and `{0}` placeholders must survive translation, since
+  a format string that loses one drops the path or the decibel figure it was carrying and
+  `string.Format` says nothing. The unbranded rule is now checked in all four languages.
+
+  Two defects this turned up. A `Strings.Tables` map declared **above** the dictionaries it
+  indexes was built out of four nulls — static initialisers run in declaration order — so every
+  lookup threw instead of falling back. And a test that switched the language never put it back:
+  the language is a global singleton, as it must be for a desktop application, so a leak changed
+  what every other test's window said, and xunit's parallel classes turned that into failures that
+  moved between runs. Parallelisation is now off for the assembly, with the reason recorded.
+
+  Rendering all four caught the layout defect i18n always produces: `Merge` is one short word in
+  English and `Zusammenführen` in German, and on one row the German ran off the edge of the
+  speakers panel. The button now sits under the two tags, which fits any language rather than the
+  four that exist today.
+
+  Review fixes, after the fact. The German and Polish had promoted "the mode that sends audio
+  out" to "the *only* mode that sends audio out" — false, CloudLocal sends it too, and exactly
+  the fact this tool exists to keep straight; a test now refuses the claim. The Settings window,
+  where the switch happens, half-stayed in the old language: the env-var note, the processing
+  note, the folder note, the untested verdict and the model rows were all built at construction,
+  and the model rows were still hard-coded English besides. All of it now follows the change,
+  the two file dialogs use the keys that already existed for them, and the "same word in the
+  target language" exemptions are per language, so a Chinese 开始 reverted to "Start" fails.
+
+  Merging the two brought out a conflict worth naming: the microphone panel had just been made
+  platform-aware in English while this branch was turning the same strings into keys, so taking
+  either side alone would have silently reverted the macOS permission advice. The platform
+  difference lives in the language tables now — `settings.sound.mac` / `settings.sound.win` fill
+  a placeholder in the three sentences that name a settings panel, and the silent verdict has a
+  macOS detail of its own, because a denied permission there sounds exactly like a dead device.
 
 ### Design changes
 
@@ -325,3 +837,33 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 
 - macOS audio capture (`feat/macos-audio-capture`): CoreAudio backend, `AudioCaptureFactory`,
   cross-platform mic list.
+
+## 2026-08-03
+
+### Local model warm-up on Start (`fix/local-mt-warmup`)
+
+Start with a local translation model opened the room first and let the weights load lazily on
+the meeting's first final — so the opening sentences sat untranslated for however long llama.cpp
+took to map a multi-gigabyte file, with nothing on screen saying why. Start now loads the model
+to a working state *before* transcription begins, and the first sentence's translation delay is
+plain inference latency.
+
+- **Capability, not vendor.** A new `IWarmupProvider` in `Kanal.Core.Providers` declares
+  "my backing resources load slowly and can be loaded ahead of use" — idempotent, cancellable.
+  `LlamaSharpTextGenerator` implements it by pulling its existing lazy load forward (same gate
+  as decodes, so warm-up can never race one); `LlamaSharpMtProvider` forwards to its generator.
+  `MainViewModel.StartAsync` checks the interface, never a vendor: the scripted demo translator
+  implements nothing and starts exactly as before.
+- **The loading phase is visible and abortable.** While the model loads the masthead says so
+  (`status.loadingmodel`, en/zh/de/pl; indeterminate wording — llama.cpp reports no progress),
+  `IsStarting` refuses a second Start, and Stop stays offered: pressing it cancels the load via
+  a `CancellationToken` that runs the whole way into `LLamaWeights.LoadFromFileAsync`. The load
+  itself runs on a background thread, so neither the UI nor Stop blocks on it (the PR #20
+  guarantee holds). A load that fails reports `status.modelloadfailed` and disposes the planned
+  providers instead of opening a room that cannot translate; a cancelled load unwinds to Idle.
+- **Ordering.** Warm-up completes before the relay is created, the previous room is redirected,
+  or the ASR session starts — a room is never live, and no audio is ever captured, while the
+  translator is not yet ready. Tests drive this through a new `PlanFilter` seam on
+  `MainViewModel` (the `RelayPublisherFactory` shape): a gated warmable fake holds the load
+  open while a wrapper records that ASR never started; plus generator-level tests for
+  load-once, cancel-then-retry, and warm-up-after-dispose. 10 new tests, suite at 269.

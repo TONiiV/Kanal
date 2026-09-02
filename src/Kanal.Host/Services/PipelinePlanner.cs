@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
+using Kanal.Host.Localization;
 using Kanal.Providers.Gladia;
 using Kanal.Providers.LocalMt;
 
@@ -45,9 +46,7 @@ public static class PipelinePlanner
     /// <summary>Seam for tests: the real one reads the ambient GLADIA_API_KEY env var.</summary>
     public delegate (string Key, string? Name)? KeyResolver(AppSettings settings);
 
-    private const string LocalAsrMissing = "local transcription is not built yet";
-    private const string CloudMtMissing =
-        "no standalone cloud translation provider yet — cloud translation only runs inside a cloud transcription session";
+    private static Localizer L => Localizer.Instance;
 
     public static PipelineStatus Describe(
         PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver? key = null) =>
@@ -75,7 +74,8 @@ public static class PipelinePlanner
         // Demo must always run: a model that was chosen but never downloaded falls back to the
         // scripted translator rather than blocking, and Substitution says so out loud.
         var mt = resolved.Model is not null
-            ? new LlamaSharpMtProvider(new LlamaSharpTextGenerator(downloads.GetPath(resolved.Model)))
+            ? new LlamaSharpMtProvider(new LlamaSharpTextGenerator(
+                downloads.GetPath(resolved.Model), resolved.Model.AssistantPrefill))
             : mode.Translation == StageKind.Cloud ? null : (IMtProvider)new FakeMtProvider();
 
         return new PipelinePlan(
@@ -108,24 +108,25 @@ public static class PipelinePlanner
         switch (mode.Transcription)
         {
             case StageKind.Scripted:
-                return ("Transcription: scripted", null);
+                return (L["stage.transcription.scripted"], null);
 
             case StageKind.Local:
-                reasons.Add(LocalAsrMissing);
-                return ("Transcription: local — not available yet", null);
+                reasons.Add(L["reason.localasr"]);
+                return (L["stage.transcription.localsoon"], null);
 
             default:
                 var resolved = key(settings);
                 if (resolved is null)
                 {
-                    reasons.Add("no API key — add one in Settings");
-                    return ("Transcription: cloud — no key", null);
+                    reasons.Add(L["reason.nokey"]);
+                    return (L["stage.transcription.nokey"], null);
                 }
 
-                var where = resolved.Value.Name is { } name
-                    ? $"key “{name}”"
-                    : "key from the environment";
-                return ($"Transcription: cloud — {where}", resolved.Value.Key);
+                // the provider is named in Settings and only there; the masthead names the key
+                var label = resolved.Value.Name is { } name
+                    ? L.Format("stage.transcription.named", name)
+                    : L["stage.transcription.env"];
+                return (label, resolved.Value.Key);
         }
     }
 
@@ -138,11 +139,11 @@ public static class PipelinePlanner
             // local transcriber there is nothing to call. That is a missing provider, not a setting.
             if (mode.Transcription != StageKind.Cloud)
             {
-                reasons.Add(CloudMtMissing);
-                return ("Translation: cloud — not available yet", null, null);
+                reasons.Add(L["reason.cloudmt"]);
+                return (L["stage.translation.cloudsoon"], null, null);
             }
 
-            return ("Translation: cloud", null, null);
+            return (L["stage.translation.cloud"], null, null);
         }
 
         // A scripted pipeline translates with whatever is on this machine: a downloaded model if
@@ -153,32 +154,32 @@ public static class PipelinePlanner
         if (id is null)
         {
             if (optional)
-                return ("Translation: scripted", null, null);
-            reasons.Add("no translation model selected — pick one in Settings");
-            return ("Translation: no model selected", null, null);
+                return (L["stage.translation.scripted"], null, null);
+            reasons.Add(L["reason.nomodel"]);
+            return (L["stage.translation.nomodel"], null, null);
         }
 
         var model = LocalModelCatalog.Find(id);
         if (model is null)
         {
-            var reason = $"unknown translation model “{id}” — pick one in Settings";
+            var reason = L.Format("reason.unknownmodel", id);
+            var label = L.Format("stage.translation.unknown", id);
             if (optional)
-                return ($"Translation: unknown model \"{id}\"", null,
-                    $"{reason} Using scripted translations.");
+                return (label, null, L.Format("reason.substitute", reason));
             reasons.Add(reason);
-            return ($"Translation: unknown model \"{id}\"", null, null);
+            return (label, null, null);
         }
 
         if (!downloads.IsDownloaded(model))
         {
-            var reason = $"{model.DisplayName} is not downloaded — open Settings";
+            var reason = L.Format("reason.notdownloaded", model.DisplayName);
+            var label = L.Format("stage.translation.notdownloaded", model.DisplayName);
             if (optional)
-                return ($"Translation: {model.DisplayName} — not downloaded", null,
-                    $"{reason}. Using scripted translations.");
+                return (label, null, L.Format("reason.substitute", reason));
             reasons.Add(reason);
-            return ($"Translation: {model.DisplayName} — not downloaded", null, null);
+            return (label, null, null);
         }
 
-        return ($"Translation: {model.DisplayName} (local)", model, null);
+        return (L.Format("stage.translation.local", model.DisplayName), model, null);
     }
 }

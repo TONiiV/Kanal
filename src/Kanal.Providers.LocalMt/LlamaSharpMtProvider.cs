@@ -8,13 +8,18 @@ namespace Kanal.Providers.LocalMt;
 /// <see cref="ITextGenerator"/>. Sequential on purpose — a local model shares
 /// one context and gains nothing from parallel requests.
 /// </summary>
-public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable, IAsyncDisposable
+public sealed class LlamaSharpMtProvider : IMtProvider, IWarmupProvider, IDisposable, IAsyncDisposable
 {
     private readonly ITextGenerator _generator;
 
     public LlamaSharpMtProvider(ITextGenerator generator) => _generator = generator;
 
     public string Id => "local-llm";
+
+    /// <summary>Loads the generator's weights ahead of the first translation. A generator with
+    /// nothing to preload (a fake, a remote one) makes this a no-op, not a failure.</summary>
+    public Task WarmUpAsync(CancellationToken ct) =>
+        _generator is IWarmupProvider warmable ? warmable.WarmUpAsync(ct) : Task.CompletedTask;
 
     public async Task<IReadOnlyDictionary<string, string>> TranslateAsync(
         string text,
@@ -24,6 +29,8 @@ public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable, IAsyncDispo
         CancellationToken ct)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var empty = new List<string>();
+
         foreach (var target in to)
         {
             if (string.Equals(target, from, StringComparison.OrdinalIgnoreCase))
@@ -34,7 +41,18 @@ public sealed class LlamaSharpMtProvider : IMtProvider, IDisposable, IAsyncDispo
             var cleaned = MtOutputCleaner.Clean(raw);
             if (cleaned.Length > 0)
                 result[target] = cleaned;
+            else
+                empty.Add(target);
         }
+
+        // Nothing at all coming back is a broken translator, and it is indistinguishable on
+        // screen from a slow one: every column waits on "…" for the rest of the meeting with no
+        // message anywhere. Saying so costs one warning line; staying quiet cost a whole
+        // rehearsal. A partial result is not raised — the languages that worked are worth more
+        // than a warning about the one that did not.
+        if (result.Count == 0 && empty.Count > 0)
+            throw new InvalidOperationException(
+                $"the local model returned no translation for {string.Join(", ", empty)}");
 
         return result;
     }

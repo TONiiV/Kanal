@@ -22,5 +22,33 @@ jobs:
       - name: Build
         run: dotnet build Kanal.slnx --configuration Release
 
-      - name: Test
-        run: dotnet test tests/Kanal.Tests/Kanal.Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+      - name: Core unit tests
+        run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: UI view-model unit tests
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gateway/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # the gateway wire protocol is frozen against the desktop publisher and the mobile page;
+      # these tests run the Worker and its Durable Objects in real workerd
+      - name: Gateway tests
+        run: npm test

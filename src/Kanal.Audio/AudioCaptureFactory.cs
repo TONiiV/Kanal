@@ -23,4 +23,25 @@ public static class AudioCaptureFactory
     public static IAudioCaptureService Create() =>
         TryCreate() ?? throw new PlatformNotSupportedException(
             $"No audio capture backend for {RuntimeInformation.OSDescription}.");
+
+    /// <summary>
+    /// Hot-plug watcher for the running platform, or null where there is none — including
+    /// when registration itself fails: a dropdown that misses a hot-plug is degraded, a
+    /// start-up that dies over a notification registration is broken.
+    /// </summary>
+    public static IAudioDeviceWatcher? TryCreateDeviceWatcher()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                return new WasapiDeviceWatcher();
+            if (OperatingSystem.IsMacOS())
+                return new CoreAudioDeviceWatcher();
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
 }
