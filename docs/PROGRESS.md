@@ -4,6 +4,59 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-02
+
+### The installer chain, aimed at a private alpha (`feat/installers`)
+
+The 2026-08-01 packaging work was written for a public, tag-driven release. The first release is
+not that: `docs/04-风控管理/上线执行方案.md` sends `0.1.0-alpha.1` to named testers over a private,
+revocable link. Rebased onto main and amended for that, rather than rewritten.
+
+- **Nothing installable leaves CI.** `gh release create` on a public repo is public even for a
+  Pre-release — and so is an Actions artifact, which is the trap the first attempt at this fell
+  into. Measured on this repository: the artifact list is readable with no login at all, and
+  downloading one needs only a GitHub account, because public means everyone has read access.
+  Swapping a Pre-release for an artifact changed the shape and not the exposure. So the release
+  gear is `workflow_dispatch` with a version input, it proves the chain works, and it discards the
+  package; the dmg testers get is built locally and distributed over a link GitHub never sees. That
+  is also the only version of this where "pull the download" is a thing that can be done.
+- **Signing is mandatory on that gear, not best-effort.** It used to fall back to an unsigned build
+  when the secrets were absent. A release that quietly comes out unsigned is worse than one that
+  fails: it looks shippable, and Gatekeeper refuses it on every Mac except the one that built it.
+  Any unset secret now fails the job before the build starts. The PR gear stays unsigned, which is
+  what lets fork PRs exercise the same path.
+- **`runtimes/` is pruned to the target RID.** LLamaSharp ships a backend for every platform it
+  supports and a RID-specific publish still carries all of them. The bundle drops from 207 MB to
+  119 MB and the dmg from 88 MB to 53 MB; on macOS it also stops asking Apple to notarise `osx-x64`
+  dylibs for an architecture the package does not target.
+- **Staging wipes the bundle first.** Staging copies into `Kanal.app`, it never removed anything, so
+  a file from an earlier build survived into the next dmg — which is how a bundle ends up carrying
+  binaries the current run never signed. It does not reproduce on a fresh runner, only on the
+  maintainer machine that packages twice, and it was found exactly that way: the first local dmg
+  after the pruning change was still 88 MB, carrying August's `runtimes/` tree.
+- **The microphone prompt speaks the operator's language.** `NSMicrophoneUsageDescription` is the
+  one piece of Kanal's text macOS renders rather than the app, asked in a room whose premise is that
+  nobody shares a language. zh-Hans, de and pl `InfoPlist.strings` are staged beside the icon.
+- **The signing path was wrong, and the first run with a real certificate is what said so.** It
+  signed the Mach-O files it could find and left the ~200 managed `.dll` assemblies beside them
+  alone — but `codesign` treats all of `Contents/MacOS` as nested code, so sealing the bundle failed
+  with `code object is not signed at all` naming a `.dll`. Everything in that directory is signed
+  now, batched through `xargs` so 240 files do not each pay a timestamp round-trip, with the apphost
+  excluded because signing the main executable alone makes codesign seal the bundle prematurely.
+  `sign.sh` also asserts the Authority, timestamp and runtime flag afterwards: `codesign --verify`
+  passes on an ad-hoc signature, which is exactly the one Gatekeeper refuses.
+- 4 new test cases (12 total in `InstallerLayoutTests`, now under `Kanal.Core.UnitTests` after the
+  test split): the three localised prompts, and staging clearing what an earlier build left behind.
+- **The chain is no longer unrun.** A dispatched release build signed 250 nested binaries, got
+  `Accepted` from the notary service for both the `.app` and the dmg, and stapled both. Verified on
+  a second machine from the downloaded file: `stapler validate` passes, `spctl` reports
+  `source=Notarized Developer ID`, the app inside the mounted dmg validates on its own, and the
+  bundle carries no credential-shaped files. Local signing steps in the design note. What is still
+  unrun is everything a human has to look at — first launch on a clean Mac, the microphone prompt,
+  and whether the hardened runtime lets llama.cpp load a local model.
+
+---
+
 ## 2026-08-04
 
 ### What Kanal is built on, named on screen (issue #35, 3 of 3)
@@ -302,6 +355,63 @@ Four small host-UI fixes from screenshot review, one PR:
 - **Model-row Delete matches its neighbours.** It was the only `ghost` (borderless) button in a
   row of outlined ones (Download / Cancel); it now wears the default outlined face. The last
   two are style-only changes verified by the existing suite.
+
+---
+
+## 2026-08-01
+
+### Installers
+
+The host now ships as a double-clickable install on both platforms, driven by
+`installers/Kanal.Installers.csproj`. Design and rationale in
+[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+
+**No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
+advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is
+notarised. The audience is a meeting operator, not a developer, and homebrew-core does not take
+internal tools, so it would mean a private tap and a hand-updated `sha256` per release. Revisit only
+if Developer ID turns out to be unavailable.
+
+**One machine cannot build both artefacts.** `codesign`/`notarytool` are macOS-only and WiX is
+Windows-only, so the csproj packages for whichever OS it runs on and `release.yml` fans out over a
+two-entry matrix. Signing is a switch (`-p:SignBuild=true`), never a branch: an unsigned build must
+always succeed, or fork PRs — which cannot read secrets — could not exercise the chain at all.
+
+Three things that only fail once the app is a real bundle, and so are covered by
+`InstallerLayoutTests` rather than left to a rehearsal:
+
+- `NSMicrophoneUsageDescription` missing → macOS denies the microphone with no prompt and no error,
+  and the host captures silence. `dotnet run` inherits the terminal's permission, so it never shows.
+- `com.apple.security.cs.allow-jit` missing → the .NET JIT cannot map executable pages under the
+  hardened runtime (which notarisation requires) and the app dies at startup.
+- `CFBundleExecutable` not matching the apphost filename → the bundle does not launch at all.
+
+The bundle and the dmg are **both** notarised and stapled. Stapling only the dmg leaves the `.app`
+without its own ticket, so its first launch needs a network round-trip to Apple — unacceptable for a
+tool whose premise is running a meeting on local models with no connectivity.
+
+Measured: unsigned `PackDmg` takes ~25 s and yields an 88 MB dmg. The bundle carries **36 dylibs**
+(LLamaSharp plus the .NET runtime), which is why `sign.sh` finds Mach-O binaries with `file(1)`
+instead of trusting a list of extensions — missing one makes the notary service reject everything.
+
+**WiX is pinned to 5.0.2 for licensing reasons.** Taking the newest version instead fails the build
+with `WIX7015: You must accept the Open Source Maintenance Fee (OSMF) EULA` — WiX introduced a paid
+EULA for commercial use in v6, and an internal tool counts. 5.0.2 is the last release before it, on
+the same schema. Do not let a dependency bump carry this past 5.x without deciding to pay.
+
+CI green on both platforms: 54 s for the dmg, 2m03 s for a well-formed 75 MB MSI (`Template: x64`,
+`WiX Toolset (5.0.2.0)`). Getting there took two red runs, and both failures were the kind that
+*only* show up on a real Windows runner — the OSMF licence gate, and an icon `SourceFile` whose
+relative path resolved against the wix process's working directory rather than the `.wxs` file, so
+it pointed outside the repository. All paths are now passed in absolute via `-d`. One diagnostic to
+ignore off Windows: `WIX0389` on a plain `Directory/@Name` is a platform artefact and does not
+appear on the runner.
+
+Unrun so far, stated rather than discovered later: the signing/notarisation path (needs a
+`Developer ID Application` certificate — the only local identity is an `Apple Development` one,
+which notarisation rejects), what the MSI does when actually *run* (per-user install location,
+shortcut, uninstall, launching from an installed copy — CI proves it builds, not that it works),
+and the release job (fires only on a tag).
 
 ---
 

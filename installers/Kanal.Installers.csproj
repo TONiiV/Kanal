@@ -1,0 +1,210 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Orchestration only - this project compiles nothing. It exists as a csproj so the packaging chain
+    is driven by the same tooling as the rest of the solution, with the same properties and the same
+    `dotnet build` entry point.
+
+    A single machine cannot produce both artefacts: codesign and notarytool exist only on macOS, MSI
+    authoring needs the Windows toolchain. PackInstaller therefore dispatches on the host OS, and CI
+    fans out over a two-entry matrix and collects the results.
+
+    Signing is a switch (-p:SignBuild=true), not a branch. An unsigned build must always succeed, so
+    that fork PRs - which cannot read secrets - exercise the same path.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+    <!-- CS2008: no source files. Deliberate. -->
+    <NoWarn>$(NoWarn);CS2008</NoWarn>
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <!--
+      Apple and the MSI both reject a pre-release suffix in a version field, so Version is numeric
+      only. A filename has no such rule, and it is the first thing a tester reads - dropping the
+      suffix there hands them "Kanal-0.1.0.dmg" for a build that must not be used in a real meeting.
+    -->
+    <FullVersion Condition="'$(FullVersion)' == ''">$(Version)</FullVersion>
+    <SignBuild Condition="'$(SignBuild)' == ''">false</SignBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..'))</RepoRoot>
+    <ArtifactsDir Condition="'$(ArtifactsDir)' == ''">$(RepoRoot)artifacts/</ArtifactsDir>
+    <HostProject>$(RepoRoot)src/Kanal.Host/Kanal.Host.csproj</HostProject>
+
+    <TargetRid Condition="'$(TargetRid)' == '' AND $([MSBuild]::IsOSPlatform('OSX'))">osx-arm64</TargetRid>
+    <TargetRid Condition="'$(TargetRid)' == '' AND $([MSBuild]::IsOSPlatform('Windows'))">win-x64</TargetRid>
+
+    <PublishOutDir>$(ArtifactsDir)publish/$(TargetRid)/</PublishOutDir>
+  </PropertyGroup>
+
+  <!-- macOS layout. MacAppStageDir is overridable so tests can stage into a temp directory. -->
+  <PropertyGroup>
+    <MacAppStageDir Condition="'$(MacAppStageDir)' == ''">$(ArtifactsDir)macos/</MacAppStageDir>
+    <MacAppDir>$([MSBuild]::NormalizeDirectory('$(MacAppStageDir)'))Kanal.app/</MacAppDir>
+    <MacContentsDir>$(MacAppDir)Contents/</MacContentsDir>
+    <MacResourcesDir>$(MacContentsDir)Resources/</MacResourcesDir>
+    <MacExecutableDir>$(MacContentsDir)MacOS/</MacExecutableDir>
+    <MacEntitlements>$(MSBuildThisFileDirectory)macos/Kanal.entitlements</MacEntitlements>
+    <MacIcon>$(RepoRoot)design/kanal.icns</MacIcon>
+    <DmgPath>$(ArtifactsDir)Kanal-$(FullVersion)-$(TargetRid).dmg</DmgPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MsiPath>$(ArtifactsDir)Kanal-$(FullVersion)-$(TargetRid).msi</MsiPath>
+    <WixSource>$(MSBuildThisFileDirectory)windows/Kanal.wxs</WixSource>
+    <WindowsIcon>$(RepoRoot)src/Kanal.Host/Assets/kanal.ico</WindowsIcon>
+  </PropertyGroup>
+
+  <!--
+    Self-contained: the operator installs no runtime. Per-RID because LLamaSharp carries native
+    libraries, so there is no portable output to share between platforms.
+  -->
+  <Target Name="PublishHost">
+    <Error Condition="'$(TargetRid)' == ''"
+           Text="TargetRid could not be inferred from the host OS. Pass -p:TargetRid=osx-arm64 or win-x64." />
+
+    <!--
+      Shelling out rather than invoking the Publish target through the MSBuild task: publishing for
+      a RID the host project was never restored for fails with NETSDK1047, and restore does not
+      compose reliably inside an existing build. `dotnet publish` restores for the RID itself.
+    -->
+    <Exec Command="dotnet publish &quot;$(HostProject)&quot; --configuration Release --runtime $(TargetRid) --self-contained true --output &quot;$(PublishOutDir)&quot; -p:Version=$(Version)" />
+
+    <!--
+      LLamaSharp ships a backend for every platform it supports, and a RID-specific publish still
+      carries all of them: ~88 MB of native libraries this package can never load. On macOS the
+      osx-x64 dylibs are also Mach-O files, which means sign.sh signs them and the notary service
+      is asked to vet them, for an architecture the dmg does not target.
+    -->
+    <Exec Condition="$([MSBuild]::IsOSPlatform('OSX'))"
+          Command="find &quot;$(PublishOutDir)runtimes&quot; -mindepth 1 -maxdepth 1 ! -name $(TargetRid) -exec rm -rf {} +" />
+    <Exec Condition="$([MSBuild]::IsOSPlatform('Windows'))"
+          Command="powershell -NoProfile -Command &quot;Get-ChildItem -LiteralPath '$(PublishOutDir)runtimes' -Directory | Where-Object Name -ne '$(TargetRid)' | Remove-Item -Recurse -Force&quot;" />
+  </Target>
+
+  <!--
+    Everything about the bundle that is pure file manipulation: directories, the icon, Info.plist,
+    and nothing that needs Apple tooling or the publish output. Split out from StageMacApp precisely
+    so it runs on any OS in seconds and can be asserted by InstallerLayoutTests in the Linux CI job.
+  -->
+  <Target Name="StageMacAppLayout">
+    <!--
+      Staging is a copy, not a sync: a file left by an earlier build survives into the next dmg.
+      That is how a bundle ends up carrying binaries nobody signed this time round, and it does not
+      reproduce on a fresh runner - only on the maintainer machine that packages twice.
+    -->
+    <RemoveDir Directories="$(MacAppDir)" />
+
+    <MakeDir Directories="$(MacExecutableDir);$(MacResourcesDir)" />
+
+    <Copy SourceFiles="$(MacIcon)" DestinationFolder="$(MacResourcesDir)" />
+
+    <!--
+      Read as a property, not an item: item values split on semicolons, which would silently mangle
+      the plist. The template is documented as semicolon-free for the same reason.
+    -->
+    <PropertyGroup>
+      <_InfoPlistContent>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)macos/Info.plist.template').Replace('__VERSION__', '$(Version)'))</_InfoPlistContent>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(MacContentsDir)Info.plist"
+                      Lines="$(_InfoPlistContent)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="false" />
+
+    <!-- One .strings file per language, each landing as <lang>.lproj/InfoPlist.strings, which is
+         the only filename macOS reads localised Info.plist values from. -->
+    <ItemGroup>
+      <_InfoPlistStrings Include="$(MSBuildThisFileDirectory)macos/lproj/*.strings" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_InfoPlistStrings)"
+          DestinationFiles="@(_InfoPlistStrings->'$(MacResourcesDir)%(Filename).lproj/InfoPlist.strings')" />
+  </Target>
+
+  <Target Name="StageMacApp" DependsOnTargets="PublishHost;StageMacAppLayout">
+    <ItemGroup>
+      <_PublishedFile Include="$(PublishOutDir)**/*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_PublishedFile)"
+          DestinationFiles="@(_PublishedFile->'$(MacExecutableDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <Exec Command="chmod +x &quot;$(MacExecutableDir)Kanal.Host&quot;" />
+
+    <Error Condition="!Exists('$(MacExecutableDir)Kanal.Host')"
+           Text="The apphost is missing from the bundle. CFBundleExecutable names Kanal.Host, and LaunchServices resolves it by that exact name." />
+  </Target>
+
+  <Target Name="SignMacApp" DependsOnTargets="StageMacApp" Condition="'$(SignBuild)' == 'true'">
+    <Error Condition="'$(MACOS_SIGN_IDENTITY)' == '' AND '$(MacSignIdentity)' == ''"
+           Text="SignBuild=true needs a Developer ID identity. Set MacSignIdentity or the MACOS_SIGN_IDENTITY environment variable. Note that an 'Apple Development' certificate will not do - notarisation requires 'Developer ID Application'." />
+
+    <PropertyGroup>
+      <MacSignIdentity Condition="'$(MacSignIdentity)' == ''">$(MACOS_SIGN_IDENTITY)</MacSignIdentity>
+    </PropertyGroup>
+
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)macos/sign.sh&quot; &quot;$(MacAppDir)&quot; &quot;$(MacEntitlements)&quot; &quot;$(MacSignIdentity)&quot;" />
+  </Target>
+
+  <!--
+    Notarise and staple the .app before it goes into the dmg, then notarise and staple the dmg too.
+    Stapling only the dmg leaves the .app without its own ticket, so its first launch after being
+    dragged to /Applications needs a network round-trip to Apple. Kanal's whole premise is running a
+    meeting on local models with no connectivity, so an app that will not open offline is broken.
+  -->
+  <Target Name="NotarizeMacApp" DependsOnTargets="SignMacApp" Condition="'$(SignBuild)' == 'true'">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)macos/notarize.sh&quot; &quot;$(MacAppDir)&quot; app" />
+  </Target>
+
+  <Target Name="PackDmg" DependsOnTargets="StageMacApp;SignMacApp;NotarizeMacApp">
+    <MakeDir Directories="$(ArtifactsDir)" />
+    <Delete Files="$(DmgPath)" />
+
+    <!-- The /Applications symlink is what makes the window a drag-and-drop target. -->
+    <Exec Command="rm -f &quot;$([MSBuild]::NormalizeDirectory('$(MacAppStageDir)'))Applications&quot; &amp;&amp; ln -s /Applications &quot;$([MSBuild]::NormalizeDirectory('$(MacAppStageDir)'))Applications&quot;" />
+
+    <Exec Command="hdiutil create -volname Kanal -srcfolder &quot;$([MSBuild]::NormalizeDirectory('$(MacAppStageDir)'))&quot; -ov -format UDZO &quot;$(DmgPath)&quot;" />
+
+    <Exec Condition="'$(SignBuild)' == 'true'"
+          Command="codesign --force --timestamp --sign &quot;$(MacSignIdentity)&quot; &quot;$(DmgPath)&quot;" />
+
+    <Exec Condition="'$(SignBuild)' == 'true'"
+          Command="bash &quot;$(MSBuildThisFileDirectory)macos/notarize.sh&quot; &quot;$(DmgPath)&quot; dmg" />
+
+    <Message Importance="high" Text="dmg: $(DmgPath)" />
+  </Target>
+
+  <!--
+    WiX runs as a local tool (see .config/dotnet-tools.json) rather than a .wixproj, so the whole
+    chain stays inside one project file. The MSI is unsigned until a Windows certificate exists -
+    first run shows a SmartScreen warning the operator has to click through.
+  -->
+  <Target Name="PackMsi" DependsOnTargets="PublishHost">
+    <MakeDir Directories="$(ArtifactsDir)" />
+
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(RepoRoot)" />
+
+    <!--
+      Paths go in as absolute values. A relative path inside the .wxs resolves against this process's
+      working directory rather than against the .wxs itself, which is how an icon reference ended up
+      pointing outside the repository.
+    -->
+    <Exec WorkingDirectory="$(RepoRoot)"
+          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -o &quot;$(MsiPath)&quot;" />
+
+    <Message Importance="high" Text="msi: $(MsiPath)" />
+  </Target>
+
+  <Target Name="PackInstaller">
+    <Error Condition="!$([MSBuild]::IsOSPlatform('OSX')) AND !$([MSBuild]::IsOSPlatform('Windows'))"
+           Text="Packaging runs on macOS or Windows. Linux builds the solution and runs the tests, but produces no installer." />
+
+    <CallTarget Condition="$([MSBuild]::IsOSPlatform('OSX'))" Targets="PackDmg" />
+    <CallTarget Condition="$([MSBuild]::IsOSPlatform('Windows'))" Targets="PackMsi" />
+  </Target>
+
+</Project>

@@ -1,0 +1,187 @@
+name: Release
+
+# Two gears.
+#
+#   workflow_dispatch  signed, notarised, stapled — uploaded as a private artifact
+#   pull requests      unsigned smoke build, artefacts only
+#
+# The PR gear exists so the packaging chain cannot rot unnoticed between releases, and it is
+# path-filtered so ordinary PRs stay on the fast ubuntu loop in ci.yml. It also covers fork PRs,
+# which cannot read secrets and therefore must be able to build unsigned.
+#
+# **Nothing installable leaves this workflow.** This repository is public, and on a public
+# repository Actions artifacts are not private either: the artifact list is readable without
+# logging in at all, and downloading needs only a GitHub account, because public means everyone has
+# read access. A Pre-release and an artifact fail the same requirement for the same reason.
+#
+# So the release build proves the chain works and throws the package away. The dmg that goes to
+# testers is built on the maintainer's machine and distributed over a private, revocable link that
+# GitHub never sees — which is also what makes "pull the download" a thing you can actually do.
+# See docs/04-风控管理/上线执行方案.md and the CI section of the installers design note.
+
+on:
+  pull_request:
+    paths:
+      - 'installers/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/release.yml'
+      - 'src/**/*.csproj'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, no leading v (e.g. 0.1.0-alpha.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # arm64 runner, builds osx-arm64 natively
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      # A dispatch input is the source of truth for the version. A PR smoke build has none and
+      # gets 0.0.0, which is a valid MSI ProductVersion and an obviously non-releasable one.
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$INPUT_VERSION" ]]; then
+            # MSI and CFBundleShortVersionString compare only numeric components. The pre-release
+            # suffix is kept for the artifact name and stripped for the packages themselves.
+            echo "version=${INPUT_VERSION%%-*}" >> "$GITHUB_OUTPUT"
+            echo "full=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+            echo "full=0.0.0-smoke" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A release that quietly comes out unsigned is worse than one that fails: it looks shippable
+      # and is refused by Gatekeeper on every Mac but the one that built it. So on a dispatch the
+      # secrets are mandatory, and the job dies here rather than at the end.
+      - name: Signing secrets are configured
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          missing=
+          for name in MACOS_CERT_P12 MACOS_CERT_PWD MACOS_SIGNING_IDENTITY \
+                      NOTARY_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          [ -z "$missing" ] || { echo "unset secrets:$missing" >&2; exit 1; }
+
+      # Reading secrets through env rather than interpolating into the script keeps the values off
+      # the command line.
+      - name: Decide whether this build signs
+        id: signing
+        shell: bash
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" \
+                && "${{ github.event_name }}" == "workflow_dispatch" \
+                && -n "$CERT_P12" ]]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Building unsigned. Smoke build only - macOS will warn on first launch."
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_pwd="$(uuidgen)"
+
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$keychain_pwd" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_pwd" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PWD" \
+            -T /usr/bin/codesign -T /usr/bin/productsign
+
+          # Without this, codesign raises a GUI authorisation prompt. On a headless runner that is
+          # a silent hang until the job times out, with nothing useful in the log.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_pwd" "$keychain"
+
+          security list-keychain -d user -s "$keychain" login.keychain-db
+
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Write notary API key
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Package
+        shell: bash
+        env:
+          # The csproj reads MACOS_SIGN_IDENTITY; the secret is named for the value it holds.
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          dotnet build installers/Kanal.Installers.csproj \
+            -t:PackInstaller \
+            -p:Version=${{ steps.version.outputs.version }} \
+            -p:FullVersion=${{ steps.version.outputs.full }} \
+            -p:TargetRid=${{ matrix.rid }} \
+            -p:SignBuild=${{ steps.signing.outputs.sign }}
+
+      - name: Remove notary key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/notary.p8"
+
+      # The package exists, has a size, and is named what it should be. Printed rather than
+      # uploaded: see the header. The checksum here is not the one testers verify against — that
+      # one comes from the maintainer's own build, beside the file they were sent.
+      - name: The package was produced
+        shell: bash
+        run: |
+          cd artifacts
+          # Each runner produces one of the two, so the other glob never matches — hence the
+          # per-file existence check rather than one `ls` over both patterns.
+          found=
+          for f in *.dmg *.msi; do
+            [ -e "$f" ] || continue
+            found=1
+            ls -lh "$f"
+            if command -v shasum > /dev/null; then shasum -a 256 "$f"
+            else sha256sum "$f"; fi
+          done
+          # upload-artifact's if-no-files-found used to be what caught a silently empty build.
+          # Nothing is uploaded any more, so the assertion has to live here.
+          [ -n "$found" ] || { echo "no package in artifacts/" >&2; exit 1; }
