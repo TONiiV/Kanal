@@ -9,10 +9,15 @@ name: Release
 # path-filtered so ordinary PRs stay on the fast ubuntu loop in ci.yml. It also covers fork PRs,
 # which cannot read secrets and therefore must be able to build unsigned.
 #
-# There is deliberately no tag gear. The alpha goes to named testers over a private, revocable
-# link, and a Pre-release on a public repo is still public — so nothing here creates a GitHub
-# Release. The dmg is uploaded as a workflow artifact, visible to repo collaborators, and the
-# private link is minted from that file by hand. See docs/04-风控管理/上线执行方案.md.
+# **Nothing installable leaves this workflow.** This repository is public, and on a public
+# repository Actions artifacts are not private either: the artifact list is readable without
+# logging in at all, and downloading needs only a GitHub account, because public means everyone has
+# read access. A Pre-release and an artifact fail the same requirement for the same reason.
+#
+# So the release build proves the chain works and throws the package away. The dmg that goes to
+# testers is built on the maintainer's machine and distributed over a private, revocable link that
+# GitHub never sees — which is also what makes "pull the download" a thing you can actually do.
+# See docs/04-风控管理/上线执行方案.md and the CI section of the installers design note.
 
 on:
   pull_request:
@@ -159,25 +164,16 @@ jobs:
         shell: bash
         run: rm -f "$RUNNER_TEMP/notary.p8"
 
-      # The testers are told to check this before installing, so it ships beside the package.
-      - name: Checksums
+      # The package exists, has a size, and is named what it should be. Printed rather than
+      # uploaded: see the header. The checksum here is not the one testers verify against — that
+      # one comes from the maintainer's own build, beside the file they were sent.
+      - name: The package was produced
         shell: bash
         run: |
           cd artifacts
+          ls -lh *.dmg *.msi 2>/dev/null
           for f in *.dmg *.msi; do
             [ -e "$f" ] || continue
-            if command -v shasum > /dev/null; then shasum -a 256 "$f" | tee "$f.sha256"
-            else sha256sum "$f" | tee "$f.sha256"; fi
+            if command -v shasum > /dev/null; then shasum -a 256 "$f"
+            else sha256sum "$f"; fi
           done
-
-      # Collaborators only, and it expires. The private link handed to testers is minted from this
-      # file — deleting the artifact is what "pulling the download" means for an unreleased build.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: kanal-${{ steps.version.outputs.full }}-${{ matrix.rid }}
-          path: |
-            artifacts/*.dmg
-            artifacts/*.msi
-            artifacts/*.sha256
-          if-no-files-found: error
-          retention-days: 30

@@ -12,10 +12,14 @@ The 2026-08-01 packaging work was written for a public, tag-driven release. The 
 not that: `docs/04-风控管理/上线执行方案.md` sends `0.1.0-alpha.1` to named testers over a private,
 revocable link. Rebased onto main and amended for that, rather than rewritten.
 
-- **No tag gear, no GitHub Release.** `gh release create` on a public repo is public even for a
-  Pre-release, so the release path is now `workflow_dispatch` with a version input, uploading a
-  workflow artifact that collaborators can read and that expires in 30 days. Deleting that artifact
-  is what "pulling the download" means for a build that was never published.
+- **Nothing installable leaves CI.** `gh release create` on a public repo is public even for a
+  Pre-release — and so is an Actions artifact, which is the trap the first attempt at this fell
+  into. Measured on this repository: the artifact list is readable with no login at all, and
+  downloading one needs only a GitHub account, because public means everyone has read access.
+  Swapping a Pre-release for an artifact changed the shape and not the exposure. So the release
+  gear is `workflow_dispatch` with a version input, it proves the chain works, and it discards the
+  package; the dmg testers get is built locally and distributed over a link GitHub never sees. That
+  is also the only version of this where "pull the download" is a thing that can be done.
 - **Signing is mandatory on that gear, not best-effort.** It used to fall back to an unsigned build
   when the secrets were absent. A release that quietly comes out unsigned is worse than one that
   fails: it looks shippable, and Gatekeeper refuses it on every Mac except the one that built it.
@@ -43,6 +47,13 @@ revocable link. Rebased onto main and amended for that, rather than rewritten.
   passes on an ad-hoc signature, which is exactly the one Gatekeeper refuses.
 - 4 new test cases (12 total in `InstallerLayoutTests`, now under `Kanal.Core.UnitTests` after the
   test split): the three localised prompts, and staging clearing what an earlier build left behind.
+- **The chain is no longer unrun.** A dispatched release build signed 250 nested binaries, got
+  `Accepted` from the notary service for both the `.app` and the dmg, and stapled both. Verified on
+  a second machine from the downloaded file: `stapler validate` passes, `spctl` reports
+  `source=Notarized Developer ID`, the app inside the mounted dmg validates on its own, and the
+  bundle carries no credential-shaped files. Local signing steps in the design note. What is still
+  unrun is everything a human has to look at — first launch on a clean Mac, the microphone prompt,
+  and whether the hardened runtime lets llama.cpp load a local model.
 
 ---
 

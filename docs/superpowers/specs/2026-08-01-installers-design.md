@@ -220,12 +220,35 @@ New `.github/workflows/release.yml`, two gears:
 
 | Trigger | Signing | Publishes |
 |---|---|---|
-| `workflow_dispatch` (version input) | **required** | private workflow artifact |
-| `pull_request` (paths-filtered) | no | artefacts only |
+| `workflow_dispatch` (version input) | **required** | nothing — proves the chain, discards the package |
+| `pull_request` (paths-filtered) | no | nothing |
 
-There is no tag gear. `gh release create` on a public repo is public even for a Pre-release, and the
-alpha goes to named testers over a private, revocable link — so the release path uploads a workflow
-artifact, readable by collaborators, and the link is minted from that file by hand.
+**Nothing installable leaves CI, and there is no tag gear.** `gh release create` on a public
+repository is public even for a Pre-release — but so is an Actions artifact, which is the trap this
+originally fell into. On a public repo the artifact list is readable without logging in at all, and
+downloading one needs only a GitHub account, because "public" means everyone has read access. A
+Pre-release and an artifact fail the alpha's distribution requirement for exactly the same reason.
+
+So CI proves the chain works and throws the package away. The release path is local:
+
+```bash
+# once: import the Developer ID certificate into the login keychain
+security import path/to/cert.p12 -T /usr/bin/codesign
+
+export MACOS_SIGN_IDENTITY="Developer ID Application: <name> (<team>)"
+export NOTARY_KEY_PATH=path/to/AuthKey_XXXXXXXX.p8
+export NOTARY_KEY_ID=XXXXXXXX
+export NOTARY_ISSUER_ID=<issuer uuid>
+
+dotnet build installers/Kanal.Installers.csproj -t:PackInstaller \
+  -p:Version=0.1.0 -p:SignBuild=true
+
+shasum -a 256 artifacts/Kanal-0.1.0-osx-arm64.dmg
+```
+
+The dmg goes to testers over a private, revocable link that GitHub never sees — which is also what
+makes "pull the download" something that can actually be done, per the rollback window in
+`docs/04-风控管理/上线执行方案.md`.
 
 Signing is mandatory on the dispatch gear, not conditional on the secrets being present. A release
 that quietly comes out unsigned is worse than one that fails: it looks shippable and Gatekeeper
