@@ -1,6 +1,7 @@
 # Installers — design
 
-**Date:** 2026-08-01 · **Branch:** `feat/installers` · **Status:** approved, not yet implemented
+**Date:** 2026-08-01 · **Branch:** `feat/installers` · **Status:** implemented; release gear amended
+2026-09-02 for private alpha distribution (see the CI section)
 
 Ship Kanal to an operator's laptop as a double-clickable install, on macOS and Windows, without
 asking them to install a .NET runtime or open a terminal.
@@ -47,7 +48,7 @@ is impossible, the unsigned-app friction returns, and a cask becomes genuinely u
 
 **A single machine cannot produce both.** `codesign`/`notarytool` exist only on macOS; MSI authoring
 needs the Windows toolchain. The csproj therefore builds *for the host OS it runs on*; CI fans out
-over a two-entry matrix and a third job collects the artefacts into one GitHub Release.
+over a two-entry matrix and uploads the artefacts from each.
 
 Intel Macs and Windows-on-ARM are out of scope (confirmed with the operator).
 
@@ -88,8 +89,14 @@ Kanal.app/Contents/
 ├── Info.plist
 ├── MacOS/Kanal.Host            ← self-contained apphost, +x
 ├── Resources/kanal.icns        ← from design/kanal.icns
+├── Resources/<lang>.lproj/InfoPlist.strings   ← localised microphone prompt
 └── _CodeSignature/             ← written by codesign
 ```
+
+`MacOS/` carries the *entire* publish output, not just the apphost: the .NET apphost resolves
+`hostfxr` and every managed assembly next to itself, so a bundle that tidies them into `Resources/`
+does not launch. Its `runtimes/` directory is pruned to the target RID first — LLamaSharp ships a
+backend per platform, and the rest is ~88 MB the package can never load.
 
 `Info.plist` keys that are load-bearing:
 
@@ -98,7 +105,7 @@ Kanal.app/Contents/
 | `CFBundleIdentifier` | `io.github.toniiv.kanal` | stable identity across versions |
 | `CFBundleExecutable` | `Kanal.Host` | must match the apphost filename exactly |
 | `CFBundleIconFile` | `kanal` | `.icns` extension omitted, by convention |
-| `CFBundleShortVersionString` / `CFBundleVersion` | from the tag | shown in Finder / About |
+| `CFBundleShortVersionString` / `CFBundleVersion` | from the version input | shown in Finder / About |
 | `NSMicrophoneUsageDescription` | operator-facing sentence | **without it macOS silently denies mic access** |
 | `LSMinimumSystemVersion` | `12.0` | matches the .NET 9 macOS floor |
 | `NSHighResolutionCapable` | `true` | otherwise the window renders blurry on Retina |
@@ -186,12 +193,16 @@ The MSI is unsigned. First run shows a SmartScreen warning that the operator mus
 
 ## Version numbers
 
-The tag is the source of truth: `v0.3.1` → `0.3.1`. `workflow_dispatch` and PR builds use `0.0.0`.
+> **Amended 2026-09-02.** Two things below were written for a public tag-driven release and no
+> longer hold: the tag gear is gone, and signing is mandatory rather than best-effort. The reason is
+> the alpha's distribution model — see `docs/04-风控管理/上线执行方案.md`.
 
-MSI `ProductVersion` constrains the tag scheme: **major ≤ 255, minor ≤ 255, build ≤ 65535**, and a
-fourth component is silently ignored for upgrade comparisons. Three-component semver tags stay well
-inside this. Pre-release suffixes (`v0.3.1-rc1`) are stripped for the MSI and kept for the release
-name.
+The `workflow_dispatch` input is the source of truth: `0.1.0-alpha.1`. PR smoke builds use `0.0.0`.
+
+MSI `ProductVersion` constrains the scheme: **major ≤ 255, minor ≤ 255, build ≤ 65535**, and a
+fourth component is silently ignored for upgrade comparisons. Three-component semver stays well
+inside this. Pre-release suffixes (`0.1.0-alpha.1`) are stripped for the MSI and for
+`CFBundleShortVersionString` — Apple rejects them there — and kept for the artifact name.
 
 ## CI
 
@@ -202,16 +213,21 @@ New `.github/workflows/release.yml`, two gears:
 
 | Trigger | Signing | Publishes |
 |---|---|---|
-| `push: tags: ['v*']` | yes | GitHub Release |
+| `workflow_dispatch` (version input) | **required** | private workflow artifact |
 | `pull_request` (paths-filtered) | no | artefacts only |
-| `workflow_dispatch` | no | artefacts only |
 
-The PR gear is filtered to `installers/**`, `.github/workflows/release.yml` and `src/**/*.csproj`, so
-ordinary PRs are unaffected while changes that can break packaging still get exercised. This also
-handles fork PRs, which cannot read secrets and therefore *must* be able to build unsigned.
+There is no tag gear. `gh release create` on a public repo is public even for a Pre-release, and the
+alpha goes to named testers over a private, revocable link — so the release path uploads a workflow
+artifact, readable by collaborators, and the link is minted from that file by hand.
 
-Secrets (macOS only): `MACOS_CERT_P12`, `MACOS_CERT_PWD`, `MACOS_SIGN_IDENTITY`, `NOTARY_KEY_P8`,
-`NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`.
+Signing is mandatory on the dispatch gear, not conditional on the secrets being present. A release
+that quietly comes out unsigned is worse than one that fails: it looks shippable and Gatekeeper
+refuses it on every Mac except the one that built it. Any unset secret fails the job before the
+build starts. The PR gear stays unsigned, which is what lets fork PRs exercise the same path.
+
+Secrets (macOS only): `MACOS_CERT_P12`, `MACOS_CERT_PWD`, `MACOS_SIGNING_IDENTITY`, `NOTARY_KEY_P8`,
+`NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. The workflow maps `MACOS_SIGNING_IDENTITY` onto the
+`MACOS_SIGN_IDENTITY` environment variable the csproj reads.
 
 Importing the certificate on a runner must end with `security set-key-partition-list`. Omitting it
 makes `codesign` raise a GUI authorisation prompt, which on a headless runner is a silent hang until
@@ -222,7 +238,7 @@ the job times out, with nothing useful in the log.
 Per CLAUDE.md, behaviour lands with tests. What is genuinely testable is the staging layer, and the
 target split exists to maximise that surface.
 
-`tests/Kanal.Tests/InstallerLayoutTests.cs` — runs `StageMacAppLayout` into a temp directory and
+`tests/Kanal.Core.UnitTests/InstallerLayoutTests.cs` — runs `StageMacAppLayout` into a temp directory and
 asserts:
 
 - `Contents/MacOS`, `Contents/Resources`, `Contents/Info.plist` exist
@@ -235,7 +251,7 @@ asserts:
 These are file assertions with no Apple tooling involved, so they run in the existing ubuntu CI job.
 
 Signing and notarisation are **not unit-testable** — they depend on a certificate and Apple's
-service. Coverage for them is the tag-triggered CI run plus one local signed build.
+service. Coverage for them is the dispatched release run plus one local signed build.
 
 ## Verified
 

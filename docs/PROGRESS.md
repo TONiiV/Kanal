@@ -4,6 +4,40 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-02
+
+### The installer chain, aimed at a private alpha (`feat/installers`)
+
+The 2026-08-01 packaging work was written for a public, tag-driven release. The first release is
+not that: `docs/04-风控管理/上线执行方案.md` sends `0.1.0-alpha.1` to named testers over a private,
+revocable link. Rebased onto main and amended for that, rather than rewritten.
+
+- **No tag gear, no GitHub Release.** `gh release create` on a public repo is public even for a
+  Pre-release, so the release path is now `workflow_dispatch` with a version input, uploading a
+  workflow artifact that collaborators can read and that expires in 30 days. Deleting that artifact
+  is what "pulling the download" means for a build that was never published.
+- **Signing is mandatory on that gear, not best-effort.** It used to fall back to an unsigned build
+  when the secrets were absent. A release that quietly comes out unsigned is worse than one that
+  fails: it looks shippable, and Gatekeeper refuses it on every Mac except the one that built it.
+  Any unset secret now fails the job before the build starts. The PR gear stays unsigned, which is
+  what lets fork PRs exercise the same path.
+- **`runtimes/` is pruned to the target RID.** LLamaSharp ships a backend for every platform it
+  supports and a RID-specific publish still carries all of them. The bundle drops from 207 MB to
+  119 MB and the dmg from 88 MB to 53 MB; on macOS it also stops asking Apple to notarise `osx-x64`
+  dylibs for an architecture the package does not target.
+- **Staging wipes the bundle first.** Staging copies into `Kanal.app`, it never removed anything, so
+  a file from an earlier build survived into the next dmg — which is how a bundle ends up carrying
+  binaries the current run never signed. It does not reproduce on a fresh runner, only on the
+  maintainer machine that packages twice, and it was found exactly that way: the first local dmg
+  after the pruning change was still 88 MB, carrying August's `runtimes/` tree.
+- **The microphone prompt speaks the operator's language.** `NSMicrophoneUsageDescription` is the
+  one piece of Kanal's text macOS renders rather than the app, asked in a room whose premise is that
+  nobody shares a language. zh-Hans, de and pl `InfoPlist.strings` are staged beside the icon.
+- 4 new test cases (12 total in `InstallerLayoutTests`, now under `Kanal.Core.UnitTests` after the
+  test split): the three localised prompts, and staging clearing what an earlier build left behind.
+
+---
+
 ## 2026-08-04
 
 ### What Kanal is built on, named on screen (issue #35, 3 of 3)

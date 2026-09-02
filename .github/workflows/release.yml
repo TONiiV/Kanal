@@ -2,16 +2,19 @@ name: Release
 
 # Two gears.
 #
-#   tags v*        signed, notarised, published to a GitHub Release
-#   pull requests  unsigned smoke build, artefacts only
+#   workflow_dispatch  signed, notarised, stapled — uploaded as a private artifact
+#   pull requests      unsigned smoke build, artefacts only
 #
 # The PR gear exists so the packaging chain cannot rot unnoticed between releases, and it is
 # path-filtered so ordinary PRs stay on the fast ubuntu loop in ci.yml. It also covers fork PRs,
 # which cannot read secrets and therefore must be able to build unsigned.
+#
+# There is deliberately no tag gear. The alpha goes to named testers over a private, revocable
+# link, and a Pre-release on a public repo is still public — so nothing here creates a GitHub
+# Release. The dmg is uploaded as a workflow artifact, visible to repo collaborators, and the
+# private link is minted from that file by hand. See docs/04-风控管理/上线执行方案.md.
 
 on:
-  push:
-    tags: ['v*']
   pull_request:
     paths:
       - 'installers/**'
@@ -19,6 +22,14 @@ on:
       - '.github/workflows/release.yml'
       - 'src/**/*.csproj'
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, no leading v (e.g. 0.1.0-alpha.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   package:
@@ -39,38 +50,60 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      # A tag is the source of truth for the version. Everything else builds 0.0.0, which is a
-      # valid MSI ProductVersion and an obviously non-releasable one.
+      # A dispatch input is the source of truth for the version. A PR smoke build has none and
+      # gets 0.0.0, which is a valid MSI ProductVersion and an obviously non-releasable one.
       - name: Resolve version
         id: version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-            # MSI compares only three components. A pre-release suffix is kept for the release
-            # name and stripped for the package itself.
-            echo "version=${version%%-*}" >> "$GITHUB_OUTPUT"
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$INPUT_VERSION" ]]; then
+            # MSI and CFBundleShortVersionString compare only numeric components. The pre-release
+            # suffix is kept for the artifact name and stripped for the packages themselves.
+            echo "version=${INPUT_VERSION%%-*}" >> "$GITHUB_OUTPUT"
+            echo "full=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
           else
             echo "version=0.0.0" >> "$GITHUB_OUTPUT"
-            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "full=0.0.0-smoke" >> "$GITHUB_OUTPUT"
           fi
 
-      # Signing needs a tag *and* the secrets. Reading them through env rather than interpolating
-      # into the script keeps the values off the command line.
+      # A release that quietly comes out unsigned is worse than one that fails: it looks shippable
+      # and is refused by Gatekeeper on every Mac but the one that built it. So on a dispatch the
+      # secrets are mandatory, and the job dies here rather than at the end.
+      - name: Signing secrets are configured
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          missing=
+          for name in MACOS_CERT_P12 MACOS_CERT_PWD MACOS_SIGNING_IDENTITY \
+                      NOTARY_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          [ -z "$missing" ] || { echo "unset secrets:$missing" >&2; exit 1; }
+
+      # Reading secrets through env rather than interpolating into the script keeps the values off
+      # the command line.
       - name: Decide whether this build signs
         id: signing
         shell: bash
         env:
           CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
         run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" \
-                && "${{ github.event_name }}" == "push" \
+          if [[ "${{ runner.os }}" == "macOS" \
+                && "${{ github.event_name }}" == "workflow_dispatch" \
                 && -n "$CERT_P12" ]]; then
             echo "sign=true" >> "$GITHUB_OUTPUT"
           else
             echo "sign=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Building unsigned. macOS will warn on first launch."
+            echo "::notice::Building unsigned. Smoke build only - macOS will warn on first launch."
           fi
 
       - name: Import Developer ID certificate
@@ -110,7 +143,8 @@ jobs:
       - name: Package
         shell: bash
         env:
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          # The csproj reads MACOS_SIGN_IDENTITY; the secret is named for the value it holds.
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
@@ -125,34 +159,25 @@ jobs:
         shell: bash
         run: rm -f "$RUNNER_TEMP/notary.p8"
 
+      # The testers are told to check this before installing, so it ships beside the package.
+      - name: Checksums
+        shell: bash
+        run: |
+          cd artifacts
+          for f in *.dmg *.msi; do
+            [ -e "$f" ] || continue
+            if command -v shasum > /dev/null; then shasum -a 256 "$f" | tee "$f.sha256"
+            else sha256sum "$f" | tee "$f.sha256"; fi
+          done
+
+      # Collaborators only, and it expires. The private link handed to testers is minted from this
+      # file — deleting the artifact is what "pulling the download" means for an unreleased build.
       - uses: actions/upload-artifact@v4
         with:
-          name: kanal-${{ matrix.rid }}
+          name: kanal-${{ steps.version.outputs.full }}-${{ matrix.rid }}
           path: |
             artifacts/*.dmg
             artifacts/*.msi
+            artifacts/*.sha256
           if-no-files-found: error
-
-  release:
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      # gh is preinstalled on the runner, so the release needs no third-party action.
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          ls -lh dist
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          retention-days: 30

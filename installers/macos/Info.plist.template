@@ -42,6 +42,20 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kanal captures room audio to transcribe and translate what is said in the meeting.</string>
 
+	<!-- The prompt above is the English fallback. macOS reads the operator's own language from
+	     Resources/<lang>.lproj/InfoPlist.strings, staged from installers/macos/lproj - and a room
+	     whose whole point is that nobody shares a language should not ask for the microphone in a
+	     language the operator may not read. -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+		<string>de</string>
+		<string>pl</string>
+	</array>
+
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0</string>
 	<key>NSHighResolutionCapable</key>

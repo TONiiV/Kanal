@@ -25,11 +25,12 @@ public class InstallerLayoutTests
 
     // Staging shells out to MSBuild, so it is done once and shared. xUnit gives each test class one
     // instance per test by default, which would otherwise re-run the build for every assertion.
-    static StagedApp StageOnce()
+    static StagedApp StageOnce() => StageInto(Path.Combine(
+        Path.GetTempPath(), "kanal-installer-tests", Guid.NewGuid().ToString("n")));
+
+    static StagedApp StageInto(string stageDir)
     {
         var repoRoot = FindRepoRoot();
-        var stageDir = Path.Combine(
-            Path.GetTempPath(), "kanal-installer-tests", Guid.NewGuid().ToString("n"));
 
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -166,6 +167,42 @@ public class InstallerLayoutTests
 
         Assert.Equal("true", plist["NSHighResolutionCapable"]);
         Assert.Equal("12.0", plist["LSMinimumSystemVersion"]);
+    }
+
+    [Theory]
+    [InlineData("zh-Hans")]
+    [InlineData("de")]
+    [InlineData("pl")]
+    public void MicrophonePromptIsLocalisedForEveryLanguageTheAppSpeaks(string language)
+    {
+        // The prompt is the one piece of Kanal's text macOS renders rather than the app, and it is
+        // asked in a room whose premise is that nobody shares a language. InfoPlist.strings is the
+        // only filename the system reads it from — a file staged under any other name is silently
+        // ignored and the operator gets the English fallback.
+        var strings = Path.Combine(
+            Staged.Value.Contents, "Resources", $"{language}.lproj", "InfoPlist.strings");
+
+        Assert.True(File.Exists(strings), $"{language}.lproj/InfoPlist.strings missing");
+        Assert.Contains("NSMicrophoneUsageDescription", File.ReadAllText(strings));
+    }
+
+    [Fact]
+    public void StagingClearsWhatAnEarlierBuildLeftBehind()
+    {
+        // Staging copies into the bundle, it does not sync it. Without an explicit wipe a file from
+        // a previous build survives into the next dmg — including binaries this run never signed.
+        // A fresh CI runner never sees it: it is the maintainer packaging twice who ships it.
+        var stageDir = Path.Combine(
+            Path.GetTempPath(), "kanal-installer-tests", Guid.NewGuid().ToString("n"));
+
+        var staged = StageInto(stageDir);
+        var leftover = Path.Combine(staged.Contents, "MacOS", "libghost.dylib");
+        Directory.CreateDirectory(Path.GetDirectoryName(leftover)!);
+        File.WriteAllText(leftover, "from the build before");
+
+        StageInto(stageDir);
+
+        Assert.False(File.Exists(leftover), "a file from the previous build survived staging");
     }
 
     [Fact]

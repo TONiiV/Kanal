@@ -66,6 +66,17 @@
       compose reliably inside an existing build. `dotnet publish` restores for the RID itself.
     -->
     <Exec Command="dotnet publish &quot;$(HostProject)&quot; --configuration Release --runtime $(TargetRid) --self-contained true --output &quot;$(PublishOutDir)&quot; -p:Version=$(Version)" />
+
+    <!--
+      LLamaSharp ships a backend for every platform it supports, and a RID-specific publish still
+      carries all of them: ~88 MB of native libraries this package can never load. On macOS the
+      osx-x64 dylibs are also Mach-O files, which means sign.sh signs them and the notary service
+      is asked to vet them, for an architecture the dmg does not target.
+    -->
+    <Exec Condition="$([MSBuild]::IsOSPlatform('OSX'))"
+          Command="find &quot;$(PublishOutDir)runtimes&quot; -mindepth 1 -maxdepth 1 ! -name $(TargetRid) -exec rm -rf {} +" />
+    <Exec Condition="$([MSBuild]::IsOSPlatform('Windows'))"
+          Command="powershell -NoProfile -Command &quot;Get-ChildItem -LiteralPath '$(PublishOutDir)runtimes' -Directory | Where-Object Name -ne '$(TargetRid)' | Remove-Item -Recurse -Force&quot;" />
   </Target>
 
   <!--
@@ -74,6 +85,13 @@
     so it runs on any OS in seconds and can be asserted by InstallerLayoutTests in the Linux CI job.
   -->
   <Target Name="StageMacAppLayout">
+    <!--
+      Staging is a copy, not a sync: a file left by an earlier build survives into the next dmg.
+      That is how a bundle ends up carrying binaries nobody signed this time round, and it does not
+      reproduce on a fresh runner - only on the maintainer machine that packages twice.
+    -->
+    <RemoveDir Directories="$(MacAppDir)" />
+
     <MakeDir Directories="$(MacExecutableDir);$(MacResourcesDir)" />
 
     <Copy SourceFiles="$(MacIcon)" DestinationFolder="$(MacResourcesDir)" />
@@ -90,6 +108,15 @@
                       Lines="$(_InfoPlistContent)"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="false" />
+
+    <!-- One .strings file per language, each landing as <lang>.lproj/InfoPlist.strings, which is
+         the only filename macOS reads localised Info.plist values from. -->
+    <ItemGroup>
+      <_InfoPlistStrings Include="$(MSBuildThisFileDirectory)macos/lproj/*.strings" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_InfoPlistStrings)"
+          DestinationFiles="@(_InfoPlistStrings->'$(MacResourcesDir)%(Filename).lproj/InfoPlist.strings')" />
   </Target>
 
   <Target Name="StageMacApp" DependsOnTargets="PublishHost;StageMacAppLayout">
