@@ -156,6 +156,7 @@ jobs:
           dotnet build installers/Kanal.Installers.csproj \
             -t:PackInstaller \
             -p:Version=${{ steps.version.outputs.version }} \
+            -p:FullVersion=${{ steps.version.outputs.full }} \
             -p:TargetRid=${{ matrix.rid }} \
             -p:SignBuild=${{ steps.signing.outputs.sign }}
 

@@ -20,6 +20,12 @@
     <!-- CS2008: no source files. Deliberate. -->
     <NoWarn>$(NoWarn);CS2008</NoWarn>
     <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <!--
+      Apple and the MSI both reject a pre-release suffix in a version field, so Version is numeric
+      only. A filename has no such rule, and it is the first thing a tester reads - dropping the
+      suffix there hands them "Kanal-0.1.0.dmg" for a build that must not be used in a real meeting.
+    -->
+    <FullVersion Condition="'$(FullVersion)' == ''">$(Version)</FullVersion>
     <SignBuild Condition="'$(SignBuild)' == ''">false</SignBuild>
   </PropertyGroup>
 
@@ -43,11 +49,11 @@
     <MacExecutableDir>$(MacContentsDir)MacOS/</MacExecutableDir>
     <MacEntitlements>$(MSBuildThisFileDirectory)macos/Kanal.entitlements</MacEntitlements>
     <MacIcon>$(RepoRoot)design/kanal.icns</MacIcon>
-    <DmgPath>$(ArtifactsDir)Kanal-$(Version)-$(TargetRid).dmg</DmgPath>
+    <DmgPath>$(ArtifactsDir)Kanal-$(FullVersion)-$(TargetRid).dmg</DmgPath>
   </PropertyGroup>
 
   <PropertyGroup>
-    <MsiPath>$(ArtifactsDir)Kanal-$(Version)-$(TargetRid).msi</MsiPath>
+    <MsiPath>$(ArtifactsDir)Kanal-$(FullVersion)-$(TargetRid).msi</MsiPath>
     <WixSource>$(MSBuildThisFileDirectory)windows/Kanal.wxs</WixSource>
     <WindowsIcon>$(RepoRoot)src/Kanal.Host/Assets/kanal.ico</WindowsIcon>
   </PropertyGroup>
