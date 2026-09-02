@@ -171,9 +171,16 @@ jobs:
         shell: bash
         run: |
           cd artifacts
-          ls -lh *.dmg *.msi 2>/dev/null
+          # Each runner produces one of the two, so the other glob never matches — hence the
+          # per-file existence check rather than one `ls` over both patterns.
+          found=
           for f in *.dmg *.msi; do
             [ -e "$f" ] || continue
+            found=1
+            ls -lh "$f"
             if command -v shasum > /dev/null; then shasum -a 256 "$f"
             else sha256sum "$f"; fi
           done
+          # upload-artifact's if-no-files-found used to be what caught a silently empty build.
+          # Nothing is uploaded any more, so the assertion has to live here.
+          [ -n "$found" ] || { echo "no package in artifacts/" >&2; exit 1; }
