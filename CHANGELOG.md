@@ -16,6 +16,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
+- The host uses one compact, horizontally scrollable control bar, leaving the meeting more room
+  while keeping every mode, language, microphone and transport control available in long locales.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.
