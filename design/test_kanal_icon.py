@@ -14,9 +14,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("kanal-icon.py")
 sys.dont_write_bytecode = True
-INK = "#111A21"
-PAPER = "#F5F0E6"
-FLOW_COLOURS = {"#B23A2E", "#9A6B10", "#1C6B58"}
+MARK_COLOURS = {"#0C1419", "#1F6A56", "#A07116", "#B03B2C"}
 
 
 def load_generator():
@@ -41,6 +39,9 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                     '<!doctype html><link rel="icon" href="data:image/svg+xml,old">',
                     encoding="utf-8",
                 )
+            (root / "design" / "kanal-icon.svg").write_bytes(
+                SCRIPT.with_name("kanal-icon.svg").read_bytes()
+            )
 
             generator.ROOT = str(root)
             generator.main()
@@ -48,24 +49,19 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             svg_paths = [
                 root / "design" / "kanal-icon.svg",
                 root / "design" / "kanal-icon-compact.svg",
-                root / "design" / "kanal-logo-horizontal.svg",
-                root / "design" / "kanal-logo-lockup.svg",
             ]
             for path in svg_paths:
-                ET.parse(path)
+                svg = ET.parse(path).getroot()
                 source = path.read_text(encoding="utf-8")
-                self.assertIn(INK, source, path.name)
+                self.assertNotIn("<text", source)
+                self.assertNotIn("kanal", source.lower())
+                self.assertEqual("0 0 512 512", svg.attrib["viewBox"])
 
             icon_source = svg_paths[0].read_text(encoding="utf-8")
-            self.assertIn(PAPER, icon_source)
-            for colour in FLOW_COLOURS:
+            for colour in MARK_COLOURS:
                 self.assertIn(colour, icon_source.upper())
-            self.assertIn("<path", icon_source, "the mark should be real vector curves and arrowheads")
-
-            lockup = svg_paths[-1].read_text(encoding="utf-8")
-            self.assertIn("One room. Every language.", lockup)
-            self.assertIn("Century Gothic Bold", lockup)
-            self.assertNotIn("<text", lockup, "the committed logo must not depend on an installed font")
+            self.assertIn("<rect", icon_source, "png2svg should emit flat vector rectangles")
+            self.assertNotIn("#F5F0E6", icon_source.upper(), "the paper texture must be transparent")
 
             splash = root / "src" / "Kanal.Host" / "Assets" / "kanal-splash-mark.png"
             data = splash.read_bytes()
@@ -86,6 +82,8 @@ class BrandAssetGeneratorTests(unittest.TestCase):
 
             self.assertTrue((root / "src" / "Kanal.Host" / "Assets" / "kanal.ico").is_file())
             self.assertTrue((root / "design" / "kanal-icon-1024.png").is_file())
+            favicon = (root / "design" / "favicon-datauri.txt").read_text()
+            self.assertTrue(favicon.startswith("data:image/png;base64,"))
             icns = (root / "design" / "kanal.icns").read_bytes()
             self.assertEqual(b"icns", icns[:4])
             self.assertEqual(len(icns), struct.unpack(">I", icns[4:8])[0])

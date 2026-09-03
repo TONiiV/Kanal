@@ -23,16 +23,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   carrying over its paper texture, shadows or raster noise. This is a deliberate, tightly scoped
   exception to the speaker-colour rule: the four-colour combination exists only inside the
   standalone brand mark, never as host chrome or an unlabeled state signal.
-- `design/kanal-icon.py` remains the geometry source for every surface and now also emits a
-  horizontal wordmark, a vertical lockup carrying the README's exact “One room. Every language.”
-  line, and a transparent splash mark for the host. The reference lettering's closest installed
-  match is Century Gothic Bold (single-storey `a`, geometric bowls, high x-height); the five-letter
-  wordmark and slogan are stored as adjusted SVG outlines, so no font file is bundled or required.
-  SVG, PNG, ICO, ICNS and the two inlined web favicons are all derived from the same route table.
+- The photographed source is cropped above its wordmark, classified into four exact ink colours,
+  stripped of small texture components and centred with transparent padding. `xyproto/png2svg`
+  converts that clean raster into the checked-in rectangle-only SVG; there are no text elements,
+  paper pixels, font dependencies or generated replacement lettering.
+- `design/kanal-icon.py` packages that traced SVG into the transparent splash mark, PNG, ICO, ICNS
+  and the two inlined web favicons. The README now displays the mark alone.
 - ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
   PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
-  platform. A generator contract test checks the palette, formats, slogan, transparent canvas and
-  byte-for-byte idempotence; CI regenerates the checked-in assets and rejects any drift.
+  platform. A generator contract test checks the palette, formats, absence of text, transparent
+  canvas and byte-for-byte idempotence; CI regenerates the checked-in assets and rejects any drift.
 
 ### Host, tools and tests target .NET 10
 
