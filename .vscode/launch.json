@@ -1,0 +1,60 @@
+{
+  // Kanal debug targets. `dotnet.defaultSolution` in settings.json points the C# Dev Kit
+  // at Kanal.slnx; these entries add F5 launches on top of it.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Demo — scripted runs the real orchestrator with no key and no microphone.
+      "name": "Host (demo, no keys)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build host",
+      "program": "${workspaceFolder}/src/Kanal.Host/bin/Debug/net9.0/Kanal.Host.dll",
+      "cwd": "${workspaceFolder}/src/Kanal.Host",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "env": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    {
+      // Live room: reads GLADIA_API_KEY / KANAL_RELAY_* / KANAL_WEB_URL from a local
+      // .env (gitignored). Copy .vscode/env.example to .env first — the debugger
+      // refuses to launch while the file is missing.
+      "name": "Host (live, .env)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build host",
+      "program": "${workspaceFolder}/src/Kanal.Host/bin/Debug/net9.0/Kanal.Host.dll",
+      "cwd": "${workspaceFolder}/src/Kanal.Host",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      // tools/Kanal.Doctor: `mic [seconds] [device]`, `gladia <wav> [--fast]`, `help`.
+      "name": "Doctor (prompt for args)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build doctor",
+      "program": "${workspaceFolder}/tools/Kanal.Doctor/bin/Debug/net9.0/Kanal.Doctor.dll",
+      "args": "${input:doctorArgs}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Attach to running process",
+      "type": "coreclr",
+      "request": "attach"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "doctorArgs",
+      "type": "promptString",
+      "description": "Kanal.Doctor arguments",
+      "default": "mic 3"
+    }
+  ]
+}

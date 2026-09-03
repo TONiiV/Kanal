@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/Kanal.slnx", "-consoleloggerparameters:NoSummary"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build host",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Kanal.Host/Kanal.Host.csproj",
+        "-consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build doctor",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/tools/Kanal.Doctor/Kanal.Doctor.csproj",
+        "-consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["test", "${workspaceFolder}/Kanal.slnx"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile",
+      // Needed on machines with only the .NET 10 SDK; inert with the 9.0 SDK present.
+      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+    },
+    {
+      "label": "test core",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["test", "${workspaceFolder}/tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj"],
+      "problemMatcher": "$msCompile",
+      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+    },
+    {
+      "label": "test ui",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["test", "${workspaceFolder}/tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj"],
+      "problemMatcher": "$msCompile",
+      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+    }
+  ]
+}
