@@ -35,10 +35,11 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - Kanal now opens on a small, undecorated splash window while the main host view model and its
   device watcher are constructed. The main window is shown before the splash closes, so the
   desktop lifetime never sees a last-window gap; there is no artificial delay.
-- The splash follows the same explicit light palette and editorial rules as the host. Its copy is
-  the README's canonical line, `One room. Every language.`, and the icon comes from the same
-  packaged resource as the application window rather than a second embedded asset.
-- A headless UI test holds the exact tagline and verifies that the packaged icon resolves.
+- The splash follows the reference's vertical hierarchy: application mark, lowercase `kanal`, a
+  short rule and the README's canonical line: `One room. Every language.` The mark comes from the
+  same packaged resource as the application window rather than a second embedded asset.
+- A headless UI test holds the lowercase name and exact tagline and verifies that the packaged icon
+  resolves.
 
 ### Host, tools and tests target .NET 10
 
