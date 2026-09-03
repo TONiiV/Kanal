@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Package the png2svg-traced Kanal mark for every application surface.
+"""Package the supplied Kanal PNG for every application surface.
 
-``design/kanal-icon.svg`` is the source of truth. The preprocessing script
-removes paper texture and text from the photographed reference before
-xyproto/png2svg converts the flat raster to SVG rectangles. This dependency-
-free packager produces deterministic PNG, ICO, ICNS and favicon derivatives.
+``design/kanal-icon.png`` is the source of truth. This dependency-free
+packager preserves that artwork and produces deterministic square PNG, ICO,
+ICNS and favicon derivatives. No SVG asset is generated or shipped.
 """
 
 from __future__ import annotations
@@ -13,7 +12,6 @@ import base64
 import os
 import re
 import struct
-import xml.etree.ElementTree as ET
 import zlib
 
 
@@ -82,40 +80,77 @@ def icns_bytes(entries: list[tuple[int, bytes]]) -> bytes:
     return b"icns" + struct.pack(">I", len(body) + 8) + body
 
 
-def _parse_colour(value: str) -> tuple[int, int, int, int]:
-    value = value.lstrip("#")
-    if len(value) == 3:
-        value = "".join(channel * 2 for channel in value)
-    if len(value) != 6:
-        raise ValueError(f"unsupported SVG colour: #{value}")
-    return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4)) + (255,)
+def _paeth(left: int, up: int, upper_left: int) -> int:
+    estimate = left + up - upper_left
+    distances = (abs(estimate - left), abs(estimate - up), abs(estimate - upper_left))
+    return (left, up, upper_left)[distances.index(min(distances))]
 
 
-def traced_svg_rgba(path: str) -> tuple[int, bytes]:
-    """Rasterise the rectangle-only SVG emitted by xyproto/png2svg."""
-    root = ET.parse(path).getroot()
-    view_box = [int(float(value)) for value in root.attrib["viewBox"].split()]
-    if view_box[:2] != [0, 0] or view_box[2] != view_box[3]:
-        raise ValueError("the traced icon must use a square, origin-zero viewBox")
-    size = view_box[2]
-    pixels = bytearray(size * size * 4)
-    for group in root:
-        if group.tag.rsplit("}", 1)[-1] != "g":
-            continue
-        colour = _parse_colour(group.attrib["fill"])
-        for rect in group:
-            if rect.tag.rsplit("}", 1)[-1] != "rect":
-                raise ValueError("the traced SVG may contain only groups and rectangles")
-            left = int(float(rect.attrib.get("x", 0)))
-            top = int(float(rect.attrib.get("y", 0)))
-            width = int(float(rect.attrib.get("width", 1)))
-            height = int(float(rect.attrib.get("height", 1)))
-            for y in range(top, top + height):
-                row = y * size * 4
-                for x in range(left, left + width):
-                    offset = row + x * 4
-                    pixels[offset:offset + 4] = colour
-    return size, bytes(pixels)
+def decode_png(path: str) -> tuple[int, int, bytes]:
+    """Decode the checked-in 8-bit RGBA PNG without third-party packages."""
+    with open(path, "rb") as handle:
+        data = handle.read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("brand source is not a PNG")
+
+    offset = 8
+    compressed = bytearray()
+    width = height = None
+    while offset < len(data):
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        tag = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        offset += 12 + length
+        if tag == b"IHDR":
+            width, height, depth, colour_type, compression, filtering, interlace = struct.unpack(
+                ">IIBBBBB", payload
+            )
+            if (depth, colour_type, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+                raise ValueError("brand source must be a non-interlaced 8-bit RGBA PNG")
+        elif tag == b"IDAT":
+            compressed += payload
+
+    if width is None or height is None:
+        raise ValueError("brand source has no IHDR chunk")
+    encoded = zlib.decompress(bytes(compressed))
+    stride = width * 4
+    result = bytearray(width * height * 4)
+    source_offset = 0
+    previous = bytearray(stride)
+    for y in range(height):
+        filter_type = encoded[source_offset]
+        source_offset += 1
+        row = bytearray(encoded[source_offset:source_offset + stride])
+        source_offset += stride
+        for index in range(stride):
+            left = row[index - 4] if index >= 4 else 0
+            up = previous[index]
+            upper_left = previous[index - 4] if index >= 4 else 0
+            if filter_type == 1:
+                row[index] = (row[index] + left) & 255
+            elif filter_type == 2:
+                row[index] = (row[index] + up) & 255
+            elif filter_type == 3:
+                row[index] = (row[index] + ((left + up) // 2)) & 255
+            elif filter_type == 4:
+                row[index] = (row[index] + _paeth(left, up, upper_left)) & 255
+            elif filter_type != 0:
+                raise ValueError(f"unsupported PNG filter {filter_type}")
+        result[y * stride:(y + 1) * stride] = row
+        previous = row
+    return width, height, bytes(result)
+
+
+def square_rgba(width: int, height: int, source: bytes) -> tuple[int, bytes]:
+    size = max(width, height)
+    result = bytearray(size * size * 4)
+    left = (size - width) // 2
+    top = (size - height) // 2
+    for y in range(height):
+        source_start = y * width * 4
+        target_start = ((top + y) * size + left) * 4
+        result[target_start:target_start + width * 4] = source[source_start:source_start + width * 4]
+    return size, bytes(result)
 
 
 def resize_rgba(source: bytes, source_size: int, target_size: int) -> bytes:
@@ -189,12 +224,10 @@ def main() -> None:
             handle.write(data)
         print(f"  {os.path.relpath(path, ROOT):52s} {len(data):6d} B")
 
-    source_svg = os.path.join(design, "kanal-icon.svg")
-    with open(source_svg, "rb") as handle:
-        svg = handle.read()
-    source_size, source_rgba = traced_svg_rgba(source_svg)
-    print(f"SVG\n  {os.path.relpath(source_svg, ROOT):52s} source ({len(svg)} B)")
-    write(os.path.join(design, "kanal-icon-compact.svg"), svg)
+    source_png = os.path.join(design, "kanal-icon.png")
+    width, height, decoded = decode_png(source_png)
+    source_size, source_rgba = square_rgba(width, height, decoded)
+    print(f"PNG\n  {os.path.relpath(source_png, ROOT):52s} source ({width}x{height})")
 
     cache: dict[int, bytes] = {}
     def rgba(size: int) -> bytes:

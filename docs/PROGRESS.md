@@ -18,21 +18,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### One mark, generated for every surface
 
-- Rebuilt the Kanal mark from the supplied reference silhouette: five squared input routes weave
-  into three arrowed outputs, using the reference's ink / pine / ochre / rust hierarchy without
-  carrying over its paper texture, shadows or raster noise. This is a deliberate, tightly scoped
-  exception to the speaker-colour rule: the four-colour combination exists only inside the
-  standalone brand mark, never as host chrome or an unlabeled state signal.
-- The photographed source is cropped above its wordmark, classified into four exact ink colours,
-  stripped of small texture components and centred with transparent padding. `xyproto/png2svg`
-  converts that clean raster into the checked-in rectangle-only SVG; there are no text elements,
-  paper pixels, font dependencies or generated replacement lettering.
-- `design/kanal-icon.py` packages that traced SVG into the transparent splash mark, PNG, ICO, ICNS
-  and the two inlined web favicons. The README now displays the mark alone.
+- The user-supplied 1536 × 1024 transparent PNG is now the single brand source. Its five incoming
+  routes and three outgoing arrows retain the original gradients and edge treatment; no wordmark,
+  font or generated replacement lettering is included. This is a deliberate, tightly scoped
+  exception to the speaker-colour rule: the combination exists only inside the standalone mark.
+- `design/kanal-icon.py` centres that PNG on a transparent square before deriving the splash mark,
+  platform PNG, ICO, ICNS and two inlined web favicons. No SVG is generated or shipped, and the
+  README displays the PNG directly.
 - ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
   PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
-  platform. A generator contract test checks the palette, formats, absence of text, transparent
-  canvas and byte-for-byte idempotence; CI regenerates the checked-in assets and rejects any drift.
+  platform. A generator contract test checks the source dimensions, formats, absence of SVG,
+  transparent canvas and byte-for-byte idempotence; CI rejects any generated-asset drift.
 
 ### Host, tools and tests target .NET 10
 

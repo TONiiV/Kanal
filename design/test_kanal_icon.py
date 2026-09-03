@@ -7,14 +7,12 @@ import struct
 import sys
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
 
 
 SCRIPT = Path(__file__).with_name("kanal-icon.py")
 sys.dont_write_bytecode = True
-MARK_COLOURS = {"#0C1419", "#1F6A56", "#A07116", "#B03B2C"}
 
 
 def load_generator():
@@ -39,29 +37,19 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                     '<!doctype html><link rel="icon" href="data:image/svg+xml,old">',
                     encoding="utf-8",
                 )
-            (root / "design" / "kanal-icon.svg").write_bytes(
-                SCRIPT.with_name("kanal-icon.svg").read_bytes()
+            (root / "design" / "kanal-icon.png").write_bytes(
+                SCRIPT.with_name("kanal-icon.png").read_bytes()
             )
 
             generator.ROOT = str(root)
             generator.main()
 
-            svg_paths = [
-                root / "design" / "kanal-icon.svg",
-                root / "design" / "kanal-icon-compact.svg",
-            ]
-            for path in svg_paths:
-                svg = ET.parse(path).getroot()
-                source = path.read_text(encoding="utf-8")
-                self.assertNotIn("<text", source)
-                self.assertNotIn("kanal", source.lower())
-                self.assertEqual("0 0 512 512", svg.attrib["viewBox"])
-
-            icon_source = svg_paths[0].read_text(encoding="utf-8")
-            for colour in MARK_COLOURS:
-                self.assertIn(colour, icon_source.upper())
-            self.assertIn("<rect", icon_source, "png2svg should emit flat vector rectangles")
-            self.assertNotIn("#F5F0E6", icon_source.upper(), "the paper texture must be transparent")
+            source = root / "design" / "kanal-icon.png"
+            source_data = source.read_bytes()
+            self.assertEqual(b"\x89PNG\r\n\x1a\n", source_data[:8])
+            width, height, bit_depth, colour_type = struct.unpack(">IIBB", source_data[16:26])
+            self.assertEqual((1536, 1024, 8, 6), (width, height, bit_depth, colour_type))
+            self.assertFalse(list((root / "design").glob("*.svg")))
 
             splash = root / "src" / "Kanal.Host" / "Assets" / "kanal-splash-mark.png"
             data = splash.read_bytes()
