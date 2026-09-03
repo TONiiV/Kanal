@@ -452,8 +452,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
 
-    public IReadOnlyList<OpenSourceNotice> Notices => OpenSourceNotices.All;
-
     public string LicenseNote =>
         Localizer.Instance.Format("settings.licenses.note", OpenSourceNotices.OwnLicense);
 

@@ -48,6 +48,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   found without knowing where an application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written all leave a line behind, with the exception attached.
-- The list of open-source projects Kanal is built on, with their licences, at the bottom of
-  Settings.
+- The list of open-source projects Kanal is built on, with their licences, readable from Settings.
+- Open-source acknowledgements now open in their own readable window from Settings, instead of
+  making the settings form several screens longer.
 - This changelog, readable from Settings.

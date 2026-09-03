@@ -6,6 +6,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### Open-source acknowledgements have their own window
+
+- Settings now links to the open-source project index instead of rendering the entire index at the
+  bottom of its already long form. The owner-modal window follows the changelog's dimensions,
+  typography, rules, scrolling and guarded single-instance interaction, while retaining every
+  project name, licence and source URL.
+- The entry point is available in English, Chinese, German and Polish. Headless UI tests hold both
+  sides of the change: every notice is visible in the dedicated window, and none remains embedded
+  in Settings.
+
 ### Host, tools and tests target .NET 10
 
 - Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to
