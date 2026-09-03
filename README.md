@@ -11,7 +11,7 @@ participants a QR code for a read-only mobile view. It was built around Chinese,
 Polish technical meetings, where part numbers, tolerances, and delivery dates matter more than
 chat-like presentation.
 
-The desktop host is an Avalonia application on .NET 9. Speech recognition and translation are
+The desktop host is an Avalonia application on .NET 10. Speech recognition and translation are
 provider-based, so cloud and local stages can be combined without changing the room model or the
 mobile client.
 
@@ -63,7 +63,7 @@ captions.
 
 ### Requirements
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Windows or macOS for live microphone capture
 - Git, when building from a clone
 

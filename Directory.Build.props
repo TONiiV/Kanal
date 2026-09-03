@@ -2,10 +2,9 @@
 
   <PropertyGroup>
     <!--
-      The projects target net9.0. A dev machine that only has a newer runtime installed
-      (common on macOS, where the 9.0 runtime is not bundled with the 10.x SDK) would
-      otherwise fail at launch with "You must install or update .NET". Inert wherever the
-      exact runtime is present — drop this once every machine has the 9.0 runtime.
+      The projects target net10.0. A dev machine that only has a newer runtime installed
+      would otherwise fail at launch with "You must install or update .NET". Inert wherever
+      the exact runtime is present — drop this once every machine has the 10.0 runtime.
     -->
     <RollForward>Major</RollForward>
   </PropertyGroup>

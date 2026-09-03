@@ -37,25 +37,21 @@
       "type": "process",
       "args": ["test", "${workspaceFolder}/Kanal.slnx"],
       "group": { "kind": "test", "isDefault": true },
-      "problemMatcher": "$msCompile",
-      // Needed on machines with only the .NET 10 SDK; inert with the 9.0 SDK present.
-      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+      "problemMatcher": "$msCompile"
     },
     {
       "label": "test core",
       "command": "dotnet",
       "type": "process",
       "args": ["test", "${workspaceFolder}/tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj"],
-      "problemMatcher": "$msCompile",
-      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+      "problemMatcher": "$msCompile"
     },
     {
       "label": "test ui",
       "command": "dotnet",
       "type": "process",
       "args": ["test", "${workspaceFolder}/tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj"],
-      "problemMatcher": "$msCompile",
-      "options": { "env": { "DOTNET_ROLL_FORWARD": "Major" } }
+      "problemMatcher": "$msCompile"
     }
   ]
 }
