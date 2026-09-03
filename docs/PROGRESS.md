@@ -16,6 +16,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   sides of the change: every notice is visible in the dedicated window, and none remains embedded
   in Settings.
 
+### One mark, generated for every surface
+
+- Rebuilt the Kanal mark as one flat, high-contrast route diagram: three voices converge in one
+  room and leave as three readable language streams. It keeps the flow idea from the design brief
+  without copying its dimensional arrows, shadows or lettering, and uses only ink and warm paper;
+  rust, ochre and pine remain reserved for speaker identity.
+- `design/kanal-icon.py` remains the geometry source for every surface and now also emits a
+  geometric horizontal wordmark, a lockup carrying the README's exact “One room. Every language.”
+  line, and a transparent splash mark for the host. SVG, PNG, ICO, ICNS and the two inlined web
+  favicons are all derived from the same route table.
+- ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
+  PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
+  platform. A generator contract test checks the palette, formats, slogan, transparent canvas and
+  byte-for-byte idempotence; CI regenerates the checked-in assets and rejects any drift.
+
 ### Host, tools and tests target .NET 10
 
 - Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to

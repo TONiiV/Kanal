@@ -1,6 +1,6 @@
 # Kanal
 
-<img src="design/kanal-icon.svg" width="96" alt="Kanal icon">
+<img src="design/kanal-logo-horizontal.svg" width="420" alt="Kanal">
 
 **One room. Every language.**\
 同一场会议，每个人的语言。

@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kanal">
-  <rect width="512" height="512" rx="114.534" fill="#F5F0E6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" width="1200" height="390" role="img" aria-label="Kanal — One room. Every language.">
+  <rect x="24" y="32" width="256" height="256" rx="57.267" fill="#F5F0E6"/>
+  <g transform="translate(24 32) scale(.5)">
   <line x1="82" y1="168" x2="168" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
   <line x1="82" y1="256" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
   <line x1="82" y1="344" x2="168" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
@@ -11,4 +12,7 @@
   <line x1="344" y1="168" x2="430" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
   <line x1="266" y1="256" x2="430" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
   <line x1="344" y1="344" x2="430" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
+  </g>
+  <path d="M350 82H382V149L450 82H494L414 158L500 238H454L382 168V238H350Z M515 238L574 82H612L671 238H635L622 199H564L551 238H515Z M575 167H611L593 112L575 167Z M690 238V82H725L800 181V82H834V238H800L724 139V238H690Z M852 238L911 82H949L1008 238H972L959 199H901L888 238H852Z M912 167H948L930 112L912 167Z M1027 82H1061V207H1136V238H1027V82Z" fill="#111A21" fill-rule="evenodd"/>
+  <text x="350" y="302" fill="#111A21" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="26" font-weight="500" letter-spacing="1.2">One room. Every language.</text>
 </svg>

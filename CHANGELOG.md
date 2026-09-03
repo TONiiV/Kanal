@@ -52,3 +52,5 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Open-source acknowledgements now open in their own readable window from Settings, instead of
   making the settings form several screens longer.
 - This changelog, readable from Settings.
+- A consistent Kanal mark across the app, browser tab and platform icons, plus a wordmark and
+  “One room. Every language.” lockup for the splash screen and project documentation.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kanal app icon — single source of truth.
+"""Kanal brand assets — single source of truth.
 
 Geometry lives here, not in a binary. Everything shipped (SVG, .icns, .ico,
 favicon) is generated from the tables below, so the icon can never drift
@@ -7,27 +7,27 @@ between platforms. Re-run after editing:
 
     python3 design/kanal-icon.py
 
-That includes the favicon inlined into web/index.html and docs/index.html —
-this script rewrites both pages in place, so there is nothing to paste by hand.
-Only the .icns needs macOS (iconutil); every other artefact is emitted on any
-platform, because a run that stopped early would reintroduce exactly the drift
-this file exists to prevent.
+That includes the logos, transparent splash mark, and favicon inlined into
+web/index.html and docs/index.html — this script rewrites both pages in place,
+so there is nothing to paste by hand. Every artefact is emitted on every
+platform. Modern ICNS chunks contain ordinary PNG data, so the macOS container
+is deterministic too and needs no platform-specific iconutil pass.
 
-No third-party dependencies: this box has no rsvg/inkscape/ImageMagick/PIL,
-and the icon is nothing but capsules, so it is cheaper to rasterise them
-directly than to take on a toolchain.
+No third-party dependencies: the mark is built from round-ended vector strokes,
+so it is cheaper and more reproducible to rasterise those directly than to take
+on an SVG or image-generation toolchain.
 
-The mark: a level meter over three lines of translation. Sound in, three
-languages out — the thing the tool actually does. Ink is the machine's own
-voice; rust/ochre/pine are the three languages, matching the speaker accents
-already shared by host and mobile client (.impeccable.md).
+The mark: three voices converge on one room, then leave as three readable
+language streams. It takes only the flow idea from the original visual brief:
+flat geometry, no copied arrows, dimensional effects, or lettering. Ink and
+paper keep the brand distinct from rust/ochre/pine, whose one job in the product
+is speaker identity (.impeccable.md).
 """
 
 import math
 import os
 import re
 import struct
-import subprocess
 import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,35 +37,38 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # blue-white tile reads as cold and unfinished.
 PAPER = (0xF5, 0xF0, 0xE6)
 INK = (0x11, 0x1A, 0x21)
-RUST = (0xB2, 0x3A, 0x2E)
-OCHRE = (0x9A, 0x6B, 0x10)
-PINE = (0x1C, 0x6B, 0x58)
 
 # --- geometry, in a 512 design grid ----------------------------------------
-# (x, y, w, h, colour); every element is a capsule — radius is min(w,h)/2.
+# A three-to-one-to-three route: many voices share one room, then every reader
+# gets one language. Each tuple is (x1, y1, x2, y2, width, colour). Rounded
+# strokes survive 16 px without the little arrowheads and crossings in the
+# reference collapsing into noise.
 FULL = [
-    (131, 126, 34, 70, INK),
-    (185, 102, 34, 118, INK),
-    (239, 85, 34, 152, INK),
-    (293, 108, 34, 106, INK),
-    (347, 130, 34, 62, INK),
-    (146, 276, 220, 38, RUST),
-    (172, 334, 168, 38, OCHRE),
-    (158, 392, 196, 38, PINE),
+    (82, 168, 168, 168, 30, INK),
+    (82, 256, 246, 256, 30, INK),
+    (82, 344, 168, 344, 30, INK),
+    (168, 168, 246, 256, 30, INK),
+    (168, 344, 246, 256, 30, INK),
+    (246, 256, 266, 256, 30, INK),
+    (266, 256, 344, 168, 30, INK),
+    (266, 256, 344, 344, 30, INK),
+    (344, 168, 430, 168, 30, INK),
+    (266, 256, 430, 256, 30, INK),
+    (344, 344, 430, 344, 30, INK),
 ]
 
-# Below ~48 px the five meter bars collapse into one grey smear. Three fatter
-# bars over three fatter lines keeps the 3-against-3 reading intact.
+# Below 64 px the full junctions become soft. The compact mark fattens the
+# strokes and lets the middle route carry straight through the shared room.
 COMPACT = [
-    (148, 106, 52, 96, INK),
-    (230, 70, 52, 168, INK),
-    (312, 94, 52, 120, INK),
-    # Thinner lines than the meter bars, bought back as gap: at 16 px the paper
-    # between the three lines is what carries "three languages", and it needs
-    # every fraction of a pixel it can get.
-    (132, 276, 248, 38, RUST),
-    (166, 340, 180, 38, OCHRE),
-    (148, 404, 216, 38, PINE),
+    (88, 176, 174, 176, 40, INK),
+    (88, 256, 424, 256, 40, INK),
+    (88, 336, 174, 336, 40, INK),
+    (174, 176, 246, 256, 40, INK),
+    (174, 336, 246, 256, 40, INK),
+    (266, 256, 338, 176, 40, INK),
+    (266, 256, 338, 336, 40, INK),
+    (338, 176, 424, 176, 40, INK),
+    (338, 336, 424, 336, 40, INK),
 ]
 
 GRID = 512.0
@@ -101,9 +104,20 @@ def _coverage(sd):
     return 0.5 - sd
 
 
-def render(size, inset=1.0):
+def _stroke_sd(px, py, x1, y1, x2, y2, width):
+    """Signed distance from a point to a round-ended line segment."""
+    vx = x2 - x1
+    vy = y2 - y1
+    length2 = vx * vx + vy * vy
+    if length2 == 0:
+        return math.hypot(px - x1, py - y1) - width / 2.0
+    t = max(0.0, min(1.0, ((px - x1) * vx + (py - y1) * vy) / length2))
+    return math.hypot(px - (x1 + t * vx), py - (y1 + t * vy)) - width / 2.0
+
+
+def render(size, inset=1.0, background=True, shapes=None):
     """Rasterise the icon to a straight-alpha RGBA buffer."""
-    shapes = geometry_for(size)
+    shapes = shapes or geometry_for(size)
     tile = size * inset
     off = (size - tile) / 2.0
     scale = tile / GRID
@@ -111,47 +125,47 @@ def render(size, inset=1.0):
 
     buf = bytearray(size * size * 4)
 
-    # Background tile first, then composite each capsule over it.
-    for py in range(size):
-        yc = py + 0.5
-        row = py * size * 4
-        for px in range(size):
-            sd = _capsule_sd(px + 0.5, yc, off, off, tile, tile, radius)
-            a = _coverage(sd)
-            if a <= 0.0:
-                continue
-            i = row + px * 4
-            buf[i] = PAPER[0]
-            buf[i + 1] = PAPER[1]
-            buf[i + 2] = PAPER[2]
-            buf[i + 3] = int(a * 255 + 0.5)
-
-    for gx, gy, gw, gh, colour in shapes:
-        x = off + gx * scale
-        y = off + gy * scale
-        w = gw * scale
-        h = gh * scale
-        r = min(w, h) / 2.0
-        x0 = max(0, int(math.floor(x - 1)))
-        y0 = max(0, int(math.floor(y - 1)))
-        x1 = min(size, int(math.ceil(x + w + 1)))
-        y1 = min(size, int(math.ceil(y + h + 1)))
-        for py in range(y0, y1):
+    # Background tile first, then composite each route over it.
+    if background:
+        for py in range(size):
             yc = py + 0.5
             row = py * size * 4
-            for px in range(x0, x1):
-                a = _coverage(_capsule_sd(px + 0.5, yc, x, y, w, h, r))
+            for px in range(size):
+                sd = _capsule_sd(px + 0.5, yc, off, off, tile, tile, radius)
+                a = _coverage(sd)
+                if a <= 0.0:
+                    continue
+                i = row + px * 4
+                buf[i] = PAPER[0]
+                buf[i + 1] = PAPER[1]
+                buf[i + 2] = PAPER[2]
+                buf[i + 3] = int(a * 255 + 0.5)
+
+    for gx1, gy1, gx2, gy2, gwidth, colour in shapes:
+        x1 = off + gx1 * scale
+        y1 = off + gy1 * scale
+        x2 = off + gx2 * scale
+        y2 = off + gy2 * scale
+        width = gwidth * scale
+        pad = width / 2.0 + 1
+        left = max(0, int(math.floor(min(x1, x2) - pad)))
+        top = max(0, int(math.floor(min(y1, y2) - pad)))
+        right = min(size, int(math.ceil(max(x1, x2) + pad)))
+        bottom = min(size, int(math.ceil(max(y1, y2) + pad)))
+        for py in range(top, bottom):
+            yc = py + 0.5
+            row = py * size * 4
+            for px in range(left, right):
+                a = _coverage(_stroke_sd(px + 0.5, yc, x1, y1, x2, y2, width))
                 if a <= 0.0:
                     continue
                 i = row + px * 4
                 da = buf[i + 3] / 255.0
                 oa = a + da * (1 - a)
-                if oa <= 0.0:
-                    continue
                 for c in range(3):
-                    src = colour[c]
-                    dst = buf[i + c]
-                    buf[i + c] = int((src * a + dst * da * (1 - a)) / oa + 0.5)
+                    buf[i + c] = int(
+                        (colour[c] * a + buf[i + c] * da * (1 - a)) / oa + 0.5
+                    )
                 buf[i + 3] = int(oa * 255 + 0.5)
 
     return bytes(buf)
@@ -225,6 +239,28 @@ def ico_bytes(entries):
     return out + b"".join(p for _, p in blobs)
 
 
+# --- ICNS ------------------------------------------------------------------
+
+
+def icns_bytes(entries):
+    """Build a modern macOS icon container from (size, RGBA) entries."""
+    chunk_types = {
+        16: b"icp4",
+        32: b"icp5",
+        64: b"icp6",
+        128: b"ic07",
+        256: b"ic08",
+        512: b"ic09",
+        1024: b"ic10",
+    }
+    chunks = []
+    for size, rgba in entries:
+        payload = png_bytes(size, rgba)
+        chunks.append(chunk_types[size] + struct.pack(">I", len(payload) + 8) + payload)
+    body = b"".join(chunks)
+    return b"icns" + struct.pack(">I", len(body) + 8) + body
+
+
 # --- SVG -------------------------------------------------------------------
 
 
@@ -232,18 +268,56 @@ def _hex(c):
     return "#%02X%02X%02X" % c
 
 
+def mark_elements(shapes):
+    """SVG elements for the shared route geometry."""
+    return "".join(
+        '\n  <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
+        'stroke-width="%s" stroke-linecap="round"/>'
+        % (_n(x1), _n(y1), _n(x2), _n(y2), _hex(colour), _n(width))
+        for x1, y1, x2, y2, width, colour in shapes
+    )
+
+
 def svg_source(shapes):
-    """The design drawing: full-bleed, one rect per element, ready to open."""
+    """The app icon: a paper tile and the shared vector mark."""
     parts = [
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" '
         'width="512" height="512" role="img" aria-label="Kanal">',
         '\n  <rect width="512" height="512" rx="%s" fill="%s"/>'
         % (_n(GRID * SQUIRCLE), _hex(PAPER)),
     ]
-    for gx, gy, gw, gh, colour in shapes:
+    parts.append(mark_elements(shapes))
+    parts.append("\n</svg>\n")
+    return "".join(parts)
+
+
+WORDMARK_PATH = (
+    "M350 82H382V149L450 82H494L414 158L500 238H454L382 168V238H350Z "
+    "M515 238L574 82H612L671 238H635L622 199H564L551 238H515Z "
+    "M575 167H611L593 112L575 167Z "
+    "M690 238V82H725L800 181V82H834V238H800L724 139V238H690Z "
+    "M852 238L911 82H949L1008 238H972L959 199H901L888 238H852Z "
+    "M912 167H948L930 112L912 167Z "
+    "M1027 82H1061V207H1136V238H1027V82Z"
+)
+
+
+def logo_source(with_tagline=False):
+    """Horizontal logo with an outlined geometric wordmark and optional slogan."""
+    height = 390 if with_tagline else 320
+    title = "Kanal — One room. Every language." if with_tagline else "Kanal"
+    parts = [
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 %d" '
+        'width="1200" height="%d" role="img" aria-label="%s">' % (height, height, title),
+        '\n  <rect x="24" y="32" width="256" height="256" rx="57.267" fill="%s"/>' % _hex(PAPER),
+        '\n  <g transform="translate(24 32) scale(.5)">%s\n  </g>' % mark_elements(FULL),
+        '\n  <path d="%s" fill="%s" fill-rule="evenodd"/>' % (WORDMARK_PATH, _hex(INK)),
+    ]
+    if with_tagline:
         parts.append(
-            '\n  <rect x="%s" y="%s" width="%s" height="%s" rx="%s" fill="%s"/>'
-            % (_n(gx), _n(gy), _n(gw), _n(gh), _n(min(gw, gh) / 2), _hex(colour))
+            '\n  <text x="350" y="302" fill="%s" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" '
+            'font-size="26" font-weight="500" letter-spacing="1.2">One room. Every language.</text>'
+            % _hex(INK)
         )
     parts.append("\n</svg>\n")
     return "".join(parts)
@@ -266,14 +340,14 @@ def favicon_data_uri(shapes):
         "<rect width='512' height='512' rx='%s' fill='%s'/>"
         % (_n(GRID * SQUIRCLE), _hex(PAPER))
     )
-    for gx, gy, gw, gh, colour in shapes:
-        svg += "<rect x='%s' y='%s' width='%s' height='%s' rx='%s' fill='%s'/>" % (
-            _n(gx),
-            _n(gy),
-            _n(gw),
-            _n(gh),
-            _n(min(gw, gh) / 2),
+    for x1, y1, x2, y2, width, colour in shapes:
+        svg += "<line x1='%s' y1='%s' x2='%s' y2='%s' stroke='%s' stroke-width='%s' stroke-linecap='round'/>" % (
+            _n(x1),
+            _n(y1),
+            _n(x2),
+            _n(y2),
             _hex(colour),
+            _n(width),
         )
     svg += "</svg>"
     encoded = svg.replace("%", "%25").replace("<", "%3C").replace(">", "%3E")
@@ -336,6 +410,8 @@ def main():
     print("SVG")
     write(os.path.join(design, "kanal-icon.svg"), svg_source(FULL).encode())
     write(os.path.join(design, "kanal-icon-compact.svg"), svg_source(COMPACT).encode())
+    write(os.path.join(design, "kanal-logo-horizontal.svg"), logo_source().encode())
+    write(os.path.join(design, "kanal-logo-lockup.svg"), logo_source(with_tagline=True).encode())
 
     # Rasterise once per size; both packagers draw from this.
     print("\nraster")
@@ -349,7 +425,8 @@ def main():
         return cache[key]
 
     print("\n.icns")
-    # iconutil wants both @1x and @2x of each nominal size.
+    # Keep the conventional iconset as an inspectable intermediate, while the
+    # checked-in ICNS is assembled directly from the same cached pixels.
     for nominal, suffix, px in [
         (16, "", 16),
         (16, "@2x", 32),
@@ -365,33 +442,27 @@ def main():
         name = "icon_%dx%d%s.png" % (nominal, nominal, suffix)
         write(os.path.join(iconset, name), png_bytes(px, rgba(px, MACOS_INSET)))
 
-    # iconutil is the only supported way to build an .icns. The bundle is a
-    # packaging artefact, so it stays in design/ — Assets/ is embedded into the
-    # binary by <AvaloniaResource>, and Avalonia only ever reads the .ico.
     icns = os.path.join(design, "kanal.icns")
-    try:
-        rc = subprocess.call(["iconutil", "-c", "icns", iconset, "-o", icns])
-    except (FileNotFoundError, OSError):
-        # Off macOS iconutil is not merely absent from PATH — spawning it raises
-        # rather than returning non-zero. Letting that escape would abort the run
-        # after the SVGs and the iconset were rewritten but before the .ico, so
-        # Windows and the web would silently keep the previous geometry: exactly
-        # the platform drift this file exists to prevent.
-        rc = -1
-    if rc == 0:
-        print("  %-52s %6d B" % (os.path.relpath(icns, ROOT), os.path.getsize(icns)))
-    else:
-        print("  iconutil unavailable — .icns not rebuilt (macOS only)")
+    write(
+        icns,
+        icns_bytes(
+            [(size, rgba(size, MACOS_INSET)) for size in (16, 32, 64, 128, 256, 512, 1024)]
+        ),
+    )
 
     print("\n.ico + PNG")
     ico = ico_bytes([(s, rgba(s)) for s in (16, 24, 32, 48, 64, 128, 256)])
     write(os.path.join(assets, "kanal.ico"), ico)
     write(os.path.join(design, "kanal-icon-1024.png"), png_bytes(1024, rgba(1024)))
+    write(
+        os.path.join(assets, "kanal-splash-mark.png"),
+        png_bytes(512, render(512, background=False, shapes=FULL)),
+    )
 
     # The mobile page must stay a single self-contained file, so its favicon is
     # inlined rather than fetched (.impeccable.md: no external assets at load).
-    # COMPACT, not FULL: a tab favicon is only ever rasterised at 16–32 px, and
-    # the five-bar meter smears at that size even as vector art.
+    # COMPACT, not FULL: a tab favicon is only ever rasterised at 16–32 px, where
+    # heavier strokes preserve the three-to-one-to-three reading.
     print("\ninline favicon")
     uri = favicon_data_uri(COMPACT)
     write(os.path.join(design, "favicon-datauri.txt"), (uri + "\n").encode())
