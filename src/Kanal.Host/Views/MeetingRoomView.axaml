@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Kanal.Host.ViewModels"
+             xmlns:l="using:Kanal.Host.Localization"
+             x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.rec">
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Padding" Value="0,9,0,0" />
+            <Setter Property="Margin" Value="0,0,0,20" />
+        </Style>
+        <Style Selector="Border.rec.live">
+            <Setter Property="BorderThickness" Value="0,3,0,0" />
+            <Setter Property="Padding" Value="0,12,0,0" />
+            <Setter Property="Margin" Value="0,28,0,20" />
+        </Style>
+        <Style Selector="Border.rec TextBlock.body">
+            <Setter Property="FontSize" Value="14.5" />
+            <Setter Property="LineHeight" Value="24" />
+        </Style>
+        <Style Selector="Border.rec.live TextBlock.body">
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="LineHeight" Value="30" />
+        </Style>
+        <Style Selector="Border.rec TextBlock.who"><Setter Property="FontSize" Value="10.5" /></Style>
+        <Style Selector="Border.rec.live TextBlock.who"><Setter Property="FontSize" Value="11.5" /></Style>
+        <Style Selector="Border.colhead:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="Padding" Value="6,0,0,0" />
+            <Setter Property="Margin" Value="-9,0,0,16" />
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <StackPanel IsVisible="{Binding !HasColumns}" Margin="24,30,24,10" MaxWidth="440"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
+            <TextBlock Text="{l:T empty.heading}" Classes="label" />
+            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" />
+            <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
+                       Foreground="{StaticResource Ink2}" Text="{l:T empty.body1}" />
+            <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="21"
+                       Foreground="{StaticResource Ink3}" Text="{l:T empty.body2}" />
+        </StackPanel>
+
+        <ItemsControl ItemsSource="{Binding Columns}" Margin="24,22,0,10">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ColumnViewModel">
+                    <Panel Margin="0,0,30,0" DragDrop.AllowDrop="True"
+                           DragDrop.DragOver="OnColumnDragOver"
+                           DragDrop.DragLeave="OnColumnDragLeave"
+                           DragDrop.Drop="OnColumnDrop">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Classes="colhead" Margin="0,0,0,16"
+                                    Background="Transparent" Focusable="True" Cursor="SizeWestEast"
+                                    ToolTip.Tip="{l:T column.drag.tip}"
+                                    PointerPressed="OnColumnHeadPointerPressed" KeyDown="OnColumnHeadKeyDown">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <TextBlock Text="{Binding Code}" FontSize="21" FontWeight="Bold"
+                                                   LetterSpacing="0.5" />
+                                        <TextBlock Text="{Binding NativeName}" FontSize="12.5" Margin="0,0,0,3"
+                                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Bottom" />
+                                    </StackPanel>
+                                    <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                                            Margin="0,7,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <ScrollViewer Loaded="OnColumnScrollLoaded"
+                                          DetachedFromVisualTree="OnColumnScrollDetached">
+                                <ItemsControl ItemsSource="{Binding Bubbles}" Margin="0,0,14,40">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BubbleViewModel">
+                                            <Border Classes="rec" Classes.live="{Binding IsLive}"
+                                                    BorderBrush="{Binding RuleColor}">
+                                                <StackPanel Spacing="5">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Classes="who" Text="{Binding SpeakerName}"
+                                                                   FontWeight="Bold" LetterSpacing="1.2"
+                                                                   Foreground="{Binding SpeakerColor}" />
+                                                        <TextBlock Classes="who" Text="{Binding SourceLang}"
+                                                                   LetterSpacing="1.5" Foreground="{StaticResource Ink3}" />
+                                                        <TextBlock Classes="who" Text="{l:T column.original}"
+                                                                   LetterSpacing="1.5" IsVisible="{Binding IsTranscript}"
+                                                                   ToolTip.Tip="{l:T column.original.tip}"
+                                                                   Foreground="{StaticResource Ink3}" />
+                                                        <TextBlock Classes="who" Text="⇄"
+                                                                   ToolTip.Tip="{l:T column.codeswitch.tip}"
+                                                                   IsVisible="{Binding CodeSwitch}"
+                                                                   Foreground="{StaticResource Ink3}" />
+                                                    </StackPanel>
+                                                    <TextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
+                                                               Foreground="{Binding TextColor}" />
+                                                    <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
+                                                            BorderBrush="{StaticResource RuleFaint}"
+                                                            BorderThickness="1,0,0,0" Padding="11,0,0,0">
+                                                        <TextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
+                                                                   FontSize="12" LineHeight="20"
+                                                                   Foreground="{StaticResource Ink3}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                        <Rectangle Width="3" HorizontalAlignment="Left" Margin="-16,0,0,0"
+                                   Fill="{StaticResource Ink}" IsVisible="{Binding IsDropBefore}" />
+                        <Rectangle Width="3" HorizontalAlignment="Right" Margin="0,0,-16,0"
+                                   Fill="{StaticResource Ink}" IsVisible="{Binding IsDropAfter}" />
+                    </Panel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Panel>
+</UserControl>

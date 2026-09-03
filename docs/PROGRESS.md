@@ -41,6 +41,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - A headless UI test holds the lowercase name and exact tagline and verifies that the packaged icon
   resolves.
 
+### The meeting window has one control bar and four focused views
+
+- Removed the duplicate `KANAL` wordmark from the window content and combined transport, mode,
+  language, microphone, export and settings controls into one compact horizontal icon bar. The bar
+  scrolls instead of wrapping, so German, Chinese and Polish labels never hide a meeting control.
+- Split the 500-line main window into `IconBarView`, `MeetingRoomView`, `SidePanelView` and
+  `StatusBarView`. Dialog ownership stays with the icon bar, column following and reordering stay
+  with the meeting room, and `MainWindow` now owns only the shell, export picker and lifetime.
+- Added a headless composition test that holds the four-region boundary and the absent in-content
+  wordmark. Existing view-model tests continue to own room and column-order behaviour.
+
 ### Host, tools and tests target .NET 10
 
 - Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to
