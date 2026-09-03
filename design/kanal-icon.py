@@ -1,192 +1,43 @@
 #!/usr/bin/env python3
-"""Kanal app icon — single source of truth.
+"""Package the supplied Kanal PNG for every application surface.
 
-Geometry lives here, not in a binary. Everything shipped (SVG, .icns, .ico,
-favicon) is generated from the tables below, so the icon can never drift
-between platforms. Re-run after editing:
-
-    python3 design/kanal-icon.py
-
-That includes the favicon inlined into web/index.html and docs/index.html —
-this script rewrites both pages in place, so there is nothing to paste by hand.
-Only the .icns needs macOS (iconutil); every other artefact is emitted on any
-platform, because a run that stopped early would reintroduce exactly the drift
-this file exists to prevent.
-
-No third-party dependencies: this box has no rsvg/inkscape/ImageMagick/PIL,
-and the icon is nothing but capsules, so it is cheaper to rasterise them
-directly than to take on a toolchain.
-
-The mark: a level meter over three lines of translation. Sound in, three
-languages out — the thing the tool actually does. Ink is the machine's own
-voice; rust/ochre/pine are the three languages, matching the speaker accents
-already shared by host and mobile client (.impeccable.md).
+``design/kanal-icon.png`` is the source of truth. This dependency-free
+packager preserves that artwork and produces deterministic square PNG, ICO,
+ICNS and favicon derivatives. No SVG asset is generated or shipped.
 """
 
-import math
+from __future__ import annotations
+
+import base64
 import os
 import re
 import struct
-import subprocess
 import zlib
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# --- palette ---------------------------------------------------------------
-# Warm paper, not the interface's cool #FCFCFD: in a Dock full of colour a
-# blue-white tile reads as cold and unfinished.
-PAPER = (0xF5, 0xF0, 0xE6)
-INK = (0x11, 0x1A, 0x21)
-RUST = (0xB2, 0x3A, 0x2E)
-OCHRE = (0x9A, 0x6B, 0x10)
-PINE = (0x1C, 0x6B, 0x58)
 
-# --- geometry, in a 512 design grid ----------------------------------------
-# (x, y, w, h, colour); every element is a capsule — radius is min(w,h)/2.
-FULL = [
-    (131, 126, 34, 70, INK),
-    (185, 102, 34, 118, INK),
-    (239, 85, 34, 152, INK),
-    (293, 108, 34, 106, INK),
-    (347, 130, 34, 62, INK),
-    (146, 276, 220, 38, RUST),
-    (172, 334, 168, 38, OCHRE),
-    (158, 392, 196, 38, PINE),
-]
-
-# Below ~48 px the five meter bars collapse into one grey smear. Three fatter
-# bars over three fatter lines keeps the 3-against-3 reading intact.
-COMPACT = [
-    (148, 106, 52, 96, INK),
-    (230, 70, 52, 168, INK),
-    (312, 94, 52, 120, INK),
-    # Thinner lines than the meter bars, bought back as gap: at 16 px the paper
-    # between the three lines is what carries "three languages", and it needs
-    # every fraction of a pixel it can get.
-    (132, 276, 248, 38, RUST),
-    (166, 340, 180, 38, OCHRE),
-    (148, 404, 216, 38, PINE),
-]
-
-GRID = 512.0
-COMPACT_BELOW = 64  # sizes strictly under this use COMPACT
-SQUIRCLE = 0.2237  # corner radius as a fraction of the tile — squircle approx.
-
-# macOS ships the tile inset in its canvas (824 pt of 1024) so every Dock icon
-# shares an optical size. Windows and the web want it full-bleed.
-MACOS_INSET = 824.0 / 1024.0
-
-
-def geometry_for(size):
-    return COMPACT if size < COMPACT_BELOW else FULL
-
-
-# --- rasteriser ------------------------------------------------------------
-
-
-def _capsule_sd(px, py, x, y, w, h, r):
-    """Signed distance from a pixel centre to a rounded rect. Negative inside."""
-    dx = abs(px - (x + w / 2)) - (w / 2 - r)
-    dy = abs(py - (y + h / 2)) - (h / 2 - r)
-    outside = math.hypot(max(dx, 0.0), max(dy, 0.0))
-    return outside + min(max(dx, dy), 0.0) - r
-
-
-def _coverage(sd):
-    """1 px analytic antialiasing band around the edge."""
-    if sd <= -0.5:
-        return 1.0
-    if sd >= 0.5:
-        return 0.0
-    return 0.5 - sd
-
-
-def render(size, inset=1.0):
-    """Rasterise the icon to a straight-alpha RGBA buffer."""
-    shapes = geometry_for(size)
-    tile = size * inset
-    off = (size - tile) / 2.0
-    scale = tile / GRID
-    radius = tile * SQUIRCLE
-
-    buf = bytearray(size * size * 4)
-
-    # Background tile first, then composite each capsule over it.
-    for py in range(size):
-        yc = py + 0.5
-        row = py * size * 4
-        for px in range(size):
-            sd = _capsule_sd(px + 0.5, yc, off, off, tile, tile, radius)
-            a = _coverage(sd)
-            if a <= 0.0:
-                continue
-            i = row + px * 4
-            buf[i] = PAPER[0]
-            buf[i + 1] = PAPER[1]
-            buf[i + 2] = PAPER[2]
-            buf[i + 3] = int(a * 255 + 0.5)
-
-    for gx, gy, gw, gh, colour in shapes:
-        x = off + gx * scale
-        y = off + gy * scale
-        w = gw * scale
-        h = gh * scale
-        r = min(w, h) / 2.0
-        x0 = max(0, int(math.floor(x - 1)))
-        y0 = max(0, int(math.floor(y - 1)))
-        x1 = min(size, int(math.ceil(x + w + 1)))
-        y1 = min(size, int(math.ceil(y + h + 1)))
-        for py in range(y0, y1):
-            yc = py + 0.5
-            row = py * size * 4
-            for px in range(x0, x1):
-                a = _coverage(_capsule_sd(px + 0.5, yc, x, y, w, h, r))
-                if a <= 0.0:
-                    continue
-                i = row + px * 4
-                da = buf[i + 3] / 255.0
-                oa = a + da * (1 - a)
-                if oa <= 0.0:
-                    continue
-                for c in range(3):
-                    src = colour[c]
-                    dst = buf[i + c]
-                    buf[i + c] = int((src * a + dst * da * (1 - a)) / oa + 0.5)
-                buf[i + 3] = int(oa * 255 + 0.5)
-
-    return bytes(buf)
-
-
-# --- PNG -------------------------------------------------------------------
-
-
-def _chunk(tag, data):
+def _chunk(tag: bytes, data: bytes) -> bytes:
     body = tag + data
     return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
 
 
-def png_bytes(size, rgba):
+def png_bytes(size: int, rgba: bytes) -> bytes:
     raw = bytearray()
     stride = size * 4
     for y in range(size):
         raw.append(0)
         raw += rgba[y * stride : (y + 1) * stride]
-    out = b"\x89PNG\r\n\x1a\n"
-    out += _chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
-    out += _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-    out += _chunk(b"IEND", b"")
-    return out
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+        + _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+        + _chunk(b"IEND", b"")
+    )
 
 
-# --- ICO -------------------------------------------------------------------
-
-
-def _dib_bytes(size, rgba):
-    """BITMAPINFOHEADER + bottom-up BGRA + AND mask, for <=48 px entries.
-
-    Windows shells older than Vista cannot read PNG-compressed ICO entries at
-    small sizes, and those are exactly the sizes the taskbar uses.
-    """
+def _dib_bytes(size: int, rgba: bytes) -> bytes:
     header = struct.pack(
         "<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0, size * size * 4, 0, 0, 0, 0
     )
@@ -194,208 +45,213 @@ def _dib_bytes(size, rgba):
     for y in range(size - 1, -1, -1):
         row = y * size * 4
         for x in range(size):
-            i = row + x * 4
-            pixels += bytes((rgba[i + 2], rgba[i + 1], rgba[i], rgba[i + 3]))
+            offset = row + x * 4
+            pixels += bytes(
+                (rgba[offset + 2], rgba[offset + 1], rgba[offset], rgba[offset + 3])
+            )
     mask_stride = ((size + 31) // 32) * 4
     return header + bytes(pixels) + b"\x00" * (mask_stride * size)
 
 
-def ico_bytes(entries):
-    """entries: list of (size, rgba). >=64 px are stored as PNG, rest as DIB."""
+def ico_bytes(entries: list[tuple[int, bytes]]) -> bytes:
     blobs = []
     for size, rgba in entries:
         payload = png_bytes(size, rgba) if size >= 64 else _dib_bytes(size, rgba)
         blobs.append((size, payload))
-
-    out = struct.pack("<HHH", 0, 1, len(blobs))
+    result = struct.pack("<HHH", 0, 1, len(blobs))
     offset = 6 + 16 * len(blobs)
     for size, payload in blobs:
-        out += struct.pack(
-            "<BBBBHHII",
-            0 if size >= 256 else size,
-            0 if size >= 256 else size,
-            0,
-            0,
-            1,
-            32,
-            len(payload),
-            offset,
+        result += struct.pack(
+            "<BBBBHHII", 0 if size >= 256 else size, 0 if size >= 256 else size,
+            0, 0, 1, 32, len(payload), offset,
         )
         offset += len(payload)
-    return out + b"".join(p for _, p in blobs)
+    return result + b"".join(payload for _, payload in blobs)
 
 
-# --- SVG -------------------------------------------------------------------
+def icns_bytes(entries: list[tuple[int, bytes]]) -> bytes:
+    types = {16: b"icp4", 32: b"icp5", 64: b"icp6", 128: b"ic07",
+             256: b"ic08", 512: b"ic09", 1024: b"ic10"}
+    chunks = []
+    for size, rgba in entries:
+        payload = png_bytes(size, rgba)
+        chunks.append(types[size] + struct.pack(">I", len(payload) + 8) + payload)
+    body = b"".join(chunks)
+    return b"icns" + struct.pack(">I", len(body) + 8) + body
 
 
-def _hex(c):
-    return "#%02X%02X%02X" % c
+def _paeth(left: int, up: int, upper_left: int) -> int:
+    estimate = left + up - upper_left
+    distances = (abs(estimate - left), abs(estimate - up), abs(estimate - upper_left))
+    return (left, up, upper_left)[distances.index(min(distances))]
 
 
-def svg_source(shapes):
-    """The design drawing: full-bleed, one rect per element, ready to open."""
-    parts = [
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" '
-        'width="512" height="512" role="img" aria-label="Kanal">',
-        '\n  <rect width="512" height="512" rx="%s" fill="%s"/>'
-        % (_n(GRID * SQUIRCLE), _hex(PAPER)),
-    ]
-    for gx, gy, gw, gh, colour in shapes:
-        parts.append(
-            '\n  <rect x="%s" y="%s" width="%s" height="%s" rx="%s" fill="%s"/>'
-            % (_n(gx), _n(gy), _n(gw), _n(gh), _n(min(gw, gh) / 2), _hex(colour))
-        )
-    parts.append("\n</svg>\n")
-    return "".join(parts)
+def decode_png(path: str) -> tuple[int, int, bytes]:
+    """Decode the checked-in 8-bit RGBA PNG without third-party packages."""
+    with open(path, "rb") as handle:
+        data = handle.read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("brand source is not a PNG")
+
+    offset = 8
+    compressed = bytearray()
+    width = height = None
+    while offset < len(data):
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        tag = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        offset += 12 + length
+        if tag == b"IHDR":
+            width, height, depth, colour_type, compression, filtering, interlace = struct.unpack(
+                ">IIBBBBB", payload
+            )
+            if (depth, colour_type, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+                raise ValueError("brand source must be a non-interlaced 8-bit RGBA PNG")
+        elif tag == b"IDAT":
+            compressed += payload
+
+    if width is None or height is None:
+        raise ValueError("brand source has no IHDR chunk")
+    encoded = zlib.decompress(bytes(compressed))
+    stride = width * 4
+    result = bytearray(width * height * 4)
+    source_offset = 0
+    previous = bytearray(stride)
+    for y in range(height):
+        filter_type = encoded[source_offset]
+        source_offset += 1
+        row = bytearray(encoded[source_offset:source_offset + stride])
+        source_offset += stride
+        for index in range(stride):
+            left = row[index - 4] if index >= 4 else 0
+            up = previous[index]
+            upper_left = previous[index - 4] if index >= 4 else 0
+            if filter_type == 1:
+                row[index] = (row[index] + left) & 255
+            elif filter_type == 2:
+                row[index] = (row[index] + up) & 255
+            elif filter_type == 3:
+                row[index] = (row[index] + ((left + up) // 2)) & 255
+            elif filter_type == 4:
+                row[index] = (row[index] + _paeth(left, up, upper_left)) & 255
+            elif filter_type != 0:
+                raise ValueError(f"unsupported PNG filter {filter_type}")
+        result[y * stride:(y + 1) * stride] = row
+        previous = row
+    return width, height, bytes(result)
 
 
-def _n(v):
-    """Trim trailing zeros — keeps the inlined data URI short."""
-    return ("%.3f" % v).rstrip("0").rstrip(".")
+def square_rgba(width: int, height: int, source: bytes) -> tuple[int, bytes]:
+    size = max(width, height)
+    result = bytearray(size * size * 4)
+    left = (size - width) // 2
+    top = (size - height) // 2
+    for y in range(height):
+        source_start = y * width * 4
+        target_start = ((top + y) * size + left) * 4
+        result[target_start:target_start + width * 4] = source[source_start:source_start + width * 4]
+    return size, bytes(result)
 
 
-def favicon_data_uri(shapes):
-    """A percent-encoded SVG data URI, for inlining into the mobile page.
+def resize_rgba(source: bytes, source_size: int, target_size: int) -> bytes:
+    """Nearest-upscale or box-downsample a transparent square RGBA image."""
+    if target_size == source_size:
+        return source
+    if target_size > source_size:
+        result = bytearray(target_size * target_size * 4)
+        for y in range(target_size):
+            sy = min(source_size - 1, y * source_size // target_size)
+            for x in range(target_size):
+                sx = min(source_size - 1, x * source_size // target_size)
+                src = (sy * source_size + sx) * 4
+                dst = (y * target_size + x) * 4
+                result[dst:dst + 4] = source[src:src + 4]
+        return bytes(result)
+    result = bytearray(target_size * target_size * 4)
+    for y in range(target_size):
+        top = y * source_size // target_size
+        bottom = max(top + 1, (y + 1) * source_size // target_size)
+        for x in range(target_size):
+            left = x * source_size // target_size
+            right = max(left + 1, (x + 1) * source_size // target_size)
+            alpha_sum = red_sum = green_sum = blue_sum = 0
+            samples = (right - left) * (bottom - top)
+            for sy in range(top, bottom):
+                for sx in range(left, right):
+                    offset = (sy * source_size + sx) * 4
+                    alpha = source[offset + 3]
+                    alpha_sum += alpha
+                    red_sum += source[offset] * alpha
+                    green_sum += source[offset + 1] * alpha
+                    blue_sum += source[offset + 2] * alpha
+            dst = (y * target_size + x) * 4
+            if alpha_sum:
+                result[dst] = red_sum // alpha_sum
+                result[dst + 1] = green_sum // alpha_sum
+                result[dst + 2] = blue_sum // alpha_sum
+                result[dst + 3] = alpha_sum // samples
+    return bytes(result)
 
-    Single quotes throughout so the attribute needs no escaping, and only the
-    handful of characters that actually must be encoded are — base64 would cost
-    a third more for no benefit.
-    """
-    svg = (
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"
-        "<rect width='512' height='512' rx='%s' fill='%s'/>"
-        % (_n(GRID * SQUIRCLE), _hex(PAPER))
-    )
-    for gx, gy, gw, gh, colour in shapes:
-        svg += "<rect x='%s' y='%s' width='%s' height='%s' rx='%s' fill='%s'/>" % (
-            _n(gx),
-            _n(gy),
-            _n(gw),
-            _n(gh),
-            _n(min(gw, gh) / 2),
-            _hex(colour),
-        )
-    svg += "</svg>"
-    encoded = svg.replace("%", "%25").replace("<", "%3C").replace(">", "%3E")
-    encoded = encoded.replace("#", "%23").replace('"', "%22")
-    return "data:image/svg+xml," + encoded
 
-
-# --- HTML ------------------------------------------------------------------
-
-# Matched and rewritten in place, on bytes: the two pages are checked out with
-# CRLF on Windows but stored with LF, and they must stay byte-identical to each
-# other. Touching only the characters inside the line leaves every terminator —
-# and every other byte of the file — exactly as it was found.
-FAVICON_LINK = re.compile(rb'<link rel="icon" href="data:image/svg\+xml,[^"]*">')
-
-# The pages the favicon must be kept in step with. docs/ is the GitHub Pages
-# copy of web/ and CI asserts the two are byte-identical, so both are rewritten
-# from the same string in the same run rather than copied by hand.
+FAVICON_LINK = re.compile(rb'<link rel="icon" href="data:image/[^"]*">')
 HTML_PAGES = [("web", "index.html"), ("docs", "index.html")]
 
 
-def write_favicon_into_pages(uri, log):
-    """Replace the inlined favicon in every page. Raises if one has drifted."""
-    link = ('<link rel="icon" href="%s">' % uri).encode()
+def write_favicon_into_pages(uri: str, log=print) -> None:
+    link = (f'<link rel="icon" href="{uri}">').encode()
     for parts in HTML_PAGES:
         path = os.path.join(ROOT, *parts)
-        with open(path, "rb") as fh:
-            before = fh.read()
-        after, n = FAVICON_LINK.subn(link, before)
-        if n != 1:
-            # Never leave one page stale while the other is current: a silent
-            # skip here is the exact failure CI's byte-identity check cannot see,
-            # because it compares the two pages to each other, not to this file.
-            raise SystemExit(
-                "%s: expected exactly 1 <link rel=\"icon\"> to rewrite, found %d"
-                % (os.path.relpath(path, ROOT), n)
-            )
-        if after == before:
-            log("  %-52s unchanged" % os.path.relpath(path, ROOT))
-            continue
-        with open(path, "wb") as fh:
-            fh.write(after)
-        log("  %-52s updated" % os.path.relpath(path, ROOT))
+        with open(path, "rb") as handle:
+            before = handle.read()
+        after, replacements = FAVICON_LINK.subn(link, before)
+        if replacements != 1:
+            relative = os.path.relpath(path, ROOT)
+            raise SystemExit(f"{relative}: expected one favicon link, found {replacements}")
+        if after != before:
+            with open(path, "wb") as handle:
+                handle.write(after)
+            log(f"  {os.path.relpath(path, ROOT):52s} updated")
 
 
-# --- outputs ---------------------------------------------------------------
-
-
-def main():
+def main() -> None:
     design = os.path.join(ROOT, "design")
     assets = os.path.join(ROOT, "src", "Kanal.Host", "Assets")
     iconset = os.path.join(design, "Kanal.iconset")
     os.makedirs(iconset, exist_ok=True)
 
-    def write(path, data):
-        with open(path, "wb") as fh:
-            fh.write(data)
-        print("  %-52s %6d B" % (os.path.relpath(path, ROOT), len(data)))
+    def write(path: str, data: bytes) -> None:
+        with open(path, "wb") as handle:
+            handle.write(data)
+        print(f"  {os.path.relpath(path, ROOT):52s} {len(data):6d} B")
 
-    print("SVG")
-    write(os.path.join(design, "kanal-icon.svg"), svg_source(FULL).encode())
-    write(os.path.join(design, "kanal-icon-compact.svg"), svg_source(COMPACT).encode())
+    source_png = os.path.join(design, "kanal-icon.png")
+    width, height, decoded = decode_png(source_png)
+    source_size, source_rgba = square_rgba(width, height, decoded)
+    print(f"PNG\n  {os.path.relpath(source_png, ROOT):52s} source ({width}x{height})")
 
-    # Rasterise once per size; both packagers draw from this.
-    print("\nraster")
-    cache = {}
+    cache: dict[int, bytes] = {}
+    def rgba(size: int) -> bytes:
+        if size not in cache:
+            cache[size] = resize_rgba(source_rgba, source_size, size)
+        return cache[size]
 
-    def rgba(size, inset=1.0):
-        key = (size, inset)
-        if key not in cache:
-            cache[key] = render(size, inset)
-            print("  %d px%s" % (size, "  (macOS inset)" if inset != 1.0 else ""))
-        return cache[key]
+    entries = [(16, "", 16), (16, "@2x", 32), (32, "", 32), (32, "@2x", 64),
+               (128, "", 128), (128, "@2x", 256), (256, "", 256),
+               (256, "@2x", 512), (512, "", 512), (512, "@2x", 1024)]
+    for nominal, suffix, pixels in entries:
+        name = f"icon_{nominal}x{nominal}{suffix}.png"
+        write(os.path.join(iconset, name), png_bytes(pixels, rgba(pixels)))
 
-    print("\n.icns")
-    # iconutil wants both @1x and @2x of each nominal size.
-    for nominal, suffix, px in [
-        (16, "", 16),
-        (16, "@2x", 32),
-        (32, "", 32),
-        (32, "@2x", 64),
-        (128, "", 128),
-        (128, "@2x", 256),
-        (256, "", 256),
-        (256, "@2x", 512),
-        (512, "", 512),
-        (512, "@2x", 1024),
-    ]:
-        name = "icon_%dx%d%s.png" % (nominal, nominal, suffix)
-        write(os.path.join(iconset, name), png_bytes(px, rgba(px, MACOS_INSET)))
-
-    # iconutil is the only supported way to build an .icns. The bundle is a
-    # packaging artefact, so it stays in design/ — Assets/ is embedded into the
-    # binary by <AvaloniaResource>, and Avalonia only ever reads the .ico.
-    icns = os.path.join(design, "kanal.icns")
-    try:
-        rc = subprocess.call(["iconutil", "-c", "icns", iconset, "-o", icns])
-    except (FileNotFoundError, OSError):
-        # Off macOS iconutil is not merely absent from PATH — spawning it raises
-        # rather than returning non-zero. Letting that escape would abort the run
-        # after the SVGs and the iconset were rewritten but before the .ico, so
-        # Windows and the web would silently keep the previous geometry: exactly
-        # the platform drift this file exists to prevent.
-        rc = -1
-    if rc == 0:
-        print("  %-52s %6d B" % (os.path.relpath(icns, ROOT), os.path.getsize(icns)))
-    else:
-        print("  iconutil unavailable — .icns not rebuilt (macOS only)")
-
-    print("\n.ico + PNG")
-    ico = ico_bytes([(s, rgba(s)) for s in (16, 24, 32, 48, 64, 128, 256)])
-    write(os.path.join(assets, "kanal.ico"), ico)
+    sizes = (16, 32, 64, 128, 256, 512, 1024)
+    write(os.path.join(design, "kanal.icns"), icns_bytes([(size, rgba(size)) for size in sizes]))
+    write(os.path.join(assets, "kanal.ico"),
+          ico_bytes([(size, rgba(size)) for size in (16, 24, 32, 48, 64, 128, 256)]))
     write(os.path.join(design, "kanal-icon-1024.png"), png_bytes(1024, rgba(1024)))
+    write(os.path.join(assets, "kanal-splash-mark.png"), png_bytes(512, rgba(512)))
 
-    # The mobile page must stay a single self-contained file, so its favicon is
-    # inlined rather than fetched (.impeccable.md: no external assets at load).
-    # COMPACT, not FULL: a tab favicon is only ever rasterised at 16–32 px, and
-    # the five-bar meter smears at that size even as vector art.
-    print("\ninline favicon")
-    uri = favicon_data_uri(COMPACT)
-    write(os.path.join(design, "favicon-datauri.txt"), (uri + "\n").encode())
-    write_favicon_into_pages(uri, print)
+    favicon = "data:image/png;base64," + base64.b64encode(png_bytes(32, rgba(32))).decode()
+    write(os.path.join(design, "favicon-datauri.txt"), (favicon + "\n").encode())
+    write_favicon_into_pages(favicon)
 
 
 if __name__ == "__main__":

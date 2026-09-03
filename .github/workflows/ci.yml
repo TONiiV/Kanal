@@ -19,6 +19,12 @@ jobs:
       - name: web/ and docs/ pages are byte-identical
         run: cmp web/index.html docs/index.html
 
+      - name: Brand assets are reproducible
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 design/test_kanal_icon.py
+          python3 design/kanal-icon.py
+          git diff --exit-code
+
       - name: Build
         run: dotnet build Kanal.slnx --configuration Release
 

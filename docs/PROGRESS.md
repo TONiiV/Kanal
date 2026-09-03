@@ -16,6 +16,20 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   sides of the change: every notice is visible in the dedicated window, and none remains embedded
   in Settings.
 
+### One mark, generated for every surface
+
+- The user-supplied 1536 × 1024 transparent PNG is now the single brand source. Its five incoming
+  routes and three outgoing arrows retain the original gradients and edge treatment; no wordmark,
+  font or generated replacement lettering is included. This is a deliberate, tightly scoped
+  exception to the speaker-colour rule: the combination exists only inside the standalone mark.
+- `design/kanal-icon.py` centres that PNG on a transparent square before deriving the splash mark,
+  platform PNG, ICO, ICNS and two inlined web favicons. No SVG is generated or shipped, and the
+  README displays the PNG directly.
+- ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
+  PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
+  platform. A generator contract test checks the source dimensions, formats, absence of SVG,
+  transparent canvas and byte-for-byte idempotence; CI rejects any generated-asset drift.
+
 ### Host, tools and tests target .NET 10
 
 - Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to
