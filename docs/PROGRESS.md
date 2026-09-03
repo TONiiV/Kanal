@@ -4,6 +4,32 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-04
+
+### Host, tools and tests target .NET 10
+
+- Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to
+  `10.0.x`. No source change was needed: Avalonia 12.1.1, LLamaSharp 0.27.0, NAudio.Wasapi 2.3.0,
+  CommunityToolkit.Mvvm, QRCoder and xunit.v3 all resolve unchanged, the solution builds with zero
+  errors, and the 191 core + 108 UI tests pass. The 132 `xUnit1051` analyzer warnings are unchanged
+  from the net9.0 baseline — the bump introduces no new diagnostics.
+- `Directory.Build.props` keeps `RollForward=Major` for the same reason it was added, now stated
+  against 10.0: a machine carrying only a newer runtime should still launch the host.
+- Dropped the `DOTNET_ROLL_FORWARD=Major` workaround from `CLAUDE.md`: the SDK on the dev machines
+  and the target framework now agree, so plain `dotnet test` works.
+- `docs/PRD-v0.3.md` keeps its transcribed ".NET 9 + Avalonia" line — it is a dated transcription,
+  not a living document — but now carries an inline note that the implementation moved to .NET 10,
+  so the repo's authoritative requirements reference cannot be read as current on that point.
+
+### VS Code debugging is configured in-repo
+
+- Added `.vscode/` with F5 targets for the host (demo mode, and a live mode reading a gitignored
+  `.env` for `GLADIA_API_KEY` / `KANAL_RELAY_*` / `KANAL_WEB_URL`), a prompted-argument launch for
+  `tools/Kanal.Doctor`, and process attach; build/test tasks over `Kanal.slnx`; C# Dev Kit and
+  Avalonia extension recommendations; and search/watch exclusions for `.worktrees/`, `bin/`, `obj/`.
+
+---
+
 ## 2026-08-04
 
 ### What Kanal is built on, named on screen (issue #35, 3 of 3)
