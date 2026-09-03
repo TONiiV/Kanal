@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Kanal.Host.Views.SplashWindow"
+        Icon="/Assets/kanal.ico"
+        Title="Kanal"
+        Width="520" Height="320"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <Grid Margin="44,40,44,36" RowDefinitions="*,Auto">
+        <Grid ColumnDefinitions="132,*" ColumnSpacing="30" VerticalAlignment="Center">
+            <Border Width="132" Height="132" Background="{StaticResource Paper}">
+                <Image Source="/Assets/kanal.ico" Width="112" Height="112"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       AutomationProperties.Name="Kanal" />
+            </Border>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="13">
+                <TextBlock Text="Kanal" FontSize="34" FontWeight="SemiBold"
+                           LetterSpacing="0.3" />
+                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,2,0,0" />
+                <TextBlock Text="One room. Every language." FontSize="14.5"
+                           LineHeight="22" Foreground="{StaticResource Ink2}" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0"
+                Margin="0,24,0,0" />
+    </Grid>
+</Window>
