@@ -16,7 +16,7 @@ SCRIPT = Path(__file__).with_name("kanal-icon.py")
 sys.dont_write_bytecode = True
 INK = "#111A21"
 PAPER = "#F5F0E6"
-FORBIDDEN_SPEAKER_COLOURS = {"#B23A2E", "#9A6B10", "#1C6B58"}
+FLOW_COLOURS = {"#B23A2E", "#9A6B10", "#1C6B58"}
 
 
 def load_generator():
@@ -28,7 +28,7 @@ def load_generator():
 
 
 class BrandAssetGeneratorTests(unittest.TestCase):
-    def test_generator_emits_the_complete_monochrome_brand_suite(self):
+    def test_generator_emits_the_reference_led_brand_suite(self):
         generator = load_generator()
 
         with tempfile.TemporaryDirectory() as directory:
@@ -55,15 +55,17 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                 ET.parse(path)
                 source = path.read_text(encoding="utf-8")
                 self.assertIn(INK, source, path.name)
-                for colour in FORBIDDEN_SPEAKER_COLOURS:
-                    self.assertNotIn(colour, source.upper(), path.name)
 
             icon_source = svg_paths[0].read_text(encoding="utf-8")
             self.assertIn(PAPER, icon_source)
-            self.assertIn("<line", icon_source, "the mark should preserve the directional flow concept")
+            for colour in FLOW_COLOURS:
+                self.assertIn(colour, icon_source.upper())
+            self.assertIn("<path", icon_source, "the mark should be real vector curves and arrowheads")
 
             lockup = svg_paths[-1].read_text(encoding="utf-8")
             self.assertIn("One room. Every language.", lockup)
+            self.assertIn("Century Gothic Bold", lockup)
+            self.assertNotIn("<text", lockup, "the committed logo must not depend on an installed font")
 
             splash = root / "src" / "Kanal.Host" / "Assets" / "kanal-splash-mark.png"
             data = splash.read_bytes()

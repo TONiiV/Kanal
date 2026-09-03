@@ -1,12 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kanal">
   <rect width="512" height="512" rx="114.534" fill="#F5F0E6"/>
-  <line x1="88" y1="176" x2="174" y2="176" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="88" y1="256" x2="424" y2="256" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="88" y1="336" x2="174" y2="336" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="174" y1="176" x2="246" y2="256" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="174" y1="336" x2="246" y2="256" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="338" y2="176" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="338" y2="336" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="338" y1="176" x2="424" y2="176" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
-  <line x1="338" y1="336" x2="424" y2="336" stroke="#111A21" stroke-width="40" stroke-linecap="round"/>
+  <path d="M78 134 L176 134 C230 134 229 190 302 190 L365 190" fill="none" stroke="#111A21" stroke-width="42" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M365 151 L434 190 L365 229 Z" fill="#111A21"/>
+  <path d="M78 256 L374 256" fill="none" stroke="#1C6B58" stroke-width="42" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M374 212 L448 256 L374 300 Z" fill="#1C6B58"/>
+  <path d="M78 378 L176 378 C230 378 229 322 302 322 L365 322" fill="none" stroke="#B23A2E" stroke-width="42" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M365 283 L434 322 L365 361 Z" fill="#B23A2E"/>
 </svg>

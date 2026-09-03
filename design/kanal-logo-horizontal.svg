@@ -1,17 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="Kanal">
-  <rect x="24" y="32" width="256" height="256" rx="57.267" fill="#F5F0E6"/>
-  <g transform="translate(24 32) scale(.5)">
-  <line x1="82" y1="168" x2="168" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="82" y1="256" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="82" y1="344" x2="168" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="168" y1="168" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="168" y1="344" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="246" y1="256" x2="266" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="344" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="344" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="344" y1="168" x2="430" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="430" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="344" y1="344" x2="430" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
+  <metadata>Mark redrawn from the supplied reference; wordmark is outlined from the closest match, Century Gothic Bold.</metadata>
+  <g transform="translate(-20 -15) scale(.72)">
+  <path d="M82 238 L154 238 C207 238 224 275 280 275" fill="none" stroke="#9A6B10" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M82 388 L159 388 C232 388 232 256 306 256" fill="none" stroke="#9A6B10" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M82 315 L151 315 C205 315 218 246 273 246 C309 246 326 323 377 323" fill="none" stroke="#B23A2E" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M377 291 L433 323 L377 355 Z" fill="#B23A2E"/>
+  <path d="M82 92 L165 92 C218 92 214 169 279 169 C309 169 321 145 372 145" fill="none" stroke="#111A21" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M372 113 L428 145 L372 177 Z" fill="#111A21"/>
+  <path d="M82 164 L157 164 C213 164 218 246 294 252 L391 252" fill="none" stroke="#1C6B58" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M391 208 L455 252 L391 296 Z" fill="#1C6B58"/>
   </g>
-  <path d="M350 82H382V149L450 82H494L414 158L500 238H454L382 168V238H350Z M515 238L574 82H612L671 238H635L622 199H564L551 238H515Z M575 167H611L593 112L575 167Z M690 238V82H725L800 181V82H834V238H800L724 139V238H690Z M852 238L911 82H949L1008 238H972L959 199H901L888 238H852Z M912 167H948L930 112L912 167Z M1027 82H1061V207H1136V238H1027V82Z" fill="#111A21" fill-rule="evenodd"/>
+  <path d="M140 1508H413V639L815 1088H1157L689 566L1214 0H875L413 501V0H140ZM2130 1088H2402V0H2130V115Q2050 39 1969.5 5.5Q1889 -28 1795 -28Q1584 -28 1430 135.5Q1276 299 1276 542Q1276 794 1425 955Q1574 1116 1787 1116Q1885 1116 1971 1079Q2057 1042 2130 968ZM1843 864Q1716 864 1632 774.5Q1548 685 1548 545Q1548 404 1633.5 313Q1719 222 1844 222Q1973 222 2058 311.5Q2143 401 2143 546Q2143 688 2058 776Q1973 864 1843 864ZM2678 1088H2950V977Q3043 1055 3118.5 1085.5Q3194 1116 3273 1116Q3435 1116 3548 1003Q3643 907 3643 719V0H3373V477Q3373 672 3355.5 736Q3338 800 3294.5 833.5Q3251 867 3187 867Q3104 867 3044.5 811.5Q2985 756 2962 658Q2950 607 2950 437V0H2678ZM4711 1088H4983V0H4711V115Q4631 39 4550.5 5.5Q4470 -28 4376 -28Q4165 -28 4011 135.5Q3857 299 3857 542Q3857 794 4006 955Q4155 1116 4368 1116Q4466 1116 4552 1079Q4638 1042 4711 968ZM4424 864Q4297 864 4213 774.5Q4129 685 4129 545Q4129 404 4214.5 313Q4300 222 4425 222Q4554 222 4639 311.5Q4724 401 4724 546Q4724 688 4639 776Q4554 864 4424 864ZM5230 1508H5503V0H5230Z" transform="translate(350 252) scale(.139 -.139)" fill="#111A21"/>
 </svg>

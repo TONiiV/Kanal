@@ -18,14 +18,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### One mark, generated for every surface
 
-- Rebuilt the Kanal mark as one flat, high-contrast route diagram: three voices converge in one
-  room and leave as three readable language streams. It keeps the flow idea from the design brief
-  without copying its dimensional arrows, shadows or lettering, and uses only ink and warm paper;
-  rust, ochre and pine remain reserved for speaker identity.
+- Rebuilt the Kanal mark from the supplied reference silhouette: five squared input routes weave
+  into three arrowed outputs, using the reference's ink / pine / ochre / rust hierarchy without
+  carrying over its paper texture, shadows or raster noise. This is a deliberate, tightly scoped
+  exception to the speaker-colour rule: the four-colour combination exists only inside the
+  standalone brand mark, never as host chrome or an unlabeled state signal.
 - `design/kanal-icon.py` remains the geometry source for every surface and now also emits a
-  geometric horizontal wordmark, a lockup carrying the README's exact “One room. Every language.”
-  line, and a transparent splash mark for the host. SVG, PNG, ICO, ICNS and the two inlined web
-  favicons are all derived from the same route table.
+  horizontal wordmark, a vertical lockup carrying the README's exact “One room. Every language.”
+  line, and a transparent splash mark for the host. The reference lettering's closest installed
+  match is Century Gothic Bold (single-storey `a`, geometric bowls, high x-height); the five-letter
+  wordmark and slogan are stored as adjusted SVG outlines, so no font file is bundled or required.
+  SVG, PNG, ICO, ICNS and the two inlined web favicons are all derived from the same route table.
 - ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
   PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
   platform. A generator contract test checks the palette, formats, slogan, transparent canvas and

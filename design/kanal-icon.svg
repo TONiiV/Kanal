@@ -1,14 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kanal">
   <rect width="512" height="512" rx="114.534" fill="#F5F0E6"/>
-  <line x1="82" y1="168" x2="168" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="82" y1="256" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="82" y1="344" x2="168" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="168" y1="168" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="168" y1="344" x2="246" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="246" y1="256" x2="266" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="344" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="344" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="344" y1="168" x2="430" y2="168" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="266" y1="256" x2="430" y2="256" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
-  <line x1="344" y1="344" x2="430" y2="344" stroke="#111A21" stroke-width="30" stroke-linecap="round"/>
+  <path d="M82 238 L154 238 C207 238 224 275 280 275" fill="none" stroke="#9A6B10" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M82 388 L159 388 C232 388 232 256 306 256" fill="none" stroke="#9A6B10" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M82 315 L151 315 C205 315 218 246 273 246 C309 246 326 323 377 323" fill="none" stroke="#B23A2E" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M377 291 L433 323 L377 355 Z" fill="#B23A2E"/>
+  <path d="M82 92 L165 92 C218 92 214 169 279 169 C309 169 321 145 372 145" fill="none" stroke="#111A21" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M372 113 L428 145 L372 177 Z" fill="#111A21"/>
+  <path d="M82 164 L157 164 C213 164 218 246 294 252 L391 252" fill="none" stroke="#1C6B58" stroke-width="28" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M391 208 L455 252 L391 296 Z" fill="#1C6B58"/>
 </svg>
