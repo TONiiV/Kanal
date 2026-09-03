@@ -51,6 +51,50 @@ public class SettingsWindowBindingTests
     }
 
     [AvaloniaFact]
+    public void TheOpenSourceWindowShowsEveryProjectAndItsLicence()
+    {
+        var window = new OpenSourceWindow();
+        window.Show();
+
+        var rendered = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text)
+            .ToHashSet();
+        Assert.Equal(Localizer.Instance["licenses.title"], window.Title);
+        Assert.Contains(Localizer.Instance.Format("licenses.note", OpenSourceNotices.OwnLicense), rendered);
+        Assert.Contains(window.GetLogicalDescendants().OfType<Button>(),
+            button => Equals(button.Content, Localizer.Instance["licenses.close"]));
+        Assert.All(OpenSourceNotices.All, notice =>
+        {
+            Assert.Contains(notice.Name, rendered);
+            Assert.Contains(notice.License, rendered);
+            Assert.Contains(notice.Url, rendered);
+        });
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void SettingsLinksToOpenSourceNoticesInsteadOfEmbeddingThem()
+    {
+        var window = new SettingsWindow(new SettingsViewModel(
+            new AppSettings(),
+            () => null,
+            isMacOs: false,
+            deviceWatcherFactory: null,
+            openFolder: _ => { }));
+        window.Show();
+
+        var openLabel = Localizer.Instance["settings.licenses.open"];
+        Assert.NotEqual("settings.licenses.open", openLabel);
+        Assert.Contains(window.GetLogicalDescendants().OfType<Button>(),
+            button => Equals(button.Content, openLabel));
+        Assert.DoesNotContain(window.GetLogicalDescendants().OfType<TextBlock>(),
+            text => text.Text == "Avalonia");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void AVersionThatIsNotOutYetSaysSoRatherThanShowingAnEmptyDate()
     {
         var entry = new ChangelogEntryViewModel(new ChangelogRelease("1.0.1", null, ["something"]));

@@ -188,5 +188,9 @@
   "changelog.unreleased": "Jeszcze nie wydano",
   "changelog.close": "Zamknij",
   "settings.licenses.heading": "OTWARTE ŹRÓDŁA",
-  "settings.licenses.note": "Kanal jest udostępniany na licencji {0} i zbudowany na poniższych projektach, z których każdy ma własną licencję."
+  "settings.licenses.note": "Kanal jest udostępniany na licencji {0}. Podziękowania dla projektów open source są dostępne osobno.",
+  "settings.licenses.open": "Zobacz podziękowania dla projektów open source",
+  "licenses.title": "Podziękowania dla projektów open source",
+  "licenses.note": "Kanal jest udostępniany na licencji {0} i zbudowany na poniższych projektach, z których każdy ma własną licencję.",
+  "licenses.close": "Zamknij"
 }
