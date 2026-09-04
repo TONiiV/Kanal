@@ -2,13 +2,16 @@
 """Package the supplied Kanal PNG for every application surface.
 
 ``design/kanal-icon.png`` is the source of truth. This dependency-free
-packager preserves that artwork and produces deterministic square PNG, ICO,
-ICNS and favicon derivatives. No SVG asset is generated or shipped.
+packager preserves that artwork, places it on a warm beige rounded tile for app
+icons, and produces deterministic square PNG, ICO, ICNS and favicon
+derivatives. The splash keeps the standalone transparent mark. No SVG asset
+is generated or shipped.
 """
 
 from __future__ import annotations
 
 import base64
+import math
 import os
 import re
 import struct
@@ -153,6 +156,37 @@ def square_rgba(width: int, height: int, source: bytes) -> tuple[int, bytes]:
     return size, bytes(result)
 
 
+ICON_TILE_RGB = (0xF5, 0xF0, 0xE6)
+
+
+def rounded_beige_icon_rgba(mark: bytes, size: int) -> bytes:
+    """Composite the unmodified mark over a warm beige rounded app tile."""
+    radius = size * 18 // 100
+    result = bytearray(size * size * 4)
+    for y in range(size):
+        py = y + 0.5
+        dy = max(radius - py, py - (size - radius), 0.0)
+        for x in range(size):
+            px = x + 0.5
+            dx = max(radius - px, px - (size - radius), 0.0)
+            distance = math.hypot(dx, dy)
+            tile_alpha = max(0, min(255, round((radius + 0.5 - distance) * 255)))
+
+            offset = (y * size + x) * 4
+            mark_alpha = mark[offset + 3]
+            remaining = 255 - mark_alpha
+            output_alpha = mark_alpha + (tile_alpha * remaining + 127) // 255
+            if output_alpha:
+                for channel, tile_channel in enumerate(ICON_TILE_RGB):
+                    numerator = (
+                        mark[offset + channel] * mark_alpha
+                        + (tile_channel * tile_alpha * remaining + 127) // 255
+                    )
+                    result[offset + channel] = min(255, (numerator + output_alpha // 2) // output_alpha)
+                result[offset + 3] = output_alpha
+    return bytes(result)
+
+
 def resize_rgba(source: bytes, source_size: int, target_size: int) -> bytes:
     """Nearest-upscale or box-downsample a transparent square RGBA image."""
     if target_size == source_size:
@@ -227,12 +261,13 @@ def main() -> None:
     source_png = os.path.join(design, "kanal-icon.png")
     width, height, decoded = decode_png(source_png)
     source_size, source_rgba = square_rgba(width, height, decoded)
+    icon_rgba = rounded_beige_icon_rgba(source_rgba, source_size)
     print(f"PNG\n  {os.path.relpath(source_png, ROOT):52s} source ({width}x{height})")
 
     cache: dict[int, bytes] = {}
     def rgba(size: int) -> bytes:
         if size not in cache:
-            cache[size] = resize_rgba(source_rgba, source_size, size)
+            cache[size] = resize_rgba(icon_rgba, source_size, size)
         return cache[size]
 
     entries = [(16, "", 16), (16, "@2x", 32), (32, "", 32), (32, "@2x", 64),
@@ -247,7 +282,8 @@ def main() -> None:
     write(os.path.join(assets, "kanal.ico"),
           ico_bytes([(size, rgba(size)) for size in (16, 24, 32, 48, 64, 128, 256)]))
     write(os.path.join(design, "kanal-icon-1024.png"), png_bytes(1024, rgba(1024)))
-    write(os.path.join(assets, "kanal-splash-mark.png"), png_bytes(512, rgba(512)))
+    splash_rgba = resize_rgba(source_rgba, source_size, 512)
+    write(os.path.join(assets, "kanal-splash-mark.png"), png_bytes(512, splash_rgba))
 
     favicon = "data:image/png;base64," + base64.b64encode(png_bytes(32, rgba(32))).decode()
     write(os.path.join(design, "favicon-datauri.txt"), (favicon + "\n").encode())

@@ -67,9 +67,38 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             first_scanline = zlib.decompress(b"".join(chunks))[: 1 + width * 4]
             self.assertEqual(0, first_scanline[0], "the generator writes unfiltered scanlines")
             self.assertEqual(0, first_scanline[4], "the transparent canvas must have an empty top-left pixel")
+            source_width, source_height, source_rgba = generator.decode_png(str(source))
+            source_size, square_source = generator.square_rgba(source_width, source_height, source_rgba)
+            expected_splash = generator.png_bytes(
+                512, generator.resize_rgba(square_source, source_size, 512)
+            )
+            self.assertEqual(expected_splash, data, "the splash must retain the standalone mark")
+
+            app_icon = root / "design" / "kanal-icon-1024.png"
+            icon_data = app_icon.read_bytes()
+            chunks = []
+            offset = 8
+            while offset < len(icon_data):
+                length = struct.unpack(">I", icon_data[offset : offset + 4])[0]
+                tag = icon_data[offset + 4 : offset + 8]
+                if tag == b"IDAT":
+                    chunks.append(icon_data[offset + 8 : offset + 8 + length])
+                offset += 12 + length
+            icon_pixels = zlib.decompress(b"".join(chunks))
+            row_stride = 1 + 1024 * 4
+
+            def icon_pixel(x: int, y: int) -> bytes:
+                start = y * row_stride + 1 + x * 4
+                return icon_pixels[start : start + 4]
+
+            for corner in ((0, 0), (1023, 0), (0, 1023), (1023, 1023)):
+                self.assertEqual(0, icon_pixel(*corner)[3], "all outer corners must be transparent")
+            beige = bytes((0xF5, 0xF0, 0xE6, 255))
+            for edge_centre in ((512, 0), (512, 1023), (0, 512), (1023, 512)):
+                self.assertEqual(beige, icon_pixel(*edge_centre), "the rounded tile must reach each edge")
 
             self.assertTrue((root / "src" / "Kanal.Host" / "Assets" / "kanal.ico").is_file())
-            self.assertTrue((root / "design" / "kanal-icon-1024.png").is_file())
+            self.assertTrue(app_icon.is_file())
             favicon = (root / "design" / "favicon-datauri.txt").read_text()
             self.assertTrue(favicon.startswith("data:image/png;base64,"))
             icns = (root / "design" / "kanal.icns").read_bytes()
