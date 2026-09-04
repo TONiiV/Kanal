@@ -139,6 +139,20 @@
                         </Button>
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"
+                                IsVisible="{Binding NeedsMicrophone}">
+                        <TextBlock Text="{l:T capture.label}" Classes="label" />
+                        <ComboBox ItemsSource="{Binding CaptureProfiles}"
+                                  SelectedItem="{Binding SelectedCaptureProfile}"
+                                  Width="166" IsEnabled="{Binding !IsRunning}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CaptureProfileOption">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
                     <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
                         <TextBlock Text="{l:T languages.label}" Classes="label" />
                         <Button Classes="ghost" Padding="5,3" Click="OnLanguagesClick"
@@ -175,9 +189,23 @@
                         </ComboBox>
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"
+                                IsVisible="{Binding NeedsComputerAudio}">
+                        <TextBlock Text="{l:T output.label}" Classes="label" />
+                        <ComboBox ItemsSource="{Binding ComputerOutputs}"
+                                  SelectedItem="{Binding SelectedComputerOutput}"
+                                  Width="200" IsEnabled="{Binding !IsRunning}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
                     <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
                                VerticalAlignment="Center" Margin="4,0" />
                     <Button Content="{l:T export.button}" Command="{Binding ExportMarkdownCommand}"
+                            Classes="ghost" />
+                    <Button Content="{l:T export.json.button}" Command="{Binding ExportJsonCommand}"
                             Classes="ghost" />
                     <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
                             ToolTip.Tip="{l:T settings.tip}"
@@ -187,6 +215,30 @@
                     </Button>
                 </StackPanel>
             </ScrollViewer>
+        </Border>
+
+        <Border IsVisible="{Binding ShowConsentGate}"
+                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                Background="{StaticResource Paper}" Padding="24,9">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="13">
+                <CheckBox Grid.Column="0" IsChecked="{Binding ConsentConfirmed}"
+                          Content="{l:T consent.confirm}" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding ConsentReminder}" FontSize="11.5"
+                               Foreground="{StaticResource Ink2}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="10.5"
+                               Foreground="{StaticResource Ink3}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedCaptureProfile.Unavailable}" FontSize="10.5"
+                               FontWeight="SemiBold" Foreground="{StaticResource Alarm}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border IsVisible="{Binding ShowProcessingNotice}"
+                Background="{StaticResource Ink}" Padding="24,10">
+            <TextBlock Text="{Binding LiveNoticeText}" FontSize="11.5" FontWeight="Bold"
+                       LetterSpacing="1.1" Foreground="{StaticResource Sheet}" />
         </Border>
 
         <Border IsVisible="{Binding IsPaused}"

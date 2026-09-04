@@ -251,22 +251,26 @@ const UI = {
       connecting:"连接中…",reconnecting:"连接已断开，正在重连…",failed:"连接失败",untrusted:"已拦截无法验证的会议消息。",
       missing:"缺少参数。请扫描主机端的二维码打开此页面。",codeswitch:"混合语种",original:"原文",
       ended:"会议已结束。记录保留在此页面。",moved:"会议已重新开始，正在切换…",paused:"已暂停 — 暂不记录。",
-      rec:"本次会议正在录音，音频保存在主机本机。",recHeld:"录音已暂停，会议恢复后继续。"},
+      rec:"本次会议正在录音，音频保存在主机本机。",recHeld:"录音已暂停，会议恢复后继续。",
+      live:"本次会议正在实时转写和翻译。",liveHeld:"转写已暂停，会议恢复后继续。"},
   de:{name:"Deutsch",waiting:"Warten auf Redebeiträge",hint:"Beiträge erscheinen hier in Echtzeit — Übersetzung oben, Original darunter. Sprache oben rechts.",
       connecting:"Verbinde…",reconnecting:"Verbindung getrennt, neuer Versuch…",failed:"Verbindung fehlgeschlagen",untrusted:"Eine nicht verifizierbare Nachricht wurde blockiert.",
       missing:"Parameter fehlen. Bitte den QR-Code des Hosts scannen.",codeswitch:"Gemischte Sprache",original:"Original",
       ended:"Besprechung beendet. Das Protokoll bleibt hier stehen.",moved:"Besprechung neu gestartet — wechsle…",paused:"Pausiert — es wird nichts aufgezeichnet.",
-      rec:"Diese Besprechung wird aufgezeichnet. Der Ton bleibt auf dem Host-Rechner.",recHeld:"Aufzeichnung angehalten — sie läuft weiter, sobald fortgesetzt wird."},
+      rec:"Diese Besprechung wird aufgezeichnet. Der Ton bleibt auf dem Host-Rechner.",recHeld:"Aufzeichnung angehalten — sie läuft weiter, sobald fortgesetzt wird.",
+      live:"Diese Besprechung wird live transkribiert und übersetzt.",liveHeld:"Transkription angehalten — sie läuft nach dem Fortsetzen weiter."},
   pl:{name:"Polski",waiting:"Oczekiwanie na wypowiedzi",hint:"Wypowiedzi pojawią się tu na żywo — tłumaczenie u góry, oryginał poniżej. Język w prawym górnym rogu.",
       connecting:"Łączenie…",reconnecting:"Rozłączono, ponawianie…",failed:"Połączenie nieudane",untrusted:"Zablokowano wiadomość, której nie można zweryfikować.",
       missing:"Brak parametrów. Zeskanuj kod QR z komputera prowadzącego.",codeswitch:"Mieszany język",original:"oryginał",
       ended:"Spotkanie zakończone. Zapis pozostaje na tej stronie.",moved:"Spotkanie uruchomione ponownie — przełączam…",paused:"Wstrzymane — nic nie jest zapisywane.",
-      rec:"To spotkanie jest nagrywane. Dźwięk pozostaje na komputerze prowadzącego.",recHeld:"Nagrywanie wstrzymane — będzie kontynuowane po wznowieniu."},
+      rec:"To spotkanie jest nagrywane. Dźwięk pozostaje na komputerze prowadzącego.",recHeld:"Nagrywanie wstrzymane — będzie kontynuowane po wznowieniu.",
+      live:"To spotkanie jest transkrybowane i tłumaczone na żywo.",liveHeld:"Transkrypcja wstrzymana — będzie kontynuowana po wznowieniu."},
   en:{name:"English",waiting:"Waiting for speech",hint:"Utterances appear here live — translation on top, original below. Language at top right.",
       connecting:"Connecting…",reconnecting:"Disconnected, reconnecting…",failed:"Connection failed",untrusted:"An unverifiable meeting message was blocked.",
       missing:"Missing parameters. Scan the QR code on the host to open this page.",codeswitch:"Mixed language",original:"original",
       ended:"Meeting ended. The record stays on this page.",moved:"Meeting restarted — switching over…",paused:"Paused — nothing is being recorded.",
-      rec:"This meeting is being recorded. The audio stays on the host machine.",recHeld:"Recording held — it continues when the meeting resumes."},
+      rec:"This meeting is being recorded. The audio stays on the host machine.",recHeld:"Recording held — it continues when the meeting resumes.",
+      live:"This meeting is being transcribed and translated live.",liveHeld:"Transcription held — it continues when the meeting resumes."},
 };
 
 const state = {
@@ -279,6 +283,7 @@ const state = {
   closed: false,         // host stopped this room; survives reload via the cache
   paused: false,         // host took the room off the record; also survives reload
   recording: false,      // host is writing the room's audio to a file; survives reload
+  transcribing: false,   // speech is processed even when recording is off; survives reload
 };
 
 /* Closed outranks paused: a room that ended while paused is ended, not waiting. */
@@ -287,13 +292,15 @@ const lifecycleStatus = () => state.closed ? "ended" : state.paused ? "paused" :
 const $ = (id) => document.getElementById(id);
 const t = (key) => (UI[state.lang] || UI.en)[key];
 
-/* The people in the room are the ones entitled to know they are on tape, and this page is the
-   only surface they read. Held rather than hidden during a pause: the file exists and resumes,
-   and a notice that vanished would read as "it stopped". */
+/* The people in the room are entitled to know whenever speech is processed, even when no WAV is
+   written. Recording is the stronger statement and replaces the transcription-only wording. */
 function setRecordingNotice() {
-  const show = state.recording && !state.closed;
+  const show = (state.recording || state.transcribing) && !state.closed;
   const el = $("rec");
-  el.querySelector("p").textContent = show ? t(state.paused ? "recHeld" : "rec") : "";
+  const key = state.recording
+    ? (state.paused ? "recHeld" : "rec")
+    : (state.paused ? "liveHeld" : "live");
+  el.querySelector("p").textContent = show ? t(key) : "";
   el.classList.toggle("show", show);
 }
 
@@ -356,6 +363,7 @@ function applySnapshot(snap) {
   // a phone joining mid-pause never saw the announcement, so the snapshot carries it
   state.paused = !!snap.paused;
   state.recording = !!snap.recording;
+  state.transcribing = !!snap.transcribing;
   if (!state.closed) setStatus(lifecycleStatus());
   setRecordingNotice();
   renderAll();
@@ -375,6 +383,7 @@ function handle(msg) {
       .catch(() => setStatus("failed")); break;
     case "room.paused": applyPaused(msg.paused); break;
     case "room.recording": applyRecording(msg.recording); break;
+    case "room.transcribing": applyTranscribing(msg.transcribing); break;
   }
 }
 
@@ -394,11 +403,18 @@ function applyRecording(recording) {
   saveCache();
 }
 
+function applyTranscribing(transcribing) {
+  state.transcribing = !!transcribing;
+  setRecordingNotice();
+  saveCache();
+}
+
 /* The room is over but the page stays useful: the transcript remains, and the channel stays
    subscribed because a restart announces itself here as room.moved. */
 function applyClosed() {
   state.closed = true;
   state.recording = false; // the room is over; nothing is being written to any more
+  state.transcribing = false;
   setRecordingNotice();
   setStatus("ended");
   saveCache();
@@ -520,6 +536,7 @@ function saveCache() {
     closed: state.closed,
     paused: state.paused,
     recording: state.recording,
+    transcribing: state.transcribing,
   }));
 }
 
@@ -534,6 +551,7 @@ function loadCache() {
     state.closed = !!cache.closed; // a reload of a finished room must not look live
     state.paused = !!cache.paused; // …nor a reload of a paused one look like it is recording
     state.recording = !!cache.recording; // the notice must survive a lock-screen reconnect
+    state.transcribing = !!cache.transcribing;
     setRecordingNotice();
     renderAll();
   } catch { /* corrupt cache — start empty */ }
@@ -692,6 +710,7 @@ async function moveToRoom(newRoomId, newVerificationKey, newInviteTicket) {
   state.closed = false;
   state.paused = false;
   state.recording = false;
+  state.transcribing = false;
   setRecordingNotice();
   renderAll();
 

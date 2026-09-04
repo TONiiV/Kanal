@@ -418,6 +418,51 @@ public class MeetingSessionTests
         Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Recording);
     }
 
+    [Fact]
+    public async Task LiveTranscriptionIsAnnouncedAndCarriedInSnapshots()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            new AudioCountingAsr(), null, relay, new RoomConfig("t", ["zh", "de"]));
+
+        await session.StartAsync(TestContext.Current.CancellationToken);
+        await session.PublishSnapshotAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(relay.OfType<RoomTranscribingMessage>().Single().Transcribing);
+        Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Transcribing);
+    }
+
+    [Fact]
+    public async Task ADeclaredScriptedSessionNeverClaimsToBeTranscribing()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh"]),
+            announceTranscription: false);
+
+        await session.StartAsync(TestContext.Current.CancellationToken);
+        await session.PublishSnapshotAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(relay.OfType<RoomTranscribingMessage>().Single().Transcribing);
+        Assert.False(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Transcribing);
+    }
+
+    [Fact]
+    public async Task ProviderEndClearsTheLiveTranscriptionState()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh"]));
+
+        await RunToEndAsync(session);
+        await WaitUntilAsync(() => relay.OfType<RoomTranscribingMessage>().Count == 2);
+        await session.PublishSnapshotAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal([true, false], relay.OfType<RoomTranscribingMessage>().Select(m => m.Transcribing));
+        Assert.False(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Transcribing);
+        Assert.False(session.IsTranscribing);
+    }
+
     /// <summary>Slow enough that shutdown always finds it in flight, quick enough to fit a grace.</summary>
     private sealed class SlowMt : IMtProvider
     {
