@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Kanal.Host.Views;
@@ -76,6 +77,50 @@ public class MainWindowCompositionTests
         Assert.Contains(
             right.GetLogicalDescendants().OfType<Button>(),
             button => button.Name == "DevicePicker");
+
+        // Tree order, not laid-out position, is what Tab and a screen reader follow: the operator
+        // must meet the transport before Export and Settings.
+        var dock = Assert.IsType<DockPanel>(left.Parent);
+        Assert.Equal([left, right], dock.Children);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The two claims the arrangement rests on, and the only two that can fail silently: the right
+    /// cluster holds the viewport edge while the bar fits, and the clusters keep a gap once it does
+    /// not. Measured rather than compared to a picture - the numbers are the behaviour.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1800.0)]
+    [InlineData(1280.0)]
+    [InlineData(900.0)]
+    public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(double width)
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = width, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
+        var panels = iconBar.GetLogicalDescendants().OfType<StackPanel>().ToList();
+        var left = Assert.Single(panels, panel => panel.Name == "LeftCluster");
+        var right = Assert.Single(panels, panel => panel.Name == "RightCluster");
+        var dock = Assert.IsType<DockPanel>(left.Parent);
+        var scroller = Assert.Single(
+            iconBar.GetLogicalDescendants().OfType<ScrollViewer>(),
+            view => view.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto);
+
+        var gap = right.Bounds.X - left.Bounds.Right;
+        Assert.True(gap >= 8, $"clusters are {gap} apart at {width} px");
+
+        // While it fits, the right cluster ends where the viewport does. Once it does not, the bar
+        // is wider than the viewport and scrolls - which is the other half of the arrangement.
+        if (dock.Bounds.Width <= scroller.Viewport.Width)
+            Assert.Equal(scroller.Viewport.Width, right.Bounds.Right, precision: 1);
+        else
+            Assert.True(scroller.Extent.Width > scroller.Viewport.Width);
 
         window.Close();
     }
