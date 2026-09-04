@@ -89,10 +89,11 @@ public class MainWindowCompositionTests
     /// not. Measured rather than compared to a picture - the numbers are the behaviour.
     /// </summary>
     [AvaloniaTheory]
-    [InlineData(1800.0)]
-    [InlineData(1280.0)]
-    [InlineData(900.0)]
-    public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(double width)
+    [InlineData(2200.0, true)]
+    [InlineData(1280.0, false)]
+    [InlineData(900.0, false)]
+    public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(
+        double width, bool expectedToFit)
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
@@ -112,9 +113,15 @@ public class MainWindowCompositionTests
         var gap = right.Bounds.X - left.Bounds.Right;
         Assert.True(gap >= 8, $"clusters are {gap} apart at {width} px");
 
+        // Which branch each width takes is stated rather than discovered: otherwise a metric change
+        // could push every case into the overflow half and the theory would stay green while
+        // testing only one of the two claims it names.
+        var fits = dock.Bounds.Width <= scroller.Viewport.Width;
+        Assert.Equal(expectedToFit, fits);
+
         // While it fits, the right cluster ends where the viewport does. Once it does not, the bar
         // is wider than the viewport and scrolls - which is the other half of the arrangement.
-        if (dock.Bounds.Width <= scroller.Viewport.Width)
+        if (fits)
             Assert.Equal(scroller.Viewport.Width, right.Bounds.Right, precision: 1);
         else
             Assert.True(scroller.Extent.Width > scroller.Viewport.Width);

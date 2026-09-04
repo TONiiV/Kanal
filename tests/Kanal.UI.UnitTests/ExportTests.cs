@@ -148,22 +148,26 @@ public class SettingsViewModelFolderTests
             TranscriptFolder = @"D:\a",
             AudioFolder = @"D:\b",
             RecordAudio = false,
+            RecordOnlineAudio = true,
         };
         var vm = new SettingsViewModel(settings, () => null);
 
         Assert.Equal(@"D:\a", vm.TranscriptFolder);
         Assert.Equal(@"D:\b", vm.AudioFolder);
         Assert.False(vm.RecordAudio);
+        Assert.True(vm.RecordOnlineAudio);
 
         vm.TranscriptFolder = @"D:\c";
         vm.AudioFolder = @"D:\d";
         vm.RecordAudio = true;
+        vm.RecordOnlineAudio = false;
         var written = new AppSettings();
         vm.ApplyTo(written);
 
         Assert.Equal(@"D:\c", written.TranscriptFolder);
         Assert.Equal(@"D:\d", written.AudioFolder);
         Assert.True(written.RecordAudio);
+        Assert.False(written.RecordOnlineAudio);
     }
 }
 
@@ -186,7 +190,8 @@ public class RecordingTests
         var folder = Path.Combine("meetings", "audio");
         var settings = new AppSettings { AudioFolder = folder };
 
-        var path = MainViewModel.RecordingPathFor(Live, settings, "kanal-093005-x7kq");
+        var path = MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.InRoom, settings, "kanal-093005-x7kq");
 
         Assert.Equal(Path.Combine(folder, "kanal-093005-x7kq.wav"), path);
     }
@@ -195,7 +200,8 @@ public class RecordingTests
     [Fact]
     public void ScriptedModesRecordNothing()
     {
-        Assert.Null(MainViewModel.RecordingPathFor(Demo, new AppSettings(), "kanal-1"));
+        Assert.Null(MainViewModel.RecordingPathFor(
+            Demo, CaptureProfileId.InRoom, new AppSettings(), "kanal-1"));
     }
 
     [Fact]
@@ -203,16 +209,38 @@ public class RecordingTests
     {
         var settings = new AppSettings { RecordAudio = false };
 
-        Assert.Null(MainViewModel.RecordingPathFor(Live, settings, "kanal-1"));
+        Assert.Null(MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.InRoom, settings, "kanal-1"));
     }
 
     [Fact]
     public void UnsetAudioFolderFallsBackRatherThanWritingToNowhere()
     {
-        var path = MainViewModel.RecordingPathFor(Live, new AppSettings(), "kanal-1");
+        var path = MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.InRoom, new AppSettings(), "kanal-1");
 
         Assert.NotNull(path);
         Assert.StartsWith(SettingsStore.DefaultOutputFolder, path);
         Assert.EndsWith("kanal-1.wav", path);
+    }
+
+    [Fact]
+    public void OnlineMeetingsDoNotWriteAWavByDefault()
+    {
+        var path = MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.OnlineMeeting, new AppSettings(), "kanal-1");
+
+        Assert.Null(path);
+    }
+
+    [Fact]
+    public void OnlineRecordingRequiresItsOwnExplicitOptIn()
+    {
+        var settings = new AppSettings { RecordOnlineAudio = true };
+
+        var path = MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.OnlineMeeting, settings, "kanal-1");
+
+        Assert.NotNull(path);
     }
 }

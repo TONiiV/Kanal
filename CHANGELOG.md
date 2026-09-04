@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Before a live room starts, the operator now chooses in-room or online capture and confirms that
+  every participant consented. The host and phones keep live transcription visible even when no
+  audio file is recorded, and Markdown/JSON exports retain the attestation.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
