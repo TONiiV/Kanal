@@ -19,11 +19,17 @@
         <ItemsControl ItemsSource="{Binding LanguageOptions}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:LanguageOption">
+                    <!-- The row is 42 px tall, but the height belongs to the row, not to the
+                         checkbox: Fluent pins the tick box to the top of whatever height the
+                         checkbox is given, so stretching it to 42 left the box floating five
+                         pixels above the flag and the name it belongs to. At its natural height,
+                         centred in the row, the box and its label share one centre line and every
+                         row lands on the same one. -->
                     <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1"
-                            Opacity="{Binding RowOpacity}">
+                            MinHeight="42" Opacity="{Binding RowOpacity}">
                         <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}"
-                                  HorizontalAlignment="Stretch"
-                                  Padding="10,0,0,0" MinHeight="42">
+                                  HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                  Padding="10,0,0,0">
                             <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
                                 <controls:FlagIcon Code="{Binding Code}" Width="24" Height="24" />
                                 <TextBlock Text="{Binding CodeUpper}" FontWeight="Bold" LetterSpacing="1"

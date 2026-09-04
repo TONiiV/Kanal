@@ -6,6 +6,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### Language rows sit on one centre line
+
+- Fluent pins a checkbox's tick box to the top of whatever height the control is given, so the
+  42 px language rows left the box five pixels above the flag and name it belongs to, and each row
+  found its own answer. The 42 px now belongs to the row border; the checkbox keeps its natural
+  height and is centred inside it, which puts the tick box, the flag and the name on one centre
+  line on every row.
+- The row's click target is the checkbox rather than the full 42 px band — the full width still
+  toggles, the outer four pixels above and below no longer do.
+- No test: this is layout, which `CLAUDE.md` keeps out of the suite. It was verified by measuring
+  the rendered row geometry headlessly.
+
 ### Open-source acknowledgements have their own window
 
 - Settings now links to the open-source project index instead of rendering the entire index at the
