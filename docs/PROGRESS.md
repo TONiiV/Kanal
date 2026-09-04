@@ -6,6 +6,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### Native online-meeting audio is the accepted path
+
+- ADR 0050 replaces the proposed BlackHole/VB-Cable primary path with native microphone plus
+  system-audio capture. Virtual drivers remain fallbacks; they do not solve the local-microphone
+  half of an online call and leave machine-wide routing behind after the meeting.
+- The work is split into three independently reviewed slices: capture profile and disclosure,
+  Windows/macOS native system-audio adapters, then bounded synchronisation and mixing into the
+  existing 16 kHz mono speech interface. Preserving local/remote channels is explicitly later.
+- Windows uses WASAPI loopback. macOS 14.2+ uses a Core Audio process tap, while macOS 13 retains
+  online capture through a ScreenCaptureKit compatibility adapter; older systems keep in-room
+  microphone capture only.
+
 ### Open-source acknowledgements have their own window
 
 - Settings now links to the open-source project index instead of rendering the entire index at the
