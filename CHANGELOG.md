@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
 - The host uses one compact, horizontally scrollable control bar, leaving the meeting more room

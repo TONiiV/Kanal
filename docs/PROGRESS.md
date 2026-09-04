@@ -16,6 +16,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   sides of the change: every notice is visible in the dedicated window, and none remains embedded
   in Settings.
 
+### A warm rounded app-icon tile
+
+- Desktop, dock and browser icon derivatives now place the unchanged multicolour mark on a clean
+  warm-beige rounded-square tile, with transparent outer corners and no border, shadow or lettering.
+- The splash remains the standalone transparent mark, keeping the startup lockup visually light.
+  Both treatments are generated deterministically from the same checked-in PNG source.
+
 ### One mark, generated for every surface
 
 - The user-supplied 1536 × 1024 transparent PNG is now the single brand source. Its five incoming
