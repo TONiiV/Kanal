@@ -27,6 +27,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   reaches the phones.
 - Up to four language columns on the host, reorderable by drag or Alt+←/→; each phone chooses one
   language for itself.
+- In the language dialog each tick box sits on the same centre line as the flag and the language
+  name beside it, and every row lands on that same line.
 - Modes describe the pipeline rather than the vendor: five combinations of transcription and
   translation, each stating what leaves the machine, with the ones that cannot run right now shown
   greyed out and explaining why.
