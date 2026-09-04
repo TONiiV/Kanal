@@ -516,6 +516,20 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 
 ## 2026-09-04
 
+### Native meeting audio, slice 2: operating-system sources
+
+- Windows enumerates active render endpoints, keeps the multimedia default first, and captures
+  the selected stable endpoint with WASAPI shared loopback. Microphone and loopback now share one
+  float/PCM downmix and resampling path to the existing 16 kHz mono PCM16 contract.
+- macOS 14.2+ uses a private global Core Audio process tap bound to the selected output, a private
+  aggregate device, and an IOProc; teardown stops and destroys the IOProc, aggregate device, then
+  tap. macOS 13–14.1 uses an audio-only ScreenCaptureKit stream anchored to the current display.
+- A small C ABI wraps the Apple APIs in a source-built universal Swift dylib. The managed boundary
+  owns bounded delivery, resampling, cancellation, actionable permission errors, and stale-output
+  rejection. The host Info.plist declares microphone and system-audio usage descriptions.
+- The existing device watcher now observes output topology/default changes as well as microphone
+  changes. Headless tests inject the native boundary and never trigger a real permission prompt.
+
 ### The control bar reads as two groups
 
 - The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster

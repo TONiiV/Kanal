@@ -20,6 +20,7 @@
     <!-- The repository's own changelog, shown in the application: one file, so the version an
          operator reads on screen cannot drift from the one a reader sees on GitHub. -->
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="Kanal.Host.CHANGELOG.md" />
+    <Content Include="Info.plist" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
