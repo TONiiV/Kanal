@@ -1,7 +1,10 @@
 {
   "mode.label": "MODUS",
   "languages.label": "SPRACHEN",
-  "input.label": "EINGANG",
+  "input.mute": "Mikrofon stummschalten",
+  "input.unmute": "Stummschaltung aufheben",
+  "input.pick": "Mikrofon wählen",
+  "input.none": "Kein Mikrofon",
   "capture.label": "AUFNAHMEQUELLE",
   "capture.inroom.name": "Im Raum",
   "capture.inroom.guidance": "Das ausgewählte Mikrofon erfasst alle Personen an diesem Computer.",

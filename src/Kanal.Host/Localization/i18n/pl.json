@@ -1,7 +1,10 @@
 {
   "mode.label": "TRYB",
   "languages.label": "JĘZYKI",
-  "input.label": "WEJŚCIE",
+  "input.mute": "Wycisz mikrofon",
+  "input.unmute": "Wyłącz wyciszenie",
+  "input.pick": "Wybierz mikrofon",
+  "input.none": "Brak mikrofonu",
   "capture.label": "PRZECHWYTYWANIE",
   "capture.inroom.name": "W pomieszczeniu",
   "capture.inroom.guidance": "Wybrany mikrofon zbiera głosy wszystkich osób przy tym komputerze.",

@@ -187,15 +187,101 @@
 
                     <StackPanel x:Name="RightCluster" DockPanel.Dock="Right" Orientation="Horizontal"
                                 Spacing="8" Margin="16,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"
+                        <!-- The microphone reads as one instrument: the glyph is the mute switch,
+                             the meter beside it says the room is actually arriving, and the caret
+                             opens the list of inputs. Muted is a struck-through microphone and a
+                             meter at rest, so the state is legible without reading a word. -->
+                        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center"
                                     IsVisible="{Binding NeedsMicrophone}">
-                            <TextBlock Text="{l:T input.label}" Classes="label" />
-                            <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
-                                      Width="200" IsEnabled="{Binding !IsRunning}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <Button Command="{Binding ToggleMuteCommand}" Classes="ghost" Padding="8,6"
+                                    ToolTip.Tip="{Binding MuteTip}"
+                                    AutomationProperties.Name="{Binding MuteTip}">
+                                <Panel>
+                                    <Path Classes="glyph" Data="{StaticResource GlyphMic}" Width="14" Height="14"
+                                          Stretch="Uniform" VerticalAlignment="Center"
+                                          IsVisible="{Binding !IsMuted}" />
+                                    <Path Classes="glyph" Data="{StaticResource GlyphMicMuted}" Width="14"
+                                          Height="14" Stretch="Uniform" VerticalAlignment="Center"
+                                          IsVisible="{Binding IsMuted}" />
+                                </Panel>
+                            </Button>
+
+                            <!-- The wrapper reserves the meter's slot whether or not the meter
+                                 is in it, so going live does not shove the picker sideways.
+                                 MinWidth="0" is not decoration: Fluent's ProgressBar theme
+                                 sets MinWidth="200", which silently wins over Width. -->
+                            <Panel Width="60" VerticalAlignment="Center">
+                                <ProgressBar x:Name="MicMeter" Value="{Binding MicLevel}" Maximum="100"
+                                             Width="52" MinWidth="0" Height="4" CornerRadius="0"
+                                             IsVisible="{Binding ShowMicLevel}"
+                                             HorizontalAlignment="Left" VerticalAlignment="Center"
+                                             Margin="2,0,6,0"
+                                             Foreground="{StaticResource Ink}"
+                                             Background="{StaticResource RuleFaint}" />
+                            </Panel>
+
+                            <!-- The name is the microphone, not the verb. A button whose content
+                                 is a panel has no name of its own - Avalonia falls back to the
+                                 content's type name - and the verb is still announced, as the
+                                 tooltip's help text. -->
+                            <Button x:Name="DevicePicker" Classes="ghost" Padding="6,6"
+                                    IsEnabled="{Binding !IsRunning}" ToolTip.Tip="{l:T input.pick}"
+                                    AutomationProperties.Name="{Binding SelectedDeviceLabel}">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="{Binding SelectedDeviceLabel}" FontSize="12"
+                                               MaxWidth="160" TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                    <Path Classes="glyph" Data="{StaticResource GlyphChevronDown}" Width="9"
+                                          Height="5" Stretch="Uniform" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Button.Flyout>
+                                    <Flyout Placement="BottomEdgeAlignedRight"
+                                            Opening="OnDevicePickerOpening">
+                                        <ListBox x:Name="DeviceList" ItemsSource="{Binding Devices}"
+                                                 Tapped="OnDeviceCommitted"
+                                                 KeyDown="OnDevicePickerKey"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 MinWidth="240" MaxHeight="320" Padding="6">
+                                            <!-- The only list of its kind in the application, so
+                                                 its rows are squared off here rather than in a
+                                                 global style: same paper block and same corners as
+                                                 the mode list it sits beside. -->
+                                            <ListBox.Styles>
+                                                <Style Selector="ListBoxItem">
+                                                    <Setter Property="CornerRadius" Value="0" />
+                                                    <Setter Property="Padding" Value="9,3" />
+                                                </Style>
+                                                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                                    <Setter Property="Background" Value="{StaticResource Paper}" />
+                                                    <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+                                                </Style>
+                                                <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+                                                    <Setter Property="Background" Value="{StaticResource Rule}" />
+                                                    <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+                                                </Style>
+                                                <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                                    <Setter Property="Background" Value="{StaticResource Rule}" />
+                                                    <Setter Property="TextElement.Foreground" Value="{StaticResource Ink}" />
+                                                </Style>
+                                            </ListBox.Styles>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                                Margin="0,3">
+                                                        <Path Width="10" Height="10" Stretch="Uniform"
+                                                              VerticalAlignment="Center"
+                                                              Data="{StaticResource GlyphCheck}"
+                                                              Fill="{StaticResource Ink}"
+                                                              IsVisible="{Binding $parent[ListBoxItem].IsSelected}" />
+                                                        <TextBlock Text="{Binding Name}" FontSize="12.5"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"

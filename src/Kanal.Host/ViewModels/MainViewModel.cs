@@ -144,6 +144,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
+            OnPropertyChanged(nameof(MuteTip));
+            OnPropertyChanged(nameof(SelectedDeviceLabel));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
             OnPropertyChanged(nameof(ConsentReminder));
             OnPropertyChanged(nameof(LiveNoticeText));
@@ -472,10 +474,51 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private double _micLevel;
 
+    /// <summary>
+    /// The meter is shown only while the room is live. Before Start it can read nothing but zero,
+    /// and a meter reading zero because nothing has started looks exactly like a meter reading
+    /// zero because the microphone is dead — which is the one distinction it exists to make.
+    /// </summary>
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
+
+    /// <summary>
+    /// The room off the microphone without taking it off the record. Muting replaces the captured
+    /// frames with silence rather than stopping the capture, so the provider's session stays open
+    /// and unmuting needs no reconnection. The provider's own endpointing still finalises the
+    /// utterance that was in flight, so speech after unmute starts a new one.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MuteTip))]
+    private bool _isMuted;
+
+    /// <summary>The meter answers the mute switch at once, not one capture frame later.</summary>
+    partial void OnIsMutedChanged(bool value)
+    {
+        if (value)
+            MicLevel = 0;
+    }
+
+    /// <summary>What the microphone button will do, said in the operator's language.</summary>
+    public string MuteTip => L[IsMuted ? "input.unmute" : "input.mute"];
+
+    [RelayCommand]
+    private void ToggleMute() => IsMuted = !IsMuted;
+
+    /// <summary>The microphone in use, named on the bar so it need not be opened to be read.</summary>
+    public string SelectedDeviceLabel => SelectedDevice?.Name ?? L["input.none"];
+
+    partial void OnSelectedDeviceChanged(AudioDeviceInfo? value) =>
+        OnPropertyChanged(nameof(SelectedDeviceLabel));
+
+    /// <summary>
+    /// What actually leaves for the provider. Muted frames go as silence of the same length, not
+    /// as a gap: a stream that simply stops arriving is a dropped connection to an ASR provider,
+    /// while silence is silence and the socket stays up.
+    /// </summary>
+    internal static ReadOnlyMemory<byte> Gate(ReadOnlyMemory<byte> frame, bool muted) =>
+        muted ? new byte[frame.Length] : frame;
 
     [ObservableProperty]
     private string _mergeFromTag = "";
@@ -652,6 +695,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
+        IsMuted = false;  // nor its mute: a meeting must not come up silent
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
@@ -1052,7 +1096,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var frames = 0L;
             await foreach (var frame in capture.CaptureAsync(deviceId, ct))
             {
-                await session.PushAudioAsync(frame, ct);
+                var muted = IsMuted;
+                await session.PushAudioAsync(Gate(frame, muted), ct);
 
                 // On the first frame, not before the loop: the device is acquired inside it.
                 if (frames == 0)
@@ -1065,7 +1110,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 if (++framesSinceMeter >= 3)
                 {
                     framesSinceMeter = 0;
-                    var peak = FramePeak(frame.Span);
+                    var peak = muted ? 0 : FramePeak(frame.Span);
                     Dispatcher.UIThread.Post(() => MicLevel = peak);
                 }
             }

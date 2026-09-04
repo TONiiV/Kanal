@@ -6,6 +6,37 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### The microphone is one instrument on the bar
+
+- The `INPUT` caption and its 200 px dropdown are replaced by a microphone mark, a level meter and
+  a caret. The mark is the mute switch (struck through when muted, so the state differs in
+  silhouette and not only in colour), the meter says the room is arriving, and the caret opens the
+  input list with a tick beside the one in use — the tick, never the colour, is what says which.
+- Muting replaces each captured frame with silence of the same length rather than stopping the
+  push. A stream that simply stops arriving is a dropped connection to an ASR provider; silence is
+  silence, so the socket stays up and unmuting needs no reconnection. It is not seamless: the
+  provider's own endpointing still finalises the utterance that was in flight, so speech after
+  unmute starts a new one. `Gate` is the whole decision and is unit-tested on its own.
+- A mute does not survive into the next meeting. Start resets it beside the pause it already reset.
+- The picker's list dismisses on a commit, not on a selection change. A `ListBox` raises
+  `SelectionChanged` on every arrow key, so the first keystroke of keyboard navigation both closed
+  the list and switched the device. Mouse use never showed it, so a test now holds it.
+- The level meter now lives in exactly one place — the status bar's copy is gone — and appears only
+  while the room is live. Before Start it can read nothing but zero, and a zero meaning "not
+  started" is indistinguishable from a zero meaning "this microphone is dead". Its slot is reserved
+  whether or not the meter is in it, so going live does not shove the picker sideways, and it
+  carries `MinWidth="0"`: Fluent's `ProgressBar` theme sets `MinWidth="200"`, which silently beats
+  `Width` and had the meter rendering four times its intended size.
+- The list highlights; only a commit writes the microphone through. Escape, or a click outside,
+  leaves the operator on the microphone the list opened with, and the list reopens on the one in
+  use rather than on the row last arrowed past.
+- The picker's accessible name is the microphone it names. A button whose content is a panel has no
+  name of its own — Avalonia falls back to the content's type name — so leaving the name off
+  announced `Avalonia.Controls.StackPanel`; the verb is still announced, as the tooltip's help text.
+- Four new strings in all four chrome languages; `input.label` is retired with the caption it
+  named. `Kanal.Host` now exposes its internals to `Kanal.UI.UnitTests`, following the convention
+  already used by the two provider projects.
+
 ### The control bar reads as two groups
 
 - The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster

@@ -1,7 +1,10 @@
 {
   "mode.label": "MODE",
   "languages.label": "LANGUAGES",
-  "input.label": "INPUT",
+  "input.mute": "Mute the microphone",
+  "input.unmute": "Unmute the microphone",
+  "input.pick": "Choose the microphone",
+  "input.none": "No microphone",
   "capture.label": "CAPTURE",
   "capture.inroom.name": "In the room",
   "capture.inroom.guidance": "Use the selected microphone for everyone around this computer.",

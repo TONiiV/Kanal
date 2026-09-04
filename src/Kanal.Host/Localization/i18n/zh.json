@@ -1,7 +1,10 @@
 {
   "mode.label": "模式",
   "languages.label": "语言",
-  "input.label": "输入",
+  "input.mute": "麦克风静音",
+  "input.unmute": "取消静音",
+  "input.pick": "选择麦克风",
+  "input.none": "无麦克风",
   "capture.label": "收音",
   "capture.inroom.name": "同一房间",
   "capture.inroom.guidance": "使用所选麦克风收取电脑周围所有人的声音。",
