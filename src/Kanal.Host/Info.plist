@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Kanal uses the selected microphone to transcribe and translate a meeting after every participant consents.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Kanal captures meeting audio playing through the selected output so remote participants can be transcribed and translated after everyone consents.</string>
+</dict>
+</plist>
