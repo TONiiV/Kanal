@@ -1,7 +1,10 @@
 {
   "mode.label": "MODUS",
   "languages.label": "SPRACHEN",
-  "input.label": "EINGANG",
+  "input.mute": "Mikrofon stummschalten",
+  "input.unmute": "Stummschaltung aufheben",
+  "input.pick": "Mikrofon wählen",
+  "input.none": "Kein Mikrofon",
   "transport.start": "Start",
   "transport.pause": "Pause",
   "transport.resume": "Weiter",

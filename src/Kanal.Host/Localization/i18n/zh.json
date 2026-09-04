@@ -1,7 +1,10 @@
 {
   "mode.label": "模式",
   "languages.label": "语言",
-  "input.label": "输入",
+  "input.mute": "静音麦克风",
+  "input.unmute": "取消静音",
+  "input.pick": "选择麦克风",
+  "input.none": "无麦克风",
   "transport.start": "开始",
   "transport.pause": "暂停",
   "transport.resume": "继续",

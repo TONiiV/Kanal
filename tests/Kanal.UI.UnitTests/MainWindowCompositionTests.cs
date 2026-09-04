@@ -71,8 +71,11 @@ public class MainWindowCompositionTests
             right.GetLogicalDescendants().OfType<Button>(),
             button => ReferenceEquals(button.Command, vm.ExportMarkdownCommand));
         Assert.Contains(
-            right.GetLogicalDescendants().OfType<ComboBox>(),
-            combo => ReferenceEquals(combo.ItemsSource, vm.Devices));
+            right.GetLogicalDescendants().OfType<Button>(),
+            button => ReferenceEquals(button.Command, vm.ToggleMuteCommand));
+        Assert.Contains(
+            right.GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "DevicePicker");
 
         window.Close();
     }

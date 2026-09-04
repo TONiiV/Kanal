@@ -6,6 +6,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### The microphone is one instrument on the bar
+
+- The `INPUT` caption and its 200 px dropdown are replaced by a microphone mark, a level meter and
+  a caret. The mark is the mute switch (struck through when muted, so the state differs in
+  silhouette and not only in colour), the meter says the room is arriving, and the caret opens the
+  input list with a tick beside the one in use — the tick, never the colour, is what says which.
+- Muting replaces each captured frame with silence of the same length rather than stopping the
+  push. A stream that simply stops arriving is a dropped connection to an ASR provider; silence is
+  silence, so the session stays open and unmuting resumes inside the same sentence. `Gate` is the
+  whole decision and is unit-tested on its own.
+- The level meter now lives in exactly one place. The status bar's copy is gone, along with
+  `ShowMicLevel`, which existed only to gate it.
+- Four new strings in all four chrome languages; `input.label` is retired with the caption it
+  named. `Kanal.Host` now exposes its internals to `Kanal.UI.UnitTests`, following the convention
+  already used by the two provider projects.
+
 ### The control bar reads as two groups
 
 - The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster

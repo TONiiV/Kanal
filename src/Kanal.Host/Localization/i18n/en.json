@@ -1,7 +1,10 @@
 {
   "mode.label": "MODE",
   "languages.label": "LANGUAGES",
-  "input.label": "INPUT",
+  "input.mute": "Mute the microphone",
+  "input.unmute": "Unmute the microphone",
+  "input.pick": "Choose the microphone",
+  "input.none": "No microphone",
   "transport.start": "Start",
   "transport.pause": "Pause",
   "transport.resume": "Resume",

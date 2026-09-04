@@ -5,13 +5,6 @@
              x:Class="Kanal.Host.Views.StatusBarView" x:DataType="vm:MainViewModel">
     <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="24,8">
         <DockPanel>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
-                        IsVisible="{Binding ShowMicLevel}" VerticalAlignment="Center">
-                <TextBlock Text="{l:T input.label}" Classes="label" />
-                <ProgressBar Value="{Binding MicLevel}" Maximum="100" Width="120" Height="6"
-                             Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
-                             CornerRadius="0" />
-            </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="7"
                         Margin="0,0,22,0" VerticalAlignment="Center"
                         IsVisible="{Binding IsRecording}" ToolTip.Tip="{Binding RecordingPath}">
