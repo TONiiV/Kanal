@@ -25,7 +25,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The microphone on the control bar is one instrument: a microphone mark that mutes the room with
   one click, a level meter beside it that shows the room actually arriving, and a caret that opens
   the list of inputs with a tick against the one in use. Muting sends silence rather than cutting
-  the stream, so unmuting resumes inside the same sentence.
+  the stream, so the connection to the transcription service is never dropped and unmuting takes
+  effect at once.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.

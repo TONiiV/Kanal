@@ -14,10 +14,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   input list with a tick beside the one in use — the tick, never the colour, is what says which.
 - Muting replaces each captured frame with silence of the same length rather than stopping the
   push. A stream that simply stops arriving is a dropped connection to an ASR provider; silence is
-  silence, so the session stays open and unmuting resumes inside the same sentence. `Gate` is the
-  whole decision and is unit-tested on its own.
-- The level meter now lives in exactly one place. The status bar's copy is gone, along with
-  `ShowMicLevel`, which existed only to gate it.
+  silence, so the socket stays up and unmuting needs no reconnection. It is not seamless: the
+  provider's own endpointing still finalises the utterance that was in flight, so speech after
+  unmute starts a new one. `Gate` is the whole decision and is unit-tested on its own.
+- A mute does not survive into the next meeting. Start resets it beside the pause it already reset.
+- The picker's list dismisses on a commit, not on a selection change. A `ListBox` raises
+  `SelectionChanged` on every arrow key, so the first keystroke of keyboard navigation both closed
+  the list and switched the device. Mouse use never showed it, so a test now holds it.
+- The level meter now lives in exactly one place — the status bar's copy is gone — and appears only
+  while the room is live. Before Start it can read nothing but zero, and a zero meaning "not
+  started" is indistinguishable from a zero meaning "this microphone is dead".
 - Four new strings in all four chrome languages; `input.label` is retired with the caption it
   named. `Kanal.Host` now exposes its internals to `Kanal.UI.UnitTests`, following the convention
   already used by the two provider projects.

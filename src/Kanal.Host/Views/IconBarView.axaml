@@ -194,13 +194,17 @@
 
                             <ProgressBar x:Name="MicMeter" Value="{Binding MicLevel}" Maximum="100"
                                          Width="52" Height="4" CornerRadius="0"
+                                         IsVisible="{Binding ShowMicLevel}"
                                          VerticalAlignment="Center" Margin="2,0,6,0"
                                          Foreground="{StaticResource Ink}"
                                          Background="{StaticResource RuleFaint}" />
 
+                            <!-- No AutomationProperties.Name here: it would override the name
+                                 Avalonia derives from the content, and a screen reader would
+                                 announce "choose the microphone" without ever saying which
+                                 microphone is in use. -->
                             <Button x:Name="DevicePicker" Classes="ghost" Padding="6,6"
-                                    IsEnabled="{Binding !IsRunning}" ToolTip.Tip="{l:T input.pick}"
-                                    AutomationProperties.Name="{l:T input.pick}">
+                                    IsEnabled="{Binding !IsRunning}" ToolTip.Tip="{l:T input.pick}">
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBlock Text="{Binding SelectedDeviceLabel}" FontSize="12"
                                                MaxWidth="160" TextTrimming="CharacterEllipsis"
@@ -212,7 +216,8 @@
                                     <Flyout Placement="BottomEdgeAlignedRight">
                                         <ListBox ItemsSource="{Binding Devices}"
                                                  SelectedItem="{Binding SelectedDevice}"
-                                                 SelectionChanged="OnDeviceChosen"
+                                                 Tapped="OnDeviceCommitted"
+                                                 KeyDown="OnDevicePickerKey"
                                                  Background="Transparent" BorderThickness="0"
                                                  MinWidth="240" MaxHeight="320" Padding="6">
                                             <!-- The only list of its kind in the application, so

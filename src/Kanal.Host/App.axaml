@@ -159,6 +159,9 @@
         <Style Selector="Button.ghost:pointerover Path.glyph">
             <Setter Property="Fill" Value="{StaticResource Sheet}" />
         </Style>
+        <Style Selector="Button.ghost:disabled Path.glyph">
+            <Setter Property="Fill" Value="{StaticResource Ink3}" />
+        </Style>
 
         <!-- Quiet secondary actions: no box until you reach for them. -->
         <Style Selector="Button.ghost">

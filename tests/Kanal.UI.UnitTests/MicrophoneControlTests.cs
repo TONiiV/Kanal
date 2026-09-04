@@ -1,7 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Kanal.Audio;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using Kanal.Host.Localization;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -90,7 +93,7 @@ public class MicrophoneControlTests
         // operator can see whether the list is the one the capture reads.
         var flyout = Assert.IsType<Flyout>(picker.Flyout);
         flyout.ShowAt(picker);
-        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
 
         var list = Assert.IsType<ListBox>(flyout.Content);
         Assert.Same(vm.Devices, list.ItemsSource);
@@ -98,6 +101,86 @@ public class MicrophoneControlTests
         flyout.Hide();
 
         window.Close();
+    }
+
+    /// <summary>
+    /// A ListBox raises SelectionChanged on every arrow key, so dismissing on that closed the list
+    /// and switched the device on the first keystroke of keyboard navigation. Dismissal is bound to
+    /// a commit instead. Mouse use never showed this, which is why it needs a test.
+    /// </summary>
+    [AvaloniaFact]
+    public void ArrowingThroughTheDeviceListDoesNotCloseItButCommittingDoes()
+    {
+        var vm = TestViewModels.Hermetic();
+        // Not whatever this machine happens to have plugged in: the test needs two rows to arrow
+        // between, and CI has no audio devices at all.
+        vm.Devices.Clear();
+        vm.Devices.Add(new AudioDeviceInfo("mic-1", "Table microphone"));
+        vm.Devices.Add(new AudioDeviceInfo("usb-1", "USB conference mic"));
+        vm.SelectedDevice = vm.Devices[0];
+
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+
+        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
+        var picker = Assert.Single(
+            iconBar.GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "DevicePicker");
+        var flyout = Assert.IsType<Flyout>(picker.Flyout);
+        flyout.ShowAt(picker);
+        Dispatcher.UIThread.RunJobs();
+        var list = Assert.IsType<ListBox>(flyout.Content);
+
+        list.Focus();
+        list.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down });
+        Dispatcher.UIThread.RunJobs();
+
+        // The arrow moved the highlight - which is what used to close the list - and the list is
+        // still open for the next one.
+        Assert.Equal(1, list.SelectedIndex);
+        Assert.True(flyout.IsOpen);
+
+        list.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(flyout.IsOpen);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// Before Start the meter can read nothing but zero, and a zero that means "not started" is
+    /// indistinguishable from a zero that means "this microphone is dead".
+    /// </summary>
+    [AvaloniaFact]
+    public void TheMeterStaysHiddenUntilTheRoomIsLive()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+
+        Assert.False(vm.ShowMicLevel);
+        var meter = Assert.Single(window.GetLogicalDescendants().OfType<ProgressBar>());
+        Assert.False(meter.IsVisible);
+
+        window.Close();
+    }
+
+    /// <summary>The twin of the pause reset: a meeting must not come up silent.</summary>
+    [AvaloniaFact]
+    public async Task AMuteDoesNotSurviveIntoTheNextMeeting()
+    {
+        var vm = TestViewModels.Demo();
+        vm.ToggleMuteCommand.Execute(null);
+        Assert.True(vm.IsMuted);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(vm.IsMuted);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>The level meter belongs beside the microphone, and lives in exactly one place.</summary>

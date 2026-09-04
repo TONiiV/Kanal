@@ -414,6 +414,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private bool _isRunning;
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
@@ -421,9 +422,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private double _micLevel;
 
     /// <summary>
+    /// The meter is shown only while the room is live. Before Start it can read nothing but zero,
+    /// and a meter reading zero because nothing has started looks exactly like a meter reading
+    /// zero because the microphone is dead — which is the one distinction it exists to make.
+    /// </summary>
+    public bool ShowMicLevel => IsRunning && NeedsMicrophone;
+
+    /// <summary>
     /// The room off the microphone without taking it off the record. Muting replaces the captured
     /// frames with silence rather than stopping the capture, so the provider's session stays open
-    /// and unmuting resumes inside the same sentence instead of rebuilding a stream.
+    /// and unmuting needs no reconnection. The provider's own endpointing still finalises the
+    /// utterance that was in flight, so speech after unmute starts a new one.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MuteTip))]
@@ -451,7 +460,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// What actually leaves for the provider. Muted frames go as silence of the same length, not
     /// as a gap: a stream that simply stops arriving is a dropped connection to an ASR provider,
-    /// while silence is silence.
+    /// while silence is silence and the socket stays up.
     /// </summary>
     internal static ReadOnlyMemory<byte> Gate(ReadOnlyMemory<byte> frame, bool muted) =>
         muted ? new byte[frame.Length] : frame;
@@ -487,6 +496,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     partial void OnSelectedModeChanged(PipelineModeOption value)
     {
         OnPropertyChanged(nameof(NeedsMicrophone));
+        OnPropertyChanged(nameof(ShowMicLevel));
         RefreshPipelineStatus();
     }
 
@@ -589,6 +599,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
+        IsMuted = false;  // nor its mute: a meeting must not come up silent
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))

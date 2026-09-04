@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Kanal.Host.ViewModels;
 
@@ -18,12 +19,17 @@ public partial class IconBarView : UserControl
     }
 
     /// <summary>
-    /// A list in a flyout does not dismiss itself the way a menu does, and an input picker that
-    /// stays open over the meeting after the choice is made is one more thing to close mid-sentence.
+    /// A list in a flyout does not dismiss itself the way a menu does, and an input picker left
+    /// open over the meeting is one more thing to close mid-sentence. Dismissal is bound to a
+    /// commit and not to the selection: a ListBox raises SelectionChanged on every arrow key, so
+    /// gating on that closed the list — and switched the device — on the first keystroke of
+    /// keyboard navigation.
     /// </summary>
-    private void OnDeviceChosen(object? sender, SelectionChangedEventArgs e)
+    private void OnDeviceCommitted(object? sender, TappedEventArgs e) => DevicePicker.Flyout?.Hide();
+
+    private void OnDevicePickerKey(object? sender, KeyEventArgs e)
     {
-        if (e.AddedItems.Count > 0)
+        if (e.Key is Key.Enter or Key.Space)
             DevicePicker.Flyout?.Hide();
     }
 
