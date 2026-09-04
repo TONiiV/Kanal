@@ -6,6 +6,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### The control bar reads as two groups
+
+- The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster
+  (microphone, export, settings) rather than one undifferentiated horizontal run. What the operator
+  reaches for mid-meeting is now separated from what is set up once and left alone.
+- The horizontal `ScrollViewer` is unchanged and still stretches the bar to the viewport, so the
+  right cluster holds the edge at normal widths and the whole row scrolls when a long locale makes
+  it too wide to fit. Nothing wraps and no control is dropped.
+- A headless composition test asserts which cluster each control belongs to; the arrangement itself
+  is layout and stays out of the suite.
+
 ### Open-source acknowledgements have their own window
 
 - Settings now links to the open-source project index instead of rendering the entire index at the
