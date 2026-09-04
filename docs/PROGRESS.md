@@ -8,15 +8,24 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### Language rows sit on one centre line
 
-- Fluent pins a checkbox's tick box to the top of whatever height the control is given, so the
-  42 px language rows left the box five pixels above the flag and name it belongs to, and each row
-  found its own answer. The 42 px now belongs to the row border; the checkbox keeps its natural
-  height and is centred inside it, which puts the tick box, the flag and the name on one centre
-  line on every row.
-- The row's click target is the checkbox rather than the full 42 px band — the full width still
-  toggles, the outer four pixels above and below no longer do.
+- Fluent pins a checkbox's tick box to the top of whatever height the control is given — as a local
+  value inside its template, so no style can override it. The language rows set `MinHeight="42"` on
+  the checkbox itself, which left the tick box five pixels above the flag and the name it belongs
+  to. The offset was the same five pixels on every row, `(42−32)/2`; what varied was nothing, which
+  is why it read as a systematic mistake rather than a glitch.
+- The height now belongs to the row border and the checkbox keeps its natural height, centred
+  inside it. Tick box, flag and name share one centre line. The band is `MinHeight="43"`, because
+  Avalonia counts the hairline inside it: 42 px of content over a 1 px rule, the pitch the rows
+  already had.
+- The row's click target is the checkbox rather than the full band — the full width still toggles,
+  the outer five pixels above and below no longer do. This is a choice, not a constraint: a style
+  putting `Margin="0,5,0,0"` on the tick grid aligns the rows while keeping the full-height target.
+  It was not taken because it depends on the internal shape of another library's template and would
+  fail silently, and without a layout test in the suite nothing would say so.
+- The fix holds while the row's content stays within the tick grid's fixed 32 px; the comment in
+  the view names that dependency, since no test can.
 - No test: this is layout, which `CLAUDE.md` keeps out of the suite. It was verified by measuring
-  the rendered row geometry headlessly.
+  the rendered row geometry headlessly, before and after, on all twelve rows.
 
 ### Open-source acknowledgements have their own window
 
