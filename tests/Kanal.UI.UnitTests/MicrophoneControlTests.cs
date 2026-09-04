@@ -136,13 +136,58 @@ public class MicrophoneControlTests
         Dispatcher.UIThread.RunJobs();
 
         // The arrow moved the highlight - which is what used to close the list - and the list is
-        // still open for the next one.
+        // still open for the next one. The microphone has not changed: a highlight is not a choice.
         Assert.Equal(1, list.SelectedIndex);
         Assert.True(flyout.IsOpen);
+        Assert.Equal("mic-1", vm.SelectedDevice!.Id);
 
         list.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         Dispatcher.UIThread.RunJobs();
+
         Assert.False(flyout.IsOpen);
+        Assert.Equal("usb-1", vm.SelectedDevice!.Id);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// Dismissing a menu means leaving things as they were. Arrowing past a microphone and pressing
+    /// Escape - or clicking away - must not be the same as choosing it.
+    /// </summary>
+    [AvaloniaFact]
+    public void LeavingThePickerWithoutCommittingKeepsTheMicrophoneItOpenedOn()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.Devices.Clear();
+        vm.Devices.Add(new AudioDeviceInfo("mic-1", "Table microphone"));
+        vm.Devices.Add(new AudioDeviceInfo("usb-1", "USB conference mic"));
+        vm.SelectedDevice = vm.Devices[0];
+
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+
+        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
+        var picker = Assert.Single(
+            iconBar.GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "DevicePicker");
+        var flyout = Assert.IsType<Flyout>(picker.Flyout);
+        flyout.ShowAt(picker);
+        Dispatcher.UIThread.RunJobs();
+        var list = Assert.IsType<ListBox>(flyout.Content);
+
+        list.Focus();
+        list.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down });
+        Dispatcher.UIThread.RunJobs();
+        flyout.Hide();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("mic-1", vm.SelectedDevice!.Id);
+
+        // And it opens on the microphone in use, not on the row that was arrowed past.
+        flyout.ShowAt(picker);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, list.SelectedIndex);
+        flyout.Hide();
 
         window.Close();
     }
@@ -162,6 +207,17 @@ public class MicrophoneControlTests
         Assert.False(vm.ShowMicLevel);
         var meter = Assert.Single(window.GetLogicalDescendants().OfType<ProgressBar>());
         Assert.False(meter.IsVisible);
+
+        // ...and the other half of "until": it appears once the room is live.
+        vm.IsRunning = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.ShowMicLevel);
+        Assert.True(meter.IsVisible);
+
+        // Fluent's ProgressBar theme sets MinWidth="200", which silently beats Width. Measured,
+        // because nothing else says whether the meter is 52 px wide or four times that.
+        Assert.Equal(52, meter.Bounds.Width, precision: 1);
 
         window.Close();
     }

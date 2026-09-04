@@ -23,7 +23,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   the list and switched the device. Mouse use never showed it, so a test now holds it.
 - The level meter now lives in exactly one place — the status bar's copy is gone — and appears only
   while the room is live. Before Start it can read nothing but zero, and a zero meaning "not
-  started" is indistinguishable from a zero meaning "this microphone is dead".
+  started" is indistinguishable from a zero meaning "this microphone is dead". Its slot is reserved
+  whether or not the meter is in it, so going live does not shove the picker sideways, and it
+  carries `MinWidth="0"`: Fluent's `ProgressBar` theme sets `MinWidth="200"`, which silently beats
+  `Width` and had the meter rendering four times its intended size.
+- The list highlights; only a commit writes the microphone through. Escape, or a click outside,
+  leaves the operator on the microphone the list opened with, and the list reopens on the one in
+  use rather than on the row last arrowed past.
+- The picker's accessible name is the microphone it names. A button whose content is a panel has no
+  name of its own — Avalonia falls back to the content's type name — so leaving the name off
+  announced `Avalonia.Controls.StackPanel`; the verb is still announced, as the tooltip's help text.
 - Four new strings in all four chrome languages; `input.label` is retired with the caption it
   named. `Kanal.Host` now exposes its internals to `Kanal.UI.UnitTests`, following the convention
   already used by the two provider projects.
@@ -44,7 +53,39 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   host width, the language flags sat flush against the input label with no space and no rule.
 - Headless tests assert which cluster each control belongs to, that the clusters are declared in
   reading order, and the two measurable claims the arrangement rests on: the right cluster ends at
-  the viewport edge while the bar fits, and the clusters keep their gap once it does not.
+  the viewport edge while the bar fits, and the clusters keep their gap once it does not. Each
+  width states which of the two halves it exercises, so a metric change cannot quietly push every
+  case into one of them.
+- The capture profile joins the left cluster beside the mode it qualifies; the computer-output
+  selector joins the input selector on the right, and the JSON export sits beside the Markdown one.
+
+### Native meeting audio, slice 1: capture intent and informed Start
+
+- Capture is now an explicit choice independent of the cloud/local speech pipeline: an in-room
+  microphone profile and a discoverable online-meeting profile with separate microphone and
+  computer-output selectors. Online Start remains visibly unavailable until the native adapters
+  land, rather than opening a room that cannot hear the remote side.
+- Every real room requires a fresh all-participant consent attestation. Online guidance says that
+  remote participants cannot see Kanal and must be told verbally or in meeting chat; headphones
+  and Do Not Disturb are stated alongside the whole-output capture choice.
+- Live transcription has its own host and phone notice even with WAV recording disabled. Recording
+  replaces it with stronger wording, pause changes both to held, and snapshots/cache preserve the
+  state for late joins and reconnects. The two phone pages remain byte-identical.
+- Markdown and JSON exports carry the capture profile and confirmation timestamp. In-room WAV
+  recording retains its existing default; online WAV recording has a separate, off-by-default
+  opt-in in Settings.
+
+### Native online-meeting audio is the accepted path
+
+- ADR 0050 replaces the proposed BlackHole/VB-Cable primary path with native microphone plus
+  system-audio capture. Virtual drivers remain fallbacks; they do not solve the local-microphone
+  half of an online call and leave machine-wide routing behind after the meeting.
+- The work is split into three independently reviewed slices: capture profile and disclosure,
+  Windows/macOS native system-audio adapters, then bounded synchronisation and mixing into the
+  existing 16 kHz mono speech interface. Preserving local/remote channels is explicitly later.
+- Windows uses WASAPI loopback. macOS 14.2+ uses a Core Audio process tap, while macOS 13 retains
+  online capture through a ScreenCaptureKit compatibility adapter; older systems keep in-room
+  microphone capture only.
 
 ### Open-source acknowledgements have their own window
 

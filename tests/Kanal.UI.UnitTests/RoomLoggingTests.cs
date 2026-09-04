@@ -81,6 +81,7 @@ public class RoomLoggingTests
         using var _ = Listening(out var sink);
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudCloud);
+        vm.ConsentConfirmed = true;
 
         await vm.StartCommand.ExecuteAsync(null);
 

@@ -145,6 +145,20 @@
                             </Button>
                         </StackPanel>
 
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"
+                                    IsVisible="{Binding NeedsMicrophone}">
+                            <TextBlock Text="{l:T capture.label}" Classes="label" />
+                            <ComboBox ItemsSource="{Binding CaptureProfiles}"
+                                      SelectedItem="{Binding SelectedCaptureProfile}"
+                                      Width="166" IsEnabled="{Binding !IsRunning}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CaptureProfileOption">
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
                         <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
                             <TextBlock Text="{l:T languages.label}" Classes="label" />
                             <Button Classes="ghost" Padding="5,3" Click="OnLanguagesClick"
@@ -192,19 +206,27 @@
                                 </Panel>
                             </Button>
 
-                            <ProgressBar x:Name="MicMeter" Value="{Binding MicLevel}" Maximum="100"
-                                         Width="52" Height="4" CornerRadius="0"
-                                         IsVisible="{Binding ShowMicLevel}"
-                                         VerticalAlignment="Center" Margin="2,0,6,0"
-                                         Foreground="{StaticResource Ink}"
-                                         Background="{StaticResource RuleFaint}" />
+                            <!-- The wrapper reserves the meter's slot whether or not the meter
+                                 is in it, so going live does not shove the picker sideways.
+                                 MinWidth="0" is not decoration: Fluent's ProgressBar theme
+                                 sets MinWidth="200", which silently wins over Width. -->
+                            <Panel Width="60" VerticalAlignment="Center">
+                                <ProgressBar x:Name="MicMeter" Value="{Binding MicLevel}" Maximum="100"
+                                             Width="52" MinWidth="0" Height="4" CornerRadius="0"
+                                             IsVisible="{Binding ShowMicLevel}"
+                                             HorizontalAlignment="Left" VerticalAlignment="Center"
+                                             Margin="2,0,6,0"
+                                             Foreground="{StaticResource Ink}"
+                                             Background="{StaticResource RuleFaint}" />
+                            </Panel>
 
-                            <!-- No AutomationProperties.Name here: it would override the name
-                                 Avalonia derives from the content, and a screen reader would
-                                 announce "choose the microphone" without ever saying which
-                                 microphone is in use. -->
+                            <!-- The name is the microphone, not the verb. A button whose content
+                                 is a panel has no name of its own - Avalonia falls back to the
+                                 content's type name - and the verb is still announced, as the
+                                 tooltip's help text. -->
                             <Button x:Name="DevicePicker" Classes="ghost" Padding="6,6"
-                                    IsEnabled="{Binding !IsRunning}" ToolTip.Tip="{l:T input.pick}">
+                                    IsEnabled="{Binding !IsRunning}" ToolTip.Tip="{l:T input.pick}"
+                                    AutomationProperties.Name="{Binding SelectedDeviceLabel}">
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBlock Text="{Binding SelectedDeviceLabel}" FontSize="12"
                                                MaxWidth="160" TextTrimming="CharacterEllipsis"
@@ -213,9 +235,9 @@
                                           Height="5" Stretch="Uniform" VerticalAlignment="Center" />
                                 </StackPanel>
                                 <Button.Flyout>
-                                    <Flyout Placement="BottomEdgeAlignedRight">
-                                        <ListBox ItemsSource="{Binding Devices}"
-                                                 SelectedItem="{Binding SelectedDevice}"
+                                    <Flyout Placement="BottomEdgeAlignedRight"
+                                            Opening="OnDevicePickerOpening">
+                                        <ListBox x:Name="DeviceList" ItemsSource="{Binding Devices}"
                                                  Tapped="OnDeviceCommitted"
                                                  KeyDown="OnDevicePickerKey"
                                                  Background="Transparent" BorderThickness="0"
@@ -262,10 +284,24 @@
                             </Button>
                         </StackPanel>
 
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"
+                                    IsVisible="{Binding NeedsComputerAudio}">
+                            <TextBlock Text="{l:T output.label}" Classes="label" />
+                            <ComboBox ItemsSource="{Binding ComputerOutputs}"
+                                      SelectedItem="{Binding SelectedComputerOutput}"
+                                      Width="200" IsEnabled="{Binding !IsRunning}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
                         <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
                                    VerticalAlignment="Center" Margin="4,0"
                                    IsVisible="{Binding NeedsMicrophone}" />
                         <Button Content="{l:T export.button}" Command="{Binding ExportMarkdownCommand}"
+                                Classes="ghost" />
+                        <Button Content="{l:T export.json.button}" Command="{Binding ExportJsonCommand}"
                                 Classes="ghost" />
                         <Button Click="OnSettingsClick" Classes="ghost" Padding="8,6"
                                 ToolTip.Tip="{l:T settings.tip}"
@@ -276,6 +312,30 @@
                     </StackPanel>
                 </DockPanel>
             </ScrollViewer>
+        </Border>
+
+        <Border IsVisible="{Binding ShowConsentGate}"
+                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                Background="{StaticResource Paper}" Padding="24,9">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="13">
+                <CheckBox Grid.Column="0" IsChecked="{Binding ConsentConfirmed}"
+                          Content="{l:T consent.confirm}" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding ConsentReminder}" FontSize="11.5"
+                               Foreground="{StaticResource Ink2}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="10.5"
+                               Foreground="{StaticResource Ink3}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedCaptureProfile.Unavailable}" FontSize="10.5"
+                               FontWeight="SemiBold" Foreground="{StaticResource Alarm}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border IsVisible="{Binding ShowProcessingNotice}"
+                Background="{StaticResource Ink}" Padding="24,10">
+            <TextBlock Text="{Binding LiveNoticeText}" FontSize="11.5" FontWeight="Bold"
+                       LetterSpacing="1.1" Foreground="{StaticResource Sheet}" />
         </Border>
 
         <Border IsVisible="{Binding IsPaused}"
