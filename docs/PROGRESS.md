@@ -27,6 +27,34 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - No test: this is layout, which `CLAUDE.md` keeps out of the suite. It was verified by measuring
   the rendered row geometry headlessly, before and after, on all twelve rows.
 
+### Native meeting audio, slice 1: capture intent and informed Start
+
+- Capture is now an explicit choice independent of the cloud/local speech pipeline: an in-room
+  microphone profile and a discoverable online-meeting profile with separate microphone and
+  computer-output selectors. Online Start remains visibly unavailable until the native adapters
+  land, rather than opening a room that cannot hear the remote side.
+- Every real room requires a fresh all-participant consent attestation. Online guidance says that
+  remote participants cannot see Kanal and must be told verbally or in meeting chat; headphones
+  and Do Not Disturb are stated alongside the whole-output capture choice.
+- Live transcription has its own host and phone notice even with WAV recording disabled. Recording
+  replaces it with stronger wording, pause changes both to held, and snapshots/cache preserve the
+  state for late joins and reconnects. The two phone pages remain byte-identical.
+- Markdown and JSON exports carry the capture profile and confirmation timestamp. In-room WAV
+  recording retains its existing default; online WAV recording has a separate, off-by-default
+  opt-in in Settings.
+
+### Native online-meeting audio is the accepted path
+
+- ADR 0050 replaces the proposed BlackHole/VB-Cable primary path with native microphone plus
+  system-audio capture. Virtual drivers remain fallbacks; they do not solve the local-microphone
+  half of an online call and leave machine-wide routing behind after the meeting.
+- The work is split into three independently reviewed slices: capture profile and disclosure,
+  Windows/macOS native system-audio adapters, then bounded synchronisation and mixing into the
+  existing 16 kHz mono speech interface. Preserving local/remote channels is explicitly later.
+- Windows uses WASAPI loopback. macOS 14.2+ uses a Core Audio process tap, while macOS 13 retains
+  online capture through a ScreenCaptureKit compatibility adapter; older systems keep in-room
+  microphone capture only.
+
 ### Open-source acknowledgements have their own window
 
 - Settings now links to the open-source project index instead of rendering the entire index at the

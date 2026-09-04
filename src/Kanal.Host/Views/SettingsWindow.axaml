@@ -207,6 +207,11 @@
                 <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                            Margin="0,2,0,0"
                            Text="{l:T settings.record.note}" />
+                <CheckBox IsChecked="{Binding RecordOnlineAudio}" Margin="0,9,0,0"
+                          Content="{l:T settings.record.online}" />
+                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                           Margin="0,2,0,0"
+                           Text="{l:T settings.record.online.note}" />
 
                 <TextBlock Text="{l:T settings.logs.heading}" Classes="label" Margin="0,28,0,0" />
                 <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />

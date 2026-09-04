@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Before a live room starts, the operator now chooses in-room or online capture and confirms that
+  every participant consented. The host and phones keep live transcription visible even when no
+  audio file is recorded, and Markdown/JSON exports retain the attestation.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
@@ -24,8 +27,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   reaches the phones.
 - Up to four language columns on the host, reorderable by drag or Alt+←/→; each phone chooses one
   language for itself.
-- In the language dialog each tick box now sits on the same centre line as the flag and name beside
-  it, and every row lands on that same line.
+- In the language dialog each tick box sits on the same centre line as the flag and the language
+  name beside it, and every row lands on that same line.
 - Modes describe the pipeline rather than the vendor: five combinations of transcription and
   translation, each stating what leaves the machine, with the ones that cannot run right now shown
   greyed out and explaining why.

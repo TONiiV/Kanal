@@ -16,7 +16,10 @@ internal static class TestViewModels
     internal static string EmptyModelsDir() =>
         Path.Combine(Path.GetTempPath(), "kanal-no-models-" + Guid.NewGuid().ToString("N"));
 
-    internal static MainViewModel Hermetic(AppSettings? settings = null, string? modelsDir = null)
+    internal static MainViewModel Hermetic(
+        AppSettings? settings = null,
+        string? modelsDir = null,
+        Func<DateTimeOffset>? utcNow = null)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -25,7 +28,8 @@ internal static class TestViewModels
         return new MainViewModel(
             () => resolved,
             () => new ModelDownloadManager(dir),
-            SettingsStore.ResolveStoredGladiaKey)
+            SettingsStore.ResolveStoredGladiaKey,
+            utcNow: utcNow)
         {
             RelayEnabled = false,
         };
