@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### The control bar reads as two groups
+
+- The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster
+  (microphone, export, settings) rather than one undifferentiated horizontal run. What the operator
+  reaches for mid-meeting is now separated from what is set up once and left alone.
+- The horizontal `ScrollViewer` is unchanged and still stretches the bar to the viewport, so the
+  right cluster holds the edge at normal widths and the whole row scrolls when a long locale makes
+  it too wide to fit. Nothing wraps and no control is dropped.
+- The left cluster is declared first. Avalonia navigates the tree, not the laid-out position, so
+  declaring the right cluster first put Export and Settings ahead of Start in Tab and screen-reader
+  order while looking identical on screen.
+- A 16 px margin holds the two clusters apart. Once the bar overflows, the `DockPanel` arranges at
+  its extent and the clusters would otherwise meet at zero — at 1280 px, the documented minimum
+  host width, the language flags sat flush against the input label with no space and no rule.
+- Headless tests assert which cluster each control belongs to, that the clusters are declared in
+  reading order, and the two measurable claims the arrangement rests on: the right cluster ends at
+  the viewport edge while the bar fits, and the clusters keep their gap once it does not. Each
+  width states which of the two halves it exercises, so a metric change cannot quietly push every
+  case into one of them.
+- The capture profile joins the left cluster beside the mode it qualifies; the computer-output
+  selector joins the input selector on the right, and the JSON export sits beside the Markdown one.
+
 ### Native meeting audio, slice 1: capture intent and informed Start
 
 - Capture is now an explicit choice independent of the cloud/local speech pipeline: an in-room
