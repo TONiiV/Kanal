@@ -6,6 +6,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-04
 
+### Native meeting audio, slice 1: capture intent and informed Start
+
+- Capture is now an explicit choice independent of the cloud/local speech pipeline: an in-room
+  microphone profile and a discoverable online-meeting profile with separate microphone and
+  computer-output selectors. Online Start remains visibly unavailable until the native adapters
+  land, rather than opening a room that cannot hear the remote side.
+- Every real room requires a fresh all-participant consent attestation. Online guidance says that
+  remote participants cannot see Kanal and must be told verbally or in meeting chat; headphones
+  and Do Not Disturb are stated alongside the whole-output capture choice.
+- Live transcription has its own host and phone notice even with WAV recording disabled. Recording
+  replaces it with stronger wording, pause changes both to held, and snapshots/cache preserve the
+  state for late joins and reconnects. The two phone pages remain byte-identical.
+- Markdown and JSON exports carry the capture profile and confirmation timestamp. In-room WAV
+  recording retains its existing default; online WAV recording has a separate, off-by-default
+  opt-in in Settings.
+
 ### Native online-meeting audio is the accepted path
 
 - ADR 0050 replaces the proposed BlackHole/VB-Cable primary path with native microphone plus

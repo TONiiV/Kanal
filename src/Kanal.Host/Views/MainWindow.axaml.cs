@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -27,14 +28,22 @@ public partial class MainWindow : Window
 
     private async Task<string?> ChooseExportPathAsync(string folder, string suggestedName)
     {
+        var extension = Path.GetExtension(suggestedName).TrimStart('.');
+        var isJson = string.Equals(extension, "json", StringComparison.OrdinalIgnoreCase);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = Localizer.Instance["export.dialog.title"],
             SuggestedFileName = suggestedName,
-            DefaultExtension = "md",
+            DefaultExtension = extension,
             ShowOverwritePrompt = true,
             SuggestedStartLocation = await SafeFolderAsync(folder),
-            FileTypeChoices = [new FilePickerFileType("Markdown") { Patterns = ["*.md"] }],
+            FileTypeChoices =
+            [
+                new FilePickerFileType(isJson ? "JSON" : "Markdown")
+                {
+                    Patterns = [$"*.{extension}"],
+                },
+            ],
         });
         return file?.TryGetLocalPath();
     }

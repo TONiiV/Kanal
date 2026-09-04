@@ -66,6 +66,12 @@ public sealed class AppSettings
     public bool RecordAudio { get; set; } = true;
 
     /// <summary>
+    /// Online calls include voices from outside the room and therefore need a separate, explicit
+    /// opt-in. A legacy settings file has no value and safely deserializes to false.
+    /// </summary>
+    public bool RecordOnlineAudio { get; set; }
+
+    /// <summary>
     /// ISO code the host's own labels and messages are shown in. Null follows the operating
     /// system, falling back to English. Nothing to do with the room's languages — the person
     /// driving the laptop is often not one of the people being translated for.
