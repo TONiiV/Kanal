@@ -74,17 +74,27 @@ public class RelayJsonTests
     }
 
     [Fact]
+    public void RoomTranscribingRoundTrips()
+    {
+        var json = RelayJson.Serialize(new RoomTranscribingMessage(true));
+
+        Assert.Contains("\"type\":\"room.transcribing\"", json);
+        Assert.True(Assert.IsType<RoomTranscribingMessage>(RelayJson.Deserialize(json)).Transcribing);
+    }
+
+    [Fact]
     public void SnapshotRoundTrips()
     {
         var snapshot = new RoomSnapshot(
             new RoomConfig("room", ["zh", "pl"]),
             [new Speaker("S01", "王工", ["S03"], "#B23A2E")],
-            []);
+            [], Transcribing: true);
 
         var restored = RelayJson.Deserialize(RelayJson.Serialize(new RoomSnapshotMessage(snapshot)));
 
         var message = Assert.IsType<RoomSnapshotMessage>(restored);
         Assert.Equal("王工", message.Snapshot.Speakers[0].DisplayName);
         Assert.Equal(["S03"], message.Snapshot.Speakers[0].MergedFrom);
+        Assert.True(message.Snapshot.Transcribing);
     }
 }

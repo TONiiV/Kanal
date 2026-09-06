@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -39,6 +40,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<ModelDownloadManager> _downloads;
     /// <summary>Enumeration source for the device dropdown; the capture pump opens its own.</summary>
     private readonly Func<IAudioCaptureService?> _captureFactory;
+    private readonly Func<DateTimeOffset> _utcNow;
     private IAudioDeviceWatcher? _deviceWatcher;
     /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
     private readonly PipelinePlanner.KeyResolver? _resolveKey;
@@ -75,16 +77,33 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<ModelDownloadManager> downloads,
         PipelinePlanner.KeyResolver? resolveKey = null,
         Func<IAudioCaptureService?>? captureFactory = null,
-        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null)
+        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
+        Func<DateTimeOffset>? utcNow = null)
     {
         _loadSettings = loadSettings;
         _downloads = downloads;
         _resolveKey = resolveKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
 
         foreach (var mode in PipelineMode.All)
             Modes.Add(new PipelineModeOption(mode, unavailable: null));
         _selectedMode = Modes[0];
+
+        CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
+            CaptureProfileId.InRoom,
+            "capture.inroom.name",
+            "capture.inroom.guidance",
+            "in-room",
+            "inRoom")));
+        CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
+            CaptureProfileId.OnlineMeeting,
+            "capture.online.name",
+            "capture.online.guidance",
+            "online-meeting",
+            "onlineMeeting",
+            "capture.online.unavailable")));
+        _selectedCaptureProfile = CaptureProfiles[0];
 
         foreach (var (code, name) in LanguageCatalog.Known)
             AttachLanguageOption(new LanguageOption
@@ -120,9 +139,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             foreach (var option in Modes)
                 option.RefreshText();
+            foreach (var option in CaptureProfiles)
+                option.RefreshText();
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
+            OnPropertyChanged(nameof(CaptureProfileGuidance));
+            OnPropertyChanged(nameof(ConsentReminder));
+            OnPropertyChanged(nameof(LiveNoticeText));
             RefreshPipelineStatus();
         };
     }
@@ -180,6 +204,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
+
+    /// <summary>Filled by the native adapter slice; kept separate from microphone endpoints.</summary>
+    public ObservableCollection<AudioDeviceInfo> ComputerOutputs { get; } = new();
+
+    public ObservableCollection<CaptureProfileOption> CaptureProfiles { get; } = new();
 
     /// <summary>The full pickable catalog, shown in the edit dialog; custom ISO codes are appended.</summary>
     public ObservableCollection<LanguageOption> LanguageOptions { get; } = new();
@@ -388,7 +417,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public Func<PipelinePlan, PipelinePlan>? PlanFilter { get; set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private PipelineModeOption _selectedMode;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(NeedsComputerAudio))]
+    [NotifyPropertyChangedFor(nameof(CaptureProfileGuidance))]
+    private CaptureProfileOption _selectedCaptureProfile;
+
+    [ObservableProperty]
+    private AudioDeviceInfo? _selectedComputerOutput;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    private bool _consentConfirmed;
+
+    private DateTimeOffset? _pendingConsentConfirmedAt;
 
     /// <summary>ISO codes typed into the edit dialog's add row, e.g. "tr, nl".</summary>
     [ObservableProperty]
@@ -413,7 +458,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
+    [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
+    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
+    [NotifyPropertyChangedFor(nameof(ShowConsentGate))]
+    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
     private bool _isRunning;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
+    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
+    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    private bool _isTranscribing;
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
     [ObservableProperty]
@@ -450,12 +505,50 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>An input device and a level meter only mean something for captured audio.</summary>
     public bool NeedsMicrophone => SelectedMode.Mode.NeedsMicrophone;
 
+    public bool NeedsComputerAudio => SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting;
+
+    public bool ShowConsentGate => NeedsMicrophone && !IsRunning;
+
+    public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
+
+    public bool ShowProcessingNotice =>
+        IsRunning && NeedsMicrophone && (IsTranscribing || IsRecording);
+
+    public string CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
+
+    public string ConsentReminder => NeedsComputerAudio
+        ? L["consent.remote.reminder"]
+        : L["consent.room.reminder"];
+
+    public string LiveNoticeText => (IsRecording, IsTranscribing, IsPaused) switch
+    {
+        (true, true, true) => L["recording.held.notice"],
+        (true, true, false) => L["recording.live.notice"],
+        (true, false, true) => L["recording.only.held.notice"],
+        (true, false, false) => L["recording.only.notice"],
+        (false, _, true) => L["transcription.held.notice"],
+        _ => L["transcription.live.notice"],
+    };
+
     partial void OnSelectedModeChanged(PipelineModeOption value)
     {
         OnPropertyChanged(nameof(NeedsMicrophone));
         OnPropertyChanged(nameof(ShowMicLevel));
+        OnPropertyChanged(nameof(ShowConsentGate));
+        OnPropertyChanged(nameof(ConsentReminder));
         RefreshPipelineStatus();
     }
+
+    partial void OnSelectedCaptureProfileChanged(CaptureProfileOption value)
+    {
+        if (!IsRunning)
+            ConsentConfirmed = false;
+        OnPropertyChanged(nameof(ShowConsentGate));
+        OnPropertyChanged(nameof(ConsentReminder));
+    }
+
+    partial void OnConsentConfirmedChanged(bool value) =>
+        _pendingConsentConfirmedAt = value ? _utcNow() : null;
 
     /// <summary>
     /// Re-resolves every mode against the current settings: the two stage labels for the selected
@@ -508,11 +601,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
+    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
     private bool _isPaused;
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
 
-    private bool CanStart() => !IsRunning && !IsStopping && !IsStarting;
+    private bool CanStart() =>
+        !IsRunning && !IsStopping && !IsStarting &&
+        (!NeedsMicrophone || (SelectedCaptureProfile.IsAvailable && ConsentConfirmed));
 
     // Stop is offered while a model is still loading: pressing it then aborts the load.
     private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
@@ -562,6 +658,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Columns.Add(new ColumnViewModel(lang));
 
         var mode = SelectedMode.Mode;
+        if (mode.NeedsMicrophone && !SelectedCaptureProfile.IsAvailable)
+        {
+            Status = SelectedCaptureProfile.Unavailable!;
+            return;
+        }
         var settings = _loadSettings();
         var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
         if (PlanFilter is not null)
@@ -577,6 +678,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = plan.Status.Unavailable;
             Log.Warning(
                 RoomLog, $"Start refused: mode {mode.Id} is unavailable — {plan.Status.Unavailable}");
+            return;
+        }
+
+        if (mode.NeedsMicrophone && !ConsentConfirmed)
+        {
+            Status = L["status.consentrequired"];
+            Log.Warning(RoomLog, $"Start refused: consent was not confirmed for mode {mode.Id}.");
             return;
         }
 
@@ -666,7 +774,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         _relay = relay;
 
-        var session = new MeetingSession(asr, mt, relay, config);
+        var session = new MeetingSession(
+            asr, mt, relay, config, announceTranscription: mode.NeedsMicrophone);
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
@@ -683,6 +792,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Dispatcher.UIThread.Post(() =>
                 Status = L.Format("status.sessionended", reason ?? L["status.done"]));
         };
+        session.TranscribingChanged += transcribing =>
+            Dispatcher.UIThread.Post(() => IsTranscribing = transcribing);
 
         try
         {
@@ -700,7 +811,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         _session = session;
+        _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
+            ? new MeetingAttestation(SelectedCaptureProfile.Profile, confirmedAt)
+            : null;
         IsRunning = true;
+        IsTranscribing = session.IsTranscribing;
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
@@ -722,7 +837,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // a lit RECORDING label, and a recording that cannot start appends its failure to the
         // status rather than being overwritten by it. The tap only fires once the microphone
         // pump below pushes audio, so nothing is missed by attaching here.
-        StartRecording(session, mode, settings, config.RoomId);
+        StartRecording(session, mode, SelectedCaptureProfile.Id, settings, config.RoomId);
 
         if (RelayEnabled && relayConnection.GatewayUrl is not null &&
             relayConnection.InviteTicket is not null)
@@ -770,7 +885,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             QrImage = null;
             JoinError = "";
             IsRunning = false;
+            IsTranscribing = false;
             IsPaused = false;
+            ConsentConfirmed = false;
             Status = _lastRecording.Length > 0
                 ? L.Format("status.stopped.audio", _lastRecording)
                 : L["status.stopped"];
@@ -1000,15 +1117,27 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// modes have no audio, and the operator can turn it off. Decided in one place so the
     /// indicator on screen and the file on disk cannot disagree.
     /// </summary>
-    public static string? RecordingPathFor(PipelineMode mode, AppSettings settings, string roomId) =>
-        mode.NeedsMicrophone && settings.RecordAudio
+    public static string? RecordingPathFor(
+        PipelineMode mode,
+        CaptureProfileId captureProfile,
+        AppSettings settings,
+        string roomId) =>
+        mode.NeedsMicrophone &&
+        (captureProfile == CaptureProfileId.InRoom
+            ? settings.RecordAudio
+            : settings.RecordOnlineAudio)
             ? Path.Combine(SettingsStore.ResolveAudioFolder(settings), $"{roomId}.wav")
             : null;
 
-    private void StartRecording(MeetingSession session, PipelineMode mode, AppSettings settings, string roomId)
+    private void StartRecording(
+        MeetingSession session,
+        PipelineMode mode,
+        CaptureProfileId captureProfile,
+        AppSettings settings,
+        string roomId)
     {
         _lastRecording = ""; // a scripted run after a recorded one must not report the old file
-        var path = RecordingPathFor(mode, settings, roomId);
+        var path = RecordingPathFor(mode, captureProfile, settings, roomId);
         if (path is null)
             return;
 
@@ -1069,6 +1198,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The file the meeting is being written to; empty when nothing is being recorded.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRecording))]
+    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
+    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
     private string _recordingPath = "";
 
     public bool IsRecording => RecordingPath.Length > 0;
@@ -1080,8 +1211,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public Func<string, string, Task<string?>>? ChooseExportPath { get; set; }
 
+    private sealed record MeetingAttestation(
+        CaptureProfile CaptureProfile,
+        DateTimeOffset ConsentConfirmedAt);
+
+    private MeetingAttestation? _lastAttestation;
+
     [RelayCommand]
     private async Task ExportMarkdownAsync()
+        => await ExportAsync("md", BuildMarkdownExport);
+
+    [RelayCommand]
+    private async Task ExportJsonAsync()
+        => await ExportAsync("json", BuildJsonExport);
+
+    private async Task ExportAsync(string extension, Func<string> build)
     {
         if (_session is null)
         {
@@ -1091,7 +1235,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         var snapshot = _session.Room.Snapshot();
         var folder = SettingsStore.ResolveTranscriptFolder(_loadSettings());
-        var name = $"{snapshot.Config.RoomId}.md";
+        var name = $"{snapshot.Config.RoomId}.{extension}";
 
         var path = ChooseExportPath is null
             ? Path.Combine(folder, name)
@@ -1102,24 +1246,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"# Kanal — {snapshot.Config.RoomId}");
-        sb.AppendLine();
-        foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
-        {
-            var (speaker, _) = ResolveSpeaker(u.SpeakerTag);
-            sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
-            foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
-                sb.AppendLine($"  - {lang}: {text}");
-            sb.AppendLine();
-        }
-
         try
         {
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
-            await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
+            await File.WriteAllTextAsync(path, build(), Encoding.UTF8);
 
             // A meeting has two artefacts and one of them was never chosen in a dialog; naming
             // both here is the only moment the operator is told where the recording went.
@@ -1136,6 +1268,51 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Log.Error(RoomLog, $"The transcript could not be written to {path}.", ex);
         }
     }
+
+    public string BuildMarkdownExport()
+    {
+        if (_session is null)
+            return "";
+
+        var snapshot = _session.Room.Snapshot();
+        var sb = new StringBuilder();
+        sb.AppendLine($"# Kanal — {snapshot.Config.RoomId}");
+        if (_lastAttestation is { } attestation)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.MarkdownValue}");
+            sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
+        }
+        sb.AppendLine();
+        foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
+        {
+            var (speaker, _) = ResolveSpeaker(u.SpeakerTag);
+            sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
+            foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
+                sb.AppendLine($"  - {lang}: {text}");
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
+    public string BuildJsonExport()
+    {
+        if (_session is null)
+            return "";
+
+        var snapshot = _session.Room.Snapshot();
+        return JsonSerializer.Serialize(new
+        {
+            snapshot.Config,
+            snapshot.Speakers,
+            Utterances = snapshot.Utterances.Where(u => u.State == UtteranceState.Final),
+            CaptureProfile = _lastAttestation is null
+                ? null
+                : _lastAttestation.CaptureProfile.JsonValue,
+            ConsentConfirmedAt = _lastAttestation?.ConsentConfirmedAt,
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+    }
+
 
     internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
 

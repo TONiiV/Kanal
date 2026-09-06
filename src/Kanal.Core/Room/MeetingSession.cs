@@ -24,6 +24,8 @@ public sealed class MeetingSession : IAsyncDisposable
     private Task? _pump;
     private int _disposed;
     private int _paused;
+    private int _transcribing;
+    private readonly bool _announceTranscription;
 
     /// <summary>How long shutdown waits for translations already in flight before cancelling them.</summary>
     public static readonly TimeSpan DefaultTranslationGrace = TimeSpan.FromSeconds(2);
@@ -33,12 +35,14 @@ public sealed class MeetingSession : IAsyncDisposable
         IMtProvider? mt,
         IRelayPublisher relay,
         RoomConfig config,
-        TimeSpan? translationGrace = null)
+        TimeSpan? translationGrace = null,
+        bool announceTranscription = true)
     {
         _asr = asr;
         _mt = mt;
         _relay = relay;
         _translationGrace = translationGrace ?? DefaultTranslationGrace;
+        _announceTranscription = announceTranscription;
         Room = new RoomState(config);
 
         if (!asr.Caps.Translation && mt is null)
@@ -50,6 +54,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
+    public event Action<bool>? TranscribingChanged;
 
     /// <summary>
     /// Raised for audio the session actually accepted — so never while paused. The recorder
@@ -67,9 +72,10 @@ public sealed class MeetingSession : IAsyncDisposable
         var config = Room.Config;
         _session = await _asr.StartAsync(
             new AsrSessionOptions(16_000, config.Languages, config.Languages), ct);
-        _pump = Task.Run(() => PumpAsync(_cts.Token), CancellationToken.None);
-
+        Interlocked.Exchange(ref _transcribing, _announceTranscription ? 1 : 0);
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
+        await _relay.PublishAsync(new RoomTranscribingMessage(IsTranscribing), ct);
+        _pump = Task.Run(() => PumpAsync(_cts.Token), CancellationToken.None);
     }
 
     /// <summary>
@@ -93,6 +99,8 @@ public sealed class MeetingSession : IAsyncDisposable
     }
 
     public bool IsRecording => Volatile.Read(ref _recording) == 1;
+
+    public bool IsTranscribing => Volatile.Read(ref _transcribing) == 1;
 
     /// <summary>
     /// Tells the room that its audio is, or is no longer, being written to a file. The host is
@@ -140,7 +148,12 @@ public sealed class MeetingSession : IAsyncDisposable
     public Task PublishSnapshotAsync(CancellationToken ct = default) =>
         _relay.PublishAsync(
             new RoomSnapshotMessage(
-                Room.Snapshot() with { Paused = IsPaused, Recording = IsRecording }),
+                Room.Snapshot() with
+                {
+                    Paused = IsPaused,
+                    Recording = IsRecording,
+                    Transcribing = IsTranscribing,
+                }),
             ct);
 
     /// <summary>Announce that this room is over, so clients stop presenting themselves as live.</summary>
@@ -190,6 +203,14 @@ public sealed class MeetingSession : IAsyncDisposable
         {
             ErrorOccurred?.Invoke(new AsrEvent.Error(ex.Message, Fatal: true));
             SessionEnded?.Invoke(ex.Message);
+        }
+        finally
+        {
+            if (Interlocked.Exchange(ref _transcribing, 0) == 1)
+            {
+                await PublishSafeAsync(new RoomTranscribingMessage(false));
+                TranscribingChanged?.Invoke(false);
+            }
         }
     }
 

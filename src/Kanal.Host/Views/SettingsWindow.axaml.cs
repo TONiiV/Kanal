@@ -100,6 +100,25 @@ public partial class SettingsWindow : Window
             }
         });
 
+    private bool _openSourceOpen;
+
+    private void OnOpenSourceClick(object? sender, RoutedEventArgs e) =>
+        Guarded("Opening the open-source acknowledgements", async () =>
+        {
+            if (_openSourceOpen)
+                return;
+
+            _openSourceOpen = true;
+            try
+            {
+                await new OpenSourceWindow().ShowDialog(this);
+            }
+            finally
+            {
+                _openSourceOpen = false;
+            }
+        });
+
     private void OnSaveClick(object? sender, RoutedEventArgs e)
     {
         try

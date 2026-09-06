@@ -14,6 +14,17 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Before a live room starts, the operator now chooses in-room or online capture and confirms that
+  every participant consented. The host and phones keep live transcription visible even when no
+  audio file is recorded, and Markdown/JSON exports retain the attestation.
+- The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
+- A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
+  application mark, the lowercase Kanal name and the line “One room. Every language”.
+- The host uses one compact, horizontally scrollable control bar, leaving the meeting more room
+  while keeping every mode, language, microphone and transport control available in long locales.
+- The control bar is arranged in two groups: transport, mode and languages sit together on the
+  left, and the microphone, export and settings controls are held against the right edge, so the
+  controls used mid-meeting no longer sit next to the ones set up once.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.
@@ -48,6 +59,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   found without knowing where an application hides things.
 - Room starts and stops, relay failures, capture failures, a translation model that will not load
   and an export that cannot be written all leave a line behind, with the exception attached.
-- The list of open-source projects Kanal is built on, with their licences, at the bottom of
-  Settings.
+- The list of open-source projects Kanal is built on, with their licences, readable from Settings.
+- Open-source acknowledgements now open in their own readable window from Settings, instead of
+  making the settings form several screens longer.
 - This changelog, readable from Settings.
+- The supplied transparent PNG Kanal route mark across the app, browser tab, splash screen and
+  platform icons, without an accompanying wordmark.

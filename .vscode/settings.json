@@ -1,0 +1,15 @@
+{
+  "dotnet.defaultSolution": "Kanal.slnx",
+  // .worktrees holds checked-out copies of feature branches (see CLAUDE.md); indexing them
+  // duplicates every symbol and every search hit.
+  "files.watcherExclude": {
+    "**/.worktrees/**": true,
+    "**/bin/**": true,
+    "**/obj/**": true
+  },
+  "search.exclude": {
+    "**/.worktrees": true,
+    "**/bin": true,
+    "**/obj": true
+  }
+}

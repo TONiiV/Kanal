@@ -1,6 +1,6 @@
 # Kanal — working notes for Claude
 
-Internal meeting-translation tool. Avalonia (.NET 9) desktop host captures room audio, streams it
+Internal meeting-translation tool. Avalonia (.NET 10) desktop host captures room audio, streams it
 through a pluggable ASR/MT chain, and broadcasts **text only** to read-only mobile clients. Built for
 one real scenario: a zh/de/pl meeting with no shared language. See `README.md` for layout and
 `docs/PRD-v0.3.md` for requirements.
@@ -12,8 +12,6 @@ dotnet build Kanal.slnx
 ```bash
 dotnet test
 ```
-
-(If only .NET 10 is installed, tests need `DOTNET_ROLL_FORWARD=Major dotnet test`.)
 
 ## Working practices
 
@@ -48,6 +46,11 @@ dotnet test
 - `web/index.html` and `docs/index.html` must stay **byte-identical**; `docs/` is the GitHub Pages copy.
 
 ## Design Context
+
+For the next host UI, follow [the approved meeting-workspace design](docs/design/meeting-workspace.md).
+It supersedes the historical host layout, chrome-colour and tooltip guidance below where they conflict.
+The [title/listening-agent discussion](docs/design/meeting-intelligence.md) separates confirmed goals
+from open decisions; do not implement its recommendations as if the user had accepted them.
 
 Full context lives in [`.impeccable.md`](.impeccable.md) — read it before any UI work. Summary:
 

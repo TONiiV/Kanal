@@ -108,6 +108,7 @@ public partial class SettingsViewModel : ViewModelBase
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _audioFolder = settings.AudioFolder ?? "";
         _recordAudio = settings.RecordAudio;
+        _recordOnlineAudio = settings.RecordOnlineAudio;
         // What this settings object says, or — when nothing has been chosen — whatever the
         // application resolved to at launch. Reading only the live localizer would have shown
         // the wrong row for a settings file that had not been applied yet.
@@ -185,6 +186,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>Whether the room is written to disk while a meeting runs.</summary>
     [ObservableProperty]
     private bool _recordAudio = true;
+
+    /// <summary>Separate opt-in because online recording is off by default.</summary>
+    [ObservableProperty]
+    private bool _recordOnlineAudio;
 
     public IReadOnlyList<AppLanguage> AppLanguages => Localizer.Available;
 
@@ -452,8 +457,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
 
-    public IReadOnlyList<OpenSourceNotice> Notices => OpenSourceNotices.All;
-
     public string LicenseNote =>
         Localizer.Instance.Format("settings.licenses.note", OpenSourceNotices.OwnLicense);
 
@@ -549,6 +552,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.AudioFolder = Folder(AudioFolder);
         settings.RecordAudio = RecordAudio;
+        settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null

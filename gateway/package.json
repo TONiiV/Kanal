@@ -3,7 +3,7 @@
   "private": true,
   "description": "Authenticated relay gateway between the Kanal host and read-only phones (Cloudflare Workers + Durable Objects).",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run && node --test test/mobile-page.test.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },
