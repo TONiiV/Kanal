@@ -260,6 +260,13 @@ question before starting a broad change.
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.
 
+The approved next host UI is specified in [Meeting workspace design](docs/design/meeting-workspace.md),
+including the [HTML prototype](docs/design/meeting-ui.prototype.html) and implementation checks. Future automatic titles and a listening
+agent are tracked separately in [Meeting intelligence design](docs/design/meeting-intelligence.md).
+These documents describe planned behaviour, not features already available in the desktop host.
+The consolidated [implementation specification](docs/specs/meeting-workspace.md) is published as
+[#64](https://github.com/TONiiV/Kanal/issues/64) with the `ready-for-agent` label.
+
 ## License
 
 Kanal is released under the [MIT License](LICENSE). The Settings window lists the open-source

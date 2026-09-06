@@ -47,6 +47,11 @@ dotnet test
 
 ## Design Context
 
+For the next host UI, follow [the approved meeting-workspace design](docs/design/meeting-workspace.md).
+It supersedes the historical host layout, chrome-colour and tooltip guidance below where they conflict.
+The [title/listening-agent discussion](docs/design/meeting-intelligence.md) separates confirmed goals
+from open decisions; do not implement its recommendations as if the user had accepted them.
+
 Full context lives in [`.impeccable.md`](.impeccable.md) — read it before any UI work. Summary:
 
 ### Users
