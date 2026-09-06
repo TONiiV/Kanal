@@ -4,7 +4,60 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-07
+
+### Meeting workspace prototype approved and archived
+
+- `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
+  `ready-for-agent`. The [local specification](specs/meeting-workspace.md) contains 60 user stories,
+  implementation/testing decisions and explicit unresolved future scope. Its prototype viewing
+  instructions were subsequently updated to the design-document location.
+  It links the existing speaker, replay, local-ASR and summary work items; no further interview
+  is required to begin the confirmed UI scope.
+
+- User confirmed the final B-based UI design. The authoritative specification is
+  [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
+  formerly collected here. Approval covers the visual direction, not completion of production code.
+- At the user's request the approved [HTML prototype](design/meeting-ui.prototype.html) now lives
+  beside the design documents and opens directly in a browser. The CMD launcher is removed.
+  The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
+- [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership
+  boundary. [CONTEXT.md](../CONTEXT.md) captures domain terminology.
+- Newly requested local-model titles (manual rename/regenerate) and a future listening-agent tab
+  are captured in [Meeting intelligence design](design/meeting-intelligence.md). Lifecycle, context,
+  proactive-action and sharing policies are still under interview; no provider implementation
+  choice is implied by these notes.
+- Prototype verification to date: JavaScript syntax and HTTP availability only. Production tests,
+  visual validation, persistence, ASR integration and Agent functionality remain outstanding.
+- Existing unrelated worktrees and production code were preserved. Documentation changes require
+  no changelog feature claim.
+- Speaker recognition updates the existing [#13](https://github.com/TONiiV/Kanal/issues/13);
+  sentence audio replay is tracked in [#63](https://github.com/TONiiV/Kanal/issues/63). Confirmed
+  goals and open scope are recorded in [Meeting evidence](design/meeting-evidence.md).
+
 ## 2026-09-04
+
+### The control bar reads as two groups
+
+- The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster
+  (microphone, export, settings) rather than one undifferentiated horizontal run. What the operator
+  reaches for mid-meeting is now separated from what is set up once and left alone.
+- The horizontal `ScrollViewer` is unchanged and still stretches the bar to the viewport, so the
+  right cluster holds the edge at normal widths and the whole row scrolls when a long locale makes
+  it too wide to fit. Nothing wraps and no control is dropped.
+- The left cluster is declared first. Avalonia navigates the tree, not the laid-out position, so
+  declaring the right cluster first put Export and Settings ahead of Start in Tab and screen-reader
+  order while looking identical on screen.
+- A 16 px margin holds the two clusters apart. Once the bar overflows, the `DockPanel` arranges at
+  its extent and the clusters would otherwise meet at zero — at 1280 px, the documented minimum
+  host width, the language flags sat flush against the input label with no space and no rule.
+- Headless tests assert which cluster each control belongs to, that the clusters are declared in
+  reading order, and the two measurable claims the arrangement rests on: the right cluster ends at
+  the viewport edge while the bar fits, and the clusters keep their gap once it does not. Each
+  width states which of the two halves it exercises, so a metric change cannot quietly push every
+  case into one of them.
+- The capture profile joins the left cluster beside the mode it qualifies; the computer-output
+  selector joins the input selector on the right, and the JSON export sits beside the Markdown one.
 
 ### Language rows sit on one centre line
 

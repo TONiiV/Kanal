@@ -22,6 +22,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   application mark, the lowercase Kanal name and the line “One room. Every language”.
 - The host uses one compact, horizontally scrollable control bar, leaving the meeting more room
   while keeping every mode, language, microphone and transport control available in long locales.
+- The control bar is arranged in two groups: transport, mode and languages sit together on the
+  left, and the microphone, export and settings controls are held against the right edge, so the
+  controls used mid-meeting no longer sit next to the ones set up once.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.
