@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:services="using:Kanal.Host.Services"
+        xmlns:l="using:Kanal.Host.Localization"
+        x:Class="Kanal.Host.Views.OpenSourceWindow"
+        x:DataType="vm:OpenSourceViewModel"
+        Title="{l:T licenses.title}"
+        Width="560" Height="600"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <DockPanel Margin="26,20,26,18">
+        <Button DockPanel.Dock="Bottom" Content="{l:T licenses.close}"
+                HorizontalAlignment="Right" Margin="0,16,0,0" Click="OnCloseClick" />
+
+        <TextBlock DockPanel.Dock="Top" Text="{l:T licenses.title}" Classes="label" />
+        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                Margin="0,7,0,0" />
+        <TextBlock DockPanel.Dock="Top" Text="{Binding LicenseNote}" FontSize="11.5"
+                   TextWrapping="Wrap" Foreground="{StaticResource Ink3}" Margin="0,14,0,4" />
+
+        <ScrollViewer AllowAutoHide="False">
+            <ItemsControl ItemsSource="{Binding Notices}" Margin="0,0,14,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="services:OpenSourceNotice">
+                        <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1"
+                                Padding="0,9">
+                            <Grid ColumnDefinitions="150,110,*">
+                                <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="12"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Grid.Column="1" Text="{Binding License}" FontSize="11"
+                                           Foreground="{StaticResource Ink2}" TextWrapping="Wrap"
+                                           Margin="8,1,8,0" />
+                                <TextBlock Grid.Column="2" Text="{Binding Url}" FontSize="11"
+                                           Foreground="{StaticResource Ink3}" TextWrapping="Wrap"
+                                           Margin="0,1,0,0" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

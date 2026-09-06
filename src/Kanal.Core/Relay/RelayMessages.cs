@@ -18,6 +18,7 @@ namespace Kanal.Core.Relay;
 [JsonDerivedType(typeof(RoomMovedMessage), "room.moved")]
 [JsonDerivedType(typeof(RoomPausedMessage), "room.paused")]
 [JsonDerivedType(typeof(RoomRecordingMessage), "room.recording")]
+[JsonDerivedType(typeof(RoomTranscribingMessage), "room.transcribing")]
 [JsonDerivedType(typeof(SignedRelayMessage), "relay.signed")]
 public abstract record RelayMessage;
 
@@ -73,6 +74,12 @@ public sealed record RoomPausedMessage(bool Paused) : RelayMessage;
 public sealed record RoomRecordingMessage(bool Recording) : RelayMessage;
 
 /// <summary>
+/// Whether speech is currently being turned into text. This is independent of WAV recording:
+/// participants must still see the processing notice when the host writes no audio file.
+/// </summary>
+public sealed record RoomTranscribingMessage(bool Transcribing) : RelayMessage;
+
+/// <summary>
 /// An exact relay JSON payload authenticated by the room's ephemeral P-256 key. The public
 /// verification key is a bearer-link parameter; only the host holds the private key. Keeping
 /// the serialized data intact avoids relying on JSON property ordering across C# and browsers.
@@ -88,7 +95,8 @@ public sealed record RoomSnapshot(
     IReadOnlyList<Speaker> Speakers,
     IReadOnlyList<Utterance> Utterances,
     bool Paused = false,
-    bool Recording = false);
+    bool Recording = false,
+    bool Transcribing = false);
 
 public static class RelayJson
 {

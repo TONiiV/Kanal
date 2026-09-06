@@ -4,6 +4,164 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-07
+
+### Meeting workspace prototype approved and archived
+
+- `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
+  `ready-for-agent`. The [local specification](specs/meeting-workspace.md) contains 60 user stories,
+  implementation/testing decisions and explicit unresolved future scope. Its prototype viewing
+  instructions were subsequently updated to the design-document location.
+  It links the existing speaker, replay, local-ASR and summary work items; no further interview
+  is required to begin the confirmed UI scope.
+
+- User confirmed the final B-based UI design. The authoritative specification is
+  [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
+  formerly collected here. Approval covers the visual direction, not completion of production code.
+- At the user's request the approved [HTML prototype](design/meeting-ui.prototype.html) now lives
+  beside the design documents and opens directly in a browser. The CMD launcher is removed.
+  The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
+- [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership
+  boundary. [CONTEXT.md](../CONTEXT.md) captures domain terminology.
+- Newly requested local-model titles (manual rename/regenerate) and a future listening-agent tab
+  are captured in [Meeting intelligence design](design/meeting-intelligence.md). Lifecycle, context,
+  proactive-action and sharing policies are still under interview; no provider implementation
+  choice is implied by these notes.
+- Prototype verification to date: JavaScript syntax and HTTP availability only. Production tests,
+  visual validation, persistence, ASR integration and Agent functionality remain outstanding.
+- Existing unrelated worktrees and production code were preserved. Documentation changes require
+  no changelog feature claim.
+- Speaker recognition updates the existing [#13](https://github.com/TONiiV/Kanal/issues/13);
+  sentence audio replay is tracked in [#63](https://github.com/TONiiV/Kanal/issues/63). Confirmed
+  goals and open scope are recorded in [Meeting evidence](design/meeting-evidence.md).
+
+## 2026-09-04
+
+### The control bar reads as two groups
+
+- The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster
+  (microphone, export, settings) rather than one undifferentiated horizontal run. What the operator
+  reaches for mid-meeting is now separated from what is set up once and left alone.
+- The horizontal `ScrollViewer` is unchanged and still stretches the bar to the viewport, so the
+  right cluster holds the edge at normal widths and the whole row scrolls when a long locale makes
+  it too wide to fit. Nothing wraps and no control is dropped.
+- The left cluster is declared first. Avalonia navigates the tree, not the laid-out position, so
+  declaring the right cluster first put Export and Settings ahead of Start in Tab and screen-reader
+  order while looking identical on screen.
+- A 16 px margin holds the two clusters apart. Once the bar overflows, the `DockPanel` arranges at
+  its extent and the clusters would otherwise meet at zero — at 1280 px, the documented minimum
+  host width, the language flags sat flush against the input label with no space and no rule.
+- Headless tests assert which cluster each control belongs to, that the clusters are declared in
+  reading order, and the two measurable claims the arrangement rests on: the right cluster ends at
+  the viewport edge while the bar fits, and the clusters keep their gap once it does not. Each
+  width states which of the two halves it exercises, so a metric change cannot quietly push every
+  case into one of them.
+- The capture profile joins the left cluster beside the mode it qualifies; the computer-output
+  selector joins the input selector on the right, and the JSON export sits beside the Markdown one.
+
+### Native meeting audio, slice 1: capture intent and informed Start
+
+- Capture is now an explicit choice independent of the cloud/local speech pipeline: an in-room
+  microphone profile and a discoverable online-meeting profile with separate microphone and
+  computer-output selectors. Online Start remains visibly unavailable until the native adapters
+  land, rather than opening a room that cannot hear the remote side.
+- Every real room requires a fresh all-participant consent attestation. Online guidance says that
+  remote participants cannot see Kanal and must be told verbally or in meeting chat; headphones
+  and Do Not Disturb are stated alongside the whole-output capture choice.
+- Live transcription has its own host and phone notice even with WAV recording disabled. Recording
+  replaces it with stronger wording, pause changes both to held, and snapshots/cache preserve the
+  state for late joins and reconnects. The two phone pages remain byte-identical.
+- Markdown and JSON exports carry the capture profile and confirmation timestamp. In-room WAV
+  recording retains its existing default; online WAV recording has a separate, off-by-default
+  opt-in in Settings.
+
+### Native online-meeting audio is the accepted path
+
+- ADR 0050 replaces the proposed BlackHole/VB-Cable primary path with native microphone plus
+  system-audio capture. Virtual drivers remain fallbacks; they do not solve the local-microphone
+  half of an online call and leave machine-wide routing behind after the meeting.
+- The work is split into three independently reviewed slices: capture profile and disclosure,
+  Windows/macOS native system-audio adapters, then bounded synchronisation and mixing into the
+  existing 16 kHz mono speech interface. Preserving local/remote channels is explicitly later.
+- Windows uses WASAPI loopback. macOS 14.2+ uses a Core Audio process tap, while macOS 13 retains
+  online capture through a ScreenCaptureKit compatibility adapter; older systems keep in-room
+  microphone capture only.
+
+### Open-source acknowledgements have their own window
+
+- Settings now links to the open-source project index instead of rendering the entire index at the
+  bottom of its already long form. The owner-modal window follows the changelog's dimensions,
+  typography, rules, scrolling and guarded single-instance interaction, while retaining every
+  project name, licence and source URL.
+- The entry point is available in English, Chinese, German and Polish. Headless UI tests hold both
+  sides of the change: every notice is visible in the dedicated window, and none remains embedded
+  in Settings.
+
+### A warm rounded app-icon tile
+
+- Desktop, dock and browser icon derivatives now place the unchanged multicolour mark on a clean
+  warm-beige rounded-square tile, with transparent outer corners and no border, shadow or lettering.
+- The splash remains the standalone transparent mark, keeping the startup lockup visually light.
+  Both treatments are generated deterministically from the same checked-in PNG source.
+
+### One mark, generated for every surface
+
+- The user-supplied 1536 × 1024 transparent PNG is now the single brand source. Its five incoming
+  routes and three outgoing arrows retain the original gradients and edge treatment; no wordmark,
+  font or generated replacement lettering is included. This is a deliberate, tightly scoped
+  exception to the speaker-colour rule: the combination exists only inside the standalone mark.
+- `design/kanal-icon.py` centres that PNG on a transparent square before deriving the splash mark,
+  platform PNG, ICO, ICNS and two inlined web favicons. No SVG is generated or shipped, and the
+  README displays the PNG directly.
+- ICNS generation no longer depends on running `iconutil` on macOS. The script writes its modern
+  PNG-backed chunks directly, which makes the full suite reproducible on every development and CI
+  platform. A generator contract test checks the source dimensions, formats, absence of SVG,
+  transparent canvas and byte-for-byte idempotence; CI rejects any generated-asset drift.
+
+### A real startup surface
+
+- Kanal now opens on a small, undecorated splash window while the main host view model and its
+  device watcher are constructed. The main window is shown before the splash closes, so the
+  desktop lifetime never sees a last-window gap; there is no artificial delay.
+- The splash follows the reference's vertical hierarchy: application mark, lowercase `kanal`, a
+  short rule and the README's canonical line: `One room. Every language.` The mark comes from the
+  same packaged resource as the application window rather than a second embedded asset.
+- A headless UI test holds the lowercase name and exact tagline and verifies that the packaged icon
+  resolves.
+
+### The meeting window has one control bar and four focused views
+
+- Removed the duplicate `KANAL` wordmark from the window content and combined transport, mode,
+  language, microphone, export and settings controls into one compact horizontal icon bar. The bar
+  scrolls instead of wrapping, so German, Chinese and Polish labels never hide a meeting control.
+- Split the 500-line main window into `IconBarView`, `MeetingRoomView`, `SidePanelView` and
+  `StatusBarView`. Dialog ownership stays with the icon bar, column following and reordering stay
+  with the meeting room, and `MainWindow` now owns only the shell, export picker and lifetime.
+- Added a headless composition test that holds the four-region boundary and the absent in-content
+  wordmark. Existing view-model tests continue to own room and column-order behaviour.
+
+### Host, tools and tests target .NET 10
+
+- Moved all eight projects from `net9.0` to `net10.0` and CI's `setup-dotnet` from `9.0.x` to
+  `10.0.x`. No source change was needed: Avalonia 12.1.1, LLamaSharp 0.27.0, NAudio.Wasapi 2.3.0,
+  CommunityToolkit.Mvvm, QRCoder and xunit.v3 all resolve unchanged, the solution builds with zero
+  errors, and the 191 core + 108 UI tests pass. The 132 `xUnit1051` analyzer warnings are unchanged
+  from the net9.0 baseline — the bump introduces no new diagnostics.
+- `Directory.Build.props` keeps `RollForward=Major` for the same reason it was added, now stated
+  against 10.0: a machine carrying only a newer runtime should still launch the host.
+- Dropped the `DOTNET_ROLL_FORWARD=Major` workaround from `CLAUDE.md`: the SDK on the dev machines
+  and the target framework now agree, so plain `dotnet test` works.
+- `docs/PRD-v0.3.md` keeps its transcribed ".NET 9 + Avalonia" line — it is a dated transcription,
+  not a living document — but now carries an inline note that the implementation moved to .NET 10,
+  so the repo's authoritative requirements reference cannot be read as current on that point.
+
+### VS Code debugging is configured in-repo
+
+- Added `.vscode/` with F5 targets for the host (demo mode, and a live mode reading a gitignored
+  `.env` for `GLADIA_API_KEY` / `KANAL_RELAY_*` / `KANAL_WEB_URL`), a prompted-argument launch for
+  `tools/Kanal.Doctor`, and process attach; build/test tasks over `Kanal.slnx`; C# Dev Kit and
+  Avalonia extension recommendations; and search/watch exclusions for `.worktrees/`, `bin/`, `obj/`.
+
 ## 2026-08-05
 
 ### A comment now has to earn its place
@@ -25,6 +183,105 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 ---
 
 ## 2026-08-04
+
+### What Kanal is built on, named on screen (issue #35, 3 of 3)
+
+An index at the bottom of Settings: project, licence, and where to read it. The people running this
+in a meeting are the ones handing the binary around, so it belongs in the application rather than
+only in a repository.
+
+- Each notice carries the NuGet ids it covers, so the list can be read against the project files by
+  hand. References excluded from the shipped build are left out — they are not distributed, so they
+  carry no obligation. **Nothing enforces this**: a coverage test was written and then dropped on
+  the owner's call, so adding a dependency means adding its entry in the same PR, and the list goes
+  stale silently if that is forgotten.
+- What no package scan can see is listed by hand and marked as such: code that arrives inside
+  another package (Skia, HarfBuzz, ANGLE, llama.cpp) and OpenCC's conversion table, which is
+  compiled into `Kanal.Core`. ANGLE ships in every Windows build and its licence is explicit that a
+  binary redistribution reproduces the notice.
+- One entry was removed rather than guessed at: a debugging aid whose package carries no licence
+  file, no `<license>` and no `<licenseUrl>` — only a commercial copyright. Naming a licence that
+  cannot be substantiated, on a screen headed "open source", is worse than omitting the entry. It
+  is excluded from Release builds anyway.
+
+Open, and a call for the repository owner rather than a defect: this is an index, and MIT and BSD-3
+ask for the notice *text* to travel with the binary while Apache-2.0 asks for a copy of the licence.
+Discharging that means shipping a `THIRD-PARTY-NOTICES.md` of a few hundred lines and somewhere to
+read it. Until that is decided the wording here, in the README and in the code describes an index
+and claims nothing more.
+
+### A changelog you can read in the room (issue #35, 2 of 3)
+
+The question "did something change since last week?" is asked in the room, by the person who
+noticed — and the laptop running a meeting is not the machine anybody browses a repository on.
+
+- `CHANGELOG.md` is embedded in the executable and parsed for a dialog behind Settings → Version.
+  The file stays plain Markdown, readable on GitHub and in a diff, rather than becoming a data
+  format only this parser understands: `## <version> — <date>` headings with ordinary bullets.
+  Wrapped lines fold into their bullet, sub-bullets lose their markers, and inline code and
+  emphasis are stripped — a dialog is a TextBlock, not a renderer, and the first cut put
+  half-sentences and stray backticks on screen.
+- `<Version>` in the host project is what the About section shows, and a test holds it against the
+  newest changelog heading, so releasing is "write the entry, bump the version" and cannot be
+  half-done. Dates are ISO and invariant: against the ambient culture a Thai or Umm al-Qura locale
+  printed a year matching nothing in the repository.
+- The changelog is a host surface like any other, so the unbranded rule reaches it: a test fails if
+  a release entry names a vendor.
+- **A version is not a release.** Nothing has shipped yet, so the file carries one heading —
+  `1.0.1`, everything Kanal does on the day it ships — rather than a history reconstructed from
+  commits that no operator ever received. The heading stays undated until the release is cut, and
+  the dialog says so in the operator's language instead of leaving the line blank. From here each
+  PR that adds a feature, fixes a bug or makes something measurably better appends its own bullet;
+  refactors, tests and docs append nothing. The convention is in `CLAUDE.md` next to the progress
+  log, and only the newest heading is allowed to be undated.
+
+Left for the repository owner to decide: the entries are English on every language setting.
+Translating release notes into four languages is a standing cost on every release, not a bug fix.
+
+### The host keeps a record of itself (issue #35, 1 of 3)
+
+A meeting cannot be replayed. Whatever went wrong happened once, in a room, with the other side of
+the table waiting — and until now the only trace was a status line that the next status line
+overwrote.
+
+- **A log facade in the core, NLog in the host.** `Kanal.Core.Diagnostics` defines four levels, an
+  `ILogSink` and a static `Log` — the same rule as the provider abstractions: the core states the
+  capability, the host names the vendor. Nothing is written until a host installs a sink, so tests,
+  `Kanal.Doctor` and any future embedder stay silent by default, and a sink that throws never
+  reaches the caller. `LogSetup` builds the configuration in code rather than from `NLog.config`:
+  the level has to change without a restart, and a config file beside the executable is one more
+  thing that can go missing from a published build.
+- **One file a day, rolled over at a size the operator sets.** `kanal-<date>.log` under the
+  application-data directory keeps a stable name all day, so "send me today's log" names one file;
+  rollovers are numbered beside it. Age is the retention policy (14 days) and a count derived from
+  the file size is a runaway backstop only, bounding the folder at roughly 2 GB without standing in
+  for the days — a fixed count silently undercut the promise, and no count at all let one loud day
+  write 65 MB with nothing yet old enough to delete.
+- **Changing the level mid-meeting keeps what is already written.** Handing NLog a fresh
+  `FileTarget` over the open file made the new one open at a stale offset and overwrite a
+  contiguous block of what had been flushed; the target is updated in place instead.
+- **What actually gets logged.** Startup with version and OS, unhandled and unobserved exceptions,
+  rooms opening and closing with their mode and languages, a session that ends on its own, a
+  refused Start with the reason, a model that will not load, a relay that cannot be set up, relay
+  publishes that fail, capture that stops under a live room, a recording that cannot be opened, an
+  export that cannot be written, and a settings file that could not be read. Debug adds capture
+  running, a frame count and snapshot publishes — counts, never content.
+- **Nothing said in the room reaches the file.** Every line is capped, message and exception alike:
+  a gateway behind a captive portal was writing its whole 20 KB error page per failure, retried
+  every 15 seconds. And the transcription wire no longer falls back to putting a whole error
+  *frame* into the error message — that frame quotes the request that caused it, which is an
+  utterance.
+- **One click to the folder**, because the person who has to send a log is on a call and will not
+  be typing an `%APPDATA%` path into a file manager. `SystemFolders.Open` is the one line of
+  platform branching, injected so a headless test never launches Explorer. If the folder cannot be
+  written at all the panel says so — NLog defers file creation and swallows that failure, so the
+  alternative was an empty directory under a promise of one file a day.
+- **A hand-edited settings file no longer costs the operator their API key.** The level reads
+  leniently, and anything else unreadable is copied to `settings.json.unreadable` before the
+  defaults replace it — logged, which is why the sink is installed before settings are read.
+
+Two of three: the changelog viewer and the open-source list follow on their own branches, since
+they are independent of this one beyond sharing a dialog.
 
 ### Kanal traffic is behind an authenticated gateway
 
