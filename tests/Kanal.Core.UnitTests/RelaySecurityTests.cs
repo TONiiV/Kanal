@@ -134,6 +134,10 @@ public class RelaySecurityTests
         Assert.Contains("invite.get(\"ticket\")", web);
         Assert.DoesNotContain("supabase", web, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("apikey", web, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("state.transcribing", web);
+        Assert.Contains("snap.transcribing", web);
+        Assert.Contains("room.transcribing", web);
+        Assert.Contains("This meeting is being transcribed and translated live.", web);
     }
 
     /// <summary>

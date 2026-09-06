@@ -8,11 +8,23 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
+using Kanal.Core.Diagnostics;
+using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
+using CoreLogLevel = Kanal.Core.Diagnostics.LogLevel;
 
 namespace Kanal.Host.ViewModels;
+
+public sealed partial class LogLevelOption(LogLevel level) : ViewModelBase
+{
+    public LogLevel Level { get; } = level;
+
+    public string Name => Localizer.Instance[$"log.level.{Level.ToString().ToLowerInvariant()}"];
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+}
 
 public partial class ApiKeyItemViewModel : ViewModelBase
 {
@@ -53,8 +65,10 @@ public partial class SettingsViewModel : ViewModelBase
         AppSettings settings,
         Func<IAudioCaptureService?>? captureFactory = null,
         bool? isMacOs = null,
-        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null)
+        Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
+        Action<string>? openFolder = null)
     {
+        _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         // no capture backend, or no devices — the panel says so when the test is started
@@ -94,12 +108,16 @@ public partial class SettingsViewModel : ViewModelBase
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _audioFolder = settings.AudioFolder ?? "";
         _recordAudio = settings.RecordAudio;
+        _recordOnlineAudio = settings.RecordOnlineAudio;
         // What this settings object says, or — when nothing has been chosen — whatever the
         // application resolved to at launch. Reading only the live localizer would have shown
         // the wrong row for a settings file that had not been applied yet.
         var chosen = settings.AppLanguage ?? Localizer.Instance.Current;
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
+
+        _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
+        _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
         // The switch happens in this window, so this window least of all may stay in the old
         // language. Unsubscribed in CancelDownloads — the same close-time cleanup the downloads
@@ -115,8 +133,14 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(EnvFallback));
         OnPropertyChanged(nameof(ProcessingNote));
         OnPropertyChanged(nameof(DefaultFolderNote));
+        OnPropertyChanged(nameof(LogNote));
+        OnPropertyChanged(nameof(LogFailureNote));
+        OnPropertyChanged(nameof(VersionLabel));
+        OnPropertyChanged(nameof(LicenseNote));
         foreach (var model in TranslationModels)
             model.RefreshText();
+        foreach (var level in LogLevels)
+            level.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -162,6 +186,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// <summary>Whether the room is written to disk while a meeting runs.</summary>
     [ObservableProperty]
     private bool _recordAudio = true;
+
+    /// <summary>Separate opt-in because online recording is off by default.</summary>
+    [ObservableProperty]
+    private bool _recordOnlineAudio;
 
     public IReadOnlyList<AppLanguage> AppLanguages => Localizer.Available;
 
@@ -377,6 +405,61 @@ public partial class SettingsViewModel : ViewModelBase
         };
     }
 
+    private readonly Action<string> _openFolder;
+
+    public IReadOnlyList<LogLevelOption> LogLevels { get; } =
+    [
+        new(CoreLogLevel.Debug),
+        new(CoreLogLevel.Info),
+        new(CoreLogLevel.Warning),
+        new(CoreLogLevel.Error),
+    ];
+
+    [ObservableProperty]
+    private LogLevelOption? _logLevel;
+
+    [ObservableProperty]
+    private decimal? _logMaxFileSizeMb = AppSettings.DefaultLogMaxFileSizeMb;
+
+    private int _lastLogSize = AppSettings.DefaultLogMaxFileSizeMb;
+
+    partial void OnLogMaxFileSizeMbChanged(decimal? value)
+    {
+        if (value is not null)
+            _lastLogSize = (int)Math.Round(value.Value);
+    }
+
+    public int LogMinSizeMb => SettingsStore.MinLogMaxFileSizeMb;
+
+    public int LogMaxSizeMb => SettingsStore.MaxLogMaxFileSizeMb;
+
+    public string LogNote => Localizer.Instance.Format("settings.logs.note", LogSetup.RetentionDays);
+
+    public string LogFolder => SettingsStore.LogsPath;
+
+    public bool LogIsWritable => LogSetup.Writable;
+
+    public string LogFailureNote =>
+        Localizer.Instance.Format("settings.logs.unwritable", LogSetup.FailureReason ?? "");
+
+    [RelayCommand]
+    private void OpenLogFolder()
+    {
+        try
+        {
+            _openFolder(SettingsStore.LogsPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", $"Could not open {SettingsStore.LogsPath}.", ex);
+        }
+    }
+
+    public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
+
+    public string LicenseNote =>
+        Localizer.Instance.Format("settings.licenses.note", OpenSourceNotices.OwnLicense);
+
     /// <summary>What the folders resolve to when both boxes are empty, printed under them.</summary>
     public string DefaultFolderNote =>
         Localizer.Instance.Format("settings.files.default", SettingsStore.DefaultOutputFolder);
@@ -448,11 +531,12 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    public void Save()
+    public AppSettings Save()
     {
         var settings = SettingsStore.Load();
         ApplyTo(settings);
         SettingsStore.Save(settings);
+        return settings;
     }
 
     /// <summary>Write the edited state onto <paramref name="settings"/> (separated from disk IO for tests).</summary>
@@ -468,7 +552,12 @@ public partial class SettingsViewModel : ViewModelBase
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.AudioFolder = Folder(AudioFolder);
         settings.RecordAudio = RecordAudio;
+        settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
+        settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
+        settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
+            ? _lastLogSize
+            : (int)Math.Round(LogMaxFileSizeMb.Value);
     }
 
     /// <summary>Whitespace is stored as "unset", so the resolver's fallback is the only default.</summary>
