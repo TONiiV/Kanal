@@ -6,6 +6,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### Local readiness and Gladia onboarding — new design discussion
+
+- User requested automatic minimum-configuration checks for local transcription/translation,
+  with Gladia API recommendations and setup guidance when requirements are not met.
+- [Design discussion](design/local-readiness.md) separates confirmed goals from proposed benchmark,
+  recommendation and switching policies. No hardware thresholds or automatic cloud fallback
+  have been approved; production implementation and published specification are unchanged.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
