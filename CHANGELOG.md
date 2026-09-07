@@ -16,6 +16,12 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - Workspaces keep their meeting records in operator-selected local folders, survive restarts,
   and report missing or damaged records without hiding the meetings that remain readable.
+
+- The meeting window is now three columns. A workspace sidebar sits on the left and the meeting
+  assistant on the right; either can be collapsed out of the way and dragged wider, and the width
+  you pick comes back when you expand it again. The transcript keeps a usable width whatever the
+  sidebars do. While both sidebars are open the control bar has less room than before and scrolls
+  sideways to reach export and settings; collapsing a sidebar gives it back.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
   audio file is recorded, and Markdown/JSON exports retain the attestation.

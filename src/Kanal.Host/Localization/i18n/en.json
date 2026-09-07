@@ -213,5 +213,11 @@
   "settings.licenses.open": "View open-source acknowledgements",
   "licenses.title": "Open-source acknowledgements",
   "licenses.note": "Kanal is licensed under {0} and built on the projects below, each under its own licence.",
-  "licenses.close": "Close"
+  "licenses.close": "Close",
+  "sidebar.workspace": "WORKSPACE",
+  "sidebar.assistant": "ASSISTANT",
+  "sidebar.collapse.tip": "Hide this panel",
+  "sidebar.workspace.show.tip": "Show the workspace panel",
+  "sidebar.assistant.show.tip": "Show the assistant panel",
+  "sidebar.resize.tip": "Drag to resize"
 }

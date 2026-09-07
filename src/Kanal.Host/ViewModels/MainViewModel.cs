@@ -26,6 +26,8 @@ namespace Kanal.Host.ViewModels;
 
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
+    public WorkspaceShellViewModel Shell { get; } = new();
+
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;

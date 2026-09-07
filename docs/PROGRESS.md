@@ -81,6 +81,74 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
   and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
 
+### The window becomes three declared regions ([#65](https://github.com/TONiiV/Kanal/issues/65))
+
+The host window was one `DockPanel`: a top bar, a bottom status line, a fixed 272 px assistant
+panel, and a transcript that was whatever remained. Batch 1 of
+[#64](https://github.com/TONiiV/Kanal/issues/64) needs a workspace sidebar as well, and a
+leftover-space transcript cannot survive two collapsible neighbours — that is precisely how the
+prototype failed, and [the approved design](design/meeting-workspace.md) rules it out.
+
+`MainWindow` is now a five-column grid: workspace sidebar, splitter, centre, splitter, assistant
+sidebar. Only the centre column is starred, and it carries a `MinWidth` of 320 px, so no
+combination of collapse and drag can squeeze the transcript to nothing — the grid refuses before
+the layout does. The toolbar and status line moved inside the centre column with the transcript,
+which is why they now stop at the sidebar edges rather than spanning the window.
+
+Collapse and width live in one `SidebarViewModel`, instantiated twice — the left and right
+behaviours are identical, and a mirrored `Left*`/`Right*` pair would be the same code written twice:
+
+- A width is clamped to 180–480 px on the way in, so a drag cannot leave a sidebar at a width the
+  next expansion has to inherit. The prototype's range is a calibration start, not an acceptance
+  number, and the constants are one edit away.
+- Collapsing sets the column to zero but keeps the chosen width, so re-expanding returns to it.
+  The grid writes a collapsed column back as zero on every layout pass; the setter ignores that
+  write rather than clamping it up to 180 and losing what the operator chose.
+- The bounds are published to the `ColumnDefinition` as well, because `GridSplitter` takes its drag
+  limits from the definition rather than from the binding source. Without that the pointer would
+  keep travelling past 480 while the column snapped back — the handle and the edge coming apart.
+  Those column bounds fall to zero while the sidebar is collapsed, or a `MinWidth` of 180 would
+  hold the column open against the collapse.
+- `CanExpand` gates the two expand affordances in the centre toolbar. They sit *outside* the
+  toolbar's scroller: a collapsed sidebar is reachable only through them, so they may not be the
+  part that scrolls out of sight.
+
+The three header rules land on one line because the two sidebars **follow the toolbar's measured
+height**, rather than all three sharing a constant. A constant lines them up only while the bar fits
+it: with a microphone mode selected and no local model downloaded, the mode picker's description
+wraps and the bar measures 96 px against the sidebars' 76 — a five-to-twenty pixel step in the one
+rule that runs across the whole window. `Grid.IsSharedSizeScope` was tried first and does not
+equalise these rows. So the bar reports its own height to the shell and the sidebars bind to it,
+which also survives whatever #66 does to the bar's contents.
+
+The window's floor is computed from the widths the sidebars currently hold, not fixed. Two sidebars
+dragged to 480 demand 1290 px; against a fixed 690 the window could be shrunk until the assistant —
+and the only control that reopens it — was off the right of the screen with no way back. The two
+splitter columns are pinned rather than `Auto` for the same reason: `Auto` measured a pixel wider
+than the handle, and a floor cannot account for a column whose width it does not set.
+
+The two sidebar headers are mirrored rather than parallel. Each collapse control sits on the edge
+its sidebar shares with the meeting and each title on the outer margin, so the two chevrons flank
+the centre and point away from it. The assistant header previously carried both on the left, which
+read as an accident rather than a choice once the workspace header stood beside it.
+
+Deliberate limitations, all for the ticket queue rather than this PR:
+
+- The workspace sidebar is a header and nothing else. Its contents — search, project selector,
+  meeting list, settings — are [#69](https://github.com/TONiiV/Kanal/issues/69) and
+  [#67](https://github.com/TONiiV/Kanal/issues/67). The header reads `WORKSPACE` as a placeholder;
+  the design puts the brand lockup there, and #69 replaces it.
+- The two full-width status rows are still present. The design removes them in favour of a compact
+  state beside the transport, which is [#66](https://github.com/TONiiV/Kanal/issues/66)'s
+  acceptance criterion, not this one's.
+- **The centre toolbar's horizontal scrollbar is now visible at the default 1320 px window**, where
+  before it appeared only on a narrow one: the bar has 776 px instead of the whole window. The
+  design asks for clipping with the transport held visible instead, and #66 carries that same
+  criterion — but it gets there by replacing every labelled control in the bar with an icon mark.
+  Fitting the labelled bar into 776 px would be work the next ticket throws away, so this ships as
+  a known regression rather than a silent one. The expand affordances are outside the scroller, so
+  neither sidebar becomes unreachable in the meantime.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled

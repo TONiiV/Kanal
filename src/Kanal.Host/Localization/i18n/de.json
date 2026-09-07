@@ -213,5 +213,11 @@
   "settings.licenses.open": "Open-Source-Danksagungen anzeigen",
   "licenses.title": "Open-Source-Danksagungen",
   "licenses.note": "Kanal steht unter der {0}-Lizenz und baut auf den folgenden Projekten auf, die jeweils ihrer eigenen Lizenz unterliegen.",
-  "licenses.close": "Schließen"
+  "licenses.close": "Schließen",
+  "sidebar.workspace": "ARBEITSBEREICH",
+  "sidebar.assistant": "ASSISTENT",
+  "sidebar.collapse.tip": "Diese Leiste ausblenden",
+  "sidebar.workspace.show.tip": "Arbeitsbereichsleiste einblenden",
+  "sidebar.assistant.show.tip": "Assistentenleiste einblenden",
+  "sidebar.resize.tip": "Zum Ändern der Breite ziehen"
 }

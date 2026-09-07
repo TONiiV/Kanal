@@ -89,16 +89,24 @@ public class MainWindowCompositionTests
     /// not. Measured rather than compared to a picture - the numbers are the behaviour.
     /// </summary>
     [AvaloniaTheory]
-    [InlineData(2200.0, true)]
-    [InlineData(1280.0, false)]
-    [InlineData(900.0, false)]
+    // The bar now lives in the centre column, so what it has to work with is the window less both
+    // sidebars - collapsing them is what hands it the whole width. 2200 is the width the fitting
+    // case has always needed; the sidebars change which states reach it, not the number.
+    [InlineData(2200.0, true, true)]
+    [InlineData(2200.0, false, false)]
+    [InlineData(1320.0, true, false)]
     public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(
-        double width, bool expectedToFit)
+        double width, bool sidebarsAway, bool expectedToFit)
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
         var window = new MainWindow { DataContext = vm, Width = width, Height = 700 };
         window.Show();
+        if (sidebarsAway)
+        {
+            vm.Shell.Left.ToggleCommand.Execute(null);
+            vm.Shell.Right.ToggleCommand.Execute(null);
+        }
         Dispatcher.UIThread.RunJobs();
 
         var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
