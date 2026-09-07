@@ -585,7 +585,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(workspace.Id, Assert.Single(Store().ListWorkspaces().Workspaces).Id);
     }
 
-    /// <summary>On macOS /tmp is a symlink, so one folder reached two ways is the ordinary case.</summary>
     [Fact]
     public void OneFolderReachedByTwoSpellingsIsOneWorkspace()
     {
@@ -603,7 +602,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
     }
 
-    /// <summary>Renaming reaches the list but not an ejected drive; reconnecting must not undo it.</summary>
     [Fact]
     public void ARenameSurvivesTheFolderComingBack()
     {
@@ -623,7 +621,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal("ACME tooling", Assert.Single(Store().ListWorkspaces().Workspaces).Name);
     }
 
-    /// <summary>A duplicated folder names the original: renaming through it would retitle that one.</summary>
     [Fact]
     public void RenamingThroughADuplicatedFolderIsRefused()
     {
@@ -643,7 +640,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal("Tooling review", Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Title);
     }
 
-    /// <summary>One row of the list being unreadable must not hide the workspaces either side of it.</summary>
     [Fact]
     public void OneBadRowDoesNotHideTheRestOfTheList()
     {
@@ -680,6 +676,59 @@ public class WorkspaceStoreTests : IDisposable
         var result = store.SaveMeeting(meeting with { TranscriptFileName = name });
 
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+    }
+
+    /// <summary>The mainstream case: a new workspace names a folder that does not exist yet.</summary>
+    [Fact]
+    public void AWorkspaceCreatedInAFolderThatDidNotExistCanBeOpenedAgain()
+    {
+        var folder = Path.Combine(_root, "not-yet", "acme");
+        Directory.CreateDirectory(_root);
+        var made = Created(Store().CreateWorkspace("ACME", folder));
+
+        var again = Created(Store().OpenWorkspace(folder));
+
+        Assert.Equal(made.Id, again.Id);
+        Assert.Single(Store().ListWorkspaces().Workspaces);
+        Assert.True(Path.IsPathRooted(made.RootPath));
+    }
+
+    /// <summary>A marker file restored into the wrong folder: one folder cannot be two workspaces.</summary>
+    [Fact]
+    public void AFolderCannotBeTakenOverByAnotherWorkspacesMarker()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var beta = Created(store.CreateWorkspace("Beta", Folder("beta")));
+        File.Copy(
+            Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName),
+            Path.Combine(beta.RootPath, WorkspaceStore.WorkspaceFileName),
+            overwrite: true);
+        Directory.Delete(acme.RootPath, recursive: true);
+
+        var result = store.OpenWorkspace(beta.RootPath);
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Equal(
+            [acme.Id, beta.Id],
+            Store().ListWorkspaces().Workspaces.Select(w => w.Id).Order());
+    }
+
+    [Fact]
+    public void RenamingThroughAnIncompleteRowIsRefused()
+    {
+        var store = Store();
+        Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var registry = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(Registry))!;
+        registry["workspaces"] = JsonSerializer.SerializeToElement(
+            new[] { new Dictionary<string, string?> { ["id"] = "rubble", ["name"] = "Rubble" } });
+        File.WriteAllText(Registry, JsonSerializer.Serialize(registry));
+
+        var result = Store().RenameWorkspace("rubble", "Something");
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
     }
 
     [Fact]

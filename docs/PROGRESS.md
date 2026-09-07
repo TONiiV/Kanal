@@ -63,9 +63,11 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   not that: the copy is only a copy while the folder already listed is still there. Paths are stored
   canonical — absolute, without a trailing separator, and with every symlink on the way down
   resolved, because on macOS `/tmp` and `/var` are themselves links and one folder reached by two
-  spellings would otherwise become two workspaces over one set of files. The list, not the folder's
-  own marker file, holds the workspace's name: a rename made while the drive was out could not
-  reach the marker, and reconnecting must not undo it.
+  spellings would otherwise become two workspaces over one set of files, and the second could delete
+  the first's meetings. One folder holds one row, checked on both routes in — a `kanal-workspace.json`
+  restored into the wrong folder cannot take it over. The list, not the folder's own marker file,
+  holds the workspace's name: a rename made while the drive was out could not reach the marker, and
+  reconnecting must not undo it.
 - `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
   workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
   the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a

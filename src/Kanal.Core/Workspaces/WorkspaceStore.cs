@@ -61,12 +61,13 @@ public sealed class WorkspaceStore(string registryPath)
         if (Directory.Exists(rootPath) && File.Exists(Path.Combine(rootPath, WorkspaceFileName)))
             return OpenWorkspace(rootPath);
 
+        // Checked before anything is written: the marker file below would otherwise be replaced
+        // on the way to a refusal, taking the identity of the workspace already living there.
         var (listed, trouble) = ReadRegistry();
         if (trouble is not null)
             return new WorkspaceResult(null, trouble);
-        if (listed.FirstOrDefault(e => SamePath(e.RootPath!, rootPath)) is { } already)
-            return Refused(
-                rootPath, $"That folder is already the workspace \"{already.Name}\".");
+        if (Occupied(listed, rootPath, byAnyoneBut: null) is { } taken)
+            return taken;
 
         var workspace = new Workspace(NewId(), name.Trim(), rootPath, DateTimeOffset.UtcNow);
         try
@@ -108,7 +109,7 @@ public sealed class WorkspaceStore(string registryPath)
         if (problem is not null)
             return new WorkspaceResult(null, problem);
 
-        var index = entries.FindIndex(e => e.Id == id);
+        var index = entries.FindIndex(e => e.Id == id && e.Complete);
         if (index < 0)
             return new WorkspaceResult(null, NoSuchWorkspace(id));
 
@@ -128,7 +129,7 @@ public sealed class WorkspaceStore(string registryPath)
         return new WorkspaceResult(renamed, null);
     }
 
-    /// <summary>Leaves every file where it is: dropping a row from a list is not deleting a year of meetings.</summary>
+    // Leaves every file where it is: dropping a row from a list is not deleting a year of meetings.
     public StoreProblem? ForgetWorkspace(string id)
     {
         var (entries, problem) = ReadRegistry();
@@ -354,6 +355,9 @@ public sealed class WorkspaceStore(string registryPath)
         if (problem is not null)
             return new WorkspaceResult(null, problem);
 
+        if (Occupied(entries, workspace.RootPath, byAnyoneBut: workspace.Id) is { } taken)
+            return taken;
+
         var index = entries.FindIndex(e => e.Id == workspace.Id);
         if (index >= 0)
         {
@@ -429,27 +433,28 @@ public sealed class WorkspaceStore(string registryPath)
             && !name.Contains('/') && !name.Contains('\\')
             && name is not ("." or ".."));
 
+    // Linux tells Acme and acme apart; macOS and Windows do not, and neither may this.
+    private static readonly StringComparison NameComparison = OperatingSystem.IsLinux()
+        ? StringComparison.Ordinal
+        : StringComparison.OrdinalIgnoreCase;
+
     private static bool Misfiled(string? recordId, string folderName) =>
-        !string.Equals(recordId, folderName, OperatingSystem.IsLinux()
-            ? StringComparison.Ordinal
-            : StringComparison.OrdinalIgnoreCase);
+        !string.Equals(recordId, folderName, NameComparison);
 
     private static StoreProblem WrongFolder(string path) =>
         new(StoreProblemKind.Unreadable, path,
             "That meeting record does not belong to the folder it is in.");
 
-    private static bool SamePath(string a, string b) =>
-        string.Equals(a, b, OperatingSystem.IsLinux()
-            ? StringComparison.Ordinal
-            : StringComparison.OrdinalIgnoreCase);
+    private static bool SamePath(string a, string b) => string.Equals(a, b, NameComparison);
 
     // Two spellings of one folder must not become two workspaces, so every link on the way down
     // is resolved: on macOS /tmp and /var are themselves symlinks, which makes this the usual case.
     private static string Absolute(string path)
     {
+        var full = path;
         try
         {
-            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
             for (var hops = 0; hops < 40; hops++)
             {
                 var (resolved, followed) = FollowFirstLink(full);
@@ -458,13 +463,13 @@ public sealed class WorkspaceStore(string registryPath)
 
                 full = resolved;
             }
-
-            return full; // a loop of links; the folder checks will say what is wrong with it
         }
         catch (Exception)
         {
-            return path; // let the folder checks phrase it; this is not the place to fail
+            // unreachable or malformed; the folder checks phrase it, and the absolute form stands
         }
+
+        return full;
     }
 
     // Resolving one link can expose another above it, so this returns after the first and the
@@ -478,6 +483,11 @@ public sealed class WorkspaceStore(string registryPath)
         for (var i = 0; i < parts.Length; i++)
         {
             walked = Path.Combine(walked, parts[i]);
+
+            // A folder about to be created has nothing below it to resolve, and asking would throw.
+            if (!Directory.Exists(walked))
+                break;
+
             if (new DirectoryInfo(walked).ResolveLinkTarget(returnFinalTarget: true) is not { } target)
                 continue;
 
@@ -494,6 +504,13 @@ public sealed class WorkspaceStore(string registryPath)
 
     private static StoreProblem NoSuchMeeting(string id) =>
         new(StoreProblemKind.NotFound, id, "No such meeting.");
+
+    private static WorkspaceResult? Occupied(
+        List<StoredRegistryEntry> entries, string rootPath, string? byAnyoneBut) =>
+        entries.FirstOrDefault(e => e.Id != byAnyoneBut && SamePath(e.RootPath ?? "", rootPath))
+                is { } already
+            ? Refused(rootPath, $"That folder is already the workspace \"{already.Name}\".")
+            : null;
 
     private static StoreProblem Unplugged(StoredRegistryEntry entry) =>
         new(StoreProblemKind.FolderMissing, entry.RootPath!,
