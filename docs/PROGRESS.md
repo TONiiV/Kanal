@@ -28,6 +28,59 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   test reads the close code from the shipped HTML rather than restating it, so the two cannot drift
   apart.
 
+### Meeting records get a home on disk ([#68](https://github.com/TONiiV/Kanal/issues/68))
+
+- `WorkspaceStore` is the single seam between the application and meeting records on disk. Layout,
+  under a folder the operator picks: `kanal-workspace.json` for the workspace's identity, and
+  `meetings/<id>/meeting.json`, one folder per meeting holding its own artefacts. Every file
+  carries a schema version.
+- The list of *which* folders are workspaces lives outside them all, in the application's own
+  profile. A workspace on a drive that is not plugged in has to keep its row in the sidebar, so the
+  list cannot be a scan of folders that happen to be reachable.
+- Meeting folders are named by id, never by title. Two meetings about the same thing on the same
+  day is the ordinary case in this room, not the odd one, and neither may land on the other.
+- Failures are reported next to whatever could still be read, never instead of it. An empty list
+  where a year of meetings used to be is the one outcome the store may never produce, so a vanished
+  workspace or meetings folder, an unopenable file, a corrupt payload, an orphaned meeting folder,
+  and an unsupported schema each produce a `StoreProblem` while the surviving records still list.
+  `StoreProblem` distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
+  (plug the drive in), `Unreadable`, `Unwritable`, `UnsupportedVersion`.
+- Three things a JSON deserializer does quietly that this store refuses. A missing or unsupported
+  schema version is not half-parsed, because the next save could write unknown fields back as loss.
+  A record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
+  field with null, which would list a phantom meeting whose folder no later operation could open.
+  And a record has to agree with where it is: an id becomes a folder name, so a hand-edited
+  `"id": ".."` would otherwise have listed as an ordinary meeting whose Delete button took the
+  workspace and every transcript in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, and the folder
+  a record sits in is the id that counts — which also stops a duplicated folder from listing one
+  meeting twice, where only one of the two could ever be renamed or deleted again. Stored artifact
+  locations are portable file names inside that folder; the public meeting record resolves them to
+  full transcript and audio paths and refuses any path that escapes its meeting folder.
+- Adding a folder that already holds a workspace adopts it under the name already on disk — picking
+  last year's folder means "open this", so the stored name outranks the one typed into the box. A
+  *copy* of such a folder — a restored backup, a share mounted twice — carries the original's id, so
+  it is reported rather than adopted; registering it by id alone would silently repoint the one row
+  at the copy and leave the original's meetings unreachable. A workspace that has simply *moved* is
+  not that: the copy is only a copy while the folder already listed is still there. Paths are stored
+  canonical — absolute, without a trailing separator, and with every symlink on the way down
+  resolved, because on macOS `/tmp` and `/var` are themselves links and one folder reached by two
+  spellings would otherwise become two workspaces over one set of files, and the second could delete
+  the first's meetings. One folder holds one row, checked on both routes in — a `kanal-workspace.json`
+  restored into the wrong folder cannot take it over. The list, not the folder's own marker file,
+  holds the workspace's name: a rename made while the drive was out could not reach the marker, and
+  reconnecting must not undo it.
+- `ForgetWorkspace` is the workspace-removal operation: it removes the row and touches no file. The
+  folder is the operator's, may be a share, and may hold the only copy of the transcripts; removing
+  it from the sidebar must stay reversible. Meetings, which Kanal itself created, do delete.
+- One limitation, taken deliberately. A registry file that cannot be parsed at all blocks every
+  operation, including `ForgetWorkspace`; there is no repair from inside the application. A single
+  unreadable *row* is reported and skipped, so it cannot hide its neighbours, but the file as a
+  whole is refused rather than replaced. `SettingsStore` copies an unreadable file aside and carries
+  on with defaults; doing that here would answer "you have no workspaces", which is the one thing
+  this store may not say.
+- Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
+  and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
