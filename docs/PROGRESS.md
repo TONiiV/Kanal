@@ -6,6 +6,39 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### The left sidebar becomes a workspace ([#69](https://github.com/TONiiV/Kanal/issues/69))
+
+#65 left the left sidebar as a header and a settings button. It now reads top to bottom: the brand
+lockup and collapse control, a search box with the new-meeting button beside it, the workspace
+picker with its add menu, the meeting list, and settings at the foot. `WorkspaceSidebarViewModel`
+sits on #68's `WorkspaceStore`, so nothing here invents a second idea of where records live.
+
+The new-meeting button is the one solid control in the sidebar. It began as a ghost `+` like the
+add menu beside it and the two were indistinguishable at a glance, which is the failure the
+criterion names — creating a meeting has to be one clear action, not something the operator hunts
+for. Weight, not colour, separates them.
+
+Selection is styled off Fluent's accent onto ink and paper: a selected meeting takes a paper fill
+and a two-pixel ink bar down its left edge. An accent-blue row would be the only chrome on screen
+carrying colour, and colour here belongs to people.
+
+Import and export are file moves, not parsers. The add menu's "import meeting record" makes a new
+meeting named after the file and copies it into the meeting's folder; a meeting's own ellipsis menu
+does the same into that record, and exports by copying the transcript back out. Reading a foreign
+transcript into `RoomState` is a different job, and neither #69 nor the record model asks for it
+yet — a parser written now would have no consumer.
+
+Search filters the list held in memory and never touches disk; `Refresh` is the only path that
+re-reads. A meeting folder that cannot be read is counted in a note above settings rather than
+swallowing the meetings that still read — the store already separates the two, and the sidebar
+keeps that separation instead of collapsing it into an empty list.
+
+**What this does not do yet.** Selecting a meeting sets `SelectedMeeting` and nothing else. The
+criterion "selecting a meeting shows its transcript and summary" needs an answer to a question the
+design has not settled — what happens to a running meeting when the operator browses a past one —
+and summaries do not exist until [#34](https://github.com/TONiiV/Kanal/issues/34). The meeting
+title row and the language flags, the other half of #69, are their own change.
+
 ### The assistant sidebar becomes points and speakers ([#71](https://github.com/TONiiV/Kanal/issues/71))
 
 The right sidebar held one list — speakers, plus the merge box. It now carries two tabs, "Points and

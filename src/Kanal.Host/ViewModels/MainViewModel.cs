@@ -17,6 +17,7 @@ using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
 using Kanal.Core.Room;
+using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
@@ -80,8 +81,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         PipelinePlanner.KeyResolver? resolveKey = null,
         Func<IAudioCaptureService?>? captureFactory = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
-        Func<DateTimeOffset>? utcNow = null)
+        Func<DateTimeOffset>? utcNow = null,
+        Func<WorkspaceStore>? workspaces = null)
     {
+        Sidebar = new WorkspaceSidebarViewModel(
+            (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))());
         _loadSettings = loadSettings;
         _downloads = downloads;
         _resolveKey = resolveKey;
@@ -205,6 +209,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public const int MaxLanguages = 4;
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
+
+    public WorkspaceSidebarViewModel Sidebar { get; }
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
