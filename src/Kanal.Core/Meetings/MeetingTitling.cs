@@ -80,9 +80,7 @@ public sealed class MeetingTitling(Func<IMeetingTitler?> titler, int minimumLine
             Log.Warning("titling", $"The meeting could not be named: {ex.Message}");
         }
 
-        // A result that lost its race is dropped rather than applied late: the operator typed a
-        // name while it was in flight, and overwriting that is the one thing that never happens
-        // without being asked.
+        // Dropped rather than applied late: the operator renamed while this was in flight.
         var stale = mine != _generation;
         if (!stale && suggested?.Trim() is { Length: > 0 } title)
         {

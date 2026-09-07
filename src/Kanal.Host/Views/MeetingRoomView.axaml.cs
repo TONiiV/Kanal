@@ -169,10 +169,8 @@ public partial class MeetingRoomView : UserControl
         vm.BeginRenameTitleCommand.Execute(null);
         Dispatcher.UIThread.Post(() =>
         {
-            var editor = this.GetVisualDescendants().OfType<TextBox>()
-                .FirstOrDefault(box => box.Name == "MeetingTitleEditor");
-            editor?.Focus();
-            editor?.SelectAll();
+            MeetingTitleEditor.Focus();
+            MeetingTitleEditor.SelectAll();
         });
     }
 
