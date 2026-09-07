@@ -99,6 +99,30 @@ public class WorkspaceShellTests
     }
 
     /// <summary>
+    /// A sidebar dragged to 480 needs more window than one at 180. A fixed floor let the operator
+    /// shrink the window until the right sidebar - and the only control that reopens it - was off
+    /// the screen.
+    /// </summary>
+    [Fact]
+    public void TheWindowFloorFollowsTheWidthsTheSidebarsCurrentlyHold()
+    {
+        var shell = Shell();
+        var atDefault = shell.MinShellWidth;
+
+        shell.Left.Width = SidebarViewModel.MaxWidth;
+
+        Assert.Equal(atDefault + (SidebarViewModel.MaxWidth - SidebarViewModel.DefaultWidth),
+            shell.MinShellWidth);
+
+        shell.Left.ToggleCommand.Execute(null);
+
+        Assert.Equal(
+            SidebarViewModel.DefaultWidth + WorkspaceShellViewModel.SplitterWidth
+                + WorkspaceShellViewModel.TranscriptReserve,
+            shell.MinShellWidth);
+    }
+
+    /// <summary>
     /// The splitter reads its drag limits off the column definition, not off this view model, so
     /// the bounds have to reach the column - and give way entirely while the sidebar is collapsed.
     /// </summary>
@@ -112,8 +136,10 @@ public class WorkspaceShellTests
 
         sidebar.ToggleCommand.Execute(null);
 
+        // Only the floor gives way. A zero ceiling would make re-expansion depend on which of the
+        // two notifications the grid happened to read first.
         Assert.Equal(0, sidebar.ColumnMinWidth);
-        Assert.Equal(0, sidebar.ColumnMaxWidth);
+        Assert.Equal(SidebarViewModel.MaxWidth, sidebar.ColumnMaxWidth);
     }
 
     [Fact]

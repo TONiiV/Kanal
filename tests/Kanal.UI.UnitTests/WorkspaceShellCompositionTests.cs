@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -64,14 +65,30 @@ public class WorkspaceShellCompositionTests
         window.Close();
     }
 
-    /// <summary>The floor the window refuses to go below still lays the three regions out.</summary>
-    [AvaloniaFact]
-    public void TheNarrowestAllowedWindowStillCarriesAllThreeRegions()
+    /// <summary>
+    /// The narrowest window each pair of widths allows still lays all three regions out inside it.
+    /// Widened sidebars are the case that mattered: against a fixed floor they ran off the right of
+    /// the window, taking the only control that reopens the assistant with them.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(SidebarViewModel.MinWidth)]
+    [InlineData(SidebarViewModel.DefaultWidth)]
+    [InlineData(SidebarViewModel.MaxWidth)]
+    public void TheNarrowestAllowedWindowStillCarriesAllThreeRegions(double sidebars)
     {
-        var (window, _) = Shown(WorkspaceShellViewModel.MinShellWidth);
+        var (window, vm) = Shown();
+        vm.Shell.Left.Width = sidebars;
+        vm.Shell.Right.Width = sidebars;
 
+        window.Width = vm.Shell.MinShellWidth;
+        Dispatcher.UIThread.RunJobs();
+
+        var assistant = Region<SidePanelView>(window);
+        Assert.True(
+            assistant.Bounds.Right <= window.Width + 1,
+            $"assistant ends at {assistant.Bounds.Right} in a {window.Width} px window");
         Assert.True(Region<WorkspaceSidebarView>(window).Bounds.Width >= SidebarViewModel.MinWidth);
-        Assert.True(Region<SidePanelView>(window).Bounds.Width >= SidebarViewModel.MinWidth);
+        Assert.True(assistant.Bounds.Width >= SidebarViewModel.MinWidth);
         Assert.True(
             Region<MeetingRoomView>(window).Bounds.Width >= WorkspaceShellViewModel.TranscriptReserve,
             $"transcript is {Region<MeetingRoomView>(window).Bounds.Width} px at the window floor");
@@ -105,6 +122,42 @@ public class WorkspaceShellCompositionTests
         Assert.Equal(open, transcript.Bounds.Width, precision: 1);
 
         window.Close();
+    }
+
+    /// <summary>
+    /// "Left and right header bars share the centre toolbar's height so the separators line up."
+    /// A shared constant is only a floor: the toolbar outgrows it whenever the selected mode's
+    /// description wraps, so the two sidebars follow the bar's measured height instead.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1320.0)]
+    [InlineData(690.0)]
+    public void TheThreeHeaderRulesLandOnOneLine(double width)
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = width, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var workspace = Rule<WorkspaceSidebarView>(window);
+        Assert.Equal(workspace, Rule<IconBarView>(window), precision: 1);
+        Assert.Equal(workspace, Rule<SidePanelView>(window), precision: 1);
+
+        window.Close();
+    }
+
+    // All three regions start at the top of the window, so where a header's rule falls is that
+    // header's own height.
+    private static double Rule<T>(Window window) where T : Control
+    {
+        var region = Region<T>(window);
+        Assert.Equal(0, region.Bounds.Y);
+        var headers = region.GetVisualDescendants().OfType<Border>()
+            .Where(border => border.BorderThickness.Bottom >= 2 && border.BorderThickness.Top == 0)
+            .ToList();
+        Assert.NotEmpty(headers);
+        return headers[0].Bounds.Height;
     }
 
     /// <summary>

@@ -11,7 +11,7 @@
         Icon="/Assets/kanal.ico"
         Title="Kanal"
         Width="1320" Height="820"
-        MinWidth="{x:Static vm:WorkspaceShellViewModel.MinShellWidth}"
+        MinWidth="{Binding Shell.MinShellWidth}"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
         Background="{StaticResource Sheet}">
@@ -26,10 +26,10 @@
             <ColumnDefinition Width="{Binding Shell.Left.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Left.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Left.ColumnMaxWidth}" />
-            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
             <ColumnDefinition Width="*"
                               MinWidth="{x:Static vm:WorkspaceShellViewModel.TranscriptReserve}" />
-            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
             <ColumnDefinition Width="{Binding Shell.Right.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Right.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Right.ColumnMaxWidth}" />
@@ -37,7 +37,7 @@
 
         <views:WorkspaceSidebarView Grid.Column="0" IsVisible="{Binding !Shell.Left.Collapsed}" />
         <GridSplitter Grid.Column="1" x:Name="WorkspaceSplitter"
-                      Width="{x:Static vm:SidebarViewModel.SplitterWidth}"
+                      Width="{x:Static vm:WorkspaceShellViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
                       IsVisible="{Binding !Shell.Left.Collapsed}"
                       ToolTip.Tip="{l:T sidebar.resize.tip}" />
@@ -49,7 +49,7 @@
         </DockPanel>
 
         <GridSplitter Grid.Column="3" x:Name="AssistantSplitter"
-                      Width="{x:Static vm:SidebarViewModel.SplitterWidth}"
+                      Width="{x:Static vm:WorkspaceShellViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
                       IsVisible="{Binding !Shell.Right.Collapsed}"
                       ToolTip.Tip="{l:T sidebar.resize.tip}" />

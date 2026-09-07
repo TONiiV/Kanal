@@ -5,15 +5,14 @@
              x:Class="Kanal.Host.Views.SidePanelView" x:DataType="vm:MainViewModel">
     <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
-            <Border DockPanel.Dock="Top" MinHeight="{StaticResource HeaderHeight}"
-                    BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Padding="20,9,12,9">
+            <Border DockPanel.Dock="Top" Classes="sidebar-header"
+                    MinHeight="{Binding Shell.HeaderHeight}">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Right" Classes="ghost" x:Name="CollapseAssistant"
+                    <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="CollapseAssistant"
                             Command="{Binding Shell.Right.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
-                        <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}"
-                              Width="8" Height="11" Stretch="Uniform" />
+                        <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}" />
                     </Button>
                     <TextBlock DockPanel.Dock="Left" Classes="label" Text="{l:T sidebar.assistant}" />
                 </DockPanel>

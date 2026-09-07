@@ -10,7 +10,6 @@ public partial class SidebarViewModel : ViewModelBase
     public const double MinWidth = 180;
     public const double MaxWidth = 480;
     public const double DefaultWidth = 272;
-    public const double SplitterWidth = 5;
 
     private double _width = DefaultWidth;
 
@@ -45,7 +44,6 @@ public partial class SidebarViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(Column))]
     [NotifyPropertyChangedFor(nameof(CanExpand))]
     [NotifyPropertyChangedFor(nameof(ColumnMinWidth))]
-    [NotifyPropertyChangedFor(nameof(ColumnMaxWidth))]
     private bool _collapsed;
 
     public bool CanExpand => Collapsed;
@@ -54,7 +52,7 @@ public partial class SidebarViewModel : ViewModelBase
     // the bounds have to be published to the column too - and give way while the sidebar is gone.
     public double ColumnMinWidth => Collapsed ? 0 : MinWidth;
 
-    public double ColumnMaxWidth => Collapsed ? 0 : MaxWidth;
+    public double ColumnMaxWidth => MaxWidth;
 
     [RelayCommand]
     private void Toggle() => Collapsed = !Collapsed;

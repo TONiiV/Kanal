@@ -113,10 +113,19 @@ behaviours are identical, and a mirrored `Left*`/`Right*` pair would be the same
   toolbar's scroller: a collapsed sidebar is reachable only through them, so they may not be the
   part that scrolls out of sight.
 
-Both header bars share the toolbar's height through one `HeaderHeight` resource, so the three
-separators land on a single line across the window. The window carries a floor of 690 px — two
-sidebars at their narrowest, two handles, and the reserve — below which the grid would overflow and
-push the right sidebar, and with it the only control that brings it back, off the screen.
+The three header rules land on one line because the two sidebars **follow the toolbar's measured
+height**, rather than all three sharing a constant. A constant lines them up only while the bar fits
+it: with a microphone mode selected and no local model downloaded, the mode picker's description
+wraps and the bar measures 96 px against the sidebars' 76 — a five-to-twenty pixel step in the one
+rule that runs across the whole window. `Grid.IsSharedSizeScope` was tried first and does not
+equalise these rows. So the bar reports its own height to the shell and the sidebars bind to it,
+which also survives whatever #66 does to the bar's contents.
+
+The window's floor is computed from the widths the sidebars currently hold, not fixed. Two sidebars
+dragged to 480 demand 1290 px; against a fixed 690 the window could be shrunk until the assistant —
+and the only control that reopens it — was off the right of the screen with no way back. The two
+splitter columns are pinned rather than `Auto` for the same reason: `Auto` measured a pixel wider
+than the handle, and a floor cannot account for a column whose width it does not set.
 
 Deliberate limitations, all for the ticket queue rather than this PR:
 

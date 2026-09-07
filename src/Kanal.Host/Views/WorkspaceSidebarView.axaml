@@ -5,16 +5,15 @@
              x:Class="Kanal.Host.Views.WorkspaceSidebarView" x:DataType="vm:MainViewModel">
     <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
         <DockPanel LastChildFill="False">
-            <Border DockPanel.Dock="Top" MinHeight="{StaticResource HeaderHeight}"
-                    BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Padding="20,9,12,9">
+            <Border DockPanel.Dock="Top" Classes="sidebar-header"
+                    MinHeight="{Binding Shell.HeaderHeight}">
                 <DockPanel LastChildFill="False">
                     <TextBlock DockPanel.Dock="Left" Classes="label" Text="{l:T sidebar.workspace}" />
-                    <Button DockPanel.Dock="Right" Classes="ghost" x:Name="CollapseWorkspace"
+                    <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="CollapseWorkspace"
                             Command="{Binding Shell.Left.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
-                        <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}"
-                              Width="8" Height="11" Stretch="Uniform" />
+                        <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}" />
                     </Button>
                 </DockPanel>
             </Border>

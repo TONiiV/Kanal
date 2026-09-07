@@ -5,25 +5,23 @@
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.IconBarView" x:DataType="vm:MainViewModel">
     <StackPanel>
-        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
-                MinHeight="{StaticResource HeaderHeight}" Padding="16,9">
+        <Border x:Name="Bar" BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                MinHeight="{x:Static vm:WorkspaceShellViewModel.DefaultHeaderHeight}" Padding="16,9">
             <!-- Outside the scroller: a collapsed sidebar is reachable only through these. -->
             <DockPanel>
-                <Button DockPanel.Dock="Left" Classes="ghost" x:Name="ExpandWorkspace"
+                <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="ExpandWorkspace"
                         Margin="0,0,10,0" IsVisible="{Binding Shell.Left.CanExpand}"
                         Command="{Binding Shell.Left.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.workspace.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.workspace.show.tip}">
-                    <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}"
-                          Width="8" Height="11" Stretch="Uniform" />
+                    <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}" />
                 </Button>
-                <Button DockPanel.Dock="Right" Classes="ghost" x:Name="ExpandAssistant"
+                <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="ExpandAssistant"
                         Margin="10,0,0,0" IsVisible="{Binding Shell.Right.CanExpand}"
                         Command="{Binding Shell.Right.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.assistant.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.assistant.show.tip}">
-                    <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}"
-                          Width="8" Height="11" Stretch="Uniform" />
+                    <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}" />
                 </Button>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <!-- Two clusters, not one undifferentiated run. What drives the meeting - transport,
