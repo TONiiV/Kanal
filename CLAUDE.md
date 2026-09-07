@@ -1,6 +1,6 @@
 # Kanal — working notes for Claude
 
-Internal meeting-translation tool. Avalonia (.NET 9) desktop host captures room audio, streams it
+Internal meeting-translation tool. Avalonia (.NET 10) desktop host captures room audio, streams it
 through a pluggable ASR/MT chain, and broadcasts **text only** to read-only mobile clients. Built for
 one real scenario: a zh/de/pl meeting with no shared language. See `README.md` for layout and
 `docs/PRD-v0.3.md` for requirements.
@@ -12,8 +12,6 @@ dotnet build Kanal.slnx
 ```bash
 dotnet test
 ```
-
-(If only .NET 10 is installed, tests need `DOTNET_ROLL_FORWARD=Major dotnet test`.)
 
 ## Working practices
 
@@ -28,8 +26,28 @@ dotnet test
   branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
   the branch; a leftover worktree keeps a merged branch checked out, which blocks
   `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+- **Comments are the exception.** Prose in a source file is prose nobody re-reads when the code
+  beneath it changes, so the default is no comment — in C#, TypeScript, and the JavaScript inside
+  `web/index.html` alike. Keep one only if it carries what a competent reader cannot derive from the
+  code: a **trap** that gets "fixed" back if it is not recorded (Avalonia's reflection binding
+  listens for the indexer name `"Item"`, never WPF's `"Item[]"` — see `Localizer.IndexerName`;
+  without the note, every bound string silently freezes on the next language switch); an **external
+  constraint or attribution** (the OpenCC `TSCharacters` table is Apache-2.0 —
+  `Kanal.Core/Text/SimplifiedChinese.cs`); or a **counter-intuitive decision** whose rejected
+  alternative looks better at a glance. One line, stating the constraint — not the story. Delete
+  everything else: XML doc restating the signature (`/// <summary>ISO code of the language the
+  chrome is currently in.</summary>` over `CurrentLanguage`), prose narrating the lines below it,
+  atmospheric description on enum members (`LevelMeter`'s "lost in the room"), divider banners,
+  commented-out code. Kanal is an application, not a published library — XML doc is no API contract
+  here, and no project sets `GenerateDocumentationFile`, so deleting it cannot break the build. A
+  rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.3.md`, where design
+  history is already kept and will actually be maintained — not in the source file.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
+- **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
+  bullet to [`CHANGELOG.md`](CHANGELOG.md) under the heading being worked towards — written for the
+  operator, not the committer. Refactors, tests and docs add nothing. A version heading gets its
+  date only when that version is released.
 
 ## Architecture invariants
 
@@ -44,6 +62,11 @@ dotnet test
 - `web/index.html` and `docs/index.html` must stay **byte-identical**; `docs/` is the GitHub Pages copy.
 
 ## Design Context
+
+For the next host UI, follow [the approved meeting-workspace design](docs/design/meeting-workspace.md).
+It supersedes the historical host layout, chrome-colour and tooltip guidance below where they conflict.
+The [title/listening-agent discussion](docs/design/meeting-intelligence.md) separates confirmed goals
+from open decisions; do not implement its recommendations as if the user had accepted them.
 
 Full context lives in [`.impeccable.md`](.impeccable.md) — read it before any UI work. Summary:
 

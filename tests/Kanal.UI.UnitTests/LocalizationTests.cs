@@ -55,6 +55,8 @@ public class LocalizationTests
         ("de", "transport.pause"),
         ("de", "export.button"),
         ("de", "column.original"),
+        ("de", "log.level.debug"),
+        ("de", "log.level.info"),
         ("pl", "transport.start"),
     ];
 

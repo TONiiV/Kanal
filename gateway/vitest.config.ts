@@ -2,6 +2,9 @@ import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
 
 export default defineWorkersConfig({
   test: {
+    // The phone-page state machine runs under Node after Vitest. Worker shims intentionally do
+    // not implement fs/vm, so keep that one executable test out of this isolated runtime.
+    include: ["test/**/*.spec.ts"],
     poolOptions: {
       workers: {
         wrangler: { configPath: "./wrangler.toml" },

@@ -51,7 +51,10 @@ internal sealed class GladiaWire
 
                 case "error":
                     yield return new AsrEvent.Error(
-                        GetStringAt(root, "data", "message") ?? GetString(root, "message") ?? json,
+                        GetStringAt(root, "data", "message")
+                        ?? GetString(root, "message")
+                        // never the frame itself: it quotes the request, which is an utterance
+                        ?? DescribeError(root),
                         Fatal: false);
                     break;
 
@@ -143,6 +146,11 @@ internal sealed class GladiaWire
             _ => null,
         };
     }
+
+    private static string DescribeError(JsonElement root) =>
+        GetIntAt(root, "data", "code") is { } code
+            ? $"the transcription service rejected a request ({code})"
+            : "the transcription service reported an error with no message";
 
     private static string? GetString(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object &&
