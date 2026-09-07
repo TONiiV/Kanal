@@ -19,6 +19,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The meeting assistant on the right now has two tabs. **Points and decisions** collects what the
+  meeting settled, grouped by topic, with the words that support each one printed underneath — and
+  nothing is recorded as agreed until you confirm it. **Speakers** is the naming and merging you
+  already had. Until a listening model is connected the first tab says so plainly, so an empty
+  panel is never mistaken for a meeting that decided nothing.
 - Workspaces keep their meeting records in operator-selected local folders, survive restarts,
   and report missing or damaged records without hiding the meetings that remain readable.
 
