@@ -11,6 +11,9 @@ public sealed class WorkspaceStore(string registryPath)
     public const string MeetingFileName = "meeting.json";
     private const string MeetingsFolderName = "meetings";
     private const string LogCategory = "workspaces";
+    private const string NeedsTitle = "A meeting needs a title.";
+    private const string NeedsName = "A workspace needs a name.";
+    private const string NotAnId = "That is not a meeting id.";
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
@@ -39,7 +42,7 @@ public sealed class WorkspaceStore(string registryPath)
     public WorkspaceResult CreateWorkspace(string name, string rootPath)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return Refused(rootPath, "A workspace needs a name.");
+            return Refused(rootPath, NeedsName);
         if (string.IsNullOrWhiteSpace(rootPath))
             return Refused(rootPath, "A workspace needs a folder.");
         if (File.Exists(rootPath))
@@ -50,6 +53,13 @@ public sealed class WorkspaceStore(string registryPath)
         // Adopted under its own name, never overwritten: picking last year's folder means "open this".
         if (Directory.Exists(rootPath) && File.Exists(Path.Combine(rootPath, WorkspaceFileName)))
             return OpenWorkspace(rootPath);
+
+        var (listed, trouble) = ReadRegistry();
+        if (trouble is not null)
+            return new WorkspaceResult(null, trouble);
+        if (listed.FirstOrDefault(e => SamePath(e.RootPath!, rootPath)) is { } already)
+            return Refused(
+                rootPath, $"That folder is already the workspace \"{already.Name}\".");
 
         var workspace = new Workspace(NewId(), name.Trim(), rootPath, DateTimeOffset.UtcNow);
         try
@@ -85,7 +95,7 @@ public sealed class WorkspaceStore(string registryPath)
     public WorkspaceResult RenameWorkspace(string id, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return Refused(registryPath, "A workspace needs a name.");
+            return Refused(registryPath, NeedsName);
 
         var (entries, problem) = ReadRegistry();
         if (problem is not null)
@@ -169,8 +179,14 @@ public sealed class WorkspaceStore(string registryPath)
             var (stored, trouble) = Read<StoredMeeting>(file);
             if (trouble is not null)
                 problems.Add(trouble);
+            else if (stored!.Id != Path.GetFileName(path))
+                // A duplicated folder would otherwise list twice under one id, and only one of
+                // the two could ever be renamed or deleted again.
+                problems.Add(new StoreProblem(
+                    StoreProblemKind.Unreadable, path,
+                    "That meeting record does not belong to the folder it is in."));
             else
-                meetings.Add(stored!.ToRecord(workspaceId));
+                meetings.Add(stored.ToRecord(workspaceId));
         }
 
         return new MeetingListing(meetings, problems);
@@ -179,7 +195,7 @@ public sealed class WorkspaceStore(string registryPath)
     public MeetingResult CreateMeeting(string workspaceId, string title)
     {
         if (string.IsNullOrWhiteSpace(title))
-            return RefusedMeeting(workspaceId, "A meeting needs a title.");
+            return RefusedMeeting(workspaceId, NeedsTitle);
 
         var (workspace, problem) = Locate(workspaceId);
         if (problem is not null)
@@ -194,9 +210,11 @@ public sealed class WorkspaceStore(string registryPath)
     public MeetingResult SaveMeeting(MeetingRecord meeting)
     {
         if (!IsFolderName(meeting.Id))
-            return RefusedMeeting(meeting.Id, "That is not a meeting id.");
+            return RefusedMeeting(meeting.Id, NotAnId);
         if (string.IsNullOrWhiteSpace(meeting.Title))
-            return RefusedMeeting(meeting.Id, "A meeting needs a title.");
+            return RefusedMeeting(meeting.Id, NeedsTitle);
+        if (!IsFileName(meeting.TranscriptFileName) || !IsFileName(meeting.AudioFileName))
+            return RefusedMeeting(meeting.Id, "An artefact is named by file, not by path.");
 
         var (workspace, problem) = Locate(meeting.WorkspaceId);
         if (problem is not null)
@@ -221,7 +239,7 @@ public sealed class WorkspaceStore(string registryPath)
     public MeetingResult RenameMeeting(string workspaceId, string meetingId, string title)
     {
         if (string.IsNullOrWhiteSpace(title))
-            return RefusedMeeting(meetingId, "A meeting needs a title.");
+            return RefusedMeeting(meetingId, NeedsTitle);
 
         var (existing, problem) = ReadMeeting(workspaceId, meetingId);
         return problem is not null
@@ -256,7 +274,7 @@ public sealed class WorkspaceStore(string registryPath)
         // An id becomes a folder name, so ".." here would delete the workspace it lives in.
         if (!IsFolderName(meetingId))
             return (null, new StoreProblem(
-                StoreProblemKind.Invalid, meetingId, "That is not a meeting id."));
+                StoreProblemKind.Invalid, meetingId, NotAnId));
 
         var (workspace, problem) = Locate(workspaceId);
         return problem is null ? (FolderFor(workspace!, meetingId), null) : (null, problem);
@@ -326,7 +344,12 @@ public sealed class WorkspaceStore(string registryPath)
             return new WorkspaceResult(null, problem);
 
         var index = entries.FindIndex(e => e.Id == workspace.Id);
-        if (index >= 0 && entries[index].RootPath != workspace.RootPath)
+
+        // Two folders, one identity: a restored backup or a share mounted twice. Only a copy if
+        // the folder already listed is still there — otherwise this is the same workspace, moved.
+        if (index >= 0
+            && !SamePath(entries[index].RootPath!, workspace.RootPath)
+            && Directory.Exists(entries[index].RootPath))
             return Refused(
                 workspace.RootPath,
                 $"That folder is a copy of the workspace \"{entries[index].Name}\", " +
@@ -382,11 +405,20 @@ public sealed class WorkspaceStore(string registryPath)
     private static bool IsFolderName(string? id) =>
         !string.IsNullOrEmpty(id) && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
+    // A name, never a path: these are resolved against the meeting's own folder.
+    private static bool IsFileName(string? name) =>
+        name is null || (name.Length > 0 && name is not ("." or "..") && Path.GetFileName(name) == name);
+
+    private static bool SamePath(string a, string b) =>
+        string.Equals(a, b, OperatingSystem.IsLinux()
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase);
+
     private static string Absolute(string path)
     {
         try
         {
-            return Path.GetFullPath(path);
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         }
         catch (Exception)
         {
@@ -420,12 +452,14 @@ public sealed class WorkspaceStore(string registryPath)
     {
         int SchemaVersion { get; }
 
+        [JsonIgnore]
         bool Complete { get; }
     }
 
     private sealed record StoredRegistry(int SchemaVersion, List<StoredRegistryEntry>? Workspaces)
         : IStoredRecord
     {
+        [JsonIgnore]
         public bool Complete => Workspaces is not null && Workspaces.TrueForAll(w => w.Complete);
     }
 
@@ -447,6 +481,7 @@ public sealed class WorkspaceStore(string registryPath)
     private sealed record StoredWorkspace(
         int SchemaVersion, string? Id, string? Name, DateTimeOffset CreatedAt) : IStoredRecord
     {
+        [JsonIgnore]
         public bool Complete => !string.IsNullOrWhiteSpace(Id) && !string.IsNullOrWhiteSpace(Name);
 
         internal static StoredWorkspace From(Workspace w) =>
@@ -466,7 +501,8 @@ public sealed class WorkspaceStore(string registryPath)
         string? TranscriptFileName,
         string? AudioFileName) : IStoredRecord
     {
-        public bool Complete => IsFolderName(Id) && !string.IsNullOrWhiteSpace(Title);
+        [JsonIgnore]
+        public bool Complete => !string.IsNullOrWhiteSpace(Id) && !string.IsNullOrWhiteSpace(Title);
 
         internal static StoredMeeting From(MeetingRecord m) =>
             new(WorkspaceStore.SchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,

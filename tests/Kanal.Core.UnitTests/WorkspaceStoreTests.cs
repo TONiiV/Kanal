@@ -231,6 +231,7 @@ public class WorkspaceStoreTests : IDisposable
             Assert.Equal(
                 WorkspaceStore.SchemaVersion,
                 document.RootElement.GetProperty("schemaVersion").GetInt32());
+            Assert.False(document.RootElement.TryGetProperty("complete", out _));
         }
     }
 
@@ -427,10 +428,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
     }
 
-    /// <summary>
-    /// A meeting id becomes a folder name. A hand-edited ".." would list as an ordinary meeting
-    /// and then, on Delete, take the whole workspace and every transcript in it.
-    /// </summary>
     [Fact]
     public void AMeetingIdThatWouldEscapeItsWorkspaceIsRefused()
     {
@@ -446,16 +443,13 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
+        // and Delete on it would have resolved to the workspace root
         Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
         Assert.Equal(StoreProblemKind.Invalid, store.DeleteMeeting(workspace.Id, "..")!.Kind);
         Assert.Null(store.MeetingFolder(workspace.Id, ".."));
         Assert.True(File.Exists(kept));
     }
 
-    /// <summary>
-    /// A copied folder — a restored backup, a share mounted twice — carries the original's id.
-    /// Registering it by id alone would point the one row at the copy and lose the original.
-    /// </summary>
     [Fact]
     public void ACopiedWorkspaceFolderIsReportedRatherThanReplacingTheOriginal()
     {
@@ -509,6 +503,87 @@ public class WorkspaceStoreTests : IDisposable
             File.SetUnixFileMode(
                 meetings, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
+    }
+
+    [Fact]
+    public void AWorkspaceThatMovedIsOpenedRatherThanMistakenForACopy()
+    {
+        var was = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", was));
+        var meeting = Created(Store().CreateMeeting(workspace.Id, "Tooling review"));
+        var now = Path.Combine(_root, "moved");
+        Directory.Move(was, now);
+
+        var moved = Created(Store().OpenWorkspace(now));
+
+        Assert.Equal(workspace.Id, moved.Id);
+        Assert.Equal(now, Assert.Single(Store().ListWorkspaces().Workspaces).RootPath);
+        Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
+    }
+
+    /// <summary>A folder picker hands back a trailing separator; the same folder is not a copy of itself.</summary>
+    [Fact]
+    public void TheSameFolderSpeltDifferentlyIsStillTheSameWorkspace()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        var again = Created(Store().OpenWorkspace(folder + Path.DirectorySeparatorChar));
+
+        Assert.Equal(workspace.Id, again.Id);
+        Assert.Single(Store().ListWorkspaces().Workspaces);
+    }
+
+    /// <summary>Duplicating a meeting folder would otherwise list one id twice, and only one could be deleted.</summary>
+    [Fact]
+    public void ADuplicatedMeetingFolderIsReportedRatherThanListedTwice()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var copy = Path.Combine(workspace.RootPath, "meetings", "copy-of-it");
+        Directory.CreateDirectory(copy);
+        File.Copy(
+            Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+            Path.Combine(copy, WorkspaceStore.MeetingFileName));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Equal(meeting.Id, Assert.Single(listing.Meetings).Id);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    /// <summary>Artefacts are named by file so a workspace can move; a path would reach outside it.</summary>
+    [Fact]
+    public void AnArtefactNamedByPathIsRefused()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        var result = store.SaveMeeting(
+            meeting with { TranscriptFileName = Path.Combine("..", "..", "elsewhere.md") });
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Null(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).TranscriptFileName);
+    }
+
+    /// <summary>One folder, one row — even when the marker file inside it has been lost.</summary>
+    [Fact]
+    public void AFolderAlreadyOnTheListIsNotMadeIntoASecondWorkspace()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        File.Delete(Path.Combine(folder, WorkspaceStore.WorkspaceFileName));
+
+        var result = store.CreateWorkspace("Beta", folder);
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Equal(workspace.Id, Assert.Single(Store().ListWorkspaces().Workspaces).Id);
     }
 
     [Fact]

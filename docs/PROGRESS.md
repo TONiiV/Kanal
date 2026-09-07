@@ -49,14 +49,19 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   not half-parsed, because the next save would write the fields it did not understand back as loss.
   A record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
   field with null, which would list a phantom meeting whose folder no later operation could open.
-  And a meeting id has to survive being used as a folder name — a hand-edited `"id": ".."` would
-  otherwise list as an ordinary meeting whose Delete button took the workspace and every transcript
-  in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, checked on the way in and on the way out.
+  And a record has to agree with where it is: an id becomes a folder name, so a hand-edited
+  `"id": ".."` would otherwise have listed as an ordinary meeting whose Delete button took the
+  workspace and every transcript in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, and the folder
+  a record sits in is the id that counts — which also stops a duplicated folder from listing one
+  meeting twice, where only one of the two could ever be renamed or deleted again. The transcript
+  and audio fields are held to the same rule: a file name, never a path.
 - Adding a folder that already holds a workspace adopts it under the name already on disk — picking
   last year's folder means "open this", so the stored name outranks the one typed into the box. A
   *copy* of such a folder — a restored backup, a share mounted twice — carries the original's id, so
   it is reported rather than adopted; registering it by id alone would silently repoint the one row
-  at the copy and leave the original's meetings unreachable. Folder paths are stored absolute.
+  at the copy and leave the original's meetings unreachable. A workspace that has simply *moved* is
+  not that: the copy is only a copy while the folder already listed is still there. Paths are stored
+  absolute and compared without their trailing separator, because a folder picker supplies one.
 - `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
   workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
   the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a
