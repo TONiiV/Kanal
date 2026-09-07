@@ -59,7 +59,18 @@ becomes points, decisions and speakers.
 
 **What this deliberately does not do.** The capture picker and the `?` flyout are the first things
 clipped when the window narrows or the status line grows; both are set before a meeting rather than
-during one. The recording state machine is untouched — start, pause/resume, stop, load cancellation
+during one.
+
+The marks also shift sideways when the status line changes length, because the line shares the
+transport's `Auto` column: pressing pause swaps "Live" for "Paused - nothing captured" and the marks
+slide about 68 px left. Reserving a fixed width for the line would hold them still, but at the
+default 1320 px window the bar has only about 50 px of slack per side, and reserving the widest
+state's 135 px would clip the capture picker permanently. Holding the marks still is worth less than
+keeping a control reachable, so this stays. Should the marks need to be fixed, the answer is a
+narrower bar budget - a sidebar collapsed by default, or the state line moved off the bar
+entirely - not a spacer paid for out of the left cluster.
+
+The recording state machine is untouched — start, pause/resume, stop, load cancellation
 and the stop-in-progress guard are the same code, and `MeetingSessionTests` still holds the line
 that a paused session reaches neither the ASR provider nor the WAV writer.
 
