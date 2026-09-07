@@ -67,6 +67,8 @@
             <StreamGeometry x:Key="GlyphPlus">M6,0 H8 V6 H14 V8 H8 V14 H6 V8 H0 V6 H6 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphArrowDown">M6,0 H8 V7 H12 L7,13.5 L2,7 H6 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphArrowUp">M6,14 H8 V7 H12 L7,0.5 L2,7 H6 Z</StreamGeometry>
+            <!-- F1: the ring is an annulus, and even-odd would fill the hole back in. -->
+            <StreamGeometry x:Key="GlyphRegenerate">F1 M7,0.6 A6.4,6.4 0 1 1 0.9,9.2 L2.8,8.6 A4.4,4.4 0 1 0 7,2.6 Z M6.2,0 H7.4 V5.2 H6.2 Z M2.6,2.4 L7.4,0 V5.2 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphEllipsis">M0,0 H2.6 V2.6 H0 Z M5.7,0 H8.3 V2.6 H5.7 Z M11.4,0 H14 V2.6 H11.4 Z</StreamGeometry>
 
             <!-- A panel closes towards its own edge and opens away from it. -->

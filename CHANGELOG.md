@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting can now name itself. With a local translation model in use, Kanal proposes a short
+  title once the meeting is a minute or so in, and a control beside the title asks for another one
+  at any time. Click the title to rename it by hand — that name is kept, is never overwritten by a
+  suggestion, and is saved with the meeting record.
+
 - The meeting title now sits above the transcript, with the room's language flags on the same line.
 - Settings is six tabs down the left instead of one long scroll: General, Audio input,
   Transcription, Translation, Summarisation and Workspace. Every setting that was there before is

@@ -89,8 +89,11 @@ public class MeetingTitleRowTests : IDisposable
         var title = Named(room, "MeetingTitle");
         var flags = Named(room, "RoomLanguages");
 
-        Assert.Same(title.Parent, flags.Parent);
-        Assert.Same(room.Content, ((Control)title.Parent!).Parent);
+        // The title sits in its own group beside the note now; what has to stay true is that the
+        // group and the flags are on one row, and that row is the top of the transcript.
+        var row = (Control)flags.Parent!;
+        Assert.Contains(row, title.GetLogicalAncestors());
+        Assert.Same(room.Content, row.Parent);
 
         window.Close();
     }

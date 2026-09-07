@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
@@ -58,6 +59,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
     private int _dragSource = -1;
+    private IMeetingTitler? _titler;
 
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
@@ -82,14 +84,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<IAudioCaptureService?>? captureFactory = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
         Func<DateTimeOffset>? utcNow = null,
-        Func<WorkspaceStore>? workspaces = null)
+        Func<WorkspaceStore>? workspaces = null,
+        IMeetingTitler? titler = null)
     {
+        _titler = titler;
+        Titling = new MeetingTitling(() => _titler);
+        Titling.Changed += OnTitlingChanged;
         Sidebar = new WorkspaceSidebarViewModel(
             (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))());
         Sidebar.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(WorkspaceSidebarViewModel.SelectedMeeting))
-                OnPropertyChanged(nameof(MeetingTitle));
+            if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
+                return;
+            // Browsing to another record must not carry this room's generated name onto it.
+            Titling.Reset();
+            OnPropertyChanged(nameof(MeetingTitle));
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
@@ -221,9 +230,70 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(MeetingTitle))]
     private string _loadedRoomId = "";
 
+    public MeetingTitling Titling { get; }
+
     public string MeetingTitle =>
-        Sidebar.SelectedMeeting?.Title
+        Titling.Title
+        ?? Sidebar.SelectedMeeting?.Title
         ?? (LoadedRoomId.Length > 0 ? LoadedRoomId : L["meeting.untitled"]);
+
+    public bool CanNameMeeting => Titling.CanSuggest;
+
+    public string TitleNote =>
+        Titling.IsSuggesting ? L["title.naming"] : Titling.Failed ? L["title.failed"] : "";
+
+    public bool HasTitleNote => TitleNote.Length > 0;
+
+    [ObservableProperty]
+    private bool _isRenamingTitle;
+
+    [ObservableProperty]
+    private string _titleDraft = "";
+
+    [RelayCommand]
+    private void BeginRenameTitle()
+    {
+        TitleDraft = MeetingTitle;
+        IsRenamingTitle = true;
+    }
+
+    [RelayCommand]
+    private void CommitRenameTitle()
+    {
+        IsRenamingTitle = false;
+        if (TitleDraft.Trim().Length == 0)
+            return;
+
+        Titling.Rename(TitleDraft);
+        Sidebar.RenameSelectedMeeting(TitleDraft);
+    }
+
+    [RelayCommand]
+    private void CancelRenameTitle() => IsRenamingTitle = false;
+
+    [RelayCommand]
+    private async Task RegenerateTitle()
+    {
+        await Titling.RegenerateAsync(FinalLines());
+        if (Titling.Title is { } named)
+            Sidebar.RenameSelectedMeeting(named);
+    }
+
+    private IReadOnlyList<string> FinalLines() =>
+        _session is null
+            ? []
+            : [.. _session.Room.Snapshot().Utterances
+                .Where(u => u.State == UtteranceState.Final)
+                .Select(u => u.SrcText)];
+
+    private void OnTitlingChanged()
+    {
+        OnPropertyChanged(nameof(MeetingTitle));
+        OnPropertyChanged(nameof(TitleNote));
+        OnPropertyChanged(nameof(HasTitleNote));
+        OnPropertyChanged(nameof(CanNameMeeting));
+        RegenerateTitleCommand.NotifyCanExecuteChanged();
+    }
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
@@ -706,6 +776,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Speakers.Clear();
         Assistant.Forget();
         LoadedRoomId = "";
+        Titling.Reset();
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
@@ -749,6 +820,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var mt = plan.Mt;
         _asr = asr;
         _mt = mt;
+        _titler = plan.Titler;
+        OnTitlingChanged();
 
         // A local translation model loads to a working state *before* the room opens. Loading
         // it on the first final — which is what lazy loading did — meant the meeting's opening
@@ -1376,6 +1449,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ApplyUtterance(Utterance u)
     {
+        if (u.State == UtteranceState.Final)
+            _ = Titling.OfferAsync(FinalLines());
+
         var (speakerName, speakerColor) = ResolveSpeaker(u.SpeakerTag);
         foreach (var column in Columns)
         {
