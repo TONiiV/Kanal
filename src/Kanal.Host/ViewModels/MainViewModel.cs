@@ -1466,7 +1466,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.SpeakerTag = u.SpeakerTag;
             bubble.SpeakerName = speakerName;
             bubble.SpeakerColor = speakerColor;
-            bubble.SourceLang = u.SrcLang.ToUpperInvariant();
+            bubble.SourceLang = Spoken(u.SrcLang);
             bubble.IsPartial = u.State == UtteranceState.Partial;
             bubble.CodeSwitch = u.CodeSwitch;
             // each column reads in its own language: the source column carries the transcript
@@ -1478,6 +1478,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
     }
+
+    // "und" is Gladia's answer when it could not place the language; printed raw it reads like an
+    // ISO code the operator has never heard of rather than an admission.
+    private static string Spoken(string srcLang) =>
+        srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
     private void ApplySpeaker(Speaker speaker)
     {

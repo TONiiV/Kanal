@@ -23,7 +23,11 @@ a prior; the benefit is that the label under an utterance is now a fact rather t
 be ignored is the one a later reader wires back up. A local ASR provider that genuinely wants a
 prior can reintroduce it with a consumer attached.
 
-The display half turned out to be right already, and now has a guard: `UnexpectedLanguageTests`
+When the recogniser cannot place a language at all it answers `und`, and upper-cased raw that reads
+like an ISO code the operator has never heard of rather than an admission. Host and phone both now
+name it as unknown, in the reader's own language.
+
+The rest of the display half turned out to be right already, and now has a guard: `UnexpectedLanguageTests`
 starts a zh/de/pl room, has one English sentence spoken into it, and asserts every column shows `EN`,
 no column claims to be the original, and the English words stay on screen under each translation.
 

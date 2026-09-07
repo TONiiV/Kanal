@@ -69,6 +69,7 @@
   "speaker.apply.tip": "Namen übernehmen (oder Eingabetaste)",
   "column.original": "· ORIGINAL",
   "column.original.tip": "In dieser Sprache gesprochen — Transkript, keine Übersetzung",
+  "lang.unknown": "UNBEKANNT",
   "column.codeswitch.tip": "Gemischte Sprache",
   "column.drag.tip": "Ziehen, um diese Spalte zu verschieben — oder Alt+← / Alt+→",
   "status.idle": "Bereit.",

@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Providers.Testing;
+using Kanal.Host.Localization;
 
 namespace Kanal.UI.UnitTests;
 
@@ -41,6 +42,30 @@ public class UnexpectedLanguageTests
             Assert.Equal("EN", bubble.SourceLang);
             Assert.False(bubble.IsTranscript);
             Assert.Equal("We need the ISO 7599 samples before Friday.", bubble.SourceText);
+        }
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task ALanguageTheRecogniserCouldNotPlaceSaysSoRatherThanReadingLikeACode()
+    {
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(
+                script: [new FakeAsrProvider.Line("S01", "und", "…szybciej niż KX-4402.")],
+                loop: true),
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await WaitForAsync(() => vm.Columns.All(c => c.Bubbles.Any(b => !b.IsPartial)));
+
+        foreach (var column in vm.Columns)
+        {
+            var bubble = column.Bubbles.First(b => !b.IsPartial);
+            Assert.Equal(Localizer.Instance["lang.unknown"], bubble.SourceLang);
+            Assert.False(bubble.IsTranscript);
         }
 
         await vm.StopCommand.ExecuteAsync(null);

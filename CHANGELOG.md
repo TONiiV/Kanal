@@ -26,7 +26,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   than showing controls that would do nothing.
 - If somebody speaks a language the room has no column for, Kanal now says which language it was
   instead of picking one of the columns and calling it the original. The words that were actually
-  said stay on screen under every translation.
+  said stay on screen under every translation. When it cannot tell which language was spoken, it
+  says so rather than printing a code.
 - The left sidebar is now a workspace. Search your meetings, start a new one with the button beside
   the search box, switch between projects, and reach import and export from each meeting's own
   menu. A record that cannot be read is reported instead of quietly shrinking the list.
