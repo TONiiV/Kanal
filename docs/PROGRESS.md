@@ -18,10 +18,13 @@ and nothing in the host had built one. The transcript/summary/decision tabs of s
 same: never built, so there was nothing to remove. Both are recorded here rather than silently
 counted as delivered.
 
-The title is `SelectedMeeting.Title` when the operator is browsing a record, the live room id while
-a room runs, and a placeholder otherwise — never blank. Generating a title with a local model and
-renaming it by hand are [#73](https://github.com/TONiiV/Kanal/issues/73); this is the row that
-displays whatever those produce.
+The title names whatever transcript is on screen: `SelectedMeeting.Title` when the operator is
+browsing a record, otherwise the id of the room that is loaded, otherwise a placeholder — never
+blank. `LoadedRoomId` is cleared when the *next* room opens rather than when this one stops,
+because `Stop` deliberately leaves the session in place for rename, merge and export; a row reading
+"New meeting" above a finished transcript would name the wrong thing. Generating a title with a
+local model and renaming it by hand are [#73](https://github.com/TONiiV/Kanal/issues/73); this is
+the row that displays whatever those produce.
 
 One existing guard moved rather than weakened. `SettingsTheJoinCodeAndTheFlagsMovedOutOfTheirOldHomes`
 asserted the flags button was docked to the top of the transcript; the flags are now inside the

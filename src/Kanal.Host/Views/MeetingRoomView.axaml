@@ -35,35 +35,35 @@
 
     <DockPanel>
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="24,18,24,0" ColumnSpacing="16">
-        <TextBlock Grid.Column="0" x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
-                   FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
-                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                   Foreground="{StaticResource Ink}" />
+            <TextBlock Grid.Column="0" x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
+                       FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                       Foreground="{StaticResource Ink}" />
 
-        <Button Grid.Column="1" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
-                HorizontalAlignment="Right" Click="OnLanguagesClick"
-                IsEnabled="{Binding !IsRunning}"
-                ToolTip.Tip="{l:T languages.tip}"
-                AutomationProperties.Name="{l:T languages.tip}">
-            <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
-                <ItemsControl ItemsSource="{Binding SelectedLanguages}" VerticalAlignment="Center">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="-8" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:LanguageOption">
-                            <Border Background="{StaticResource Sheet}" CornerRadius="13" Padding="2">
-                                <controls:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <TextBlock Text="{Binding SelectedLanguageSummary}" FontSize="12"
-                           Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
-            </StackPanel>
-        </Button>
+            <Button Grid.Column="1" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
+                    HorizontalAlignment="Right" Click="OnLanguagesClick"
+                    IsEnabled="{Binding !IsRunning}"
+                    ToolTip.Tip="{l:T languages.tip}"
+                    AutomationProperties.Name="{l:T languages.tip}">
+                <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                    <ItemsControl ItemsSource="{Binding SelectedLanguages}" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="-8" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LanguageOption">
+                                <Border Background="{StaticResource Sheet}" CornerRadius="13" Padding="2">
+                                    <controls:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding SelectedLanguageSummary}" FontSize="12"
+                               Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
         </Grid>
 
         <Panel>
