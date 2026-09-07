@@ -21,12 +21,16 @@ public sealed record MeetingRecord(
 
 public enum StoreProblemKind
 {
+    Invalid,
+
     NotFound,
 
-    /// <summary>Known to the list, but the folder is not there — an unplugged drive, a moved directory.</summary>
+    /// <summary>Known to the list, but not on disk — an unplugged drive, a moved folder.</summary>
     FolderMissing,
 
     Unreadable,
+
+    Unwritable,
 
     UnsupportedVersion,
 }

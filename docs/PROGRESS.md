@@ -39,14 +39,23 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   list cannot be a scan of folders that happen to be reachable.
 - Meeting folders are named by id, never by title. Two meetings about the same thing on the same
   day is the ordinary case in this room, not the odd one, and neither may land on the other.
-- Failures are reported next to whatever could still be read, never instead of it: a vanished
-  folder, a hand-edited file, or a record written by a newer Kanal each produce a `StoreProblem`
-  while the surviving records still list. An empty list where a year of meetings used to be is the
-  one outcome the store must never produce — so a later schema version is refused rather than
-  half-parsed, since the next save would write the dropped fields back as loss.
-- Adding a folder that already holds a workspace adopts it, identity intact; `ForgetWorkspace`
-  removes the row and touches no file. Removing something from a sidebar must not be the same
-  gesture as deleting the operator's only copy.
+- Failures are reported next to whatever could still be read, never instead of it. An empty list
+  where a year of meetings used to be is the one outcome the store may never produce, so a vanished
+  folder, an unopenable file, a corrupt payload, an orphaned meeting folder, and a record written by
+  a newer Kanal each produce a `StoreProblem` while the surviving records still list. `StoreProblem`
+  distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
+  (plug the drive in), `Unreadable`, `Unwritable`, `UnsupportedVersion`.
+- Two things a JSON deserializer does quietly that this store refuses. A later schema version is not
+  half-parsed, because the next save would write the fields it did not understand back as loss. And
+  a record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
+  field with null, which would list a phantom meeting whose folder no later operation could open.
+- Adding a folder that already holds a workspace adopts it under the name already on disk — picking
+  last year's folder means "open this", so the stored name outranks the one typed into the box.
+- `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
+  workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
+  the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a
+  supplier's meetings should not be reachable by the gesture that tidies a sidebar. Meetings, which
+  Kanal itself created, do delete.
 - Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
   and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
 

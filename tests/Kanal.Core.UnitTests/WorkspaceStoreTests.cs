@@ -107,10 +107,6 @@ public class WorkspaceStoreTests : IDisposable
     private static string[] Titles(WorkspaceStore store, string workspaceId) =>
         [.. store.ListMeetings(workspaceId).Meetings.Select(m => m.Title).Order()];
 
-    /// <summary>
-    /// Two meetings on the same day about the same thing is the ordinary case, not the odd one.
-    /// Nothing about a title may decide where bytes land.
-    /// </summary>
     [Fact]
     public void TwoMeetingsWithOneTitleGetSeparateHomes()
     {
@@ -142,7 +138,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal("Delivery dates", Assert.Single(fresh.ListMeetings(workspace.Id).Meetings).Title);
     }
 
-    /// <summary>A cleared text box is not a name, and must not become one.</summary>
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
@@ -150,17 +145,13 @@ public class WorkspaceStoreTests : IDisposable
     {
         var store = Store();
 
-        Assert.NotNull(store.CreateWorkspace(blank, Folder("acme")).Problem);
+        Assert.Equal(StoreProblemKind.Invalid, store.CreateWorkspace(blank, Folder("acme")).Problem!.Kind);
 
         var workspace = Created(store.CreateWorkspace("ACME", Folder("beta")));
-        Assert.NotNull(store.RenameWorkspace(workspace.Id, blank).Problem);
-        Assert.NotNull(store.CreateMeeting(workspace.Id, blank).Problem);
+        Assert.Equal(StoreProblemKind.Invalid, store.RenameWorkspace(workspace.Id, blank).Problem!.Kind);
+        Assert.Equal(StoreProblemKind.Invalid, store.CreateMeeting(workspace.Id, blank).Problem!.Kind);
     }
 
-    /// <summary>
-    /// A workspace on a drive that is not plugged in must read as unavailable, not as gone: an
-    /// empty meeting list where a year of records used to be is the wrong thing to show.
-    /// </summary>
     [Fact]
     public void AWorkspaceWhoseFolderHasVanishedIsReportedRatherThanDropped()
     {
@@ -207,10 +198,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
     }
 
-    /// <summary>
-    /// A record written by a later version is not corrupt, and guessing at it is worse than
-    /// saying so — reading half of it and then saving would discard whatever we did not know about.
-    /// </summary>
     [Fact]
     public void ARecordFromALaterSchemaIsRefusedRatherThanGuessedAt()
     {
@@ -250,7 +237,6 @@ public class WorkspaceStoreTests : IDisposable
         }
     }
 
-    /// <summary>Adopting a folder that already holds a workspace keeps its identity and records.</summary>
     [Fact]
     public void AnExistingFolderIsAdoptedRatherThanReplaced()
     {
@@ -279,10 +265,19 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Single(store.ListWorkspaces().Workspaces);
     }
 
-    /// <summary>
-    /// Forgetting is not deleting. The folder is the operator's, holds their transcripts, and may
-    /// be a shared drive — removing it from the list is the most this is allowed to mean.
-    /// </summary>
+    /// <summary>Adding a folder that is already a workspace opens it: the name on disk outranks the one typed.</summary>
+    [Fact]
+    public void AdoptingAWorkspaceKeepsTheNameItAlreadyHad()
+    {
+        var folder = Folder("acme");
+        Created(Store().CreateWorkspace("ACME tooling", folder));
+        File.Delete(Registry);
+
+        var adopted = Created(Store().CreateWorkspace("Something else entirely", folder));
+
+        Assert.Equal("ACME tooling", adopted.Name);
+    }
+
     [Fact]
     public void ForgettingAWorkspaceLeavesEveryFileWhereItWas()
     {
@@ -292,7 +287,7 @@ public class WorkspaceStoreTests : IDisposable
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
         var meetingFolder = store.MeetingFolder(workspace.Id, meeting.Id)!;
 
-        Assert.True(store.ForgetWorkspace(workspace.Id));
+        Assert.Null(store.ForgetWorkspace(workspace.Id));
 
         Assert.Empty(Store().ListWorkspaces().Workspaces);
         Assert.True(File.Exists(Path.Combine(folder, WorkspaceStore.WorkspaceFileName)));
@@ -308,7 +303,7 @@ public class WorkspaceStoreTests : IDisposable
         var kept = Created(store.CreateMeeting(workspace.Id, "Delivery dates"));
         var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
 
-        Assert.True(store.DeleteMeeting(workspace.Id, meeting.Id));
+        Assert.Null(store.DeleteMeeting(workspace.Id, meeting.Id));
 
         Assert.False(Directory.Exists(folder));
         Assert.Equal(kept.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
@@ -324,13 +319,10 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Empty(meetings.Meetings);
         Assert.Equal(StoreProblemKind.NotFound, Assert.Single(meetings.Problems).Kind);
         Assert.NotNull(store.CreateMeeting("no-such-workspace", "Tooling review").Problem);
-        Assert.False(store.DeleteMeeting("no-such-workspace", "whatever"));
+        Assert.Equal(StoreProblemKind.NotFound, store.DeleteMeeting("no-such-workspace", "whatever")!.Kind);
+        Assert.Equal(StoreProblemKind.NotFound, store.ForgetWorkspace("no-such-workspace")!.Kind);
     }
 
-    /// <summary>
-    /// The registry is the application's own file, so an unreadable one is not the operator's
-    /// fault to solve — but it must not read as "you have no workspaces" either.
-    /// </summary>
     [Fact]
     public void AnUnreadableRegistryIsReportedRatherThanTreatedAsEmpty()
     {
@@ -350,6 +342,99 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Empty(listing.Workspaces);
         Assert.Empty(listing.Problems);
+    }
+
+    /// <summary>
+    /// Valid JSON is not a valid record: the deserializer fills a field it cannot find with null,
+    /// and a meeting with no id names a folder that no later operation could open.
+    /// </summary>
+    [Fact]
+    public void AHalfWrittenRecordIsReportedRatherThanListedAsAPhantom()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+
+        File.WriteAllText(path, $$"""{"schemaVersion":{{WorkspaceStore.SchemaVersion}}}""");
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
+    public void AHalfWrittenRegistryIsReportedRatherThanListedAsPhantoms()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(
+            Registry,
+            $$"""{"schemaVersion":{{WorkspaceStore.SchemaVersion}},"workspaces":[{"name":"ACME"}]}""");
+
+        var listing = Store().ListWorkspaces();
+
+        Assert.Empty(listing.Workspaces);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    /// <summary>A record that cannot be opened at all, as opposed to one whose contents are wrong.</summary>
+    [Fact]
+    public void ARecordThatCannotBeReadIsReportedRatherThanThrown()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+
+        File.Delete(path);
+        Directory.CreateDirectory(path); // a folder where a file belongs fails the read on every platform
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    /// <summary>An interrupted save: the operator saw the meeting created, so it cannot just be absent.</summary>
+    [Fact]
+    public void AMeetingFolderWithNoRecordIsReported()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Directory.CreateDirectory(Path.Combine(workspace.RootPath, "meetings", "orphan"));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
+    public void AnUnreadableWorkspaceFileIsReportedRatherThanAdopted()
+    {
+        var folder = Folder("acme");
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.WorkspaceFileName), "{ not json at all");
+
+        var result = Store().OpenWorkspace(folder);
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.Unreadable, result.Problem!.Kind);
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void RenamingAMeetingThatIsNotThereIsReported()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+
+        var result = store.RenameMeeting(workspace.Id, "no-such-meeting", "Delivery dates");
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
     }
 
     [Fact]
