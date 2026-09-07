@@ -41,6 +41,14 @@ public class GeneratedMeetingTitlerTests
     }
 
     [Fact]
+    public async Task ASentenceIsRefusedInAScriptThatDoesNotSpaceItsWords()
+    {
+        var essay = string.Concat(Enumerable.Repeat("这次会议讨论了公差和交期。", 8));
+        Assert.Null(await TitleFrom(essay, "a"));
+        Assert.Equal("公差评审", await TitleFrom("公差评审", "a"));
+    }
+
+    [Fact]
     public async Task AnAnswerOfNothingIsNoTitle()
     {
         Assert.Null(await TitleFrom("   ", "a"));

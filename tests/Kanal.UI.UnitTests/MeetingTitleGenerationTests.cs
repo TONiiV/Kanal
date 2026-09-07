@@ -15,6 +15,12 @@ public class MeetingTitleGenerationTests : IDisposable
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "kanal-titling-" + Guid.NewGuid().ToString("N"));
 
+    private sealed class Held : IMeetingTitler
+    {
+        public Task<string?> SuggestAsync(IReadOnlyList<string> lines, CancellationToken ct) =>
+            new TaskCompletionSource<string?>().Task;
+    }
+
     private sealed class Titler : IMeetingTitler
     {
         public string? Next { get; set; } = "Tolerance review";
@@ -112,6 +118,49 @@ public class MeetingTitleGenerationTests : IDisposable
 
         Assert.Equal("New meeting", vm.MeetingTitle);
         Assert.Equal(Localizer.Instance["title.failed"], vm.TitleNote);
+    }
+
+    [Fact]
+    public async Task ATitleNobodyAskedForIsStillOnTheRecordAfterAClose()
+    {
+        var (vm, store, workspace) = WithMeeting("New meeting", new Titler());
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        await vm.Titling.OfferAsync([.. Enumerable.Repeat("line", 6)]);
+
+        Assert.Equal("Tolerance review", store.ListMeetings(workspace.Id).Meetings.Single().Title);
+    }
+
+    [Fact]
+    public void NamingCannotBeAskedForTwiceAtOnce()
+    {
+        var (vm, _, _) = WithMeeting("New meeting", new Held());
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        Assert.True(vm.RegenerateTitleCommand.CanExecute(null));
+        vm.RegenerateTitleCommand.Execute(null);
+
+        Assert.True(vm.Titling.IsSuggesting);
+        Assert.False(vm.RegenerateTitleCommand.CanExecute(null));
+
+        var (idle, _, _) = WithMeeting("New meeting", null);
+        Assert.False(idle.RegenerateTitleCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void RenamingKeepsTheOperatorOnTheMeetingTheyRenamed()
+    {
+        var (vm, _, _) = WithMeeting("New meeting", new Titler());
+        var chosen = vm.Sidebar.Meetings.Single();
+        vm.Sidebar.SelectedMeeting = chosen;
+
+        vm.BeginRenameTitleCommand.Execute(null);
+        vm.TitleDraft = "Werkzeugübergabe";
+        vm.CommitRenameTitleCommand.Execute(null);
+
+        Assert.Same(chosen, vm.Sidebar.SelectedMeeting);
+        Assert.Equal("Werkzeugübergabe", chosen.Title);
+        Assert.True(vm.Titling.NamedByHand);
     }
 
     [Fact]

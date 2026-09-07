@@ -60,6 +60,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
     private int _dragSource = -1;
     private IMeetingTitler? _titler;
+    private string? _titleOnRecord;
 
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
@@ -261,23 +262,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void CommitRenameTitle()
     {
         IsRenamingTitle = false;
-        if (TitleDraft.Trim().Length == 0)
-            return;
-
         Titling.Rename(TitleDraft);
-        Sidebar.RenameSelectedMeeting(TitleDraft);
     }
 
     [RelayCommand]
     private void CancelRenameTitle() => IsRenamingTitle = false;
 
-    [RelayCommand]
-    private async Task RegenerateTitle()
-    {
-        await Titling.RegenerateAsync(FinalLines());
-        if (Titling.Title is { } named)
-            Sidebar.RenameSelectedMeeting(named);
-    }
+    public bool CanRegenerateTitle => Titling.CanSuggest && !Titling.IsSuggesting;
+
+    [RelayCommand(CanExecute = nameof(CanRegenerateTitle))]
+    private Task RegenerateTitle() => Titling.RegenerateAsync(FinalLines());
 
     private IReadOnlyList<string> FinalLines() =>
         _session is null
@@ -288,10 +282,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void OnTitlingChanged()
     {
+        // Every title reaches the record here, whoever asked for it: a generated name the operator
+        // never touched is exactly the one that has to survive the app being closed.
+        if (Titling.Title != _titleOnRecord)
+        {
+            _titleOnRecord = Titling.Title;
+            if (_titleOnRecord is { } named)
+                Sidebar.RenameSelectedMeeting(named);
+        }
+
         OnPropertyChanged(nameof(MeetingTitle));
         OnPropertyChanged(nameof(TitleNote));
         OnPropertyChanged(nameof(HasTitleNote));
         OnPropertyChanged(nameof(CanNameMeeting));
+        OnPropertyChanged(nameof(CanRegenerateTitle));
         RegenerateTitleCommand.NotifyCanExecuteChanged();
     }
 

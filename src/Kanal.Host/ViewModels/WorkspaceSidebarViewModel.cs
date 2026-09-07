@@ -63,8 +63,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (Refused(problem) || renamed is null)
             return false;
 
-        LoadMeetings([]);
-        SelectedMeeting = Meetings.FirstOrDefault(m => m.Id == renamed.Id);
+        meeting.Adopt(renamed);
+        var held = _held.FindIndex(m => m.Id == renamed.Id);
+        if (held >= 0)
+            _held[held] = renamed;
         return true;
     }
 

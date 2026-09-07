@@ -7,6 +7,7 @@ public sealed partial class GeneratedMeetingTitler(ITextGenerator generator) : I
 {
     private const int MaxLines = 40;
     private const int MaxWords = 8;
+    private const int MaxChars = 60;
 
     [GeneratedRegex(@"^\s*(Title|Titel|Tytuł|标题|主题)\s*[:：]\s*", RegexOptions.IgnoreCase)]
     private static partial Regex TitleLabel();
@@ -21,9 +22,12 @@ public sealed partial class GeneratedMeetingTitler(ITextGenerator generator) : I
             .FirstOrDefault() ?? "";
         first = MtOutputCleaner.Clean(TitleLabel().Replace(first, "")).TrimEnd('.', '。');
 
-        // A model that answered with a sentence did not understand the question; a
-        // sentence cut to eight words names the meeting something it is not.
-        return first.Length > 0 && first.Split(' ').Length <= MaxWords ? first : null;
+        // A model that answered with a sentence did not understand the question, and a sentence
+        // cut to eight words names the meeting something it is not. Chinese writes a sentence
+        // without a single space, so the word count alone would wave the whole essay through.
+        return first.Length is > 0 and <= MaxChars && first.Split(' ').Length <= MaxWords
+            ? first
+            : null;
     }
 
     private static string Prompt(string transcript) =>

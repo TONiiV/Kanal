@@ -10,7 +10,16 @@ public sealed partial class MeetingItemViewModel(
     Func<MeetingItemViewModel, Task> import,
     Func<MeetingItemViewModel, Task> export) : ViewModelBase
 {
-    public MeetingRecord Record { get; } = record;
+    public MeetingRecord Record { get; private set; } = record;
+
+    // Renaming updates the item rather than rebuilding the list: a fresh instance would read as
+    // the operator selecting a different meeting, and the sidebar would reset around it.
+    public void Adopt(MeetingRecord renamed)
+    {
+        Record = renamed;
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(When));
+    }
 
     public string Id => Record.Id;
 

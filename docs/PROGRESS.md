@@ -37,6 +37,12 @@ to both the MT provider and the titler — a second one over the same file is a 
 model in memory. Where there is no local model there is no titler, and the regenerate control is
 absent rather than dead.
 
+Every title reaches the record, whoever asked for it — a generated name the operator never touched
+is exactly the one that has to survive the app being closed, so the write-through sits on the
+titling change rather than on the two operator commands. Renaming updates the meeting item in place
+rather than rebuilding the list; a fresh item instance reads as the operator selecting a different
+meeting, and the sidebar would have reset the title it had just been given.
+
 Renaming is durable: the title row's text becomes an editor in place (Enter commits, Escape
 abandons, clicking away commits), and the committed name is written through `WorkspaceStore` onto
 the selected meeting record. "Meeting title" stays distinct from the workspace name — the workspace
