@@ -43,6 +43,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   assistant on the right; either can be collapsed out of the way and dragged wider, and the width
   you pick comes back when you expand it again. The transcript keeps a usable width whatever the
   sidebars do.
+- Record, pause and stop are round marks, each sitting on a larger, paler disc of its own colour,
+  so the transport is easier to hit and easier to read across the room. The capture picker shows
+  its whole icon instead of a clipped one, and the microphone mark has been redrawn.
 - The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
   stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
   window gets; the processing and capture pickers hold the left edge and the join QR the right. A

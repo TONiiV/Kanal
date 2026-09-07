@@ -1,8 +1,11 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Shape = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
@@ -198,6 +201,33 @@ public class MainWindowCompositionTests
             .Select(item => item.Command).ToList();
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportJsonCommand));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheCapturePickerDrawsItsWholeGlyphInsideItself()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var capture = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
+        var glyph = Assert.Single(
+            capture.GetVisualDescendants().OfType<Shape>(),
+            path => path.Classes.Contains("glyph"));
+
+        var slot = glyph.GetVisualAncestors().OfType<Visual>().First(visual => visual.ClipToBounds);
+        var corner = glyph.TranslatePoint(new Point(glyph.Bounds.Width, glyph.Bounds.Height), slot);
+
+        Assert.NotNull(corner);
+        Assert.True(
+            corner.Value.X <= slot.Bounds.Width + 0.5 && corner.Value.Y <= slot.Bounds.Height + 0.5,
+            $"the capture glyph runs to {corner.Value} in a {slot.Bounds.Size} slot, so it is cut off.");
 
         window.Close();
     }

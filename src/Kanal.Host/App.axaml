@@ -25,6 +25,8 @@
             <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
             <SolidColorBrush x:Key="Record" Color="#C42B22" />
             <SolidColorBrush x:Key="Hold" Color="#C08A12" />
+            <SolidColorBrush x:Key="RecordWash" Color="#F2CFCC" />
+            <SolidColorBrush x:Key="HoldWash" Color="#F2E6C6" />
 
             <!-- FluentTheme paints checked boxes, radios and selection in the OS accent, which put a
                  saturated blue beside the speaker hues and out-shouted them. Redirect the accent ramp
@@ -60,7 +62,7 @@
             <StreamGeometry x:Key="GlyphRecord">M0,6 A6,6 0 1 1 12,6 A6,6 0 1 1 0,6 Z</StreamGeometry>
 
             <!-- F1 selects nonzero fill; under the default even-odd rule the stem punches a hole. -->
-            <StreamGeometry x:Key="GlyphMicrophone">F1 M3.4,0 H6.6 V7.6 H3.4 Z M0.9,5.4 H2.2 V8.2 H7.8 V5.4 H9.1 V9.5 H5.7 V12.7 H7.6 V14 H2.4 V12.7 H4.3 V9.5 H0.9 Z</StreamGeometry>
+            <StreamGeometry x:Key="GlyphMicrophone">F1 M3.5,3 A2.5,2.5 0 0 1 8.5,3 V7 A2.5,2.5 0 0 1 3.5,7 Z M0.8,7 A5.2,5.2 0 0 0 11.2,7 H9.9 A3.9,3.9 0 0 1 2.1,7 Z M5.3,10.9 H6.7 V14.6 H5.3 Z M2.6,14.6 H9.4 V16 H2.6 Z</StreamGeometry>
 
             <StreamGeometry x:Key="GlyphQr">M0,0 H5 V5 H0 Z M1.3,1.3 H3.7 V3.7 H1.3 Z M9,0 H14 V5 H9 Z M10.3,1.3 H12.7 V3.7 H10.3 Z M0,9 H5 V14 H0 Z M1.3,10.3 H3.7 V12.7 H1.3 Z M7.4,7 H9.4 V9 H7.4 Z M11,7.4 H13 V9.4 H11 Z M7.4,11 H9.4 V13 H7.4 Z M12,12 H14 V14 H12 Z</StreamGeometry>
 
@@ -189,23 +191,6 @@
             <Setter Property="Padding" Value="20,9,12,9" />
         </Style>
 
-        <!-- Declared after Button.ghost so the marks keep their colour through hover and press. -->
-        <Style Selector="Button.mark">
-            <Setter Property="Padding" Value="9,8" />
-        </Style>
-
-        <Style Selector="Button.mark Path.record">
-            <Setter Property="Fill" Value="{StaticResource Record}" />
-        </Style>
-
-        <Style Selector="Button.mark Path.hold">
-            <Setter Property="Fill" Value="{StaticResource Hold}" />
-        </Style>
-
-        <Style Selector="Button.mark:disabled Path">
-            <Setter Property="Opacity" Value="0.4" />
-        </Style>
-
         <Style Selector="Button.chevron > Path">
             <Setter Property="Width" Value="8" />
             <Setter Property="Height" Value="11" />
@@ -223,6 +208,69 @@
         <Style Selector="Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
+
+        <!-- Declared after Button.ghost so a mark keeps its own fill through hover and press. -->
+        <Style Selector="Button.mark">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="17" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{StaticResource RecordWash}" />
+        </Style>
+
+        <Style Selector="Button.mark.hold">
+            <Setter Property="Background" Value="{StaticResource HoldWash}" />
+        </Style>
+
+        <Style Selector="Button.mark /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Record}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Record}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark.hold:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Hold}" />
+        </Style>
+
+        <Style Selector="Button.mark.hold:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Hold}" />
+        </Style>
+
+        <Style Selector="Button.mark Path.record">
+            <Setter Property="Fill" Value="{StaticResource Record}" />
+        </Style>
+
+        <Style Selector="Button.mark Path.hold">
+            <Setter Property="Fill" Value="{StaticResource Hold}" />
+        </Style>
+
+        <Style Selector="Button.mark:pointerover Path">
+            <Setter Property="Fill" Value="{StaticResource Sheet}" />
+        </Style>
+
+        <Style Selector="Button.mark:pressed Path">
+            <Setter Property="Fill" Value="{StaticResource Sheet}" />
+        </Style>
+
+        <Style Selector="Button.mark:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+
 
         <Style Selector="ToggleButton">
             <Setter Property="Background" Value="{StaticResource Sheet}" />
