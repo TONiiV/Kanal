@@ -410,18 +410,12 @@ function applyTranscribing(transcribing) {
   saveCache();
 }
 
-/* The room is over but the page stays useful: the transcript remains, and the channel stays
-   subscribed because a restart announces itself here as room.moved. */
-function showRoomEnded() {
+function applyClosed() {
+  state.closed = true;
   state.recording = false; // the room is over; nothing is being written to any more
   state.transcribing = false;
   setRecordingNotice();
   setStatus("ended");
-}
-
-function applyClosed() {
-  state.closed = true;
-  showRoomEnded();
   saveCache();
 }
 

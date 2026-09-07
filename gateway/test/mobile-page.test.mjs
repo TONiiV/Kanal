@@ -62,7 +62,7 @@ function harness(cached = null) {
     constantOf("ROOM_EXPIRED_CLOSE"),
     ...[
       "setRecordingNotice", "applyRecording", "applyTranscribing", "applyPaused",
-      "showRoomEnded", "applyClosed", "applySnapshot", "loadCache", "stopFollowing",
+      "applyClosed", "applySnapshot", "loadCache", "stopFollowing",
       "roomExpired",
     ].map(sourceOf),
   ].join("\n"), context);
