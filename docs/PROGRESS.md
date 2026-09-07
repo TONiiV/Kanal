@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### An expired room says so once, instead of refusing 2000 times
+
+- Reader tickets last 12 h. Past that the phone's backoff loop retried forever at its 15 s cap,
+  collecting a 401 each time and showing "reconnecting" — a tab left open overnight made roughly
+  2000 pointless requests and never told the participant the room was simply over. Item 3 of #40,
+  now #70.
+- The room object closes an expired socket with **4001** rather than 1000. A tidy normal closure is
+  indistinguishable from every other tidy closure, so the phone had nothing to reason about and
+  reasonably guessed "reconnect". 4001 is in the application-private range and is terminal.
+- The phone acts only on that authenticated gateway decision. A failed upgrade still appears as
+  1006 and keeps the existing retry behavior; it is never reclassified from an unverified ticket
+  timestamp or the phone clock.
+- Every other close code keeps the existing backoff. A locked phone, a lost cell and a roamed
+  network all still have a live room to come back to, and must still come back to it. The
+  transcript stays on the page either way.
+- Tests: the gateway side is driven through the room object directly, because a 12 h ticket cannot
+  be aged out through `?action=stream` inside a test — the Worker refuses it long before the room
+  sees it. Both paths that can close a socket are covered: the expiry **alarm**, which is the only
+  one that fires in the real overnight case where nobody is publishing, and `publish()`. The page
+  test reads the close code from the shipped HTML rather than restating it, so the two cannot drift
+  apart.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled

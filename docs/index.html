@@ -220,6 +220,7 @@ main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
 
 const CACHE_LIMIT = 50; // survive lock-screen reconnects without a blank page
 const STICK_SLOP = 160; // px from the bottom that still counts as "following along"
+const ROOM_EXPIRED_CLOSE = 4001; // terminal: the ticket is finished, so reconnecting only earns 401s
 const params = new URLSearchParams(location.search);
 const invite = new URLSearchParams(location.hash.replace(/^#/, ""));
 const relayUrlParam = invite.get("relay");
@@ -409,8 +410,6 @@ function applyTranscribing(transcribing) {
   saveCache();
 }
 
-/* The room is over but the page stays useful: the transcript remains, and the channel stays
-   subscribed because a restart announces itself here as room.moved. */
 function applyClosed() {
   state.closed = true;
   state.recording = false; // the room is over; nothing is being written to any more
@@ -641,6 +640,10 @@ function streamUrl(endpoint) {
   return url.toString();
 }
 
+function roomExpired(closeCode) {
+  return closeCode === ROOM_EXPIRED_CLOSE;
+}
+
 async function startGateway(endpoint, ticket, room, verificationKey) {
   const previous = gateway;
   if (previous) {
@@ -653,6 +656,11 @@ async function startGateway(endpoint, ticket, room, verificationKey) {
     socket: null, reconnect: true, reconnectAttempt: 0, sessionReady: false,
   };
   connectGateway(gateway);
+}
+
+function stopFollowing(connection) {
+  connection.reconnect = false;
+  applyClosed();
 }
 
 function connectGateway(connection) {
@@ -687,9 +695,12 @@ function connectGateway(connection) {
   socket.onerror = () => {
     if (gateway === connection && !state.closed) setStatus("reconnecting");
   };
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     if (gateway !== connection || !connection.reconnect) return;
     connection.sessionReady = false;
+    if (roomExpired(event.code)) {
+      return stopFollowing(connection);
+    }
     const delay = Math.min(1000 * (2 ** connection.reconnectAttempt++), 15000);
     setTimeout(() => connectGateway(connection), delay);
   };

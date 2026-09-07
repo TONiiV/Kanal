@@ -18,8 +18,18 @@ function sourceOf(name) {
   throw new Error(`${name} has no closing brace`);
 }
 
+/* Taken from the page rather than restated here: a test that carries its own copy of the
+   close code stays green while the two drift apart. */
+function constantOf(name) {
+  const match = html.match(new RegExp(`^const ${name} = [^;]+;`, "m"));
+  assert.ok(match, `${name} is missing from the shipped phone page`);
+  return match[0];
+}
+
 function harness(cached = null) {
   const notice = { text: "", shown: false };
+  const status = { text: "" };
+  const saved = [];
   const state = {
     recording: false,
     transcribing: false,
@@ -41,18 +51,22 @@ function harness(cached = null) {
     }),
     t: (key) => key,
     lifecycleStatus: () => state.closed ? "ended" : state.paused ? "paused" : "",
-    setStatus: () => {},
-    saveCache: () => {},
+    setStatus: (text) => { status.text = text; },
+    saveCache: () => { saved.push(true); },
     applyConfig: () => {},
     applySpeaker: () => {},
     renderAll: () => {},
     localStorage: { getItem: () => cached === null ? null : JSON.stringify(cached) },
   });
   vm.runInContext([
-    "setRecordingNotice", "applyRecording", "applyTranscribing", "applyPaused",
-    "applyClosed", "applySnapshot", "loadCache",
-  ].map(sourceOf).join("\n"), context);
-  return { context, notice, state, run: (code) => vm.runInContext(code, context) };
+    constantOf("ROOM_EXPIRED_CLOSE"),
+    ...[
+      "setRecordingNotice", "applyRecording", "applyTranscribing", "applyPaused",
+      "applyClosed", "applySnapshot", "loadCache", "stopFollowing",
+      "roomExpired",
+    ].map(sourceOf),
+  ].join("\n"), context);
+  return { context, notice, status, state, saved, run: (code) => vm.runInContext(code, context) };
 }
 
 test("recording replaces transcription, pause holds it, and close clears it", () => {
@@ -90,4 +104,25 @@ test("snapshot and cache restore authoritative transcription state", () => {
   });
   cached.run("loadCache()");
   assert.deepEqual(cached.notice, { text: "liveHeld", shown: true });
+});
+
+test("the room's own 4001 is terminal, and every other close still reconnects", () => {
+  const h = harness();
+
+  assert.equal(h.run("roomExpired(4001)"), true);
+  assert.equal(h.run("roomExpired(1006)"), false);
+  assert.equal(h.run("roomExpired(1000)"), false);
+});
+
+test("the terminal close is remembered and keeps the transcript visible", () => {
+  const h = harness();
+  h.state.utterances.set("u1", { id: "u1" });
+
+  h.run("stopFollowing({reconnect: true})");
+
+  assert.equal(h.state.closed, true);
+  assert.equal(h.saved.length, 1);
+  assert.deepEqual(h.notice, { text: "", shown: false });
+  assert.equal(h.status.text, "ended");
+  assert.deepEqual([...h.state.utterances.values()], [{ id: "u1" }]);
 });
