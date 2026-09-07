@@ -23,6 +23,9 @@ public class WorkspaceShellCompositionTests
     private static T Region<T>(Window window) where T : Control =>
         window.GetLogicalDescendants().OfType<T>().Single();
 
+    private static Control Named(Control root, string name) =>
+        root.GetLogicalDescendants().OfType<Control>().Single(control => control.Name == name);
+
     [AvaloniaFact]
     public void TheWindowIsThreeDeclaredRegions()
     {
@@ -186,6 +189,23 @@ public class WorkspaceShellCompositionTests
         Assert.True(expandRight.IsVisible);
         Assert.DoesNotContain(expandLeft, scroller.GetLogicalDescendants());
         Assert.DoesNotContain(expandRight, scroller.GetLogicalDescendants());
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void EachSidebarPutsItsCollapseControlOnTheEdgeThatFacesTheMeeting()
+    {
+        var (window, _) = Shown();
+
+        var workspace = Region<WorkspaceSidebarView>(window);
+        var assistant = Region<SidePanelView>(window);
+
+        Assert.Equal(Dock.Left, DockPanel.GetDock(Named(workspace, "WorkspaceTitle")));
+        Assert.Equal(Dock.Right, DockPanel.GetDock(Named(workspace, "CollapseWorkspace")));
+
+        Assert.Equal(Dock.Left, DockPanel.GetDock(Named(assistant, "CollapseAssistant")));
+        Assert.Equal(Dock.Right, DockPanel.GetDock(Named(assistant, "AssistantTitle")));
 
         window.Close();
     }

@@ -127,6 +127,11 @@ and the only control that reopens it — was off the right of the screen with no
 splitter columns are pinned rather than `Auto` for the same reason: `Auto` measured a pixel wider
 than the handle, and a floor cannot account for a column whose width it does not set.
 
+The two sidebar headers are mirrored rather than parallel. Each collapse control sits on the edge
+its sidebar shares with the meeting and each title on the outer margin, so the two chevrons flank
+the centre and point away from it. The assistant header previously carried both on the left, which
+read as an accident rather than a choice once the workspace header stood beside it.
+
 Deliberate limitations, all for the ticket queue rather than this PR:
 
 - The workspace sidebar is a header and nothing else. Its contents — search, project selector,

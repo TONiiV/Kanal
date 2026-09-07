@@ -8,13 +8,14 @@
             <Border DockPanel.Dock="Top" Classes="sidebar-header"
                     MinHeight="{Binding Shell.HeaderHeight}">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="CollapseAssistant"
+                    <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="CollapseAssistant"
                             Command="{Binding Shell.Right.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
                         <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}" />
                     </Button>
-                    <TextBlock DockPanel.Dock="Left" Classes="label" Text="{l:T sidebar.assistant}" />
+                    <TextBlock DockPanel.Dock="Right" Classes="label" x:Name="AssistantTitle"
+                               Text="{l:T sidebar.assistant}" />
                 </DockPanel>
             </Border>
             <Border Padding="20,20,20,16">
