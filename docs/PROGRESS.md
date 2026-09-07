@@ -28,6 +28,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   test reads the close code from the shipped HTML rather than restating it, so the two cannot drift
   apart.
 
+### Meeting records get a home on disk ([#68](https://github.com/TONiiV/Kanal/issues/68))
+
+- `WorkspaceStore` is the single seam between the application and meeting records on disk. Layout,
+  under a folder the operator picks: `kanal-workspace.json` for the workspace's identity, and
+  `meetings/<id>/meeting.json`, one folder per meeting holding its own artefacts. Every file
+  carries a schema version.
+- The list of *which* folders are workspaces lives outside them all, in the application's own
+  profile. A workspace on a drive that is not plugged in has to keep its row in the sidebar, so the
+  list cannot be a scan of folders that happen to be reachable.
+- Meeting folders are named by id, never by title. Two meetings about the same thing on the same
+  day is the ordinary case in this room, not the odd one, and neither may land on the other.
+- Failures are reported next to whatever could still be read, never instead of it: a vanished
+  folder, a hand-edited file, or a record written by a newer Kanal each produce a `StoreProblem`
+  while the surviving records still list. An empty list where a year of meetings used to be is the
+  one outcome the store must never produce — so a later schema version is refused rather than
+  half-parsed, since the next save would write the dropped fields back as loss.
+- Adding a folder that already holds a workspace adopts it, identity intact; `ForgetWorkspace`
+  removes the row and touches no file. Removing something from a sidebar must not be the same
+  gesture as deleting the operator's only copy.
+- Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
+  and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
