@@ -28,6 +28,7 @@ function constantOf(name) {
 
 function harness(cached = null) {
   const notice = { text: "", shown: false };
+  const status = { text: "" };
   const saved = [];
   const state = {
     recording: false,
@@ -50,25 +51,22 @@ function harness(cached = null) {
     }),
     t: (key) => key,
     lifecycleStatus: () => state.closed ? "ended" : state.paused ? "paused" : "",
-    setStatus: () => {},
+    setStatus: (text) => { status.text = text; },
     saveCache: () => { saved.push(true); },
     applyConfig: () => {},
     applySpeaker: () => {},
     renderAll: () => {},
     localStorage: { getItem: () => cached === null ? null : JSON.stringify(cached) },
-    atob: (value) => Buffer.from(value, "base64").toString("binary"),
-    TextDecoder,
-    Uint8Array,
   });
   vm.runInContext([
     constantOf("ROOM_EXPIRED_CLOSE"),
     ...[
       "setRecordingNotice", "applyRecording", "applyTranscribing", "applyPaused",
       "showRoomEnded", "applyClosed", "applySnapshot", "loadCache", "stopFollowing",
-      "decodeBase64Url", "ticketExpiry", "ticketLapsed", "roomExpired",
+      "roomExpired",
     ].map(sourceOf),
   ].join("\n"), context);
-  return { context, notice, state, saved, run: (code) => vm.runInContext(code, context) };
+  return { context, notice, status, state, saved, run: (code) => vm.runInContext(code, context) };
 }
 
 test("recording replaces transcription, pause holds it, and close clears it", () => {
@@ -110,56 +108,21 @@ test("snapshot and cache restore authoritative transcription state", () => {
 
 test("the room's own 4001 is terminal, and every other close still reconnects", () => {
   const h = harness();
-  const now = 1_800_000_000;
-  const connected = { everConnected: true, expiresAt: now + 3600 };
 
-  assert.equal(h.run(`roomExpired(${JSON.stringify(connected)}, 4001, ${now})`), true);
-  assert.equal(h.run(`roomExpired(${JSON.stringify(connected)}, 1006, ${now})`), false);
-  assert.equal(h.run(`roomExpired(${JSON.stringify(connected)}, 1000, ${now})`), false);
-
-  // A phone with a wrong clock must not be able to declare a live meeting over.
-  const lapsedButAnswering = { everConnected: true, expiresAt: now - 60 };
-  assert.equal(h.run(`roomExpired(${JSON.stringify(lapsedButAnswering)}, 1006, ${now})`), false);
+  assert.equal(h.run("roomExpired(4001)"), true);
+  assert.equal(h.run("roomExpired(1006)"), false);
+  assert.equal(h.run("roomExpired(1000)"), false);
 });
 
-test("a page reloaded after the room ended stops before it asks", () => {
+test("the terminal close is remembered and keeps the transcript visible", () => {
   const h = harness();
-  const now = 1_800_000_000;
+  h.state.utterances.set("u1", { id: "u1" });
 
-  // No 4001 can arrive here: the upgrade is refused before a socket exists.
-  assert.equal(h.run(`ticketLapsed({everConnected: false, expiresAt: ${now - 60}}, ${now})`), true);
-  assert.equal(h.run(`ticketLapsed({everConnected: false, expiresAt: ${now + 60}}, ${now})`), false);
+  h.run("stopFollowing({reconnect: true})");
 
-  // A ticket the page cannot read is not a ticket the page may condemn.
-  assert.equal(h.run(`ticketLapsed({everConnected: false, expiresAt: 0}, ${now})`), false);
-});
-
-test("a reader ticket's expiry is read from the ticket itself", () => {
-  const h = harness();
-  const claims = { v: 1, room: "kanal-x", vk: "k", iat: 1_800_000_000, exp: 1_800_043_200, role: "reader" };
-  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
-
-  assert.equal(h.run(`ticketExpiry(${JSON.stringify(payload + ".c2ln")})`), 1_800_043_200);
-
-  // Unreadable means "do not know", never "expired".
-  assert.equal(h.run(`ticketExpiry("not-a-ticket")`), 0);
-  assert.equal(h.run(`ticketExpiry("")`), 0);
-  assert.equal(h.run(`ticketExpiry(${JSON.stringify(Buffer.from("{}").toString("base64url") + ".x")})`), 0);
-});
-
-test("an ending the room announced is remembered; one the page inferred is not", () => {
-  const announced = harness();
-  announced.run("stopFollowing({reconnect: true}, ROOM_EXPIRED_CLOSE)");
-  assert.equal(announced.state.closed, true);
-  assert.equal(announced.saved.length, 1);
-
-  // Nothing would ever clear a cached "ended" the gateway never sent, and a phone with a
-  // wrong clock whose first connect merely failed would carry it across every later reload.
-  const inferred = harness();
-  inferred.run("stopFollowing({reconnect: true}, 1006)");
-  assert.equal(inferred.state.closed, false);
-  assert.equal(inferred.saved.length, 0);
-
-  // Either way the participant sees the same thing, and the recording banner goes out.
-  assert.deepEqual(announced.notice, inferred.notice);
+  assert.equal(h.state.closed, true);
+  assert.equal(h.saved.length, 1);
+  assert.deepEqual(h.notice, { text: "", shown: false });
+  assert.equal(h.status.text, "ended");
+  assert.deepEqual([...h.state.utterances.values()], [{ id: "u1" }]);
 });

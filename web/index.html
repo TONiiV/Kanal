@@ -646,24 +646,8 @@ function streamUrl(endpoint) {
   return url.toString();
 }
 
-// Read without verifying: the gateway still decides. This only answers "is asking pointless".
-function ticketExpiry(ticket) {
-  try {
-    const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(ticket.split(".")[0])));
-    return Number(claims.exp) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-// A refused upgrade reaches the browser as a bare 1006, so a reloaded page has only the ticket
-// to go on. Never before a failed attempt, and never once the gateway has answered.
-function ticketLapsed(connection, now) {
-  return !connection.everConnected && connection.expiresAt > 0 && now >= connection.expiresAt;
-}
-
-function roomExpired(connection, closeCode, now) {
-  return closeCode === ROOM_EXPIRED_CLOSE || ticketLapsed(connection, now);
+function roomExpired(closeCode) {
+  return closeCode === ROOM_EXPIRED_CLOSE;
 }
 
 async function startGateway(endpoint, ticket, room, verificationKey) {
@@ -676,16 +660,13 @@ async function startGateway(endpoint, ticket, room, verificationKey) {
     endpoint, ticket, room, expectedRoom: room, expectedKey: verificationKey,
     verificationKey: await importVerificationKey(verificationKey),
     socket: null, reconnect: true, reconnectAttempt: 0, sessionReady: false,
-    everConnected: false, expiresAt: ticketExpiry(ticket),
   };
   connectGateway(gateway);
 }
 
-function stopFollowing(connection, closeCode) {
+function stopFollowing(connection) {
   connection.reconnect = false;
-  // Announced by the room, so it is remembered; inferred from our own clock, so it is not:
-  // a cached "ended" that the gateway never sent has nothing that could ever clear it.
-  if (closeCode === ROOM_EXPIRED_CLOSE) applyClosed(); else showRoomEnded();
+  applyClosed();
 }
 
 function connectGateway(connection) {
@@ -705,7 +686,6 @@ function connectGateway(connection) {
             message.verificationKey !== connection.expectedKey)
           throw new Error("Gateway session does not match invitation");
         connection.sessionReady = true;
-        connection.everConnected = true;
         connection.reconnectAttempt = 0;
         connection.room = message.room;
         $("room").textContent = message.room;
@@ -724,8 +704,8 @@ function connectGateway(connection) {
   socket.onclose = (event) => {
     if (gateway !== connection || !connection.reconnect) return;
     connection.sessionReady = false;
-    if (roomExpired(connection, event.code, Date.now() / 1000)) {
-      return stopFollowing(connection, event.code);
+    if (roomExpired(event.code)) {
+      return stopFollowing(connection);
     }
     const delay = Math.min(1000 * (2 ** connection.reconnectAttempt++), 15000);
     setTimeout(() => connectGateway(connection), delay);

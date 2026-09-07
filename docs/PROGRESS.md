@@ -15,21 +15,9 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - The room object closes an expired socket with **4001** rather than 1000. A tidy normal closure is
   indistinguishable from every other tidy closure, so the phone had nothing to reason about and
   reasonably guessed "reconnect". 4001 is in the application-private range and is terminal.
-- A close code only reaches a socket that is open. The other half of the loop is the **reload**: a
-  page opened after the room ended never gets a socket at all, because the Worker refuses the
-  expired ticket at the upgrade and the browser reports that as a bare 1006. So the page reads
-  `exp` out of the reader ticket it already holds in the invitation hash — unverified, since the
-  gateway is still the one that decides — and treats a lapsed ticket as terminal too.
-- **That judgement is made after a failed attempt, never before one, and never once the gateway has
-  answered.** Deciding up front from `Date.now()` would let a phone with a wrong clock declare a
-  live meeting over; making one real attempt first means a skewed clock costs nothing, because a
-  reachable room answers and `everConnected` retires the clock for that connection. The loop still
-  collapses from ~2000 requests to one.
-- **An ending the room announced is remembered; one the page inferred is only shown.** A 4001 goes
-  through `applyClosed()` and is written to the cache, because the gateway said so. A lapsed ticket
-  clears the recording banner and shows "ended" without persisting `closed` — otherwise a phone
-  with a wrong clock whose first connect happened to fail would carry a false "ended" across every
-  later reload, with nothing able to clear it.
+- The phone acts only on that authenticated gateway decision. A failed upgrade still appears as
+  1006 and keeps the existing retry behavior; it is never reclassified from an unverified ticket
+  timestamp or the phone clock.
 - Every other close code keeps the existing backoff. A locked phone, a lost cell and a roamed
   network all still have a live room to come back to, and must still come back to it. The
   transcript stays on the page either way.
@@ -37,8 +25,8 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   be aged out through `?action=stream` inside a test — the Worker refuses it long before the room
   sees it. Both paths that can close a socket are covered: the expiry **alarm**, which is the only
   one that fires in the real overnight case where nobody is publishing, and `publish()`. The page
-  side drives `roomExpired`, `ticketLapsed` and `ticketExpiry` out of the shipped HTML, with the
-  close code read from the page rather than restated in the test, so the two cannot drift apart.
+  test reads the close code from the shipped HTML rather than restating it, so the two cannot drift
+  apart.
 
 ### Meeting workspace prototype approved and archived
 

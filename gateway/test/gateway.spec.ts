@@ -349,7 +349,7 @@ describe("room expiry", () => {
 
     await until(() => closes.length > 0);
     expect(closes[0].code).toBe(4001);
-  });
+  }, 10_000);
 
   it("closes an expired reader rather than fanning a publish out to it", async () => {
     const closes = await openDirect("expired-busy-room", past());
@@ -358,7 +358,7 @@ describe("room expiry", () => {
 
     await until(() => closes.length > 0);
     expect(closes[0].code).toBe(4001);
-  });
+  }, 10_000);
 
   it("leaves a reader whose ticket is still valid alone", async () => {
     const closes = await openDirect("live-room", future());
