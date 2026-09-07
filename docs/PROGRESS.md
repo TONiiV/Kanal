@@ -61,6 +61,12 @@ becomes points, decisions and speakers.
 clipped when the window narrows or the status line grows; both are set before a meeting rather than
 during one.
 
+The three paused variants the bands used to distinguish - held while recording, held while recording
+only, held while transcribing - collapse into one `state.paused`. The line describes what is
+happening now, and while paused nothing is being written whichever of the three preceded it; naming
+the suspended activity would put "saving audio" on screen at the one moment it is false. The cost is
+that the line no longer says whether a WAV was open before the pause.
+
 The marks also shift sideways when the status line changes length, because the line shares the
 transport's `Auto` column: pressing pause swaps "Live" for "Paused - nothing captured" and the marks
 slide about 68 px left. Reserving a fixed width for the line would hold them still, but at the

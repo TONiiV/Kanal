@@ -24,18 +24,12 @@
                     <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}" />
                 </Button>
 
-                <!-- The transport column is Auto and the two around it are starred, which is the
-                     whole narrowing rule in one line: a starred column gives up width, an Auto one
-                     does not. The bar therefore never scrolls sideways and never wraps - the side
-                     clusters are clipped instead, each keeping what sits at its own outer edge. -->
+                <!-- A starred column gives up width, an Auto one does not: the transport must keep
+                     every pixel it asked for, so the side clusters clip instead of the bar scrolling. -->
                 <Grid ColumnDefinitions="*,Auto,*">
                     <StackPanel Grid.Column="0" x:Name="LeftCluster" Orientation="Horizontal"
                                 Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center"
                                 ClipToBounds="True">
-                        <!-- The selection box carries two words and the dropdown carries the whole
-                             argument: every row says where each stage runs, what leaves the machine,
-                             and why it cannot be picked. Both from one control, so the bar spends
-                             one slot rather than three on the choice that decides the meeting. -->
                         <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
                                   Width="160" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding SelectedMode.Name}"
@@ -77,8 +71,6 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <!-- What the pairings mean, and that captions always reach the phones as text
-                             through the relay, is a paragraph rather than a tooltip. -->
                         <Button Classes="ghost" Content="?" Padding="9,5" FontWeight="Bold"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="{l:T modes.tip}"
@@ -231,9 +223,7 @@
                     <StackPanel Grid.Column="2" x:Name="RightCluster" Orientation="Horizontal"
                                 Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 ClipToBounds="True">
-                        <!-- Export belongs on the meeting record's own menu (#69). Until that row
-                             exists it lives here, behind the same ellipsis it will move to, rather
-                             than as two labelled buttons nobody presses mid-meeting. -->
+                        <!-- Parked here until #69 gives the meeting record its own menu. -->
                         <Button Classes="ghost" Padding="8,9" x:Name="MeetingMore"
                                 ToolTip.Tip="{l:T meeting.more.tip}"
                                 AutomationProperties.Name="{l:T meeting.more.tip}">

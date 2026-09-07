@@ -19,8 +19,6 @@
                 </DockPanel>
             </Border>
 
-            <!-- Configuration is set once and then left alone, so it sits at the foot of the
-                 sidebar rather than beside the controls the operator uses mid-meeting. -->
             <Button DockPanel.Dock="Bottom" Classes="ghost" x:Name="Settings"
                     Click="OnSettingsClick" Margin="14,0,14,14" Padding="8,7"
                     HorizontalAlignment="Left"

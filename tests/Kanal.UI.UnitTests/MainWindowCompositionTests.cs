@@ -42,11 +42,6 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
-    /// <summary>
-    /// The bar reads as three regions, and which one a control belongs to is the whole point of the
-    /// arrangement: mode and capture on the left, the transport in the middle, the join code on the
-    /// right. Tree order is asserted too — it is what Tab and a screen reader follow.
-    /// </summary>
     [AvaloniaFact]
     public void TheBarIsThreeClustersWithTheTransportInTheMiddle()
     {
@@ -84,12 +79,6 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
-    /// <summary>
-    /// The narrowing rule, which is the one claim the column widths exist to make: the transport
-    /// keeps every pixel it asked for while the bar as a whole stays inside the window. The side
-    /// clusters give the space up instead — measured, because nothing else would catch a starred
-    /// column quietly turning into an Auto one.
-    /// </summary>
     [AvaloniaFact]
     public void TheTransportKeepsItsWidthAsTheWindowNarrowsAndTheBarNeverScrolls()
     {
@@ -116,8 +105,6 @@ public class MainWindowCompositionTests
                 $"the transport left the bar at {width} px: {transport.Bounds} in {bar.Bounds}");
         }
 
-        // Scrolling the bar sideways was the previous answer to a narrow window, and it hid the
-        // controls it was meant to preserve.
         Assert.DoesNotContain(
             Bar(window).GetLogicalDescendants().OfType<ScrollViewer>(),
             scroller => scroller.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled);
@@ -125,10 +112,6 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
-    /// <summary>
-    /// Both marks are one button each, shown and hidden rather than enabled and disabled, so the
-    /// bindings that decide which is on screen are what the operator actually reads.
-    /// </summary>
     [AvaloniaFact]
     public void TheMarksOnScreenFollowTheMeetingState()
     {
@@ -155,10 +138,6 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
-    /// <summary>
-    /// Three controls left the bar in this rearrangement, and each would be unreachable rather than
-    /// merely moved if its new home were forgotten.
-    /// </summary>
     [AvaloniaFact]
     public void SettingsTheJoinCodeAndTheFlagsMovedOutOfTheirOldHomes()
     {
@@ -175,13 +154,11 @@ public class MainWindowCompositionTests
             Bar(window).GetLogicalDescendants().OfType<Button>(),
             button => button.Name == "Settings");
 
-        // The join code was in the assistant sidebar, which #71 rebuilds around something else.
         Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(), button => button.Name == "JoinQr");
         Assert.Empty(
             window.GetLogicalDescendants().OfType<SidePanelView>().Single()
                 .GetLogicalDescendants().OfType<Image>());
 
-        // The flags belong to the meeting, so they sit at the head of the transcript.
         var flags = Assert.Single(
             window.GetLogicalDescendants().OfType<MeetingRoomView>().Single()
                 .GetLogicalDescendants().OfType<Button>(),
@@ -194,11 +171,6 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
-    /// <summary>
-    /// The device pickers and the export commands both moved behind a mark, so what they are worth
-    /// depends entirely on the flyout opening onto them. Nothing in the bar's own tree would show
-    /// that, so the flyouts are opened.
-    /// </summary>
     [AvaloniaFact]
     public void TheFlyoutsBehindTheMarksCarryTheDevicesAndTheExports()
     {
@@ -228,6 +200,7 @@ public class MainWindowCompositionTests
         window.Close();
     }
 
+    // Flyout content is outside the logical tree: its bindings stay unevaluated until ShowAt.
     private static T Opened<T>(Button owner) where T : FlyoutBase
     {
         var flyout = Assert.IsType<T>(owner.Flyout);

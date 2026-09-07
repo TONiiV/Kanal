@@ -34,9 +34,6 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <!-- The flags belong to the meeting, not to the toolbar: the design puts them at the head
-             of the transcript, where the title joins them in #69. Codes beside the flags, because
-             colour never carries a meaning on its own here. -->
         <Button DockPanel.Dock="Top" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
                 Margin="24,18,24,0" HorizontalAlignment="Right" Click="OnLanguagesClick"
                 IsEnabled="{Binding !IsRunning}"
