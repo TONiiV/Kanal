@@ -61,12 +61,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   it is reported rather than adopted; registering it by id alone would silently repoint the one row
   at the copy and leave the original's meetings unreachable. A workspace that has simply *moved* is
   not that: the copy is only a copy while the folder already listed is still there. Paths are stored
-  absolute and compared without their trailing separator, because a folder picker supplies one.
+  canonical — absolute, without a trailing separator, and with every symlink on the way down
+  resolved, because on macOS `/tmp` and `/var` are themselves links and one folder reached by two
+  spellings would otherwise become two workspaces over one set of files. The list, not the folder's
+  own marker file, holds the workspace's name: a rename made while the drive was out could not
+  reach the marker, and reconnecting must not undo it.
 - `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
   workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
   the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a
   supplier's meetings should not be reachable by the gesture that tidies a sidebar. Meetings, which
   Kanal itself created, do delete.
+- One limitation, taken deliberately. A registry file that cannot be parsed at all blocks every
+  operation, including `ForgetWorkspace`; there is no repair from inside the application. A single
+  unreadable *row* is reported and skipped, so it cannot hide its neighbours, but the file as a
+  whole is refused rather than replaced. `SettingsStore` copies an unreadable file aside and carries
+  on with defaults; doing that here would answer "you have no workspaces", which is the one thing
+  this store may not say.
 - Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
   and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
 

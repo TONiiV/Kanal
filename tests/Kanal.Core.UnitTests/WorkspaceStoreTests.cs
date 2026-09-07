@@ -59,7 +59,7 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Empty(listing.Problems);
         Assert.Equal(made.Id, read.Id);
         Assert.Equal("ACME tooling", read.Name);
-        Assert.Equal(folder, read.RootPath);
+        Assert.Equal(made.RootPath, read.RootPath);
         Assert.Equal(made.CreatedAt, read.CreatedAt);
     }
 
@@ -161,7 +161,7 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(workspace.Id, Assert.Single(listing.Workspaces).Id);
         var problem = Assert.Single(listing.Problems);
         Assert.Equal(StoreProblemKind.FolderMissing, problem.Kind);
-        Assert.Equal(folder, problem.Subject);
+        Assert.Equal(workspace.RootPath, problem.Subject);
     }
 
     [Fact]
@@ -517,7 +517,9 @@ public class WorkspaceStoreTests : IDisposable
         var moved = Created(Store().OpenWorkspace(now));
 
         Assert.Equal(workspace.Id, moved.Id);
-        Assert.Equal(now, Assert.Single(Store().ListWorkspaces().Workspaces).RootPath);
+        var listed = Assert.Single(Store().ListWorkspaces().Workspaces);
+        Assert.Equal(moved.RootPath, listed.RootPath);
+        Assert.EndsWith("moved", listed.RootPath);
         Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
     }
 
@@ -534,7 +536,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Single(Store().ListWorkspaces().Workspaces);
     }
 
-    /// <summary>Duplicating a meeting folder would otherwise list one id twice, and only one could be deleted.</summary>
     [Fact]
     public void ADuplicatedMeetingFolderIsReportedRatherThanListedTwice()
     {
@@ -553,7 +554,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
     }
 
-    /// <summary>Artefacts are named by file so a workspace can move; a path would reach outside it.</summary>
     [Fact]
     public void AnArtefactNamedByPathIsRefused()
     {
@@ -569,7 +569,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Null(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).TranscriptFileName);
     }
 
-    /// <summary>One folder, one row — even when the marker file inside it has been lost.</summary>
     [Fact]
     public void AFolderAlreadyOnTheListIsNotMadeIntoASecondWorkspace()
     {
@@ -584,6 +583,103 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Null(result.Workspace);
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
         Assert.Equal(workspace.Id, Assert.Single(Store().ListWorkspaces().Workspaces).Id);
+    }
+
+    /// <summary>On macOS /tmp is a symlink, so one folder reached two ways is the ordinary case.</summary>
+    [Fact]
+    public void OneFolderReachedByTwoSpellingsIsOneWorkspace()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        var meeting = Created(Store().CreateMeeting(workspace.Id, "Tooling review"));
+        var link = Path.Combine(_root, "link");
+        Directory.CreateSymbolicLink(link, _root);
+        var sameFolder = Path.Combine(link, "acme");
+
+        var again = Created(Store().OpenWorkspace(sameFolder));
+
+        Assert.Equal(workspace.Id, again.Id);
+        Assert.Single(Store().ListWorkspaces().Workspaces);
+        Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
+    }
+
+    /// <summary>Renaming reaches the list but not an ejected drive; reconnecting must not undo it.</summary>
+    [Fact]
+    public void ARenameSurvivesTheFolderComingBack()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        var marker = Path.Combine(folder, WorkspaceStore.WorkspaceFileName);
+        var away = File.ReadAllText(marker);
+
+        File.Delete(marker);
+        Directory.Delete(folder, recursive: true); // the drive is out
+        Assert.Null(store.RenameWorkspace(workspace.Id, "ACME tooling").Problem);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(marker, away); // and back, still holding the old name
+
+        Assert.Equal("ACME tooling", Created(Store().OpenWorkspace(folder)).Name);
+        Assert.Equal("ACME tooling", Assert.Single(Store().ListWorkspaces().Workspaces).Name);
+    }
+
+    /// <summary>A duplicated folder names the original: renaming through it would retitle that one.</summary>
+    [Fact]
+    public void RenamingThroughADuplicatedFolderIsRefused()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var copy = Path.Combine(workspace.RootPath, "meetings", "copy-of-it");
+        Directory.CreateDirectory(copy);
+        File.Copy(
+            Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+            Path.Combine(copy, WorkspaceStore.MeetingFileName));
+
+        var result = store.RenameMeeting(workspace.Id, "copy-of-it", "Delivery dates");
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.Unreadable, result.Problem!.Kind);
+        Assert.Equal("Tooling review", Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Title);
+    }
+
+    /// <summary>One row of the list being unreadable must not hide the workspaces either side of it.</summary>
+    [Fact]
+    public void OneBadRowDoesNotHideTheRestOfTheList()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var beta = Created(store.CreateWorkspace("Beta", Folder("beta")));
+
+        var registry = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(Registry))!;
+        var rows = registry["workspaces"].EnumerateArray()
+            .Select(r => JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(r.GetRawText())!)
+            .ToList();
+        rows.Insert(1, new Dictionary<string, JsonElement> { ["name"] = JsonSerializer.SerializeToElement("Rubble") });
+        registry["workspaces"] = JsonSerializer.SerializeToElement(rows);
+        File.WriteAllText(Registry, JsonSerializer.Serialize(registry));
+
+        var listing = Store().ListWorkspaces();
+
+        Assert.Equal([acme.Id, beta.Id], listing.Workspaces.Select(w => w.Id));
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    /// <summary>A Windows-shaped traversal is still a traversal when it is written on a Unix host.</summary>
+    [Theory]
+    [InlineData("../elsewhere.md")]
+    [InlineData("..\\..\\elsewhere.md")]
+    [InlineData("..")]
+    [InlineData("   ")]
+    public void AnArtefactNamedByPathIsRefusedInEveryShape(string name)
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        var result = store.SaveMeeting(meeting with { TranscriptFileName = name });
+
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
     }
 
     [Fact]

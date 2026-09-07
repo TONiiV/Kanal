@@ -31,6 +31,13 @@ public sealed class WorkspaceStore(string registryPath)
         var problems = new List<StoreProblem>();
         foreach (var entry in entries)
         {
+            if (!entry.Complete)
+            {
+                problems.Add(new StoreProblem(
+                    StoreProblemKind.Unreadable, registryPath, "A row of the list is missing fields."));
+                continue;
+            }
+
             workspaces.Add(entry.ToWorkspace());
             if (!Directory.Exists(entry.RootPath))
                 problems.Add(Unplugged(entry));
@@ -179,12 +186,10 @@ public sealed class WorkspaceStore(string registryPath)
             var (stored, trouble) = Read<StoredMeeting>(file);
             if (trouble is not null)
                 problems.Add(trouble);
-            else if (stored!.Id != Path.GetFileName(path))
+            else if (Misfiled(stored!.Id, Path.GetFileName(path)))
                 // A duplicated folder would otherwise list twice under one id, and only one of
                 // the two could ever be renamed or deleted again.
-                problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, path,
-                    "That meeting record does not belong to the folder it is in."));
+                problems.Add(WrongFolder(path));
             else
                 meetings.Add(stored.ToRecord(workspaceId));
         }
@@ -273,8 +278,7 @@ public sealed class WorkspaceStore(string registryPath)
     {
         // An id becomes a folder name, so ".." here would delete the workspace it lives in.
         if (!IsFolderName(meetingId))
-            return (null, new StoreProblem(
-                StoreProblemKind.Invalid, meetingId, NotAnId));
+            return (null, Invalid(meetingId, NotAnId));
 
         var (workspace, problem) = Locate(workspaceId);
         return problem is null ? (FolderFor(workspace!, meetingId), null) : (null, problem);
@@ -291,7 +295,14 @@ public sealed class WorkspaceStore(string registryPath)
             return (null, NoSuchMeeting(meetingId));
 
         var (stored, trouble) = Read<StoredMeeting>(file);
-        return trouble is not null ? (null, trouble) : (stored!.ToRecord(workspaceId), null);
+        if (trouble is not null)
+            return (null, trouble);
+
+        // A duplicated folder holds a record naming the original. Renaming through it would save
+        // under that id and retitle the healthy meeting instead of the one that was asked for.
+        return Misfiled(stored!.Id, meetingId)
+            ? (null, WrongFolder(folder!))
+            : (stored.ToRecord(workspaceId), null);
     }
 
     private static string FolderFor(Workspace workspace, string meetingId) =>
@@ -303,7 +314,7 @@ public sealed class WorkspaceStore(string registryPath)
         if (problem is not null)
             return (null, problem);
 
-        var entry = entries.FirstOrDefault(e => e.Id == workspaceId);
+        var entry = entries.FirstOrDefault(e => e.Id == workspaceId && e.Complete);
         if (entry is null)
             return (null, NoSuchWorkspace(workspaceId));
 
@@ -344,21 +355,27 @@ public sealed class WorkspaceStore(string registryPath)
             return new WorkspaceResult(null, problem);
 
         var index = entries.FindIndex(e => e.Id == workspace.Id);
-
-        // Two folders, one identity: a restored backup or a share mounted twice. Only a copy if
-        // the folder already listed is still there — otherwise this is the same workspace, moved.
-        if (index >= 0
-            && !SamePath(entries[index].RootPath!, workspace.RootPath)
-            && Directory.Exists(entries[index].RootPath))
-            return Refused(
-                workspace.RootPath,
-                $"That folder is a copy of the workspace \"{entries[index].Name}\", " +
-                $"which is open at {entries[index].RootPath}.");
-
         if (index >= 0)
+        {
+            var listed = entries[index];
+
+            // Two folders, one identity: a restored backup, a share mounted twice. Only a copy
+            // while the folder already listed is still there — otherwise it is the same one, moved.
+            if (!SamePath(listed.RootPath!, workspace.RootPath) && Directory.Exists(listed.RootPath))
+                return Refused(
+                    workspace.RootPath,
+                    $"That folder is a copy of the workspace \"{listed.Name}\", " +
+                    $"which is open at {listed.RootPath}.");
+
+            // The list holds the name the operator last gave it. A rename made while the drive was
+            // out could not reach the marker file, and must not be undone by reading it back.
+            workspace = workspace with { Name = listed.Name! };
             entries[index] = StoredRegistryEntry.From(workspace);
+        }
         else
+        {
             entries.Add(StoredRegistryEntry.From(workspace));
+        }
 
         try
         {
@@ -407,23 +424,69 @@ public sealed class WorkspaceStore(string registryPath)
 
     // A name, never a path: these are resolved against the meeting's own folder.
     private static bool IsFileName(string? name) =>
-        name is null || (name.Length > 0 && name is not ("." or "..") && Path.GetFileName(name) == name);
+        name is null
+        || (!string.IsNullOrWhiteSpace(name)
+            && !name.Contains('/') && !name.Contains('\\')
+            && name is not ("." or ".."));
+
+    private static bool Misfiled(string? recordId, string folderName) =>
+        !string.Equals(recordId, folderName, OperatingSystem.IsLinux()
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase);
+
+    private static StoreProblem WrongFolder(string path) =>
+        new(StoreProblemKind.Unreadable, path,
+            "That meeting record does not belong to the folder it is in.");
 
     private static bool SamePath(string a, string b) =>
         string.Equals(a, b, OperatingSystem.IsLinux()
             ? StringComparison.Ordinal
             : StringComparison.OrdinalIgnoreCase);
 
+    // Two spellings of one folder must not become two workspaces, so every link on the way down
+    // is resolved: on macOS /tmp and /var are themselves symlinks, which makes this the usual case.
     private static string Absolute(string path)
     {
         try
         {
-            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            for (var hops = 0; hops < 40; hops++)
+            {
+                var (resolved, followed) = FollowFirstLink(full);
+                if (!followed)
+                    return resolved;
+
+                full = resolved;
+            }
+
+            return full; // a loop of links; the folder checks will say what is wrong with it
         }
         catch (Exception)
         {
             return path; // let the folder checks phrase it; this is not the place to fail
         }
+    }
+
+    // Resolving one link can expose another above it, so this returns after the first and the
+    // caller walks again from the top.
+    private static (string Path, bool Followed) FollowFirstLink(string full)
+    {
+        var walked = Path.GetPathRoot(full) ?? string.Empty;
+        var parts = full[walked.Length..]
+            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+
+        for (var i = 0; i < parts.Length; i++)
+        {
+            walked = Path.Combine(walked, parts[i]);
+            if (new DirectoryInfo(walked).ResolveLinkTarget(returnFinalTarget: true) is not { } target)
+                continue;
+
+            var rest = Path.Combine([.. parts[(i + 1)..]]);
+            return (Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(Path.Combine(target.FullName, rest))), true);
+        }
+
+        return (full, false);
     }
 
     private static StoreProblem NoSuchWorkspace(string id) =>
@@ -436,11 +499,14 @@ public sealed class WorkspaceStore(string registryPath)
         new(StoreProblemKind.FolderMissing, entry.RootPath!,
             $"The folder for workspace \"{entry.Name}\" is not there.");
 
+    private static StoreProblem Invalid(string subject, string detail) =>
+        new(StoreProblemKind.Invalid, subject, detail);
+
     private static WorkspaceResult Refused(string subject, string detail) =>
-        new(null, new StoreProblem(StoreProblemKind.Invalid, subject, detail));
+        new(null, Invalid(subject, detail));
 
     private static MeetingResult RefusedMeeting(string subject, string detail) =>
-        new(null, new StoreProblem(StoreProblemKind.Invalid, subject, detail));
+        new(null, Invalid(subject, detail));
 
     private static StoreProblem Trouble(string path, string detail, Exception cause)
     {
@@ -460,7 +526,7 @@ public sealed class WorkspaceStore(string registryPath)
         : IStoredRecord
     {
         [JsonIgnore]
-        public bool Complete => Workspaces is not null && Workspaces.TrueForAll(w => w.Complete);
+        public bool Complete => Workspaces is not null;
     }
 
     private sealed record StoredRegistryEntry(
