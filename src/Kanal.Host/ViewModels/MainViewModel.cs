@@ -86,6 +86,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         Sidebar = new WorkspaceSidebarViewModel(
             (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))());
+        Sidebar.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkspaceSidebarViewModel.SelectedMeeting))
+                OnPropertyChanged(nameof(MeetingTitle));
+        };
         _loadSettings = loadSettings;
         _downloads = downloads;
         _resolveKey = resolveKey;
@@ -211,6 +216,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     public WorkspaceSidebarViewModel Sidebar { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MeetingTitle))]
+    private string _liveRoomId = "";
+
+    public string MeetingTitle =>
+        Sidebar.SelectedMeeting?.Title
+        ?? (LiveRoomId.Length > 0 ? LiveRoomId : L["meeting.untitled"]);
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
@@ -692,6 +705,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Columns.Clear();
         Speakers.Clear();
         Assistant.Forget();
+        LiveRoomId = "";
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
@@ -774,6 +788,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
+        LiveRoomId = config.RoomId;
         var relaySettings = RelaySettingsFactory();
         var signingKey = RelaySigningKey.Create();
         RelayConnection relayConnection;

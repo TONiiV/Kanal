@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The meeting title now sits above the transcript, with the room's language flags on the same line.
 - Settings is six tabs down the left instead of one long scroll: General, Audio input,
   Transcription, Translation, Summarisation and Workspace. Every setting that was there before is
   still there, in the tab it belongs to. Summarisation says plainly that it is not built yet rather

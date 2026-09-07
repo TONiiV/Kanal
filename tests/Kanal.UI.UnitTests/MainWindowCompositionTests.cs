@@ -163,7 +163,9 @@ public class MainWindowCompositionTests
             window.GetLogicalDescendants().OfType<MeetingRoomView>().Single()
                 .GetLogicalDescendants().OfType<Button>(),
             button => button.Name == "RoomLanguages");
-        Assert.Equal(Dock.Top, DockPanel.GetDock(flags));
+        // The flags share the title's row now; what has to stay true is that the row is the top
+        // of the transcript rather than the toolbar or the side panel.
+        Assert.Equal(Dock.Top, DockPanel.GetDock((Control)flags.Parent!));
         Assert.Contains(
             flags.GetLogicalDescendants().OfType<ItemsControl>(),
             items => ReferenceEquals(items.ItemsSource, vm.SelectedLanguages));

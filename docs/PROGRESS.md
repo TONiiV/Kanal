@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### The meeting title takes the top of the transcript ([#69](https://github.com/TONiiV/Kanal/issues/69))
+
+#66 had already put the room's overlapping circular language flags at the top of the transcript.
+This gives that row its left half: the meeting title, set at 22 px semi-bold, sharing one grid row
+with the flags. The starred column is the title, so a long German compound truncates and the flags
+keep every pixel they asked for.
+
+There is no project-name header above it and there never was — #64's story 31 asks for its absence,
+and nothing in the host had built one. The transcript/summary/decision tabs of story 38 are the
+same: never built, so there was nothing to remove. Both are recorded here rather than silently
+counted as delivered.
+
+The title is `SelectedMeeting.Title` when the operator is browsing a record, the live room id while
+a room runs, and a placeholder otherwise — never blank. Generating a title with a local model and
+renaming it by hand are [#73](https://github.com/TONiiV/Kanal/issues/73); this is the row that
+displays whatever those produce.
+
+One existing guard moved rather than weakened. `SettingsTheJoinCodeAndTheFlagsMovedOutOfTheirOldHomes`
+asserted the flags button was docked to the top of the transcript; the flags are now inside the
+title's row, so the assertion is on that row instead. What it defends is unchanged — the flags
+belong at the top of the transcript, not in the toolbar or the side panel.
+
 ### The left sidebar becomes a workspace ([#69](https://github.com/TONiiV/Kanal/issues/69))
 
 #65 left the left sidebar as a header and a settings button. It now reads top to bottom: the brand
