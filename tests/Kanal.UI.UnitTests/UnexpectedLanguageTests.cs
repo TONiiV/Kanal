@@ -4,10 +4,6 @@ using Kanal.Core.Providers.Testing;
 
 namespace Kanal.UI.UnitTests;
 
-/// <summary>
-/// Somebody speaks a language nobody picked. The room still has three columns, and none of them
-/// may claim to be the original — the transcript belongs to the language that was recognised.
-/// </summary>
 public class UnexpectedLanguageTests
 {
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 15_000)
@@ -44,7 +40,6 @@ public class UnexpectedLanguageTests
             var bubble = column.Bubbles.First(b => !b.IsPartial && !b.AwaitingTranslation);
             Assert.Equal("EN", bubble.SourceLang);
             Assert.False(bubble.IsTranscript);
-            // Nobody reads English here, but the words that were actually said stay on screen.
             Assert.Equal("We need the ISO 7599 samples before Friday.", bubble.SourceText);
         }
 
