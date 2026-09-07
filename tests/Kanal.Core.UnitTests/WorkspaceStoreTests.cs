@@ -3,7 +3,6 @@ using Kanal.Core.Workspaces;
 
 namespace Kanal.Core.UnitTests;
 
-/// <summary>What must never happen to meeting records on disk: cross-talk, overwriting, silent loss.</summary>
 public class WorkspaceStoreTests : IDisposable
 {
     private readonly string _root = Path.Combine(
@@ -82,9 +81,7 @@ public class WorkspaceStoreTests : IDisposable
 
         var read = Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
         Assert.Equal(saved.Languages, read.Languages);
-        // A record compares its list field by reference, so the languages are checked above and
-        // held constant here. What this still catches is the one that matters: a field added to
-        // MeetingRecord later and forgotten on the way to disk.
+        // A record compares its list field by reference, so hold it constant and compare the rest.
         IReadOnlyList<string> same = [];
         Assert.Equal(saved with { Languages = same }, read with { Languages = same });
     }
@@ -164,7 +161,7 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(workspace.Id, Assert.Single(listing.Workspaces).Id);
         var problem = Assert.Single(listing.Problems);
         Assert.Equal(StoreProblemKind.FolderMissing, problem.Kind);
-        Assert.Equal(folder, problem.Path);
+        Assert.Equal(folder, problem.Subject);
     }
 
     [Fact]
@@ -265,7 +262,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Single(store.ListWorkspaces().Workspaces);
     }
 
-    /// <summary>Adding a folder that is already a workspace opens it: the name on disk outranks the one typed.</summary>
     [Fact]
     public void AdoptingAWorkspaceKeepsTheNameItAlreadyHad()
     {
@@ -344,10 +340,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Empty(listing.Problems);
     }
 
-    /// <summary>
-    /// Valid JSON is not a valid record: the deserializer fills a field it cannot find with null,
-    /// and a meeting with no id names a folder that no later operation could open.
-    /// </summary>
     [Fact]
     public void AHalfWrittenRecordIsReportedRatherThanListedAsAPhantom()
     {
@@ -379,7 +371,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
     }
 
-    /// <summary>A record that cannot be opened at all, as opposed to one whose contents are wrong.</summary>
     [Fact]
     public void ARecordThatCannotBeReadIsReportedRatherThanThrown()
     {
@@ -398,7 +389,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
     }
 
-    /// <summary>An interrupted save: the operator saw the meeting created, so it cannot just be absent.</summary>
     [Fact]
     public void AMeetingFolderWithNoRecordIsReported()
     {
@@ -435,6 +425,90 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Null(result.Meeting);
         Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
+    }
+
+    /// <summary>
+    /// A meeting id becomes a folder name. A hand-edited ".." would list as an ordinary meeting
+    /// and then, on Delete, take the whole workspace and every transcript in it.
+    /// </summary>
+    [Fact]
+    public void AMeetingIdThatWouldEscapeItsWorkspaceIsRefused()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var kept = Path.Combine(workspace.RootPath, WorkspaceStore.WorkspaceFileName);
+        var folder = Path.Combine(workspace.RootPath, "meetings", "odd");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(
+            Path.Combine(folder, WorkspaceStore.MeetingFileName),
+            $$"""{"schemaVersion":{{WorkspaceStore.SchemaVersion}},"id":"..","title":"Tooling review"}""");
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.Invalid, store.DeleteMeeting(workspace.Id, "..")!.Kind);
+        Assert.Null(store.MeetingFolder(workspace.Id, ".."));
+        Assert.True(File.Exists(kept));
+    }
+
+    /// <summary>
+    /// A copied folder — a restored backup, a share mounted twice — carries the original's id.
+    /// Registering it by id alone would point the one row at the copy and lose the original.
+    /// </summary>
+    [Fact]
+    public void ACopiedWorkspaceFolderIsReportedRatherThanReplacingTheOriginal()
+    {
+        var store = Store();
+        var original = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(original.Id, "Tooling review"));
+        var copy = Folder("acme-backup");
+        foreach (var file in Directory.EnumerateFiles(original.RootPath))
+            File.Copy(file, Path.Combine(copy, Path.GetFileName(file)));
+
+        var result = store.OpenWorkspace(copy);
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        var listed = Assert.Single(Store().ListWorkspaces().Workspaces);
+        Assert.Equal(original.RootPath, listed.RootPath);
+        Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(original.Id).Meetings).Id);
+    }
+
+    [Fact]
+    public void AMeetingsFolderThatCannotBeListedIsReported()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var meetings = Path.Combine(workspace.RootPath, "meetings");
+
+        if (OperatingSystem.IsWindows())
+            return; // no mode bits to take away; the guard under test is platform-independent
+
+        File.SetUnixFileMode(meetings, UnixFileMode.None);
+        try
+        {
+            if (Directory.EnumerateDirectories(meetings).Any())
+                return; // running as root, where a mode of 000 stops nothing
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // the folder is unreadable, which is the state this test needs
+        }
+
+        try
+        {
+            var listing = Store().ListMeetings(workspace.Id);
+
+            Assert.Empty(listing.Meetings);
+            Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                meetings, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]

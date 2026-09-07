@@ -45,12 +45,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   a newer Kanal each produce a `StoreProblem` while the surviving records still list. `StoreProblem`
   distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
   (plug the drive in), `Unreadable`, `Unwritable`, `UnsupportedVersion`.
-- Two things a JSON deserializer does quietly that this store refuses. A later schema version is not
-  half-parsed, because the next save would write the fields it did not understand back as loss. And
-  a record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
+- Three things a JSON deserializer does quietly that this store refuses. A later schema version is
+  not half-parsed, because the next save would write the fields it did not understand back as loss.
+  A record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
   field with null, which would list a phantom meeting whose folder no later operation could open.
+  And a meeting id has to survive being used as a folder name — a hand-edited `"id": ".."` would
+  otherwise list as an ordinary meeting whose Delete button took the workspace and every transcript
+  in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, checked on the way in and on the way out.
 - Adding a folder that already holds a workspace adopts it under the name already on disk — picking
-  last year's folder means "open this", so the stored name outranks the one typed into the box.
+  last year's folder means "open this", so the stored name outranks the one typed into the box. A
+  *copy* of such a folder — a restored backup, a share mounted twice — carries the original's id, so
+  it is reported rather than adopted; registering it by id alone would silently repoint the one row
+  at the copy and leave the original's meetings unreachable. Folder paths are stored absolute.
 - `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
   workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
   the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a

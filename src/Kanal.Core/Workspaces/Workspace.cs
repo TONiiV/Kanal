@@ -1,13 +1,13 @@
 namespace Kanal.Core.Workspaces;
 
-/// <summary>A folder holding several meetings. Project, company, team: peers, never nested (ADR 0051).</summary>
+// Peers, never nested: there is no company-above-project level here (ADR 0051).
 public sealed record Workspace(
     string Id,
     string Name,
     string RootPath,
     DateTimeOffset CreatedAt);
 
-/// <summary>File names are relative to the meeting's folder: a workspace survives being moved or re-mounted.</summary>
+// File names, not paths: a workspace has to survive being moved or mounted somewhere else.
 public sealed record MeetingRecord(
     string Id,
     string WorkspaceId,
@@ -25,7 +25,6 @@ public enum StoreProblemKind
 
     NotFound,
 
-    /// <summary>Known to the list, but not on disk — an unplugged drive, a moved folder.</summary>
     FolderMissing,
 
     Unreadable,
@@ -35,8 +34,8 @@ public enum StoreProblemKind
     UnsupportedVersion,
 }
 
-/// <summary>Always reported alongside what could be read: one bad record must not empty the list.</summary>
-public sealed record StoreProblem(StoreProblemKind Kind, string Path, string Detail);
+// Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.
+public sealed record StoreProblem(StoreProblemKind Kind, string Subject, string Detail);
 
 public sealed record WorkspaceListing(
     IReadOnlyList<Workspace> Workspaces,
