@@ -24,6 +24,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   Transcription, Translation, Summarisation and Workspace. Every setting that was there before is
   still there, in the tab it belongs to. Summarisation says plainly that it is not built yet rather
   than showing controls that would do nothing.
+- If somebody speaks a language the room has no column for, Kanal now says which language it was
+  instead of picking one of the columns and calling it the original. The words that were actually
+  said stay on screen under every translation.
 - The left sidebar is now a workspace. Search your meetings, start a new one with the button beside
   the search box, switch between projects, and reach import and export from each meeting's own
   menu. A record that cannot be read is reported instead of quietly shrinking the list.

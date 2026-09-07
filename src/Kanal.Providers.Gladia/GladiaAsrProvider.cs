@@ -44,9 +44,11 @@ public sealed class GladiaAsrProvider : IAsrProvider, IDisposable
             ["sample_rate"] = session.SampleRateHz,
             ["bit_depth"] = 16,
             ["channels"] = 1,
+            // No "languages": that field restricts recognition, and restricting it to the columns
+            // on screen made an English sentence come back tagged as one of them, with a column
+            // that never heard it labelled ORIGINAL.
             ["language_config"] = new JsonObject
             {
-                ["languages"] = new JsonArray(session.ExpectedLanguages.Select(l => (JsonNode)l).ToArray()),
                 ["code_switching"] = true,
             },
             // without this Gladia only delivers finals — the UI needs partials for live gray text

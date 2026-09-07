@@ -130,7 +130,7 @@ static async Task<int> GladiaCheckAsync(string? wavPath, bool fast)
     try
     {
         session = await provider.StartAsync(
-            new AsrSessionOptions(16_000, ["zh", "de", "pl", "en"], ["zh", "de", "pl", "en"]),
+            new AsrSessionOptions(16_000, ["zh", "de", "pl", "en"]),
             CancellationToken.None);
     }
     catch (Exception ex)

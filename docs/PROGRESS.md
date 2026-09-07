@@ -6,6 +6,27 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### The language that was spoken, not the one that was picked ([#28](https://github.com/TONiiV/Kanal/issues/28))
+
+The room's language columns were being sent to Gladia as `language_config.languages`, which does not
+hint at recognition — it restricts it. An English sentence in a zh/de/pl room therefore came back
+tagged as one of those three, and the column that never heard it was labelled ORIGINAL over text
+nobody had said in that language. In a meeting where a part number is read out in the one language
+everybody happens to share, that is the worst place to be confidently wrong.
+
+Recognition is now unconstrained: `code_switching` stays on, the `languages` field is gone, and what
+comes back is what was heard. Translation targets are untouched — those are the columns on screen,
+and they were always a separate list. The cost is that Gladia no longer has the room's languages as
+a prior; the benefit is that the label under an utterance is now a fact rather than a projection.
+
+`AsrSessionOptions.ExpectedLanguages` went with it. Nothing else read it, and a field that exists to
+be ignored is the one a later reader wires back up. A local ASR provider that genuinely wants a
+prior can reintroduce it with a consumer attached.
+
+The display half turned out to be right already, and now has a guard: `UnexpectedLanguageTests`
+starts a zh/de/pl room, has one English sentence spoken into it, and asserts every column shows `EN`,
+no column claims to be the original, and the English words stay on screen under each translation.
+
 ### A meeting names itself, and the operator has the last word ([#73](https://github.com/TONiiV/Kanal/issues/73))
 
 The ticket asked for three contracts to be fixed here rather than left open. They are:
