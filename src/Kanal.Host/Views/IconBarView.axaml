@@ -132,17 +132,33 @@
                                   AutomationProperties.Name="{Binding CaptureTip}">
                             <ComboBox.SelectionBoxItemTemplate>
                                 <DataTemplate x:DataType="vm:CaptureProfileOption">
-                                    <Path Classes="glyph" Data="{StaticResource GlyphScreen}" Width="14" Height="14"
-                                          Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                    <Panel VerticalAlignment="Center" HorizontalAlignment="Left">
+                                        <Path Classes="glyph" Data="{StaticResource GlyphPeople}"
+                                              IsVisible="{Binding IsInRoom}" Width="14" Height="14"
+                                              Stretch="Uniform" VerticalAlignment="Center" />
+                                        <Path Classes="glyph" Data="{StaticResource GlyphScreen}"
+                                              IsVisible="{Binding !IsInRoom}" Width="14" Height="14"
+                                              Stretch="Uniform" VerticalAlignment="Center" />
+                                    </Panel>
                                 </DataTemplate>
                             </ComboBox.SelectionBoxItemTemplate>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CaptureProfileOption">
-                                    <StackPanel Spacing="3" MaxWidth="300" Margin="0,3,0,4">
-                                        <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
-                                                   TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
-                                    </StackPanel>
+                                    <Grid ColumnDefinitions="Auto,*" MaxWidth="300" Margin="0,3,0,4">
+                                        <Panel Grid.Column="0" Margin="0,3,11,0" VerticalAlignment="Top">
+                                            <Path Classes="glyph" Data="{StaticResource GlyphPeople}"
+                                                  IsVisible="{Binding IsInRoom}" Width="13" Height="13"
+                                                  Stretch="Uniform" />
+                                            <Path Classes="glyph" Data="{StaticResource GlyphScreen}"
+                                                  IsVisible="{Binding !IsInRoom}" Width="13" Height="13"
+                                                  Stretch="Uniform" />
+                                        </Panel>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
+                                                       TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>

@@ -57,6 +57,7 @@
             <StreamGeometry x:Key="GlyphSettings">F1 M0,2.5 H14 V3.9 H0 Z M3.2,0.9 H6.2 V5.5 H3.2 Z M0,6.5 H14 V7.9 H0 Z M8.4,4.9 H11.4 V9.5 H8.4 Z M0,10.5 H14 V11.9 H0 Z M1.6,8.9 H4.6 V13.5 H1.6 Z</StreamGeometry>
 
             <StreamGeometry x:Key="GlyphChip">M2,2 H12 V12 H2 Z M4.4,4.4 H9.6 V9.6 H4.4 Z M3,0 H4.2 V2 H3 Z M6.4,0 H7.6 V2 H6.4 Z M9.8,0 H11 V2 H9.8 Z M3,12 H4.2 V14 H3 Z M6.4,12 H7.6 V14 H6.4 Z M9.8,12 H11 V14 H9.8 Z M0,3 H2 V4.2 H0 Z M0,6.4 H2 V7.6 H0 Z M0,9.8 H2 V11 H0 Z M12,3 H14 V4.2 H12 Z M12,6.4 H14 V7.6 H12 Z M12,9.8 H14 V11 H12 Z</StreamGeometry>
+            <StreamGeometry x:Key="GlyphPeople">F1 M2.0,3.9 A2.6,2.6 0 1 1 7.2,3.9 A2.6,2.6 0 1 1 2.0,3.9 Z M8.5,4.6 A2.1,2.1 0 1 1 12.7,4.6 A2.1,2.1 0 1 1 8.5,4.6 Z M0.2,12.8 A4.4,4.4 0 0 1 9.0,12.8 Z M8.6,12.8 A2.7,2.7 0 0 1 14.0,12.8 Z</StreamGeometry>
             <StreamGeometry x:Key="GlyphScreen">M0,1 H14 V11 H0 Z M1.4,2.4 H12.6 V9.6 H1.4 Z M5.6,11 H8.4 V13 H5.6 Z M3.5,13 H10.5 V14 H3.5 Z</StreamGeometry>
 
             <StreamGeometry x:Key="GlyphRecord">M0,6 A6,6 0 1 1 12,6 A6,6 0 1 1 0,6 Z</StreamGeometry>
@@ -228,26 +229,21 @@
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
+        <!-- Restated for :disabled, which would otherwise fall through to the base rule and ring
+             the disc in Rule grey. -->
         <Style Selector="Button.mark:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{TemplateBinding Background}" />
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
-        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource Record}" />
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
-        <Style Selector="Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Record}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-        </Style>
-
-        <Style Selector="Button.mark.hold:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Hold}" />
-        </Style>
-
-        <Style Selector="Button.mark.hold:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="Button.mark.hold:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.mark.hold:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource Hold}" />
         </Style>
 
@@ -259,11 +255,7 @@
             <Setter Property="Fill" Value="{StaticResource Hold}" />
         </Style>
 
-        <Style Selector="Button.mark:pointerover Path">
-            <Setter Property="Fill" Value="{StaticResource Sheet}" />
-        </Style>
-
-        <Style Selector="Button.mark:pressed Path">
+        <Style Selector="Button.mark:pointerover Path, Button.mark:pressed Path">
             <Setter Property="Fill" Value="{StaticResource Sheet}" />
         </Style>
 

@@ -17,6 +17,10 @@ chevron came out 12 px wide, which cut 2 px off a 14 px screen mark. It is 76 px
 gets its full width and the box draws all four sides. `MainWindowCompositionTests` measures the
 glyph against the first clipping ancestor above it, which is the assertion that failed before.
 
+The picker also drew one screen mark for both profiles, so a picker that fit would still not have
+said which of the two was selected. In-room now carries a two-person mark and online the screen,
+in the collapsed box and in the dropdown rows alike.
+
 **Record, pause and stop are discs.** Each mark is a 34 px circle carrying a paler wash of its own
 colour — `RecordWash` under the red marks, `HoldWash` under the ochre pause — with the mark itself
 at full strength on top. The wash is the colour the glyph already had, not a new one: the transport

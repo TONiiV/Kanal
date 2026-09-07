@@ -5,6 +5,7 @@ using Shape = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Kanal.Host.Views;
 
@@ -219,7 +220,7 @@ public class MainWindowCompositionTests
             combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
         var glyph = Assert.Single(
             capture.GetVisualDescendants().OfType<Shape>(),
-            path => path.Classes.Contains("glyph"));
+            path => path.Classes.Contains("glyph") && path.IsVisible);
 
         var slot = glyph.GetVisualAncestors().OfType<Visual>().First(visual => visual.ClipToBounds);
         var corner = glyph.TranslatePoint(new Point(glyph.Bounds.Width, glyph.Bounds.Height), slot);
@@ -228,6 +229,40 @@ public class MainWindowCompositionTests
         Assert.True(
             corner.Value.X <= slot.Bounds.Width + 0.5 && corner.Value.Y <= slot.Bounds.Height + 0.5,
             $"the capture glyph runs to {corner.Value} in a {slot.Bounds.Size} slot, so it is cut off.");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheCapturePickerShowsAMarkPerProfileWithoutBeingOpened()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var capture = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
+
+        Geometry? Shown()
+        {
+            Dispatcher.UIThread.RunJobs();
+            return capture.GetVisualDescendants().OfType<Shape>()
+                .Where(path => path.Classes.Contains("glyph") && path.IsVisible)
+                .Select(path => path.Data)
+                .SingleOrDefault();
+        }
+
+        vm.SelectedCaptureProfile = vm.CaptureProfiles.Single(profile => profile.IsInRoom);
+        var inRoom = Shown();
+        vm.SelectedCaptureProfile = vm.CaptureProfiles.Single(profile => !profile.IsInRoom);
+        var online = Shown();
+
+        Assert.NotNull(inRoom);
+        Assert.NotNull(online);
+        Assert.NotSame(inRoom, online);
 
         window.Close();
     }
