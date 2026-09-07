@@ -263,5 +263,8 @@
   "meeting.import": "Importuj do tego spotkania",
   "meeting.export": "Eksportuj to spotkanie",
   "workspace.noproject": "Nie otwarto jeszcze projektu. Dodaj go, aby przechowywać zapisy.",
-  "workspace.nomeetings": "Nie ma tu jeszcze spotkań."
+  "workspace.nomeetings": "Nie ma tu jeszcze spotkań.",
+  "workspace.picker": "Projekt",
+  "workspace.meetings": "Spotkania",
+  "workspace.nomatches": "Nic nie pasuje."
 }

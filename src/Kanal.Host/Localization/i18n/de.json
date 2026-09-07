@@ -263,5 +263,8 @@
   "meeting.import": "In diese Besprechung importieren",
   "meeting.export": "Diese Besprechung exportieren",
   "workspace.noproject": "Noch kein Projekt geöffnet. Fügen Sie eines hinzu, um Aufzeichnungen zu behalten.",
-  "workspace.nomeetings": "Hier gibt es noch keine Besprechungen."
+  "workspace.nomeetings": "Hier gibt es noch keine Besprechungen.",
+  "workspace.picker": "Projekt",
+  "workspace.meetings": "Besprechungen",
+  "workspace.nomatches": "Nichts passt dazu."
 }

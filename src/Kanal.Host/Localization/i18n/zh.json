@@ -263,5 +263,8 @@
   "meeting.import": "导入到本场会议",
   "meeting.export": "导出本场会议",
   "workspace.noproject": "尚未打开项目。添加一个以保存会议记录。",
-  "workspace.nomeetings": "这里还没有会议。"
+  "workspace.nomeetings": "这里还没有会议。",
+  "workspace.picker": "项目",
+  "workspace.meetings": "会议",
+  "workspace.nomatches": "没有匹配的会议。"
 }

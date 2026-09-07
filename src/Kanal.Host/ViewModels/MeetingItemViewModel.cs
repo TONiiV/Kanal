@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Workspaces;
@@ -18,8 +17,6 @@ public sealed partial class MeetingItemViewModel(
     public string Title => Record.Title;
 
     public string When => Record.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-
-    public bool HasTranscript => File.Exists(Record.TranscriptPath);
 
     [RelayCommand]
     private Task Import() => import(this);

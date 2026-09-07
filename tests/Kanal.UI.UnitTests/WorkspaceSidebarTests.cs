@@ -60,6 +60,12 @@ public class WorkspaceSidebarTests : IDisposable
 
         vm.Search = "";
         Assert.Equal(3, vm.Meetings.Count);
+
+        // An empty list under a search is a search that found nothing, not a workspace with nothing.
+        vm.Search = "no such meeting";
+        Assert.Equal(Kanal.Host.Localization.Localizer.Instance["workspace.nomatches"], vm.EmptyNote);
+        vm.Search = "";
+        Assert.Equal(Kanal.Host.Localization.Localizer.Instance["workspace.nomeetings"], vm.EmptyNote);
     }
 
     [Fact]
@@ -205,15 +211,20 @@ public class WorkspaceSidebarTests : IDisposable
         var (window, _) = Shown();
         var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
 
+        var spoken = new List<string>();
         foreach (var name in new[]
                  { "MeetingSearch", "NewMeeting", "WorkspacePicker", "WorkspaceAdd", "MeetingList", "Settings" })
         {
             var control = Named(sidebar, name);
             Assert.True(control.Focusable || control is ItemsControl, $"{name} cannot be reached by keyboard.");
-            if (control is Button or TextBox)
-                Assert.False(string.IsNullOrWhiteSpace(
-                    Avalonia.Automation.AutomationProperties.GetName(control)), $"{name} has no accessible name.");
+            var spokenName = Avalonia.Automation.AutomationProperties.GetName(control);
+            Assert.False(string.IsNullOrWhiteSpace(spokenName), $"{name} has no accessible name.");
+            spoken.Add(spokenName!);
         }
+
+        // A name borrowed from a neighbour reads as that neighbour, and a non-blank assertion
+        // alone cannot tell the two apart.
+        Assert.Equal(spoken.Count, spoken.Distinct().Count());
 
         window.Close();
     }

@@ -56,7 +56,7 @@
             <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
                        Text="{Binding Sidebar.ProblemNote}" TextWrapping="Wrap"
                        Margin="14,0,14,12" FontSize="11.5" LineHeight="17"
-                       Foreground="{StaticResource Record}"
+                       Foreground="{StaticResource Alarm}"
                        IsVisible="{Binding Sidebar.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="14,14,14,0" ColumnSpacing="7">
@@ -77,7 +77,7 @@
                           ItemsSource="{Binding Sidebar.Workspaces}"
                           SelectedItem="{Binding Sidebar.SelectedWorkspace}"
                           PlaceholderText="{l:T workspace.noproject}"
-                          AutomationProperties.Name="{l:T workspace.newproject}">
+                          AutomationProperties.Name="{l:T workspace.picker}">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
                             <TextBlock Text="{Binding Name}" />
@@ -105,11 +105,16 @@
                 </Button>
             </Grid>
 
+            <TextBlock DockPanel.Dock="Top" x:Name="NoMeetings" Text="{Binding Sidebar.EmptyNote}"
+                       Margin="14,16,14,0" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{StaticResource Ink3}"
+                       IsVisible="{Binding !Sidebar.Meetings.Count}" />
+
             <ListBox x:Name="MeetingList" Margin="7,12,7,10" Background="Transparent"
                      BorderThickness="0"
                      ItemsSource="{Binding Sidebar.Meetings}"
                      SelectedItem="{Binding Sidebar.SelectedMeeting}"
-                     AutomationProperties.Name="{l:T workspace.search}">
+                     AutomationProperties.Name="{l:T workspace.meetings}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:MeetingItemViewModel">
                         <Grid ColumnDefinitions="*,Auto">

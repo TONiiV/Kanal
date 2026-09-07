@@ -263,5 +263,8 @@
   "meeting.import": "Import into this meeting",
   "meeting.export": "Export this meeting",
   "workspace.noproject": "No project open yet. Add one to keep meeting records.",
-  "workspace.nomeetings": "No meetings here yet."
+  "workspace.nomeetings": "No meetings here yet.",
+  "workspace.picker": "Project",
+  "workspace.meetings": "Meetings",
+  "workspace.nomatches": "Nothing matches that."
 }

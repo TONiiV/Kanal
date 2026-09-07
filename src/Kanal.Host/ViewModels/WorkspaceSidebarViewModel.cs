@@ -51,6 +51,9 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public bool HasWorkspace => SelectedWorkspace is not null;
 
+    public string EmptyNote =>
+        Search.Trim().Length > 0 ? L["workspace.nomatches"] : L["workspace.nomeetings"];
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();
@@ -88,6 +91,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private void Show()
     {
+        OnPropertyChanged(nameof(EmptyNote));
         var keep = SelectedMeeting?.Id;
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
@@ -104,11 +108,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private void NewMeeting()
     {
         var (meeting, problem) = _store.CreateMeeting(SelectedWorkspace!.Id, L["meeting.untitled"]);
-        if (problem is not null)
-        {
-            Report(problem);
+        if (Refused(problem))
             return;
-        }
 
         Search = "";
         LoadMeetings([]);
@@ -121,12 +122,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (ChooseWorkspaceFolder is null || await ChooseWorkspaceFolder() is not { } folder)
             return;
 
-        var (workspace, problem) = _store.CreateWorkspace(Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), folder);
-        if (problem is not null)
-        {
-            Report(problem);
+        var (workspace, problem) = _store.CreateWorkspace(
+            Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), folder);
+        if (Refused(problem))
             return;
-        }
 
         Refresh();
         SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == workspace!.Id);
@@ -140,11 +139,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
         var (meeting, problem) = _store.CreateMeeting(
             SelectedWorkspace!.Id, Path.GetFileNameWithoutExtension(source));
-        if (problem is not null)
-        {
-            Report(problem);
+        if (Refused(problem))
             return;
-        }
 
         await CopyIntoAsync(meeting!, source);
     }
@@ -176,10 +172,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        var (_, problem) = _store.SaveMeeting(meeting with { TranscriptPath = target });
-        if (problem is not null)
-            Report(problem);
-
+        Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
         LoadMeetings([]);
         return Task.CompletedTask;
     }
@@ -207,10 +200,14 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
     }
 
-    private void Report(StoreProblem problem)
+    private bool Refused(StoreProblem? problem)
     {
+        if (problem is null)
+            return false;
+
         ProblemNote = problem.Detail;
         Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        return true;
     }
 
     private static Localizer L => Localizer.Instance;
