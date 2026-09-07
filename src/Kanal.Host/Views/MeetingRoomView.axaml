@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
+             xmlns:controls="using:Kanal.Host.Controls"
              x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
         <Style Selector="Border.rec">
@@ -32,7 +33,33 @@
         </Style>
     </UserControl.Styles>
 
-    <Panel>
+    <DockPanel>
+        <Button DockPanel.Dock="Top" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
+                Margin="24,18,24,0" HorizontalAlignment="Right" Click="OnLanguagesClick"
+                IsEnabled="{Binding !IsRunning}"
+                ToolTip.Tip="{l:T languages.tip}"
+                AutomationProperties.Name="{l:T languages.tip}">
+            <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                <ItemsControl ItemsSource="{Binding SelectedLanguages}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="-8" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LanguageOption">
+                            <Border Background="{StaticResource Sheet}" CornerRadius="13" Padding="2">
+                                <controls:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding SelectedLanguageSummary}" FontSize="12"
+                           Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Button>
+
+        <Panel>
         <StackPanel IsVisible="{Binding !HasColumns}" Margin="24,30,24,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
             <TextBlock Text="{l:T empty.heading}" Classes="label" />
@@ -116,5 +143,6 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-    </Panel>
+        </Panel>
+    </DockPanel>
 </UserControl>

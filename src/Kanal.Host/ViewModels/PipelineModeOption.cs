@@ -20,6 +20,8 @@ public partial class PipelineModeOption : ViewModelBase
 
     public string Name => Mode.Name;
 
+    public string Short => Mode.Short;
+
     public string Help => Mode.Help;
 
     [ObservableProperty]
@@ -41,6 +43,7 @@ public partial class PipelineModeOption : ViewModelBase
     public void RefreshText()
     {
         OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(Short));
         OnPropertyChanged(nameof(Help));
         OnPropertyChanged(nameof(Detail));
         OnPropertyChanged(nameof(Status));

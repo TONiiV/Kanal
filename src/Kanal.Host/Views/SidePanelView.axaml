@@ -20,22 +20,6 @@
             </Border>
             <Border Padding="20,20,20,16">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasJoinInfo}" Margin="0,0,0,22">
-                        <TextBlock Text="{l:T join.label}" Classes="label" />
-                        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,12" />
-                        <Image Source="{Binding QrImage}" Width="196" Height="196" HorizontalAlignment="Left"
-                               RenderOptions.BitmapInterpolationMode="None" />
-                        <TextBox Text="{Binding JoinUrl}" IsReadOnly="True" FontSize="10" Height="48"
-                                 TextWrapping="Wrap" AcceptsReturn="True" Margin="0,10,0,0" />
-                    </StackPanel>
-
-                    <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasJoinError}" Margin="0,0,0,22">
-                        <TextBlock Text="{l:T join.label}" Classes="label" />
-                        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,12" />
-                        <TextBlock Text="{Binding JoinError}" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink2}" FontSize="12" />
-                    </StackPanel>
-
                     <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
                         <TextBlock Text="{l:T merge.label}" Classes="label" />
                         <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />

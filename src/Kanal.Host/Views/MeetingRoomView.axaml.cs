@@ -20,6 +20,14 @@ public partial class MeetingRoomView : UserControl
 
     public MeetingRoomView() => InitializeComponent();
 
+    private async void OnLanguagesClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+            return;
+
+        await new LanguagesWindow { DataContext = DataContext }.ShowDialog(owner);
+    }
+
     private void OnColumnScrollLoaded(object? sender, RoutedEventArgs e)
     {
         if (sender is not ScrollViewer scroller || _following.ContainsKey(scroller))

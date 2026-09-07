@@ -9,6 +9,14 @@ namespace Kanal.UI.UnitTests;
 
 public class MainWindowCompositionTests
 {
+    private static IconBarView Bar(Window window) =>
+        window.GetLogicalDescendants().OfType<IconBarView>().Single();
+
+    private static StackPanel Cluster(Window window, string name) =>
+        Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<StackPanel>(),
+            panel => panel.Name == name);
+
     [AvaloniaFact]
     public void MainWindowComposesTheFourNamedRegionsWithoutAWordmark()
     {
@@ -21,119 +29,183 @@ public class MainWindowCompositionTests
         Assert.Single(window.GetLogicalDescendants().OfType<SidePanelView>());
         Assert.Single(window.GetLogicalDescendants().OfType<StatusBarView>());
 
-        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
+        var iconBar = Bar(window);
         Assert.DoesNotContain(
             iconBar.GetLogicalDescendants().OfType<TextBlock>(),
             text => string.Equals(text.Text, "KANAL", StringComparison.Ordinal));
-
-        var toolbarScroller = Assert.Single(
-            iconBar.GetLogicalDescendants().OfType<ScrollViewer>(),
-            scroller => scroller.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto);
-        Assert.Equal(ScrollBarVisibility.Disabled, toolbarScroller.VerticalScrollBarVisibility);
 
         var buttons = iconBar.GetLogicalDescendants().OfType<Button>().ToList();
         Assert.Contains(buttons, button => ReferenceEquals(button.Command, vm.StartCommand));
         Assert.Contains(buttons, button => ReferenceEquals(button.Command, vm.PauseCommand));
         Assert.Contains(buttons, button => ReferenceEquals(button.Command, vm.StopCommand));
-        Assert.Contains(buttons, button => ReferenceEquals(button.Command, vm.ExportMarkdownCommand));
 
         window.Close();
     }
 
-    /// <summary>
-    /// The bar reads as two clusters: what drives the meeting on the left, what is set up once on
-    /// the right. Which panel a control belongs to is the whole point of the arrangement, so it is
-    /// asserted here rather than left to a pixel comparison.
-    /// </summary>
     [AvaloniaFact]
-    public void TheToolbarSplitsIntoALeftMeetingClusterAndARightSetupCluster()
+    public void TheBarIsThreeClustersWithTheTransportInTheMiddle()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+
+        var left = Cluster(window, "LeftCluster");
+        var transport = Cluster(window, "Transport");
+        var right = Cluster(window, "RightCluster");
+
+        Assert.Equal(0, Grid.GetColumn(left));
+        Assert.Equal(1, Grid.GetColumn(transport));
+        Assert.Equal(2, Grid.GetColumn(right));
+
+        Assert.Contains(
+            left.GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+        Assert.Contains(
+            left.GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
+
+        var marks = transport.GetLogicalDescendants().OfType<Button>().ToList();
+        Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.StartCommand));
+        Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.PauseCommand));
+        Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.StopCommand));
+        Assert.Single(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "AudioDevices");
+
+        Assert.Single(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "JoinQr");
+
+        var grid = Assert.IsType<Grid>(left.Parent);
+        Assert.Equal([left, transport, right], grid.Children);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheTransportKeepsItsWidthAsTheWindowNarrowsAndTheBarNeverScrolls()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 2200, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var wide = Cluster(window, "Transport").Bounds.Width;
+        Assert.True(wide > 0, "the transport measured nothing at 2200 px.");
+
+        foreach (var width in new[] { 1320.0, 900.0 })
+        {
+            window.Width = width;
+            Dispatcher.UIThread.RunJobs();
+
+            var transport = Cluster(window, "Transport");
+            Assert.Equal(wide, transport.Bounds.Width, precision: 1);
+
+            var bar = Assert.IsType<Grid>(transport.Parent);
+            Assert.True(
+                transport.Bounds.X >= 0 && transport.Bounds.Right <= bar.Bounds.Width + 1,
+                $"the transport left the bar at {width} px: {transport.Bounds} in {bar.Bounds}");
+        }
+
+        Assert.DoesNotContain(
+            Bar(window).GetLogicalDescendants().OfType<ScrollViewer>(),
+            scroller => scroller.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheMarksOnScreenFollowTheMeetingState()
     {
         var vm = TestViewModels.Hermetic();
         var window = new MainWindow { DataContext = vm };
         window.Show();
 
-        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
-        var panels = iconBar.GetLogicalDescendants().OfType<StackPanel>().ToList();
-        var left = Assert.Single(panels, panel => panel.Name == "LeftCluster");
-        var right = Assert.Single(panels, panel => panel.Name == "RightCluster");
+        var transport = Cluster(window, "Transport");
+        var record = Assert.Single(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "RecordMark");
+        var pause = Assert.Single(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "PauseMark");
+        var stop = Assert.Single(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "StopMark");
 
-        Assert.Equal(Dock.Left, DockPanel.GetDock(left));
-        Assert.Equal(Dock.Right, DockPanel.GetDock(right));
+        Assert.True(record.IsVisible);
+        Assert.False(pause.IsVisible);
+        Assert.False(stop.IsVisible);
 
-        var leftButtons = left.GetLogicalDescendants().OfType<Button>().ToList();
-        Assert.Contains(leftButtons, button => ReferenceEquals(button.Command, vm.StartCommand));
-        Assert.Contains(leftButtons, button => ReferenceEquals(button.Command, vm.PauseCommand));
-        Assert.Contains(leftButtons, button => ReferenceEquals(button.Command, vm.StopCommand));
-        Assert.Contains(
-            left.GetLogicalDescendants().OfType<ComboBox>(),
-            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+        vm.IsRunning = true;
+        Dispatcher.UIThread.RunJobs();
 
-        Assert.Contains(
-            right.GetLogicalDescendants().OfType<Button>(),
-            button => ReferenceEquals(button.Command, vm.ExportMarkdownCommand));
-        Assert.Contains(
-            right.GetLogicalDescendants().OfType<ComboBox>(),
-            combo => ReferenceEquals(combo.ItemsSource, vm.Devices));
-
-        // Tree order, not laid-out position, is what Tab and a screen reader follow: the operator
-        // must meet the transport before Export and Settings.
-        var dock = Assert.IsType<DockPanel>(left.Parent);
-        Assert.Equal([left, right], dock.Children);
+        Assert.False(record.IsVisible);
+        Assert.True(pause.IsVisible);
+        Assert.True(stop.IsVisible);
 
         window.Close();
     }
 
-    /// <summary>
-    /// The two claims the arrangement rests on, and the only two that can fail silently: the right
-    /// cluster holds the viewport edge while the bar fits, and the clusters keep a gap once it does
-    /// not. Measured rather than compared to a picture - the numbers are the behaviour.
-    /// </summary>
-    [AvaloniaTheory]
-    // The bar now lives in the centre column, so what it has to work with is the window less both
-    // sidebars - collapsing them is what hands it the whole width. 2200 is the width the fitting
-    // case has always needed; the sidebars change which states reach it, not the number.
-    [InlineData(2200.0, true, true)]
-    [InlineData(2200.0, false, false)]
-    [InlineData(1320.0, true, false)]
-    public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(
-        double width, bool sidebarsAway, bool expectedToFit)
+    [AvaloniaFact]
+    public void SettingsTheJoinCodeAndTheFlagsMovedOutOfTheirOldHomes()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+
+        var workspace = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
+        var settings = Assert.Single(
+            workspace.GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "Settings");
+        Assert.Equal(Dock.Bottom, DockPanel.GetDock(settings));
+        Assert.DoesNotContain(
+            Bar(window).GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "Settings");
+
+        Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(), button => button.Name == "JoinQr");
+        Assert.Empty(
+            window.GetLogicalDescendants().OfType<SidePanelView>().Single()
+                .GetLogicalDescendants().OfType<Image>());
+
+        var flags = Assert.Single(
+            window.GetLogicalDescendants().OfType<MeetingRoomView>().Single()
+                .GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "RoomLanguages");
+        Assert.Equal(Dock.Top, DockPanel.GetDock(flags));
+        Assert.Contains(
+            flags.GetLogicalDescendants().OfType<ItemsControl>(),
+            items => ReferenceEquals(items.ItemsSource, vm.SelectedLanguages));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheFlyoutsBehindTheMarksCarryTheDevicesAndTheExports()
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
-        var window = new MainWindow { DataContext = vm, Width = width, Height = 700 };
+        var window = new MainWindow { DataContext = vm };
         window.Show();
-        if (sidebarsAway)
-        {
-            vm.Shell.Left.ToggleCommand.Execute(null);
-            vm.Shell.Right.ToggleCommand.Execute(null);
-        }
         Dispatcher.UIThread.RunJobs();
 
-        var iconBar = window.GetLogicalDescendants().OfType<IconBarView>().Single();
-        var panels = iconBar.GetLogicalDescendants().OfType<StackPanel>().ToList();
-        var left = Assert.Single(panels, panel => panel.Name == "LeftCluster");
-        var right = Assert.Single(panels, panel => panel.Name == "RightCluster");
-        var dock = Assert.IsType<DockPanel>(left.Parent);
-        var scroller = Assert.Single(
-            iconBar.GetLogicalDescendants().OfType<ScrollViewer>(),
-            view => view.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto);
+        var audio = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "AudioDevices");
+        var pickers = Opened<Flyout>(audio).Content as Control;
+        Assert.NotNull(pickers);
+        Assert.Contains(
+            pickers.GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Devices));
 
-        var gap = right.Bounds.X - left.Bounds.Right;
-        Assert.True(gap >= 8, $"clusters are {gap} apart at {width} px");
-
-        // Which branch each width takes is stated rather than discovered: otherwise a metric change
-        // could push every case into the overflow half and the theory would stay green while
-        // testing only one of the two claims it names.
-        var fits = dock.Bounds.Width <= scroller.Viewport.Width;
-        Assert.Equal(expectedToFit, fits);
-
-        // While it fits, the right cluster ends where the viewport does. Once it does not, the bar
-        // is wider than the viewport and scrolls - which is the other half of the arrangement.
-        if (fits)
-            Assert.Equal(scroller.Viewport.Width, right.Bounds.Right, precision: 1);
-        else
-            Assert.True(scroller.Extent.Width > scroller.Viewport.Width);
+        var more = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "MeetingMore");
+        var commands = Opened<MenuFlyout>(more).Items.OfType<MenuItem>()
+            .Select(item => item.Command).ToList();
+        Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
+        Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportJsonCommand));
 
         window.Close();
+    }
+
+    // Flyout content is outside the logical tree: its bindings stay unevaluated until ShowAt.
+    private static T Opened<T>(Button owner) where T : FlyoutBase
+    {
+        var flyout = Assert.IsType<T>(owner.Flyout);
+        flyout.ShowAt(owner);
+        Dispatcher.UIThread.RunJobs();
+        return flyout;
     }
 }

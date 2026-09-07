@@ -146,9 +146,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
+            OnPropertyChanged(nameof(PauseTip));
+            OnPropertyChanged(nameof(StopTip));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
+            OnPropertyChanged(nameof(CaptureTip));
             OnPropertyChanged(nameof(ConsentReminder));
-            OnPropertyChanged(nameof(LiveNoticeText));
+            OnPropertyChanged(nameof(CompactState));
             RefreshPipelineStatus();
         };
     }
@@ -461,15 +464,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
     [NotifyPropertyChangedFor(nameof(ShowConsentGate))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(ShowRecord))]
+    [NotifyPropertyChangedFor(nameof(ShowPause))]
+    [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isTranscribing;
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
@@ -487,6 +491,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
+    [NotifyPropertyChangedFor(nameof(CanShowJoin))]
     private string _joinUrl = "";
 
     [ObservableProperty]
@@ -494,12 +499,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinError))]
+    [NotifyPropertyChangedFor(nameof(CanShowJoin))]
     private string _joinError = "";
 
     public bool HasJoinInfo => JoinUrl.Length > 0;
 
     /// <summary>Shows relay bootstrap failures where the operator expected the join QR.</summary>
     public bool HasJoinError => JoinError.Length > 0;
+
+    public bool CanShowJoin => HasJoinInfo || HasJoinError;
 
     /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
     public bool HasColumns => Columns.Count > 0;
@@ -513,24 +521,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
-    public bool ShowProcessingNotice =>
-        IsRunning && NeedsMicrophone && (IsTranscribing || IsRecording);
-
     public string CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
+
+    /// <summary>The capture mark is an icon in both states, so which one it is has to be said.</summary>
+    public string CaptureTip => $"{L["capture.tip"]} — {SelectedCaptureProfile.Name}";
 
     public string ConsentReminder => NeedsComputerAudio
         ? L["consent.remote.reminder"]
         : L["consent.room.reminder"];
-
-    public string LiveNoticeText => (IsRecording, IsTranscribing, IsPaused) switch
-    {
-        (true, true, true) => L["recording.held.notice"],
-        (true, true, false) => L["recording.live.notice"],
-        (true, false, true) => L["recording.only.held.notice"],
-        (true, false, false) => L["recording.only.notice"],
-        (false, _, true) => L["transcription.held.notice"],
-        _ => L["transcription.live.notice"],
-    };
 
     partial void OnSelectedModeChanged(PipelineModeOption value)
     {
@@ -547,6 +545,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ConsentConfirmed = false;
         OnPropertyChanged(nameof(ShowConsentGate));
         OnPropertyChanged(nameof(ConsentReminder));
+        OnPropertyChanged(nameof(CaptureTip));
     }
 
     partial void OnConsentConfirmedChanged(bool value) =>
@@ -592,6 +591,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowRecord))]
+    [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(StopTip))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isStarting;
 
     /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
@@ -603,10 +606,39 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
+    [NotifyPropertyChangedFor(nameof(PauseTip))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isPaused;
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
+
+    public string PauseTip => L[IsPaused ? "transport.resume.tip" : "transport.pause.tip"];
+
+    public string StopTip => L[IsStarting ? "transport.cancel.tip" : "transport.stop.tip"];
+
+    public bool ShowRecord => !IsRunning && !IsStarting;
+
+    public bool ShowPause => IsRunning;
+
+    // Stop stands in for the record mark while a model loads, because aborting the load is the
+    // only thing there is to do in that phase.
+    public bool ShowStop => IsRunning || IsStarting;
+
+    // Every branch is spelled out rather than collapsed: a line reading "saving audio" while
+    // nothing is being written is the one failure this replacement for the bands has to rule out.
+    public string CompactState => (IsStarting, IsRunning) switch
+    {
+        (true, _) => L["state.loading"],
+        (_, false) => "",
+        _ when IsPaused => L["state.paused"],
+        _ => (IsRecording, IsTranscribing) switch
+        {
+            (true, true) => L["state.recording"],
+            (true, false) => L["state.recordingonly"],
+            (false, true) => L["state.live"],
+            _ => L["state.open"],
+        },
+    };
 
     private bool CanStart() =>
         !IsRunning && !IsStopping && !IsStarting &&
@@ -1200,8 +1232,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The file the meeting is being written to; empty when nothing is being recorded.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRecording))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private string _recordingPath = "";
 
     public bool IsRecording => RecordingPath.Length > 0;

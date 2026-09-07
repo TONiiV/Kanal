@@ -20,19 +20,19 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The meeting window is now three columns. A workspace sidebar sits on the left and the meeting
   assistant on the right; either can be collapsed out of the way and dragged wider, and the width
   you pick comes back when you expand it again. The transcript keeps a usable width whatever the
-  sidebars do. While both sidebars are open the control bar has less room than before and scrolls
-  sideways to reach export and settings; collapsing a sidebar gives it back.
+  sidebars do.
+- The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
+  stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
+  window gets; the processing and capture pickers hold the left edge and the join QR the right. A
+  short line beside the transport says what is happening, replacing the two full-width bands that
+  used to push the transcript down. Settings moved to the foot of the workspace sidebar, export to
+  the bar's ellipsis menu, and the room's language flags to the top of the transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
   audio file is recorded, and Markdown/JSON exports retain the attestation.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
-- The host uses one compact, horizontally scrollable control bar, leaving the meeting more room
-  while keeping every mode, language, microphone and transport control available in long locales.
-- The control bar is arranged in two groups: transport, mode and languages sit together on the
-  left, and the microphone, export and settings controls are held against the right edge, so the
-  controls used mid-meeting no longer sit next to the ones set up once.
 - A phone whose join link has expired now shows the meeting as ended and stops trying to
   reconnect, instead of sitting on "reconnecting" and retrying every 15 seconds for as long as
   the tab stays open. The transcript already on the page is kept.

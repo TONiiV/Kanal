@@ -6,6 +6,80 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### The centre toolbar becomes marks, and the two status bands go ([#66](https://github.com/TONiiV/Kanal/issues/66))
+
+The bar #65 left behind was the old labelled row moved into a 766 px column, and it scrolled
+sideways at the default window size to reach export and settings. [The approved
+design](design/meeting-workspace.md) forbids both the scrolling and the wrapping, and its
+prototype settles the arrangement: processing and capture pickers at the left, transport with the
+microphone beside it in the middle, join QR at the right, and nothing else.
+
+**The narrowing rule is three column definitions.** The bar is `*,Auto,*`. A starred column gives up
+width when there is not enough; an `Auto` one does not. So the transport keeps every pixel it asked
+for at any window size, and the two side clusters — which are `ClipToBounds` and aligned outward —
+lose their innermost controls instead. There is no `ScrollViewer` left in the bar. The two expand
+chevrons stay docked outside the three columns, because a collapsed sidebar is reachable only
+through them and they may not be what gets clipped.
+
+**One control per choice, not three.** The mode picker was a 300 px combo box plus a `?` flyout. It
+is now a 160 px combo whose `SelectionBoxItemTemplate` shows a chip mark and two words
+(`Local · local`), while its dropdown carries the full name and the privacy consequence per row.
+Capture mode is the same trick at 62 px — a screen mark, with the two profiles and their guidance in
+the dropdown. The `?` flyout stays: `modes.intro` is where the operator learns that captions always
+reach the phones as text through the relay, and that is a paragraph, not a tooltip.
+
+**Colour enters the chrome, once.** `Record` (`#C42B22`) and `Hold` (`#C08A12`) are the only
+non-ink brushes on a control. The design fixes them — a red record dot idle, a yellow pause and a
+red stop while running — and the worktree's `CLAUDE.md` says the approved design supersedes the
+older chrome-colour guidance where they conflict. Both sit off the speaker palette so a transport
+mark is never mistaken for a person, and both marks carry a shape, a tooltip and an accessible name,
+so colour is never the only signal. They keep their brush through hover and press: which mark is
+record and which is stop is the last thing that may change under the pointer mid-meeting.
+
+**`CompactState` replaces `LiveNoticeText` and `ShowProcessingNotice`.** The two full-width Ink bands
+are gone. Their strings were written to be shouted across a band — `RECORDING, TRANSCRIPTION AND
+TRANSLATION ARE LIVE` — and none of them fits a line beside the transport, so the seven
+`*.notice` keys and `paused.band` were replaced by six short `state.*` ones. Every branch is spelled
+out rather than collapsed: a line that says `Live · saving audio` while nothing is being written is
+the one failure the property exists to prevent.
+
+**Three controls left the bar, and each had to land somewhere real rather than nowhere.**
+
+- Settings is at the foot of the workspace sidebar, where story 19 and the design put it. #67 still
+  owns what the dialog looks like inside; this is the button and its new home.
+- The room's language flags are at the head of the transcript, where the design puts them next to
+  the meeting title. #69 adds the title beside them. Leaving them in the bar was the alternative,
+  and it did not fit: at 1320 px with both sidebars open the left cluster has about 310 px, and mode
+  plus capture plus flags is closer to 340 — the flags would have been clipped in the default state.
+- Export is behind an ellipsis in the right cluster. It belongs on the meeting record's own menu
+  (#69), and this is the same affordance parked one place early rather than two labelled buttons.
+
+The join QR moved out of the assistant sidebar into the bar, which #71 needs anyway — that sidebar
+becomes points, decisions and speakers.
+
+**What this deliberately does not do.** The capture picker and the `?` flyout are the first things
+clipped when the window narrows or the status line grows; both are set before a meeting rather than
+during one.
+
+The three paused variants the bands used to distinguish - held while recording, held while recording
+only, held while transcribing - collapse into one `state.paused`. The line describes what is
+happening now, and while paused nothing is being written whichever of the three preceded it; naming
+the suspended activity would put "saving audio" on screen at the one moment it is false. The cost is
+that the line no longer says whether a WAV was open before the pause.
+
+The marks also shift sideways when the status line changes length, because the line shares the
+transport's `Auto` column: pressing pause swaps "Live" for "Paused - nothing captured" and the marks
+slide about 68 px left. Reserving a fixed width for the line would hold them still, but at the
+default 1320 px window the bar has only about 50 px of slack per side, and reserving the widest
+state's 135 px would clip the capture picker permanently. Holding the marks still is worth less than
+keeping a control reachable, so this stays. Should the marks need to be fixed, the answer is a
+narrower bar budget - a sidebar collapsed by default, or the state line moved off the bar
+entirely - not a spacer paid for out of the left cluster.
+
+The recording state machine is untouched — start, pause/resume, stop, load cancellation
+and the stop-in-progress guard are the same code, and `MeetingSessionTests` still holds the line
+that a paused session reaches neither the ASR provider nor the WAV writer.
+
 ### An expired room says so once, instead of refusing 2000 times
 
 - Reader tickets last 12 h. Past that the phone's backoff loop retried forever at its 15 s cap,

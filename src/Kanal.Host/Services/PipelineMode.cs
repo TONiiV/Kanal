@@ -51,6 +51,7 @@ public enum PipelineModeId
 public sealed record PipelineMode(
     PipelineModeId Id,
     string NameKey,
+    string ShortKey,
     StageKind Transcription,
     StageKind Translation,
     string LeavesKey,
@@ -62,21 +63,24 @@ public sealed record PipelineMode(
 
     public string Name => Localizer.Instance[NameKey];
 
+    /// <summary>Two words for the toolbar; the full name only appears where there is room for it.</summary>
+    public string Short => Localizer.Instance[ShortKey];
+
     public string Leaves => Localizer.Instance[LeavesKey];
 
     public string Help => Localizer.Instance[HelpKey];
 
     public static IReadOnlyList<PipelineMode> All { get; } =
     [
-        new(PipelineModeId.Demo, "mode.demo.name",
+        new(PipelineModeId.Demo, "mode.demo.name", "mode.demo.short",
             StageKind.Scripted, StageKind.Scripted, Nothing, "mode.demo.help"),
-        new(PipelineModeId.CloudCloud, "mode.cloudcloud.name",
+        new(PipelineModeId.CloudCloud, "mode.cloudcloud.name", "mode.cloudcloud.short",
             StageKind.Cloud, StageKind.Cloud, Audio, "mode.cloudcloud.help"),
-        new(PipelineModeId.CloudLocal, "mode.cloudlocal.name",
+        new(PipelineModeId.CloudLocal, "mode.cloudlocal.name", "mode.cloudlocal.short",
             StageKind.Cloud, StageKind.Local, Audio, "mode.cloudlocal.help"),
-        new(PipelineModeId.LocalCloud, "mode.localcloud.name",
+        new(PipelineModeId.LocalCloud, "mode.localcloud.name", "mode.localcloud.short",
             StageKind.Local, StageKind.Cloud, TextOnly, "mode.localcloud.help"),
-        new(PipelineModeId.LocalLocal, "mode.locallocal.name",
+        new(PipelineModeId.LocalLocal, "mode.locallocal.name", "mode.locallocal.short",
             StageKind.Local, StageKind.Local, Nothing, "mode.locallocal.help"),
     ];
 

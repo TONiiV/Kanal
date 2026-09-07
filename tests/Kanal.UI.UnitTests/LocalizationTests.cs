@@ -58,6 +58,8 @@ public class LocalizationTests
         ("de", "log.level.debug"),
         ("de", "log.level.info"),
         ("pl", "transport.start"),
+        ("de", "mode.demo.short"),
+        ("pl", "mode.demo.short"),
     ];
 
     [Theory]
