@@ -1,4 +1,4 @@
-import { SELF } from "cloudflare:test";
+import { env, runDurableObjectAlarm, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -313,5 +313,58 @@ describe("origin policy", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
       "https://toniiv.github.io",
     );
+  });
+});
+
+/**
+ * Reader tickets last 12 h, so a socket that outlives its ticket cannot be produced through
+ * `?action=stream` inside a test — the Worker refuses the expired ticket long before the room
+ * sees it. These drive the room object directly, which is the only place the expiry lives.
+ */
+describe("room expiry", () => {
+  const roomStub = (name: string) => env.ROOMS.get(env.ROOMS.idFromName(name));
+
+  async function openDirect(name: string, expiresAt: number) {
+    const response = await roomStub(name).fetch(
+      `https://room/?room=${ROOM}&vk=${VK}&exp=${expiresAt}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(response.status).toBe(101);
+    const socket = response.webSocket!;
+    const closes: { code: number; reason: string }[] = [];
+    socket.accept();
+    socket.addEventListener("close", (event) => {
+      closes.push({ code: event.code, reason: event.reason });
+    });
+    return closes;
+  }
+
+  const past = () => Math.floor(Date.now() / 1000) - 60;
+  const future = () => Math.floor(Date.now() / 1000) + 3600;
+
+  it("closes an expired reader on its own, with nobody publishing", async () => {
+    const closes = await openDirect("expired-quiet-room", past());
+
+    await runDurableObjectAlarm(roomStub("expired-quiet-room"));
+
+    await until(() => closes.length > 0);
+    expect(closes[0].code).toBe(4001);
+  });
+
+  it("closes an expired reader rather than fanning a publish out to it", async () => {
+    const closes = await openDirect("expired-busy-room", past());
+
+    await roomStub("expired-busy-room").publish(signedEnvelope);
+
+    await until(() => closes.length > 0);
+    expect(closes[0].code).toBe(4001);
+  });
+
+  it("leaves a reader whose ticket is still valid alone", async () => {
+    const closes = await openDirect("live-room", future());
+
+    await roomStub("live-room").publish(signedEnvelope);
+
+    expect(closes).toEqual([]);
   });
 });

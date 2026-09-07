@@ -17,6 +17,7 @@ import { DurableObject } from "cloudflare:workers";
  *   POST ?action=publish  Bearer <host ticket>    {payload: <relay.signed envelope>}
  *   GET  ?action=stream   WebSocket upgrade, subprotocols "kanal, ticket.<reader ticket>"
  *                         -> "kanal", then {type:"gateway.session"|"relay", ...}
+ *                         close 4001 = ticket expired, terminal; the phone must not reconnect
  *
  * Device authorization (operator-only, curl or a future settings pane):
  *   POST ?action=admin.code     Bearer <KANAL_ADMIN_TOKEN>  {note?} -> {code}
@@ -38,6 +39,8 @@ const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
+// A 1000 is indistinguishable from any other tidy close, so the phone reconnects into 401s.
+const ROOM_EXPIRED_CLOSE = 4001;
 
 type Role = "host" | "reader";
 
@@ -403,7 +406,7 @@ export class RoomRelay extends DurableObject<Env> {
     const { expiresAt } = (socket.deserializeAttachment() ?? {}) as { expiresAt?: number };
     if (expiresAt && expiresAt > now) return false;
     try {
-      socket.close(1000, "Room expired");
+      socket.close(ROOM_EXPIRED_CLOSE, "Room expired");
     } catch {
       // already closing
     }

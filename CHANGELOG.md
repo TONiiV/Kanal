@@ -25,6 +25,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The control bar is arranged in two groups: transport, mode and languages sit together on the
   left, and the microphone, export and settings controls are held against the right edge, so the
   controls used mid-meeting no longer sit next to the ones set up once.
+- A phone whose join link has expired now shows the meeting as ended and stops trying to
+  reconnect, instead of sitting on "reconnecting" and retrying every 15 seconds for as long as
+  the tab stays open. The transcript already on the page is kept.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.
