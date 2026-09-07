@@ -8,10 +8,8 @@ public sealed class MeetingInsights(RoomState room)
 
     public IReadOnlyList<MeetingInsight> Items => _items;
 
-    public event Action<MeetingInsight>? Changed;
-
-    // An item that cannot lead back to something that was said is the failure the candidate state
-    // exists to prevent, so it is refused rather than shown with nothing behind it.
+    // Refused rather than stored and flagged: an item with no source is the very failure the
+    // candidate state exists to let a person catch.
     public MeetingInsight? Record(MeetingInsight insight)
     {
         var sources = insight.SourceUtteranceIds.Where(room.Contains).ToList();
@@ -20,7 +18,6 @@ public sealed class MeetingInsights(RoomState room)
 
         var recorded = insight with { SourceUtteranceIds = sources, State = InsightState.Candidate };
         _items.Add(recorded);
-        Changed?.Invoke(recorded);
         return recorded;
     }
 
@@ -43,7 +40,6 @@ public sealed class MeetingInsights(RoomState room)
             return false;
 
         _items[index] = _items[index] with { State = state };
-        Changed?.Invoke(_items[index]);
         return true;
     }
 }
