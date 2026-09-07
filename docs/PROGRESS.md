@@ -41,20 +41,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   day is the ordinary case in this room, not the odd one, and neither may land on the other.
 - Failures are reported next to whatever could still be read, never instead of it. An empty list
   where a year of meetings used to be is the one outcome the store may never produce, so a vanished
-  folder, an unopenable file, a corrupt payload, an orphaned meeting folder, and a record written by
-  a newer Kanal each produce a `StoreProblem` while the surviving records still list. `StoreProblem`
-  distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
+  workspace or meetings folder, an unopenable file, a corrupt payload, an orphaned meeting folder,
+  and an unsupported schema each produce a `StoreProblem` while the surviving records still list.
+  `StoreProblem` distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
   (plug the drive in), `Unreadable`, `Unwritable`, `UnsupportedVersion`.
-- Three things a JSON deserializer does quietly that this store refuses. A later schema version is
-  not half-parsed, because the next save would write the fields it did not understand back as loss.
+- Three things a JSON deserializer does quietly that this store refuses. A missing or unsupported
+  schema version is not half-parsed, because the next save could write unknown fields back as loss.
   A record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
   field with null, which would list a phantom meeting whose folder no later operation could open.
   And a record has to agree with where it is: an id becomes a folder name, so a hand-edited
   `"id": ".."` would otherwise have listed as an ordinary meeting whose Delete button took the
   workspace and every transcript in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, and the folder
   a record sits in is the id that counts — which also stops a duplicated folder from listing one
-  meeting twice, where only one of the two could ever be renamed or deleted again. The transcript
-  and audio fields are held to the same rule: a file name, never a path.
+  meeting twice, where only one of the two could ever be renamed or deleted again. Stored artifact
+  locations are portable file names inside that folder; the public meeting record resolves them to
+  full transcript and audio paths and refuses any path that escapes its meeting folder.
 - Adding a folder that already holds a workspace adopts it under the name already on disk — picking
   last year's folder means "open this", so the stored name outranks the one typed into the box. A
   *copy* of such a folder — a restored backup, a share mounted twice — carries the original's id, so
@@ -68,11 +69,9 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   restored into the wrong folder cannot take it over. The list, not the folder's own marker file,
   holds the workspace's name: a rename made while the drive was out could not reach the marker, and
   reconnecting must not undo it.
-- `ForgetWorkspace` removes the row and touches no file. **This is deliberately the only removal a
-  workspace has**, against the ticket's "creating, listing, renaming and deleting": the folder is
-  the operator's, may be a share, and holds the only copy of their transcripts. Deleting a year of a
-  supplier's meetings should not be reachable by the gesture that tidies a sidebar. Meetings, which
-  Kanal itself created, do delete.
+- `ForgetWorkspace` is the workspace-removal operation: it removes the row and touches no file. The
+  folder is the operator's, may be a share, and may hold the only copy of the transcripts; removing
+  it from the sidebar must stay reversible. Meetings, which Kanal itself created, do delete.
 - One limitation, taken deliberately. A registry file that cannot be parsed at all blocks every
   operation, including `ForgetWorkspace`; there is no repair from inside the application. A single
   unreadable *row* is reported and skipped, so it cannot hide its neighbours, but the file as a

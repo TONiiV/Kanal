@@ -28,7 +28,6 @@ public class WorkspaceStoreTests : IDisposable
         }
         catch (IOException)
         {
-            // a temp directory that outlives the test is the operating system's problem
         }
 
         GC.SuppressFinalize(this);
@@ -52,7 +51,6 @@ public class WorkspaceStoreTests : IDisposable
         var folder = Folder("acme");
         var made = Created(Store().CreateWorkspace("ACME tooling", folder));
 
-        // a second store over the same registry is what the next launch sees
         var listing = Store().ListWorkspaces();
 
         var read = Assert.Single(listing.Workspaces);
@@ -66,18 +64,20 @@ public class WorkspaceStoreTests : IDisposable
     [Fact]
     public void AMeetingSurvivesARestartWithEveryFieldIntact()
     {
-        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
-        var made = Created(Store().CreateMeeting(workspace.Id, "Tooling review"));
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var made = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var meetingFolder = store.MeetingFolder(workspace.Id, made.Id)!;
 
         var saved = made with
         {
             StartedAt = new DateTimeOffset(2026, 9, 7, 9, 30, 0, TimeSpan.FromHours(2)),
             EndedAt = new DateTimeOffset(2026, 9, 7, 10, 15, 0, TimeSpan.FromHours(2)),
             Languages = ["zh", "de", "pl"],
-            TranscriptFileName = "transcript.md",
-            AudioFileName = "room.wav",
+            TranscriptPath = Path.Combine(meetingFolder, "transcript.md"),
+            AudioPath = Path.Combine(meetingFolder, "room.wav"),
         };
-        Assert.Null(Store().SaveMeeting(saved).Problem);
+        Assert.Null(store.SaveMeeting(saved).Problem);
 
         var read = Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
         Assert.Equal(saved.Languages, read.Languages);
@@ -178,6 +178,18 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void AMissingMeetingsFolderIsReportedRatherThanEmpty()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+        Directory.Delete(Path.Combine(workspace.RootPath, "meetings"));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.FolderMissing, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
     public void ACorruptRecordIsReportedAndItsNeighboursStillList()
     {
         var store = Store();
@@ -215,6 +227,62 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void ARecordWithoutASchemaVersionIsRefusedRatherThanGuessedAt()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
+        document.Remove("schemaVersion");
+        File.WriteAllText(path, JsonSerializer.Serialize(document));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.UnsupportedVersion, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Theory]
+    [InlineData("createdAt")]
+    [InlineData("languages")]
+    public void AMeetingMissingARequiredFieldIsRefused(string field)
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
+        document.Remove(field);
+        File.WriteAllText(path, JsonSerializer.Serialize(document));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
+    public void AStoredArtifactPathIsRefusedRatherThanListed()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
+        document["transcriptFileName"] = JsonSerializer.SerializeToElement("../../elsewhere.md");
+        File.WriteAllText(path, JsonSerializer.Serialize(document));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
     public void EveryRecordCarriesTheSchemaItWasWrittenWith()
     {
         var store = Store();
@@ -242,7 +310,7 @@ public class WorkspaceStoreTests : IDisposable
         var original = Created(Store().CreateWorkspace("ACME", folder));
         var meeting = Created(Store().CreateMeeting(original.Id, "Tooling review"));
 
-        File.Delete(Registry); // the application's list of workspaces is gone, the folder is not
+        File.Delete(Registry);
         var adopted = Created(Store().OpenWorkspace(folder));
 
         Assert.Equal(original.Id, adopted.Id);
@@ -382,7 +450,7 @@ public class WorkspaceStoreTests : IDisposable
             store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
 
         File.Delete(path);
-        Directory.CreateDirectory(path); // a folder where a file belongs fails the read on every platform
+        Directory.CreateDirectory(path);
 
         var listing = Store().ListMeetings(workspace.Id);
 
@@ -484,11 +552,10 @@ public class WorkspaceStoreTests : IDisposable
         try
         {
             if (Directory.EnumerateDirectories(meetings).Any())
-                return; // running as root, where a mode of 000 stops nothing
+                return;
         }
         catch (UnauthorizedAccessException)
         {
-            // the folder is unreadable, which is the state this test needs
         }
 
         try
@@ -555,18 +622,46 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
-    public void AnArtefactNamedByPathIsRefused()
+    public void AnArtifactPathOutsideTheMeetingFolderIsRefused()
     {
         var store = Store();
         var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
 
         var result = store.SaveMeeting(
-            meeting with { TranscriptFileName = Path.Combine("..", "..", "elsewhere.md") });
+            meeting with { TranscriptPath = Path.Combine("..", "..", "elsewhere.md") });
 
         Assert.Null(result.Meeting);
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
-        Assert.Null(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).TranscriptFileName);
+        Assert.Null(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).TranscriptPath);
+    }
+
+    [Fact]
+    public void AMeetingWithoutLanguagesIsRefusedBeforeItCanBecomeUnreadable()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        var result = store.SaveMeeting(meeting with { Languages = null! });
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
+    }
+
+    [Fact]
+    public void AMeetingWithoutACreatedTimestampIsRefusedBeforeItCanBecomeUnreadable()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        var result = store.SaveMeeting(meeting with { CreatedAt = default });
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
     }
 
     [Fact]
@@ -612,10 +707,10 @@ public class WorkspaceStoreTests : IDisposable
         var away = File.ReadAllText(marker);
 
         File.Delete(marker);
-        Directory.Delete(folder, recursive: true); // the drive is out
+        Directory.Delete(folder, recursive: true);
         Assert.Null(store.RenameWorkspace(workspace.Id, "ACME tooling").Problem);
         Directory.CreateDirectory(folder);
-        File.WriteAllText(marker, away); // and back, still holding the old name
+        File.WriteAllText(marker, away);
 
         Assert.Equal("ACME tooling", Created(Store().OpenWorkspace(folder)).Name);
         Assert.Equal("ACME tooling", Assert.Single(Store().ListWorkspaces().Workspaces).Name);
@@ -667,18 +762,17 @@ public class WorkspaceStoreTests : IDisposable
     [InlineData("..\\..\\elsewhere.md")]
     [InlineData("..")]
     [InlineData("   ")]
-    public void AnArtefactNamedByPathIsRefusedInEveryShape(string name)
+    public void ARelativeOrTraversalArtifactPathIsRefused(string name)
     {
         var store = Store();
         var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
 
-        var result = store.SaveMeeting(meeting with { TranscriptFileName = name });
+        var result = store.SaveMeeting(meeting with { TranscriptPath = name });
 
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
     }
 
-    /// <summary>The mainstream case: a new workspace names a folder that does not exist yet.</summary>
     [Fact]
     public void AWorkspaceCreatedInAFolderThatDidNotExistCanBeOpenedAgain()
     {
@@ -693,7 +787,6 @@ public class WorkspaceStoreTests : IDisposable
         Assert.True(Path.IsPathRooted(made.RootPath));
     }
 
-    /// <summary>A marker file restored into the wrong folder: one folder cannot be two workspaces.</summary>
     [Fact]
     public void AFolderCannotBeTakenOverByAnotherWorkspacesMarker()
     {
@@ -711,7 +804,7 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Null(result.Workspace);
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
         Assert.Equal(
-            [acme.Id, beta.Id],
+            new[] { acme.Id, beta.Id }.Order(),
             Store().ListWorkspaces().Workspaces.Select(w => w.Id).Order());
     }
 

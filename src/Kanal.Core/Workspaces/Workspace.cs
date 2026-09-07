@@ -7,7 +7,6 @@ public sealed record Workspace(
     string RootPath,
     DateTimeOffset CreatedAt);
 
-// File names, not paths: a workspace has to survive being moved or mounted somewhere else.
 public sealed record MeetingRecord(
     string Id,
     string WorkspaceId,
@@ -16,8 +15,8 @@ public sealed record MeetingRecord(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     IReadOnlyList<string> Languages,
-    string? TranscriptFileName,
-    string? AudioFileName);
+    string? TranscriptPath,
+    string? AudioPath);
 
 public enum StoreProblemKind
 {

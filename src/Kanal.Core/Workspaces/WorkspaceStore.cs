@@ -55,7 +55,7 @@ public sealed class WorkspaceStore(string registryPath)
         if (File.Exists(rootPath))
             return Refused(rootPath, "That path is a file, not a folder.");
 
-        rootPath = Absolute(rootPath);
+        rootPath = CanonicalWorkspacePath(rootPath);
 
         // Adopted under its own name, never overwritten: picking last year's folder means "open this".
         if (Directory.Exists(rootPath) && File.Exists(Path.Combine(rootPath, WorkspaceFileName)))
@@ -77,7 +77,7 @@ public sealed class WorkspaceStore(string registryPath)
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Trouble(rootPath, "The workspace folder could not be written.", ex));
+            return new WorkspaceResult(null, Unwritable(rootPath, "The workspace folder could not be written.", ex));
         }
 
         return Register(workspace);
@@ -85,7 +85,7 @@ public sealed class WorkspaceStore(string registryPath)
 
     public WorkspaceResult OpenWorkspace(string rootPath)
     {
-        rootPath = Absolute(rootPath);
+        rootPath = CanonicalWorkspacePath(rootPath);
         if (!Directory.Exists(rootPath))
             return new WorkspaceResult(null, new StoreProblem(
                 StoreProblemKind.FolderMissing, rootPath, "That folder is not there."));
@@ -123,7 +123,7 @@ public sealed class WorkspaceStore(string registryPath)
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Trouble(renamed.RootPath, "The rename could not be written.", ex));
+            return new WorkspaceResult(null, Unwritable(renamed.RootPath, "The rename could not be written.", ex));
         }
 
         return new WorkspaceResult(renamed, null);
@@ -145,7 +145,7 @@ public sealed class WorkspaceStore(string registryPath)
         }
         catch (Exception ex)
         {
-            return Trouble(registryPath, "The workspace list could not be written.", ex);
+            return Unwritable(registryPath, "The workspace list could not be written.", ex);
         }
     }
 
@@ -157,7 +157,8 @@ public sealed class WorkspaceStore(string registryPath)
 
         var folder = Path.Combine(workspace!.RootPath, MeetingsFolderName);
         if (!Directory.Exists(folder))
-            return new MeetingListing([], []);
+            return new MeetingListing([], [new StoreProblem(
+                StoreProblemKind.FolderMissing, folder, "The meetings folder is not there.")]);
 
         List<string> folders;
         try
@@ -176,7 +177,7 @@ public sealed class WorkspaceStore(string registryPath)
         foreach (var path in folders)
         {
             var file = Path.Combine(path, MeetingFileName);
-            if (!File.Exists(file))
+            if (!File.Exists(file) && !Directory.Exists(file))
             {
                 // An interrupted save: the operator watched it being created, so it cannot vanish.
                 problems.Add(new StoreProblem(
@@ -192,7 +193,7 @@ public sealed class WorkspaceStore(string registryPath)
                 // the two could ever be renamed or deleted again.
                 problems.Add(WrongFolder(path));
             else
-                meetings.Add(stored.ToRecord(workspaceId));
+                meetings.Add(stored.ToRecord(workspaceId, path));
         }
 
         return new MeetingListing(meetings, problems);
@@ -219,24 +220,28 @@ public sealed class WorkspaceStore(string registryPath)
             return RefusedMeeting(meeting.Id, NotAnId);
         if (string.IsNullOrWhiteSpace(meeting.Title))
             return RefusedMeeting(meeting.Id, NeedsTitle);
-        if (!IsFileName(meeting.TranscriptFileName) || !IsFileName(meeting.AudioFileName))
-            return RefusedMeeting(meeting.Id, "An artefact is named by file, not by path.");
-
+        if (meeting.CreatedAt == default)
+            return RefusedMeeting(meeting.Id, "A meeting needs a creation time.");
+        if (meeting.Languages is null || meeting.Languages.Any(string.IsNullOrWhiteSpace))
+            return RefusedMeeting(meeting.Id, "Meeting languages cannot be missing or blank.");
         var (workspace, problem) = Locate(meeting.WorkspaceId);
         if (problem is not null)
             return new MeetingResult(null, problem);
 
         var folder = FolderFor(workspace!, meeting.Id);
+        if (!IsArtifactPath(meeting.TranscriptPath, folder) || !IsArtifactPath(meeting.AudioPath, folder))
+            return RefusedMeeting(meeting.Id, "An artefact path must name a file inside its meeting folder.");
+
         try
         {
             Directory.CreateDirectory(folder);
             File.WriteAllText(
                 Path.Combine(folder, MeetingFileName),
-                JsonSerializer.Serialize(StoredMeeting.From(meeting), Options));
+                JsonSerializer.Serialize(StoredMeeting.From(meeting, folder), Options));
         }
         catch (Exception ex)
         {
-            return new MeetingResult(null, Trouble(folder, "The meeting could not be written.", ex));
+            return new MeetingResult(null, Unwritable(folder, "The meeting could not be written.", ex));
         }
 
         return new MeetingResult(meeting, null);
@@ -268,7 +273,7 @@ public sealed class WorkspaceStore(string registryPath)
         }
         catch (Exception ex)
         {
-            return Trouble(folder!, "The meeting could not be deleted.", ex);
+            return Unwritable(folder!, "The meeting could not be deleted.", ex);
         }
     }
 
@@ -303,7 +308,7 @@ public sealed class WorkspaceStore(string registryPath)
         // under that id and retitle the healthy meeting instead of the one that was asked for.
         return Misfiled(stored!.Id, meetingId)
             ? (null, WrongFolder(folder!))
-            : (stored.ToRecord(workspaceId), null);
+            : (stored.ToRecord(workspaceId, folder!), null);
     }
 
     private static string FolderFor(Workspace workspace, string meetingId) =>
@@ -326,7 +331,7 @@ public sealed class WorkspaceStore(string registryPath)
 
     private (List<StoredRegistryEntry> Entries, StoreProblem? Problem) ReadRegistry()
     {
-        if (!File.Exists(registryPath))
+        if (!File.Exists(registryPath) && !Directory.Exists(registryPath))
             return ([], null);
 
         var (registry, problem) = Read<StoredRegistry>(registryPath);
@@ -387,7 +392,7 @@ public sealed class WorkspaceStore(string registryPath)
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Trouble(registryPath, "The workspace list could not be written.", ex));
+            return new WorkspaceResult(null, Unwritable(registryPath, "The workspace list could not be written.", ex));
         }
 
         return new WorkspaceResult(workspace, null);
@@ -410,10 +415,10 @@ public sealed class WorkspaceStore(string registryPath)
             return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
 
         // Refused, not half-read: the next save would write the dropped fields back as loss.
-        if (value.SchemaVersion > SchemaVersion)
+        if (value.SchemaVersion != SchemaVersion)
             return (null, new StoreProblem(
                 StoreProblemKind.UnsupportedVersion, path,
-                $"Written by a newer version of Kanal (schema {value.SchemaVersion})."));
+                $"Unsupported workspace schema {value.SchemaVersion}."));
 
         // Well-formed JSON is not a well-formed record: a missing field deserializes to null.
         return value.Complete
@@ -433,6 +438,25 @@ public sealed class WorkspaceStore(string registryPath)
             && !name.Contains('/') && !name.Contains('\\')
             && name is not ("." or ".."));
 
+    private static bool IsArtifactPath(string? path, string meetingFolder)
+    {
+        if (path is null)
+            return true;
+
+        try
+        {
+            if (!Path.IsPathFullyQualified(path) || !IsFileName(Path.GetFileName(path)))
+                return false;
+
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            return parent is not null && SamePath(parent, meetingFolder);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     // Linux tells Acme and acme apart; macOS and Windows do not, and neither may this.
     private static readonly StringComparison NameComparison = OperatingSystem.IsLinux()
         ? StringComparison.Ordinal
@@ -449,7 +473,7 @@ public sealed class WorkspaceStore(string registryPath)
 
     // Two spellings of one folder must not become two workspaces, so every link on the way down
     // is resolved: on macOS /tmp and /var are themselves symlinks, which makes this the usual case.
-    private static string Absolute(string path)
+    private static string CanonicalWorkspacePath(string path)
     {
         var full = path;
         try
@@ -525,7 +549,7 @@ public sealed class WorkspaceStore(string registryPath)
     private static MeetingResult RefusedMeeting(string subject, string detail) =>
         new(null, Invalid(subject, detail));
 
-    private static StoreProblem Trouble(string path, string detail, Exception cause)
+    private static StoreProblem Unwritable(string path, string detail, Exception cause)
     {
         Log.Warning(LogCategory, $"{detail} ({path})", cause);
         return new StoreProblem(StoreProblemKind.Unwritable, path, $"{detail} {cause.Message}");
@@ -550,9 +574,10 @@ public sealed class WorkspaceStore(string registryPath)
         string? Id, string? Name, string? RootPath, DateTimeOffset CreatedAt)
     {
         internal bool Complete =>
-            !string.IsNullOrWhiteSpace(Id)
+            IsFolderName(Id)
             && !string.IsNullOrWhiteSpace(Name)
-            && !string.IsNullOrWhiteSpace(RootPath);
+            && !string.IsNullOrWhiteSpace(RootPath)
+            && CreatedAt != default;
 
         internal static StoredRegistryEntry From(Workspace w) =>
             new(w.Id, w.Name, w.RootPath, w.CreatedAt);
@@ -565,7 +590,8 @@ public sealed class WorkspaceStore(string registryPath)
         int SchemaVersion, string? Id, string? Name, DateTimeOffset CreatedAt) : IStoredRecord
     {
         [JsonIgnore]
-        public bool Complete => !string.IsNullOrWhiteSpace(Id) && !string.IsNullOrWhiteSpace(Name);
+        public bool Complete =>
+            IsFolderName(Id) && !string.IsNullOrWhiteSpace(Name) && CreatedAt != default;
 
         internal static StoredWorkspace From(Workspace w) =>
             new(WorkspaceStore.SchemaVersion, w.Id, w.Name, w.CreatedAt);
@@ -585,14 +611,27 @@ public sealed class WorkspaceStore(string registryPath)
         string? AudioFileName) : IStoredRecord
     {
         [JsonIgnore]
-        public bool Complete => !string.IsNullOrWhiteSpace(Id) && !string.IsNullOrWhiteSpace(Title);
+        public bool Complete =>
+            IsFolderName(Id)
+            && !string.IsNullOrWhiteSpace(Title)
+            && CreatedAt != default
+            && Languages is not null
+            && Languages.All(language => !string.IsNullOrWhiteSpace(language))
+            && IsFileName(TranscriptFileName)
+            && IsFileName(AudioFileName);
 
-        internal static StoredMeeting From(MeetingRecord m) =>
+        internal static StoredMeeting From(MeetingRecord m, string folder) =>
             new(WorkspaceStore.SchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
-                [.. m.Languages], m.TranscriptFileName, m.AudioFileName);
+                [.. m.Languages], FileName(m.TranscriptPath, folder), FileName(m.AudioPath, folder));
 
-        internal MeetingRecord ToRecord(string workspaceId) =>
+        internal MeetingRecord ToRecord(string workspaceId, string folder) =>
             new(Id!, workspaceId, Title!, CreatedAt, StartedAt, EndedAt,
-                Languages ?? [], TranscriptFileName, AudioFileName);
+                Languages!, ArtifactPath(folder, TranscriptFileName), ArtifactPath(folder, AudioFileName));
+
+        private static string? FileName(string? path, string folder) =>
+            path is null ? null : Path.GetRelativePath(folder, path);
+
+        private static string? ArtifactPath(string folder, string? fileName) =>
+            fileName is null ? null : Path.Combine(folder, fileName);
     }
 }
