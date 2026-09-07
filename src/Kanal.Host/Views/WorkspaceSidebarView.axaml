@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Kanal.Host.ViewModels"
+             xmlns:l="using:Kanal.Host.Localization"
+             x:Class="Kanal.Host.Views.WorkspaceSidebarView" x:DataType="vm:MainViewModel">
+    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
+        <DockPanel>
+            <Border DockPanel.Dock="Top" MinHeight="{StaticResource HeaderHeight}"
+                    BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Padding="20,9,12,9">
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Classes="label" Text="{l:T sidebar.workspace}" />
+                    <Button DockPanel.Dock="Right" Classes="ghost" x:Name="CollapseWorkspace"
+                            Command="{Binding Shell.ToggleLeftCommand}"
+                            ToolTip.Tip="{l:T sidebar.collapse.tip}"
+                            AutomationProperties.Name="{l:T sidebar.collapse.tip}">
+                        <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}"
+                              Width="8" Height="11" Stretch="Uniform" />
+                    </Button>
+                </DockPanel>
+            </Border>
+
+            <Border />
+        </DockPanel>
+    </Border>
+</UserControl>

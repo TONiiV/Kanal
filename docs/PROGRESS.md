@@ -81,6 +81,48 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
   and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
 
+### The window becomes three declared regions ([#65](https://github.com/TONiiV/Kanal/issues/65))
+
+The host window was one `DockPanel`: a top bar, a bottom status line, a fixed 272 px assistant
+panel, and a transcript that was whatever remained. Batch 1 of
+[#64](https://github.com/TONiiV/Kanal/issues/64) needs a workspace sidebar as well, and a
+leftover-space transcript cannot survive two collapsible neighbours — that is precisely how the
+prototype failed, and [the approved design](design/meeting-workspace.md) rules it out.
+
+`MainWindow` is now a five-column grid: workspace sidebar, splitter, centre, splitter, assistant
+sidebar. Only the centre column is starred, and it carries a `MinWidth` of 320 px, so no
+combination of collapse and drag can squeeze the transcript to nothing — the grid refuses before
+the layout does. The toolbar and status line moved inside the centre column with the transcript,
+which is why they now stop at the sidebar edges rather than spanning the window.
+
+Collapse and width live in `WorkspaceShellViewModel`, not in the views:
+
+- A width is clamped to 180–480 px on the way in, so a drag cannot leave a sidebar at a width the
+  next expansion has to inherit. The prototype's range is a calibration start, not an acceptance
+  number, and the constants are one edit away.
+- Collapsing sets the column to zero but keeps the chosen width, so re-expanding returns to it.
+  The grid writes a collapsed column back as zero on every layout pass; the setter ignores that
+  write rather than clamping it up to 180 and losing what the operator chose.
+- `CanExpandLeft`/`CanExpandRight` gate the two expand affordances in the centre toolbar. They sit
+  *outside* the toolbar's scroller: a collapsed sidebar is reachable only through them, so they may
+  not be the part that scrolls out of sight.
+
+Both header bars share the toolbar's height through one `HeaderHeight` resource, so the three
+separators land on a single line across the window.
+
+Deliberate limitations, both for the ticket queue rather than this PR:
+
+- The workspace sidebar is an empty region with a header. Its contents — search, project selector,
+  meeting list, settings — are [#69](https://github.com/TONiiV/Kanal/issues/69) and
+  [#67](https://github.com/TONiiV/Kanal/issues/67).
+- The centre toolbar still scrolls horizontally when the centre column is narrower than the bar,
+  which it now is at the default window size with both sidebars open. The design asks for clipping
+  with the transport held visible instead; that requires the icon-mark bar of
+  [#66](https://github.com/TONiiV/Kanal/issues/66), which replaces the labelled controls the
+  current bar is built from. Making the labelled bar fit a 776 px column would be work thrown away
+  by the next ticket. The expand affordances are already excluded from the scroller, so the two
+  sidebars stay reachable in the meantime.
+
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled

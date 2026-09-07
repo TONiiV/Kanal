@@ -213,5 +213,11 @@
   "settings.licenses.open": "查看开源鸣谢",
   "licenses.title": "开源鸣谢",
   "licenses.note": "Kanal 以 {0} 许可发布，并基于以下项目构建，各自遵循其自身的许可协议。",
-  "licenses.close": "关闭"
+  "licenses.close": "关闭",
+  "sidebar.workspace": "工作空间",
+  "sidebar.assistant": "会议助手",
+  "sidebar.collapse.tip": "收起此面板",
+  "sidebar.workspace.show.tip": "展开工作空间面板",
+  "sidebar.assistant.show.tip": "展开会议助手面板",
+  "sidebar.resize.tip": "拖动调整宽度"
 }

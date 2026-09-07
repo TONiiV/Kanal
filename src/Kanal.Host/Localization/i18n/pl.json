@@ -213,5 +213,11 @@
   "settings.licenses.open": "Zobacz podziękowania dla projektów open source",
   "licenses.title": "Podziękowania dla projektów open source",
   "licenses.note": "Kanal jest udostępniany na licencji {0} i zbudowany na poniższych projektach, z których każdy ma własną licencję.",
-  "licenses.close": "Zamknij"
+  "licenses.close": "Zamknij",
+  "sidebar.workspace": "OBSZAR ROBOCZY",
+  "sidebar.assistant": "ASYSTENT",
+  "sidebar.collapse.tip": "Ukryj ten panel",
+  "sidebar.workspace.show.tip": "Pokaż panel obszaru roboczego",
+  "sidebar.assistant.show.tip": "Pokaż panel asystenta",
+  "sidebar.resize.tip": "Przeciągnij, aby zmienić szerokość"
 }

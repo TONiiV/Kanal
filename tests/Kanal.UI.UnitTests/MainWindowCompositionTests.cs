@@ -89,7 +89,9 @@ public class MainWindowCompositionTests
     /// not. Measured rather than compared to a picture - the numbers are the behaviour.
     /// </summary>
     [AvaloniaTheory]
-    [InlineData(2200.0, true)]
+    // Window width, not bar width: the bar now lives in the centre column, so both sidebars come
+    // off the top before any of it reaches the toolbar.
+    [InlineData(2900.0, true)]
     [InlineData(1280.0, false)]
     [InlineData(900.0, false)]
     public void TheRightClusterHoldsTheEdgeWhileTheBarFitsAndTheClustersNeverMeet(
