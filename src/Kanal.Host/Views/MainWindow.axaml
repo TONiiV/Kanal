@@ -11,6 +11,7 @@
         Icon="/Assets/kanal.ico"
         Title="Kanal"
         Width="1320" Height="820"
+        MinWidth="{x:Static vm:WorkspaceShellViewModel.MinShellWidth}"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
         Background="{StaticResource Sheet}">
@@ -18,23 +19,27 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <!-- Three declared regions, not a transcript that happens to be what is left over. The centre
-         is the only starred column and carries a floor, so no combination of collapse and drag can
-         squeeze it to nothing - which is exactly how the prototype failed. -->
+    <!-- The centre is the only starred column and carries a floor: a transcript that is merely
+         what the sidebars leave over is how the prototype collapsed. -->
     <Grid x:Name="Shell">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="{Binding Shell.LeftColumn, Mode=TwoWay}" />
+            <ColumnDefinition Width="{Binding Shell.Left.Column, Mode=TwoWay}"
+                              MinWidth="{Binding Shell.Left.ColumnMinWidth}"
+                              MaxWidth="{Binding Shell.Left.ColumnMaxWidth}" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*"
                               MinWidth="{x:Static vm:WorkspaceShellViewModel.TranscriptReserve}" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="{Binding Shell.RightColumn, Mode=TwoWay}" />
+            <ColumnDefinition Width="{Binding Shell.Right.Column, Mode=TwoWay}"
+                              MinWidth="{Binding Shell.Right.ColumnMinWidth}"
+                              MaxWidth="{Binding Shell.Right.ColumnMaxWidth}" />
         </Grid.ColumnDefinitions>
 
-        <views:WorkspaceSidebarView Grid.Column="0" IsVisible="{Binding !Shell.LeftCollapsed}" />
-        <GridSplitter Grid.Column="1" x:Name="WorkspaceSplitter" Width="5"
+        <views:WorkspaceSidebarView Grid.Column="0" IsVisible="{Binding !Shell.Left.Collapsed}" />
+        <GridSplitter Grid.Column="1" x:Name="WorkspaceSplitter"
+                      Width="{x:Static vm:SidebarViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
-                      IsVisible="{Binding !Shell.LeftCollapsed}"
+                      IsVisible="{Binding !Shell.Left.Collapsed}"
                       ToolTip.Tip="{l:T sidebar.resize.tip}" />
 
         <DockPanel Grid.Column="2">
@@ -43,10 +48,11 @@
             <views:MeetingRoomView />
         </DockPanel>
 
-        <GridSplitter Grid.Column="3" x:Name="AssistantSplitter" Width="5"
+        <GridSplitter Grid.Column="3" x:Name="AssistantSplitter"
+                      Width="{x:Static vm:SidebarViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
-                      IsVisible="{Binding !Shell.RightCollapsed}"
+                      IsVisible="{Binding !Shell.Right.Collapsed}"
                       ToolTip.Tip="{l:T sidebar.resize.tip}" />
-        <views:SidePanelView Grid.Column="4" IsVisible="{Binding !Shell.RightCollapsed}" />
+        <views:SidePanelView Grid.Column="4" IsVisible="{Binding !Shell.Right.Collapsed}" />
     </Grid>
 </Window>

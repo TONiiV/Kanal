@@ -7,20 +7,19 @@
     <StackPanel>
         <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
                 MinHeight="{StaticResource HeaderHeight}" Padding="16,9">
-            <!-- The two expand affordances sit outside the scroller. A collapsed sidebar is only
-                 reachable through them, so they may not be the part that scrolls out of sight. -->
+            <!-- Outside the scroller: a collapsed sidebar is reachable only through these. -->
             <DockPanel>
                 <Button DockPanel.Dock="Left" Classes="ghost" x:Name="ExpandWorkspace"
-                        Margin="0,0,10,0" IsVisible="{Binding Shell.CanExpandLeft}"
-                        Command="{Binding Shell.ToggleLeftCommand}"
+                        Margin="0,0,10,0" IsVisible="{Binding Shell.Left.CanExpand}"
+                        Command="{Binding Shell.Left.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.workspace.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.workspace.show.tip}">
                     <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}"
                           Width="8" Height="11" Stretch="Uniform" />
                 </Button>
                 <Button DockPanel.Dock="Right" Classes="ghost" x:Name="ExpandAssistant"
-                        Margin="10,0,0,0" IsVisible="{Binding Shell.CanExpandRight}"
-                        Command="{Binding Shell.ToggleRightCommand}"
+                        Margin="10,0,0,0" IsVisible="{Binding Shell.Right.CanExpand}"
+                        Command="{Binding Shell.Right.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.assistant.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.assistant.show.tip}">
                     <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}"

@@ -3,11 +3,6 @@ using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
 
-/// <summary>
-/// The shell's whole job is that the transcript is never squeezed out. Collapsing a sidebar has to
-/// give its width away and give it back, and no drag may take the centre below what a line of
-/// three scripts needs.
-/// </summary>
 public class WorkspaceShellTests
 {
     private static WorkspaceShellViewModel Shell() => new();
@@ -17,112 +12,119 @@ public class WorkspaceShellTests
     {
         var shell = Shell();
 
-        Assert.False(shell.LeftCollapsed);
-        Assert.False(shell.RightCollapsed);
-        Assert.Equal(WorkspaceShellViewModel.DefaultWidth, shell.LeftWidth);
-        Assert.Equal(WorkspaceShellViewModel.DefaultWidth, shell.RightWidth);
+        Assert.False(shell.Left.Collapsed);
+        Assert.False(shell.Right.Collapsed);
+        Assert.Equal(SidebarViewModel.DefaultWidth, shell.Left.Width);
+        Assert.Equal(SidebarViewModel.DefaultWidth, shell.Right.Width);
     }
 
     [Fact]
-    public void CollapsingASidebarGivesItsColumnAwayEntirely()
+    public void CollapsingASidebarGivesItsColumnAwayEntirelyAndLeavesTheOther()
     {
         var shell = Shell();
 
-        shell.ToggleLeftCommand.Execute(null);
+        shell.Left.ToggleCommand.Execute(null);
 
-        Assert.True(shell.LeftCollapsed);
-        Assert.Equal(new GridLength(0), shell.LeftColumn);
-        Assert.Equal(new GridLength(WorkspaceShellViewModel.DefaultWidth), shell.RightColumn);
+        Assert.True(shell.Left.Collapsed);
+        Assert.Equal(new GridLength(0), shell.Left.Column);
+        Assert.False(shell.Right.Collapsed);
+        Assert.Equal(new GridLength(SidebarViewModel.DefaultWidth), shell.Right.Column);
     }
 
-    /// <summary>A width is a setting, not a side effect of the last thing that happened to it.</summary>
     [Fact]
     public void AChosenWidthSurvivesCollapseAndReExpansion()
     {
         var shell = Shell();
-        shell.LeftWidth = 340;
-        shell.RightWidth = 210;
+        shell.Left.Width = 340;
+        shell.Right.Width = 210;
 
-        shell.ToggleLeftCommand.Execute(null);
-        shell.ToggleRightCommand.Execute(null);
-        shell.ToggleLeftCommand.Execute(null);
-        shell.ToggleRightCommand.Execute(null);
+        shell.Left.ToggleCommand.Execute(null);
+        shell.Right.ToggleCommand.Execute(null);
+        shell.Left.ToggleCommand.Execute(null);
+        shell.Right.ToggleCommand.Execute(null);
 
-        Assert.Equal(340, shell.LeftWidth);
-        Assert.Equal(210, shell.RightWidth);
-        Assert.Equal(new GridLength(340), shell.LeftColumn);
-        Assert.Equal(new GridLength(210), shell.RightColumn);
+        Assert.Equal(340, shell.Left.Width);
+        Assert.Equal(210, shell.Right.Width);
+        Assert.Equal(new GridLength(340), shell.Left.Column);
+        Assert.Equal(new GridLength(210), shell.Right.Column);
     }
 
     [Theory]
-    [InlineData(40, WorkspaceShellViewModel.MinWidth)]
-    [InlineData(9000, WorkspaceShellViewModel.MaxWidth)]
-    [InlineData(0, WorkspaceShellViewModel.MinWidth)]
-    [InlineData(-100, WorkspaceShellViewModel.MinWidth)]
+    [InlineData(40, SidebarViewModel.MinWidth)]
+    [InlineData(9000, SidebarViewModel.MaxWidth)]
+    [InlineData(0, SidebarViewModel.MinWidth)]
+    [InlineData(-100, SidebarViewModel.MinWidth)]
     public void ADragBeyondTheBoundedRangeStopsAtTheBound(double dragged, double expected)
     {
-        var shell = Shell();
+        var sidebar = new SidebarViewModel { Width = dragged };
 
-        shell.LeftWidth = dragged;
-        shell.RightWidth = dragged;
-
-        Assert.Equal(expected, shell.LeftWidth);
-        Assert.Equal(expected, shell.RightWidth);
+        Assert.Equal(expected, sidebar.Width);
     }
 
-    /// <summary>
-    /// A splitter drag writes the column back, and a drag on a collapsed column would otherwise
-    /// report zero and be clamped up to the minimum — quietly forgetting the width being kept.
-    /// </summary>
     [Fact]
     public void AColumnWrittenBackWhileCollapsedDoesNotOverwriteTheKeptWidth()
     {
-        var shell = Shell();
-        shell.LeftWidth = 400;
-        shell.ToggleLeftCommand.Execute(null);
+        var sidebar = new SidebarViewModel { Width = 400 };
+        sidebar.ToggleCommand.Execute(null);
 
-        shell.LeftColumn = new GridLength(0);
+        sidebar.Column = new GridLength(0);
 
-        Assert.Equal(400, shell.LeftWidth);
-        shell.ToggleLeftCommand.Execute(null);
-        Assert.Equal(new GridLength(400), shell.LeftColumn);
+        Assert.Equal(400, sidebar.Width);
+        sidebar.ToggleCommand.Execute(null);
+        Assert.Equal(new GridLength(400), sidebar.Column);
     }
 
     [Fact]
     public void ASplitterDragIsAcceptedThroughTheColumn()
     {
-        var shell = Shell();
+        var sidebar = new SidebarViewModel();
 
-        shell.LeftColumn = new GridLength(300);
+        sidebar.Column = new GridLength(300);
 
-        Assert.Equal(300, shell.LeftWidth);
+        Assert.Equal(300, sidebar.Width);
     }
 
-    /// <summary>The only way back from a collapsed sidebar is the affordance on the centre toolbar.</summary>
     [Fact]
     public void TheExpandAffordanceIsOfferedOnlyWhileTheSidebarIsCollapsed()
     {
         var shell = Shell();
 
-        Assert.False(shell.CanExpandLeft);
-        Assert.False(shell.CanExpandRight);
+        Assert.False(shell.Left.CanExpand);
+        Assert.False(shell.Right.CanExpand);
 
-        shell.ToggleLeftCommand.Execute(null);
+        shell.Left.ToggleCommand.Execute(null);
 
-        Assert.True(shell.CanExpandLeft);
-        Assert.False(shell.CanExpandRight);
+        Assert.True(shell.Left.CanExpand);
+        Assert.False(shell.Right.CanExpand);
     }
 
     /// <summary>
-    /// The reserve is what a line of Chinese stacked against "wsporników" needs. Two sidebars at
-    /// their widest plus the reserve is the narrowest window the shell can be laid out in.
+    /// The splitter reads its drag limits off the column definition, not off this view model, so
+    /// the bounds have to reach the column - and give way entirely while the sidebar is collapsed.
     /// </summary>
     [Fact]
-    public void TheTranscriptKeepsItsReserveWhateverTheSidebarsDo()
+    public void TheColumnCarriesTheSameBoundsTheSplitterHasToRespect()
     {
-        Assert.True(WorkspaceShellViewModel.TranscriptReserve > 0);
-        Assert.True(WorkspaceShellViewModel.MinWidth < WorkspaceShellViewModel.MaxWidth);
-        Assert.True(WorkspaceShellViewModel.DefaultWidth >= WorkspaceShellViewModel.MinWidth);
-        Assert.True(WorkspaceShellViewModel.DefaultWidth <= WorkspaceShellViewModel.MaxWidth);
+        var sidebar = new SidebarViewModel();
+
+        Assert.Equal(SidebarViewModel.MinWidth, sidebar.ColumnMinWidth);
+        Assert.Equal(SidebarViewModel.MaxWidth, sidebar.ColumnMaxWidth);
+
+        sidebar.ToggleCommand.Execute(null);
+
+        Assert.Equal(0, sidebar.ColumnMinWidth);
+        Assert.Equal(0, sidebar.ColumnMaxWidth);
+    }
+
+    [Fact]
+    public void TheTwoSidebarsCarryTheirOwnStateRatherThanSharingIt()
+    {
+        var shell = Shell();
+
+        shell.Left.Width = 400;
+        shell.Right.ToggleCommand.Execute(null);
+
+        Assert.Equal(SidebarViewModel.DefaultWidth, shell.Right.Width);
+        Assert.False(shell.Left.Collapsed);
     }
 }

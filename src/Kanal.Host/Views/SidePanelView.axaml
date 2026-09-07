@@ -6,16 +6,16 @@
     <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" MinHeight="{StaticResource HeaderHeight}"
-                    BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Padding="12,9,20,9">
+                    BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Padding="20,9,12,9">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Left" Classes="ghost" x:Name="CollapseAssistant"
-                            Command="{Binding Shell.ToggleRightCommand}"
+                    <Button DockPanel.Dock="Right" Classes="ghost" x:Name="CollapseAssistant"
+                            Command="{Binding Shell.Right.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
                         <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}"
                               Width="8" Height="11" Stretch="Uniform" />
                     </Button>
-                    <TextBlock DockPanel.Dock="Right" Classes="label" Text="{l:T sidebar.assistant}" />
+                    <TextBlock DockPanel.Dock="Left" Classes="label" Text="{l:T sidebar.assistant}" />
                 </DockPanel>
             </Border>
             <Border Padding="20,20,20,16">
