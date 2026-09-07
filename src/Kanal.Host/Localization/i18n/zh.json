@@ -229,5 +229,14 @@
   "mode.cloudcloud.short": "云端 · 云端",
   "mode.cloudlocal.short": "云端 · 本地",
   "mode.localcloud.short": "本地 · 云端",
-  "mode.locallocal.short": "本地 · 本地"
+  "mode.locallocal.short": "本地 · 本地",
+  "settings.tab.general": "常规",
+  "settings.tab.audio": "音频输入",
+  "settings.tab.transcription": "转写",
+  "settings.tab.translation": "翻译",
+  "settings.tab.summary": "摘要",
+  "settings.tab.workspace": "工作区",
+  "settings.localasr.heading": "本地模型",
+  "settings.summary.heading": "会议摘要",
+  "settings.summary.note": "会议摘要尚未开发。开发之后，在这里选择所用模型以及它可以读取的内容。"
 }

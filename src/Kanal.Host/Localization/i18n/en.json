@@ -229,5 +229,14 @@
   "mode.cloudcloud.short": "Cloud · cloud",
   "mode.cloudlocal.short": "Cloud · local",
   "mode.localcloud.short": "Local · cloud",
-  "mode.locallocal.short": "Local · local"
+  "mode.locallocal.short": "Local · local",
+  "settings.tab.general": "General",
+  "settings.tab.audio": "Audio input",
+  "settings.tab.transcription": "Transcription",
+  "settings.tab.translation": "Translation",
+  "settings.tab.summary": "Summarisation",
+  "settings.tab.workspace": "Workspace",
+  "settings.localasr.heading": "LOCAL MODELS",
+  "settings.summary.heading": "SUMMARISATION",
+  "settings.summary.note": "Meeting summaries are not built yet. When they are, this is where the model and what it may read are chosen."
 }

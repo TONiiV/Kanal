@@ -229,5 +229,14 @@
   "mode.cloudcloud.short": "Cloud · Cloud",
   "mode.cloudlocal.short": "Cloud · lokal",
   "mode.localcloud.short": "Lokal · Cloud",
-  "mode.locallocal.short": "Lokal · lokal"
+  "mode.locallocal.short": "Lokal · lokal",
+  "settings.tab.general": "Allgemein",
+  "settings.tab.audio": "Audioeingang",
+  "settings.tab.transcription": "Transkription",
+  "settings.tab.translation": "Übersetzung",
+  "settings.tab.summary": "Zusammenfassung",
+  "settings.tab.workspace": "Arbeitsbereich",
+  "settings.localasr.heading": "LOKALE MODELLE",
+  "settings.summary.heading": "ZUSAMMENFASSUNG",
+  "settings.summary.note": "Sitzungszusammenfassungen sind noch nicht gebaut. Sobald es sie gibt, wird hier das Modell gewählt und was es lesen darf."
 }
