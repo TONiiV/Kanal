@@ -128,8 +128,7 @@ public class CaptureProfileTests
 
         Assert.False(vm.IsLiveTranscription);
         Assert.True(vm.IsRecording);
-        Assert.True(vm.ShowProcessingNotice);
-        Assert.Equal(Kanal.Host.Localization.Localizer.Instance["recording.only.notice"], vm.LiveNoticeText);
+        Assert.Equal(Kanal.Host.Localization.Localizer.Instance["state.recordingonly"], vm.CompactState);
         Assert.True(vm.IsRunning); // Stop remains available to close and export the ended room
         await vm.StopCommand.ExecuteAsync(null);
         Directory.Delete(audioFolder, recursive: true);

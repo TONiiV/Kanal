@@ -18,6 +18,17 @@
                     </Button>
                 </DockPanel>
             </Border>
+
+            <!-- Configuration is set once and then left alone, so it sits at the foot of the
+                 sidebar rather than beside the controls the operator uses mid-meeting. -->
+            <Button DockPanel.Dock="Bottom" Classes="ghost" x:Name="Settings"
+                    Click="OnSettingsClick" Margin="14,0,14,14" Padding="8,7"
+                    HorizontalAlignment="Left"
+                    ToolTip.Tip="{l:T settings.tip}"
+                    AutomationProperties.Name="{l:T settings.tip}">
+                <Path Classes="glyph" Data="{StaticResource GlyphSettings}" Width="14" Height="14"
+                      Stretch="Uniform" VerticalAlignment="Center" />
+            </Button>
         </DockPanel>
     </Border>
 </UserControl>

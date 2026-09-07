@@ -165,19 +165,20 @@ public class WorkspaceShellCompositionTests
 
     /// <summary>
     /// A collapsed sidebar is only reachable through the toolbar affordance, so that affordance may
-    /// not be the part of the toolbar that scrolls out of sight when the window narrows.
+    /// not sit in one of the two columns the bar clips as the window narrows.
     /// </summary>
     [AvaloniaFact]
-    public void TheExpandAffordancesAppearOnCollapseAndSitOutsideTheScrollingToolbar()
+    public void TheExpandAffordancesAppearOnCollapseAndSitOutsideTheClippedColumns()
     {
         var (window, vm) = Shown();
         var iconBar = Region<IconBarView>(window);
         var buttons = iconBar.GetLogicalDescendants().OfType<Button>().ToList();
         var expandLeft = Assert.Single(buttons, button => button.Name == "ExpandWorkspace");
         var expandRight = Assert.Single(buttons, button => button.Name == "ExpandAssistant");
-        var scroller = Assert.Single(
-            iconBar.GetLogicalDescendants().OfType<ScrollViewer>(),
-            view => view.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto);
+        var clipped = iconBar.GetLogicalDescendants().OfType<StackPanel>()
+            .Where(panel => panel.Name is "LeftCluster" or "RightCluster")
+            .ToList();
+        Assert.Equal(2, clipped.Count);
 
         Assert.False(expandLeft.IsVisible);
         Assert.False(expandRight.IsVisible);
@@ -187,8 +188,11 @@ public class WorkspaceShellCompositionTests
 
         Assert.True(expandLeft.IsVisible);
         Assert.True(expandRight.IsVisible);
-        Assert.DoesNotContain(expandLeft, scroller.GetLogicalDescendants());
-        Assert.DoesNotContain(expandRight, scroller.GetLogicalDescendants());
+        foreach (var cluster in clipped)
+        {
+            Assert.DoesNotContain(expandLeft, cluster.GetLogicalDescendants());
+            Assert.DoesNotContain(expandRight, cluster.GetLogicalDescendants());
+        }
 
         window.Close();
     }
