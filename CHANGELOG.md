@@ -12,6 +12,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 ## 1.0.1
 
+- Settings is six tabs down the left instead of one long scroll: General, Audio input,
+  Transcription, Translation, Summarisation and Workspace. Every setting that was there before is
+  still there, in the tab it belongs to. Summarisation says plainly that it is not built yet rather
+  than showing controls that would do nothing.
+
 The first release. Everything below is what Kanal does on the day it ships.
 
 - Workspaces keep their meeting records in operator-selected local folders, survive restarts,

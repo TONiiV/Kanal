@@ -6,6 +6,36 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### Settings becomes six tabs ([#67](https://github.com/TONiiV/Kanal/issues/67))
+
+The settings window was one 640 px column of eight stacked sections, so finding the log level meant
+scrolling past every API key and both folder pickers. It is now a `TabControl` with
+`TabStripPlacement="Left"`: General, Audio input, Transcription, Translation, Summarisation,
+Workspace. Nothing was dropped — a test walks every tab and asserts each of the eighteen named
+controls has exactly one home, so a setting cannot be lost or accidentally duplicated into two panes.
+
+**The tab list departs from the ticket in one word.** #67 names the third tab "Local transcription".
+The only transcription settings that exist today are the Gladia cloud keys, and the ticket gives them
+no other tab; putting them under "General" would file the most-used setting in the drawer for
+odds and ends. The tab is therefore **Transcription**, holding the cloud keys now and a `LOCAL MODELS`
+section that says local transcription is not built yet — which is the home #72 will fill. The
+alternative, keeping the ticket's name and moving the keys, buys literal compliance at the cost of
+the arrangement the rest of the tabs follow: one pipeline stage per tab.
+
+Summarisation is a pane with no controls at all, only a sentence saying it is not built and what will
+be chosen there when it is. A test finds every pane that offers no interactive control and requires
+it to say something instead, so an empty tab cannot ship by accident.
+
+Two Avalonia notes worth keeping. A `TabItem`'s content stays a **logical** child of the tab whether
+or not the tab is selected, so `GetLogicalDescendants` sees all six panes at once - which is why the
+existing `SettingsWindowBindingTests` still find their controls without selecting anything, and why
+the test that asserts selection actually swaps the pane has to read the **visual** tree instead.
+Fluent draws the selected tab's marker in the system accent colour; the host is ink and paper, so
+`Border#PART_SelectedPipe` is restyled.
+
+Settings opening from the foot of the workspace sidebar was already done in #66; this ticket's first
+acceptance criterion was met there.
+
 ### The centre toolbar becomes marks, and the two status bands go ([#66](https://github.com/TONiiV/Kanal/issues/66))
 
 The bar #65 left behind was the old labelled row moved into a 766 px column, and it scrolled
