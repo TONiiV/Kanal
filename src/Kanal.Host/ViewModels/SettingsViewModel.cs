@@ -106,7 +106,6 @@ public partial class SettingsViewModel : ViewModelBase
         active.IsActive = true;
 
         _transcriptFolder = settings.TranscriptFolder ?? "";
-        _audioFolder = settings.AudioFolder ?? "";
         _recordAudio = settings.RecordAudio;
         _recordOnlineAudio = settings.RecordOnlineAudio;
         // What this settings object says, or — when nothing has been chosen — whatever the
@@ -178,10 +177,6 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string _transcriptFolder = "";
-
-    /// <inheritdoc cref="TranscriptFolder"/>
-    [ObservableProperty]
-    private string _audioFolder = "";
 
     /// <summary>Whether the room is written to disk while a meeting runs.</summary>
     [ObservableProperty]
@@ -550,7 +545,6 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
         settings.TranscriptFolder = Folder(TranscriptFolder);
-        settings.AudioFolder = Folder(AudioFolder);
         settings.RecordAudio = RecordAudio;
         settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;

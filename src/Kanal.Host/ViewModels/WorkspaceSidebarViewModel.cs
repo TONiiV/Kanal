@@ -70,6 +70,67 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return true;
     }
 
+    /// <summary>
+    /// The record this meeting is written into: the selected one while it has never been
+    /// recorded, otherwise a new one beside it. Null when no workspace is open — the meeting
+    /// still runs, and the host says plainly that nothing is being kept.
+    /// </summary>
+    public MeetingRecord? OpenRecordForMeeting(DateTimeOffset startedAt, IReadOnlyList<string> languages)
+    {
+        if (SelectedWorkspace is not { } workspace)
+            return null;
+
+        var record = SelectedMeeting?.Record is { StartedAt: null } untouched ? untouched : null;
+        if (record is null)
+        {
+            var (made, problem) = _store.CreateMeeting(workspace.Id, L["meeting.untitled"]);
+            if (Refused(problem))
+                return null;
+
+            record = made!;
+            Search = "";
+            LoadMeetings([]);
+            SelectedMeeting = Meetings.FirstOrDefault(m => m.Id == record.Id);
+        }
+
+        if (FolderOf(record) is not { } folder)
+            return null;
+
+        return SaveRecord(record with
+        {
+            StartedAt = startedAt,
+            EndedAt = null,
+            Languages = [.. languages],
+            TranscriptPath = Path.Combine(folder, TranscriptLog.FileName),
+        });
+    }
+
+    public string? FolderOf(MeetingRecord record) =>
+        _store.MeetingFolder(record.WorkspaceId, record.Id);
+
+    // Read back from the held list rather than saving the caller's copy: a title generated
+    // mid-meeting was written through RenameSelectedMeeting, and a stale record would undo it.
+    public void CloseRecord(string meetingId, DateTimeOffset endedAt)
+    {
+        if (_held.FirstOrDefault(m => m.Id == meetingId) is { } current)
+            SaveRecord(current with { EndedAt = endedAt });
+    }
+
+    // Adopted in place rather than reloaded: rebuilding the list mid-meeting reads as the
+    // operator selecting a different meeting, and resets the title around it.
+    public MeetingRecord? SaveRecord(MeetingRecord record)
+    {
+        var (saved, problem) = _store.SaveMeeting(record);
+        if (Refused(problem) || saved is null)
+            return null;
+
+        var held = _held.FindIndex(m => m.Id == saved.Id);
+        if (held >= 0)
+            _held[held] = saved;
+        Meetings.FirstOrDefault(m => m.Id == saved.Id)?.Adopt(saved);
+        return saved;
+    }
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();

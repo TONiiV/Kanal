@@ -53,6 +53,48 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### A meeting now writes itself down while it is still happening
+
+Slice 1 of [ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md) (decisions 5–8). Until now
+a real meeting was never written into a meeting record: `TranscriptPath` was set only by import and
+read only by export, the live transcript reached disk only when the operator remembered to press
+Export, and the recording went to a different global folder under `{RoomId}.wav`. `StartedAt` and
+`EndedAt` had sat in the schema since #68 with no code on either side. A Start now opens a record,
+writes `StartedAt`, and hands both artefacts one folder: `meetings/<id>/transcript.jsonl` and
+`meetings/<id>/audio.wav`. Stop writes `EndedAt`.
+
+**The transcript is appended, not batched.** The recording has patched its RIFF lengths every two
+seconds since it was written, on the grounds that an hour held in memory means one crash costs all
+of it; a transcript batched at Stop would have made the same host crash leave a playable recording
+next to an empty file. `TranscriptLogWriter` writes one JSON object per line and flushes each one,
+so the worst a kill can cost is the sentence in flight. The reader is deliberately forgiving in one
+specific way: a line that will not parse is skipped rather than failing the read, because the last
+line of a killed host is a line stopped in the middle of itself and every completed line above it
+is still something somebody said. Two smaller things fell out of writing it. Only finals are logged
+— a partial is superseded within seconds, and the export has never carried them either — and
+because translations arrive after the final they belong to, the same id is written more than once
+and the reader is last-write-wins by id, ordered by first appearance.
+
+**The room id left the file system, and the title row with it.** Getting `{RoomId}.wav` out of the
+audio folder was the stated goal, but the export dialog was still offering `kanal-224813-….md`, and
+`MeetingTitle` was still falling back to `LoadedRoomId` when nothing else named the meeting — which
+is where that suggested name came from, and which also put a bearer capability in the heading of a
+transcript that gets mailed to a supplier. Both are gone. The row reads "New meeting" until a
+record or a generated title names it, which is what decision 9 asks for anyway.
+
+**Two judgement calls the ticket left open.** With no workspace open there is no folder, so nothing
+is written and the status line says so, rather than the host inventing a folder or refusing to
+start; slice 2 closes that hole by creating a default workspace at first launch. And a write
+failure is handled the way `MeetingRecorder` already handles it for audio: `Append` never throws,
+the first failure stops the log and is reported once, and every line after it is dropped silently —
+retrying against a dead disk would only overwrite "disk full" with "cannot access a disposed
+object". A meeting that cannot be written down is still a meeting worth holding.
+
+The binding rule from decision 3 had to land here rather than in slice 2, because a Start needs
+something to bind to: an untouched record (`StartedAt` null) is written into, anything else gets a
+new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
+and start" — not the rule.
+
 ### The icons become files, and stop drifting off centre
 
 Every mark in the chrome was a `StreamGeometry` in `App.axaml` — path data in a resource dictionary,

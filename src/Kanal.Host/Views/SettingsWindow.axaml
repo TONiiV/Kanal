@@ -261,22 +261,14 @@
                         <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
                                    Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
 
-                        <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:T settings.files.transcripts}"
+                        <Grid ColumnDefinitions="110,*,Auto" Margin="0,0,0,4">
+                            <TextBlock Grid.Column="0" Text="{l:T settings.files.transcripts}"
                                        Classes="label" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="0" Grid.Column="1" x:Name="TranscriptFolder"
+                            <TextBox Grid.Column="1" x:Name="TranscriptFolder"
                                      Text="{Binding TranscriptFolder}"
                                      PlaceholderText="{l:T settings.files.placeholder}" Margin="0,0,8,0" />
-                            <Button Grid.Row="0" Grid.Column="2" Content="{l:T settings.browse}"
+                            <Button Grid.Column="2" Content="{l:T settings.browse}"
                                     Click="OnBrowseTranscriptsClick" />
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:T settings.files.audio}"
-                                       Classes="label" VerticalAlignment="Center" Margin="0,9,0,0" />
-                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="AudioFolder"
-                                     Text="{Binding AudioFolder}"
-                                     PlaceholderText="{l:T settings.files.placeholder}" Margin="0,9,8,0" />
-                            <Button Grid.Row="1" Grid.Column="2" Content="{l:T settings.browse}" Margin="0,9,0,0"
-                                    Click="OnBrowseAudioClick" />
                         </Grid>
 
                         <CheckBox x:Name="RecordAudio" IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
