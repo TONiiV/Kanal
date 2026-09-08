@@ -386,6 +386,36 @@ public class MainWindowCompositionTests
     }
 
     /// <summary>
+    /// The help button explains the mode, so it has to belong to the mode box. In an uncapped
+    /// starred column the box sits at the left of whatever width the window has spare and the
+    /// button lands at the far right of it, next to the transport it says nothing about.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1320.0)]
+    [InlineData(1600.0)]
+    public void TheHelpButtonStaysAgainstTheModeBox(double width)
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = width, Height = 700 };
+        window.Show();
+
+        var cluster = Cluster(window, "LeftCluster");
+        var modes = Assert.Single(
+            cluster.GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+        var help = Assert.Single(
+            cluster.GetLogicalDescendants().OfType<Button>(),
+            button => (button.Content as string) == "?");
+
+        var gap = help.TranslatePoint(new Point(0, 0), cluster)!.Value.X
+            - modes.TranslatePoint(new Point(modes.Bounds.Width, 0), cluster)!.Value.X;
+
+        Assert.InRange(gap, 0, 9);
+
+        window.Close();
+    }
+
+    /// <summary>
     /// A record button reads as a record button when the disc nearly fills it and the wash is
     /// left as a ring, not as a field with a dot in the middle of it.
     /// </summary>

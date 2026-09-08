@@ -28,6 +28,16 @@ non-colour signal that a row cannot be picked and the grey second line was alrea
 insufficient once. Losing the second glyph also gave the label back its width — Polish now sets
 `Lokalnie · Lokalnie` in full instead of trimming.
 
+**The help button belongs to the mode box.** `LeftCluster`'s first column was an open starred
+column, so it took every spare pixel the window had: the mode box sat at its left edge and the `?`
+that explains the mode was arranged at the right edge of the column — 293 px away at a 1600 px
+window, close enough to the transport to read as belonging to it. The column is capped at 200 px
+and the box stretches to fill it. The cap has to be on the column rather than on the box, and the
+box has to stretch: with `Auto` the column hugs the box and the cluster stops giving up width when
+it is squeezed, and with a left-aligned box the button follows the column edge rather than the box,
+which moves by 75 px between `Demo` and `Cloud · Cloud`. Stretching also holds the button still as
+the mode and the language change.
+
 **The record disc nearly fills its button.** It was a 13-unit circle inside a 16-unit view box
 inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark is 28 px now, the
 even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box

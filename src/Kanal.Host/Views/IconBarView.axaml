@@ -27,13 +27,25 @@
                 <!-- A starred column gives up width, an Auto one does not: the transport must keep
                      every pixel it asked for, so the side clusters clip instead of the bar scrolling. -->
                 <Grid ColumnDefinitions="*,Auto,*">
-                    <!-- The mode box is the one thing here that may give up width: the picker beside
-                         it is a glyph and a chevron with nothing to trim, so a cluster that shrank
-                         evenly would cut its chevron off rather than shorten a label. -->
-                    <Grid Grid.Column="0" x:Name="LeftCluster" ColumnDefinitions="*,Auto,Auto"
+                    <Grid Grid.Column="0" x:Name="LeftCluster"
                           ColumnSpacing="8" VerticalAlignment="Center" ClipToBounds="True">
+                        <Grid.ColumnDefinitions>
+                            <!-- Starred so the mode box is the one thing here that gives up width -
+                                 the picker beside it is a glyph and a chevron with nothing to trim,
+                                 so a cluster that shrank evenly would cut its chevron off rather
+                                 than shorten a label. Capped so the column stops at the box: an
+                                 open starred column takes every spare pixel in the window, and the
+                                 help button that explains the mode lands at the far right of it,
+                                 against the transport it says nothing about. The box stretches to
+                                 the cap rather than to its own text, so the button beside it holds
+                                 still as the mode and the language change. -->
+                            <ColumnDefinition Width="*" MaxWidth="200" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <ComboBox Grid.Column="0" ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
-                                  MaxWidth="208" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
+                                  HorizontalAlignment="Stretch"
+                                  IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding SelectedMode.Name}"
                                   AutomationProperties.Name="{l:T mode.tip}">
                             <ComboBox.ItemContainerTheme>
