@@ -25,7 +25,11 @@ The list follows the box. Every row leads with the same mark the collapsed box w
 mark the operator learns while choosing still means something back in the bar. The availability
 square that used to lead the row went with it: two marks on one row is the thing being fixed, and
 a row that cannot be picked is already disabled and already names its blocker in the second line.
-The square stays in the help flyout, which is the reference list and has the room for it. Losing
+The square stays in the help flyout, which is the reference list and has the room for it. The mark
+carries the state instead: a row that cannot be picked draws it in `Ink3`, the same grey its second
+line already uses, through `ComboBoxItem:disabled Path.mode`. The fill had to move out of the XAML
+and into a style to do it — a local value on the element beats a style setter, so the inline fill
+would have kept the mark at full ink while the row greyed around it. Losing
 the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
 instead of trimming.
 

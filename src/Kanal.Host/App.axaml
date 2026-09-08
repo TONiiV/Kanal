@@ -129,6 +129,15 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
+        <!-- Styled rather than set on the Path: a local value beats a style, so an inline fill
+             would keep a mode that cannot be picked at full ink while its row greys around it. -->
+        <Style Selector="ComboBoxItem Path.mode">
+            <Setter Property="Fill" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="ComboBoxItem:disabled Path.mode">
+            <Setter Property="Fill" Value="{StaticResource Ink3}" />
+        </Style>
+
         <Style Selector="Button Path.glyph">
             <Setter Property="Fill" Value="{StaticResource Ink}" />
         </Style>

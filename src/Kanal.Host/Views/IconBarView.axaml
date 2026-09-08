@@ -68,7 +68,7 @@
                                     <Grid ColumnDefinitions="Auto,*" Margin="0,3,0,4" MaxWidth="330">
                                         <Path Grid.Column="0" Classes="mode" Width="16" Height="16"
                                               Stretch="Uniform" Margin="0,1,10,0" VerticalAlignment="Top"
-                                              Data="{Binding Mark}" Fill="{StaticResource Ink}" />
+                                              Data="{Binding Mark}" />
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Detail}" FontSize="10.5" LineHeight="15"
