@@ -25,7 +25,7 @@ public sealed class GladiaAsrProvider : IAsrProvider, IDisposable
         _http = http ?? new HttpClient();
         Caps = new AsrCapabilities(
             Streaming: true,
-            Diarization: true,
+            Diarization: false,
             Translation: options.EnableTranslation,
             AutoLanguageDetect: true,
             Languages: new HashSet<string> { "zh", "de", "pl", "en", "fr", "es", "it", "pt", "ja", "ko" },
