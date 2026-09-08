@@ -209,6 +209,42 @@ public class MainWindowCompositionTests
     }
 
     /// <summary>
+    /// Hover grows the mark, so it has to grow about the mark's own centre: an origin anywhere
+    /// else moves the disc across the bar on the way up.
+    /// </summary>
+    [AvaloniaFact]
+    public void HoveringATransportMarkGrowsItAboutItsOwnCentre()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var mark = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "RecordMark");
+        var bar = Bar(window);
+        var middle = new Point(mark.Bounds.Width / 2, mark.Bounds.Height / 2);
+        var atRest = mark.TranslatePoint(middle, bar)!.Value;
+
+        ((IPseudoClasses)mark.Classes).Set(":pointerover", true);
+        Dispatcher.UIThread.RunJobs();
+
+        var hovered = mark.TranslatePoint(middle, bar)!.Value;
+        Assert.Equal(atRest.X, hovered.X, precision: 2);
+        Assert.Equal(atRest.Y, hovered.Y, precision: 2);
+
+        var glyph = Assert.Single(mark.GetVisualDescendants().OfType<Shape>(), path => path.IsVisible);
+        var offset = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), mark)!.Value
+            - middle;
+        Assert.True(
+            Math.Abs(offset.X) < 0.01 && Math.Abs(offset.Y) < 0.01,
+            $"hovered, the glyph sits {offset} off the centre of its {mark.Bounds.Size} disc.");
+
+        window.Close();
+    }
+
+    /// <summary>
     /// A glyph box an odd number of pixels wide leaves half a pixel of slack on one side of an
     /// even disc, which is how the transport ended up with the pause mark a hair right of centre
     /// and the stop mark a hair left.

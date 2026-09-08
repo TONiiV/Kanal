@@ -44,6 +44,21 @@ inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark 
 even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box
 and the circle are the same thing. The wash reads as a ring.
 
+**Reaching for a mark grows it rather than recolouring it.** Hover and press used to flood the disc
+with its full colour and flip the glyph to paper. At 34 px that leaves a 3 px ring of red between
+two circles the renderer rasterises independently — high contrast, and thin enough that a half
+pixel of difference between them reads as an off-centre hole. The mark now scales to 1.1 over
+140 ms on `CubicEaseOut`, about `RenderTransformOrigin` 50 %/50 %, and nothing changes colour.
+Pressed repeats the hover scale so the theme's own press shrink cannot take over.
+
+Measured headless, the wash disc and the red disc are concentric at rest — both centred on the same
+pixel, the ring exactly 3 px on every side — and the hovered disc is 30 px against the resting 28 px
+on that same centre. The two `:pointerover`/`:pressed` content-presenter rules stay, restated to
+carry the wash rather than the record colour: a pseudo-class rule that activates later beats the
+plain one, so dropping them would let the base button's hover ink flood the disc. They also had to
+be split into one style per selector — `{TemplateBinding}` in a comma-separated `/template/` style
+fails to compile with `AVLN3000: Unable to find the ControlTemplate scope`.
+
 That last part needed the circle redrawn. Written as two half arcs between antipodal points —
 `M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser
 measures the geometry as a flat line of zero height and `FillContains` answers no everywhere, even
