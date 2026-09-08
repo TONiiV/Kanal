@@ -6,6 +6,49 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-08
 
+### The diarization catalog, and a licence that cannot slip in ([#107](https://github.com/TONiiV/Kanal/issues/107))
+
+Speaker attribution needs two models, not one: something that says *when* the speaker changed and
+something that says *whether it is the same voice as before*. `DiarizationModelCatalog` lists
+pyannote segmentation 3.0 for the first and four candidates for the second — 3D-Speaker CAM++,
+3D-Speaker ERes2Net base, WeSpeaker CN-Celeb ResNet34 and NeMo TitaNet small. Which embedding model
+becomes the default is [ADR 0055](adr/0055-speaker-attribution.md)'s decision 16, and it is settled
+by measured DER on Chinese, German and Polish rather than by parameter count, so the catalog offers
+candidates and declines to rank them. Sizes came from the GitHub releases API and every SHA-256 was
+recomputed from the downloaded file on 2026-09-08; the four embedding hashes also match the
+`checksum.txt` upstream publishes beside them.
+
+**The licence gate is a constructor, not a review checklist.** sherpa-onnx packages Rev's Reverb
+diarization models in the *same* GitHub release as the segmentation model this catalog uses — two
+lines apart in the asset list — under a licence whose §3.2 forbids supplying the model or its output
+"in the course of a commercial activity". DiariZen's weights are CC-BY-NC-4.0. These are the same
+shape of trap as NLLB and Seamless, and the same shape of trap is caught the same way twice only if
+something other than attention catches it. So a `ModelLicense` carries whether it permits commercial
+use, `DiarizationModelInfo` rejects one that does not at construction, and both banned licences
+exist as named values purely so a test can prove the rejection. Listing Reverb is not a mistake
+somebody has to notice; it is a build that does not start.
+
+**Readiness degrades to nothing rather than to an error.** `Readiness` reads the disk and answers
+`Ready` only when a segmentation model *and* an embedding model are both present. An unset choice, a
+choice naming a model that no longer exists, or two segmentation models chosen by mistake all read
+as not downloaded — not as an exception on the way into a meeting. `DiarizationModelDownload`
+carries the other two states the ticket asked for: a download that 404s or fails its hash check
+ends at `Failed` with a message on the object, and never as a thrown exception the host would have
+to render as a dialog over a running transcript. Headless tests start a demo meeting with an empty
+models directory and assert the transcript arrives and no mode's status mentions a speaker model.
+
+The URL change the ADR called for turned out to be mostly already done: `IDownloadableFile` has
+taken a whole `DownloadUrl` since the downloader was shared, and it is `LocalModelInfo` that
+composes the HuggingFace path for its own entries. These records compose a GitHub releases URL
+instead, which is what the change was for — no token, no gated repo. The embedding release tag is
+spelt `speaker-recongition-models` upstream and a test pins the misspelling, because correcting it
+turns every embedding URL into a 404 that only shows up at download time.
+
+One thing is deliberately unfinished. The published segmentation asset is a `.tar.bz2` holding
+`model.onnx` and `model.int8.onnx`, and the BCL has no bzip2 — unpacking would mean a new
+dependency, so it lands with the slice that loads the model. Until then `Ready` means the verified
+archive is on disk. Nothing consumes any of this yet, so there is no CHANGELOG entry.
+
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
 The transcription-model catalog needs everything the translation catalog already has: a file
