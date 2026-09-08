@@ -115,6 +115,51 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### Who said it: a decision, at last ([ADR 0055](adr/0055-speaker-attribution.md))
+
+[#13](https://github.com/TONiiV/Kanal/issues/13) has been open since July with a "decision needed"
+nobody answered, and `docs/design/meeting-evidence.md` has carried an unanswered **S1** since the
+design review. Meanwhile `GladiaAsrProvider.Caps` declares `Diarization: true` — a claim that has
+been false the whole time, because Gladia's `/v2/live` request body has no diarization parameter at
+all. The right sidebar's speaker tab, the rename, the non-destructive merge, and the mobile page's
+`Speaker.MergedFrom` resolution are all built and all have exactly one tag to work on.
+
+The survey turned up three things worth recording beyond the choice itself.
+
+**Two of the obvious candidates are licensed out of reach.** Rev's Reverb diarization models —
+which sherpa-onnx conveniently packages alongside the one we can use — and DiariZen's weights are
+both **non-commercial only**. Same shape as the NLLB/Seamless trap: attractive, well-benchmarked,
+and unusable. Caught at selection time rather than before a release, which is the only time it is
+cheap to catch.
+
+**Streaming diarization is genuinely possible now, and still the wrong buy.** NVIDIA's Streaming
+Sortformer has an official ONNX export in NeMo main, community ONNX weights, and a Rust
+implementation proving it runs outside Python — 1.04 s latency at 15.09% DER. But its speaker count
+is fixed at **four** by training (≥5 speakers degrades to 42.56% DER) against a product spec that
+says 3–8 participants, and its speaker cache is deliberately left *outside* the ONNX graph: the
+cache-update rules and the 128-dim log-mel front end are ~1300 lines of Rust numerics that would
+have to be re-derived in C# with no reference vectors to check against. Thirteen hundred lines whose
+failure mode is silently attributing a sentence to the wrong person.
+
+**The chosen path turns a documented weakness into a product advantage.** sherpa-onnx's clustering
+is markedly less accurate when it is not told how many speakers there are, and upstream's own answer
+to that is "tune the threshold yourself". But the number of people in the room is something the
+operator can see by looking up. A streaming model cannot accept that hint; this one can.
+
+So: **provisional tags live, authoritative re-run afterwards.** Per-utterance embeddings clustered
+online during the meeting, then a full offline pass over the recording once it ends — the second
+overwriting the first through the non-destructive merge semantics that have been sitting unused
+since #68. It costs a step at the end of the meeting (measured RTF 0.12–0.30, so roughly 7–18
+minutes per recorded hour) and it needs one shared meeting timeline aligning ASR timestamps to
+recorded audio across pause gaps and reconnects — which is also exactly what
+[#63](https://github.com/TONiiV/Kanal/issues/63) needs, so the two stop being separate problems.
+
+Also settled, and written down rather than discovered later: **overlapping speech is not solved**.
+The segmentation model detects it internally, but sherpa-onnx's output carries one speaker label
+per segment, so overlap collapses into a cluster. And `Utterance.SpeakerConfidence` gets no real
+value yet — per-segment confidence exists only on sherpa-onnx's unreleased main branch, so the UI
+shows nothing rather than a number that was made up.
+
 ### A meeting record finally gets a life ([ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md))
 
 The workspace sidebar shipped in #68 and the meeting titler in #82, and between them sat a hole
