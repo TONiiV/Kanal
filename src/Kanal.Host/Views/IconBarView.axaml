@@ -65,7 +65,7 @@
                             </ComboBox.SelectionBoxItemTemplate>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3,0,4" MaxWidth="330">
+                                    <Grid ColumnDefinitions="Auto,*" Margin="0,3,0,4" MaxWidth="330">
                                         <Path Grid.Column="0" Classes="mode" Width="16" Height="16"
                                               Stretch="Uniform" Margin="0,1,10,0" VerticalAlignment="Top"
                                               Data="{Binding Mark}" Fill="{StaticResource Ink}" />
@@ -75,14 +75,6 @@
                                                        TextWrapping="Wrap"
                                                        Foreground="{StaticResource Ink3}" />
                                         </StackPanel>
-                                        <Path Grid.Column="2" Width="11" Height="11" Stretch="Uniform"
-                                              Margin="10,4,0,0" VerticalAlignment="Top"
-                                              Data="{c:Icon square-filled}" Fill="{StaticResource Ink}"
-                                              IsVisible="{Binding IsAvailable}" />
-                                        <Path Grid.Column="2" Width="11" Height="11" Stretch="Uniform"
-                                              Margin="10,4,0,0" VerticalAlignment="Top"
-                                              Data="{c:Icon square-hollow}" Fill="{StaticResource Ink3}"
-                                              IsVisible="{Binding !IsAvailable}" />
                                     </Grid>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>

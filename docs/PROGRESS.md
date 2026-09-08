@@ -22,11 +22,12 @@ arrowhead are one glyph in a dropdown row. Changing the base shape as well as th
 makes the five separable at 16 px.
 
 The list follows the box. Every row leads with the same mark the collapsed box will show, so the
-mark the operator learns while choosing still means something back in the bar; the availability
-square moved to the right edge of the row rather than being dropped, because it is the only
-non-colour signal that a row cannot be picked and the grey second line was already judged
-insufficient once. Losing the second glyph also gave the label back its width — Polish now sets
-`Lokalnie · Lokalnie` in full instead of trimming.
+mark the operator learns while choosing still means something back in the bar. The availability
+square that used to lead the row went with it: two marks on one row is the thing being fixed, and
+a row that cannot be picked is already disabled and already names its blocker in the second line.
+The square stays in the help flyout, which is the reference list and has the room for it. Losing
+the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
+instead of trimming.
 
 **The help button belongs to the mode box.** `LeftCluster`'s first column was an open starred
 column, so it took every spare pixel the window had: the mode box sat at its left edge and the `?`
