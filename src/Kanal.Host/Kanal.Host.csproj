@@ -42,4 +42,22 @@
     <ProjectReference Include="..\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
+
+  <!-- macOS reads privacy purpose strings from Contents/Info.plist, never from a file placed
+       beside a raw Mach-O. Keep a runnable development bundle in every macOS build so the same
+       artifact that requests TCC permission is the one whose declarations are tested. -->
+  <Target Name="CreateMacAppBundle"
+          AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <_MacAppDir>$(TargetDir)Kanal.app/Contents</_MacAppDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MacHostFile Include="$(TargetDir)*"
+                    Exclude="$(TargetDir)Info.plist" />
+    </ItemGroup>
+    <MakeDir Directories="$(_MacAppDir)/MacOS" />
+    <Copy SourceFiles="@(_MacHostFile)" DestinationFolder="$(_MacAppDir)/MacOS" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Info.plist" DestinationFiles="$(_MacAppDir)/Info.plist" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

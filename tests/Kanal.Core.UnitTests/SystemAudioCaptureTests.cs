@@ -138,7 +138,7 @@ public class SystemAudioCaptureTests
         try
         {
             Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_start"));
-            Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_stop"));
+            Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_stop_with_completion"));
         }
         finally
         {
@@ -147,13 +147,27 @@ public class SystemAudioCaptureTests
     }
 
     [Fact]
-    public void HostInfoPlistDeclaresBothAudioPermissionPurposes()
+    public void BuiltMacAppCarriesBothAudioPermissionPurposes()
     {
+        var output = new DirectoryInfo(AppContext.BaseDirectory);
+        var configuration = output.Parent!.Name;
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-        var plist = File.ReadAllText(Path.Combine(root, "src/Kanal.Host/Info.plist"));
+        var plistPath = OperatingSystem.IsMacOS()
+            ? Path.Combine(root, $"src/Kanal.Host/bin/{configuration}/{output.Name}/Kanal.app/Contents/Info.plist")
+            : Path.Combine(root, "src/Kanal.Host/Info.plist");
+        var plist = File.ReadAllText(plistPath);
 
         Assert.Contains("NSAudioCaptureUsageDescription", plist, StringComparison.Ordinal);
         Assert.Contains("NSMicrophoneUsageDescription", plist, StringComparison.Ordinal);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var executable = Path.Combine(Path.GetDirectoryName(plistPath)!, "MacOS/Kanal.Host");
+            Assert.True(File.Exists(executable), "the plist must belong to a runnable app bundle");
+            Assert.True(File.Exists(Path.Combine(
+                Path.GetDirectoryName(executable)!,
+                "libkanal_audio_native.dylib")));
+        }
     }
 
     private sealed class FakeMacNative(string? failure = null) : IMacSystemAudioNative
@@ -201,10 +215,11 @@ public class SystemAudioCaptureTests
             return new IntPtr(42);
         }
 
-        public void Stop(IntPtr handle)
+        public ValueTask StopAsync(IntPtr handle)
         {
             Assert.Equal(new IntPtr(42), handle);
             Stopped = true;
+            return ValueTask.CompletedTask;
         }
     }
 }
