@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
              xmlns:ws="using:Kanal.Core.Workspaces"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
@@ -39,7 +40,7 @@
                             Command="{Binding Shell.Left.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
-                        <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}" />
+                        <Path Classes="glyph" Data="{c:Icon chevron-left}" />
                     </Button>
                 </DockPanel>
             </Border>
@@ -49,8 +50,7 @@
                     HorizontalAlignment="Left"
                     ToolTip.Tip="{l:T settings.tip}"
                     AutomationProperties.Name="{l:T settings.tip}">
-                <Path Classes="glyph" Data="{StaticResource GlyphSettings}" Width="14" Height="14"
-                      Stretch="Uniform" VerticalAlignment="Center" />
+                <Path Classes="glyph" Data="{c:Icon settings}" />
             </Button>
 
             <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
@@ -67,8 +67,7 @@
                         Command="{Binding Sidebar.NewMeetingCommand}"
                         ToolTip.Tip="{l:T workspace.newmeeting.tip}"
                         AutomationProperties.Name="{l:T workspace.newmeeting.tip}">
-                    <Path Classes="glyph" Data="{StaticResource GlyphPlus}" Width="12" Height="12"
-                          Stretch="Uniform" VerticalAlignment="Center" />
+                    <Path Classes="glyph" Data="{c:Icon plus}" Width="14" Height="14" />
                 </Button>
             </Grid>
 
@@ -94,14 +93,12 @@
                             <MenuItem Name="ImportRecord" Header="{l:T workspace.importrecord}"
                                       Command="{Binding Sidebar.ImportMeetingRecordCommand}">
                                 <MenuItem.Icon>
-                                    <Path Classes="glyph" Data="{StaticResource GlyphArrowDown}"
-                                          Width="11" Height="11" Stretch="Uniform" />
+                                    <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuFlyout>
                     </Button.Flyout>
-                    <Path Classes="glyph" Data="{StaticResource GlyphPlus}" Width="12" Height="12"
-                          Stretch="Uniform" VerticalAlignment="Center" />
+                    <Path Classes="glyph" Data="{c:Icon plus}" Width="14" Height="14" />
                 </Button>
             </Grid>
 
@@ -133,21 +130,18 @@
                                         <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"
                                                   Command="{Binding ImportCommand}">
                                             <MenuItem.Icon>
-                                                <Path Classes="glyph" Data="{StaticResource GlyphArrowDown}"
-                                                      Width="11" Height="11" Stretch="Uniform" />
+                                                <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Name="ExportMeeting" Header="{l:T meeting.export}"
                                                   Command="{Binding ExportCommand}">
                                             <MenuItem.Icon>
-                                                <Path Classes="glyph" Data="{StaticResource GlyphArrowUp}"
-                                                      Width="11" Height="11" Stretch="Uniform" />
+                                                <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                     </MenuFlyout>
                                 </Button.Flyout>
-                                <Path Classes="glyph" Data="{StaticResource GlyphEllipsis}" Width="12"
-                                      Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                                <Path Classes="glyph" Data="{c:Icon ellipsis}" Width="14" Height="14" />
                             </Button>
                         </Grid>
                     </DataTemplate>

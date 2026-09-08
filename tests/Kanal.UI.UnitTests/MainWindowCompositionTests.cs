@@ -7,6 +7,8 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using Kanal.Host.Controls;
+using Kanal.Host.Localization;
 using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
@@ -16,9 +18,9 @@ public class MainWindowCompositionTests
     private static IconBarView Bar(Window window) =>
         window.GetLogicalDescendants().OfType<IconBarView>().Single();
 
-    private static StackPanel Cluster(Window window, string name) =>
+    private static Panel Cluster(Window window, string name) =>
         Assert.Single(
-            Bar(window).GetLogicalDescendants().OfType<StackPanel>(),
+            Bar(window).GetLogicalDescendants().OfType<Panel>(),
             panel => panel.Name == name);
 
     [AvaloniaFact]
@@ -202,6 +204,158 @@ public class MainWindowCompositionTests
             .Select(item => item.Command).ToList();
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportJsonCommand));
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// A glyph box an odd number of pixels wide leaves half a pixel of slack on one side of an
+    /// even disc, which is how the transport ended up with the pause mark a hair right of centre
+    /// and the stop mark a hair left.
+    /// </summary>
+    [AvaloniaFact]
+    public void EveryTransportMarkSitsInTheCentreOfItsDisc()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        vm.IsRunning = true;
+        vm.IsTranscribing = true;
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var marks = Bar(window).GetLogicalDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("mark") && button.IsVisible)
+            .ToList();
+
+        Assert.NotEmpty(marks);
+        Assert.All(marks, mark =>
+        {
+            var glyph = Assert.Single(
+                mark.GetVisualDescendants().OfType<Shape>(),
+                path => path.IsVisible);
+            var centre = new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2);
+            var offset = glyph.TranslatePoint(centre, mark)!.Value
+                - new Point(mark.Bounds.Width / 2, mark.Bounds.Height / 2);
+
+            Assert.True(
+                Math.Abs(offset.X) < 0.01 && Math.Abs(offset.Y) < 0.01,
+                $"{mark.Name}'s glyph sits {offset} off the centre of its {mark.Bounds.Size} disc.");
+        });
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The chevron is drawn by the ComboBox template against the picker's own right edge, so a
+    /// picker sized to its glyph alone loses it: the width has to carry glyph, gap and chevron.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheCapturePickerDrawsItsChevronInsideItselfWithoutCrowdingTheGlyph()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var capture = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
+        var chevron = Assert.Single(capture.GetVisualDescendants().OfType<PathIcon>());
+        var glyph = Assert.Single(
+            capture.GetVisualDescendants().OfType<Shape>(),
+            path => path.Classes.Contains("glyph") && path.IsVisible);
+
+        var left = chevron.TranslatePoint(new Point(0, 0), capture)!.Value.X;
+        var right = chevron.TranslatePoint(new Point(chevron.Bounds.Width, 0), capture)!.Value.X;
+        var glyphRight = glyph.TranslatePoint(new Point(glyph.Bounds.Width, 0), capture)!.Value.X;
+
+        Assert.True(right <= capture.Bounds.Width,
+            $"the chevron runs to {right} in a {capture.Bounds.Width} picker, so it is cut off.");
+        Assert.True(left - glyphRight >= 4,
+            $"only {left - glyphRight} between the capture glyph and its chevron.");
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The left cluster is narrower than what it holds as soon as the window is, and it used to
+    /// give up the width at its right-hand end — where the capture picker is. The mode label is
+    /// the only thing here that can be shortened, so it is the only thing that yields.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("en")]
+    [InlineData("pl")]
+    public void TheModeLabelGivesUpWidthBeforeTheCapturePickerDoes(string code)
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            Localizer.Instance.Current = code;
+            var vm = TestViewModels.Hermetic();
+            vm.SelectedMode = vm.Modes.Last(mode => mode.Mode.NeedsMicrophone);
+            vm.IsRunning = true;
+            vm.IsTranscribing = true;
+            var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var cluster = Cluster(window, "LeftCluster");
+            var capture = Assert.Single(
+                cluster.GetLogicalDescendants().OfType<ComboBox>(),
+                combo => ReferenceEquals(combo.ItemsSource, vm.CaptureProfiles));
+            var modes = Assert.Single(
+                cluster.GetLogicalDescendants().OfType<ComboBox>(),
+                combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+            var left = capture.TranslatePoint(new Point(0, 0), cluster)!.Value.X;
+            var right = capture.TranslatePoint(new Point(capture.Bounds.Width, 0), cluster)!.Value.X;
+            var modesRight = modes.TranslatePoint(new Point(modes.Bounds.Width, 0), cluster)!.Value.X;
+
+            Assert.True(
+                right <= cluster.Bounds.Width + 0.5,
+                $"{code}: the capture picker ends at {right} in a {cluster.Bounds.Width} cluster.");
+            Assert.True(
+                modesRight <= left + 0.5,
+                $"{code}: the mode box runs to {modesRight}, over a capture picker that starts at {left}.");
+
+            window.Close();
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// The collapsed mode box used to draw one chip whatever the mode was, which said nothing
+    /// about where either half of the pipeline runs — the one thing the mode names.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheModeBoxMarksWhereBothStagesRun()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+
+        var modes = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+
+        foreach (var option in vm.Modes)
+        {
+            vm.SelectedMode = option;
+            Dispatcher.UIThread.RunJobs();
+
+            var marks = modes.GetVisualDescendants().OfType<Shape>()
+                .Where(path => path.Classes.Contains("glyph") && path.IsVisible)
+                .Select(path => path.Data)
+                .ToList();
+
+            Assert.Equal(
+                [Icons.Stage(option.Mode.Transcription), Icons.Stage(option.Mode.Translation)],
+                marks);
+        }
 
         window.Close();
     }

@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The toolbar's marks sit square in the middle of the controls that carry them, and the capture
+  picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
+  tight. The mode box now draws a cloud and a laptop to say where each half of the pipeline runs,
+  in place of the chip that said nothing.
+
 - A meeting can now name itself. With a local translation model in use, Kanal proposes a short
   title once the meeting is a minute or so in, and a control beside the title asks for another one
   at any time. Click the title to rename it by hand — that name is kept, is never overwritten by a
