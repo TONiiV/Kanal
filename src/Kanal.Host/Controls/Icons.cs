@@ -31,10 +31,16 @@ public static class Icons
 
     public static Geometry Of(string name) => Loaded.GetOrAdd(name, Load);
 
-    public static Geometry Stage(StageKind stage) => Of(stage switch
+    /// <summary>
+    /// One mark per mode. The shape is where transcription runs; an arrow on it means the second
+    /// stage runs on the other side, pointing the way the work is handed over.
+    /// </summary>
+    public static Geometry Mode(PipelineModeId mode) => Of(mode switch
     {
-        StageKind.Cloud => "cloud",
-        StageKind.Local => "local",
+        PipelineModeId.CloudCloud => "cloud",
+        PipelineModeId.CloudLocal => "cloud-down",
+        PipelineModeId.LocalCloud => "local-up",
+        PipelineModeId.LocalLocal => "local",
         _ => "script",
     });
 
