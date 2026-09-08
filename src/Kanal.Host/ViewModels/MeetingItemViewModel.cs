@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Workspaces;
 
@@ -26,6 +27,11 @@ public sealed partial class MeetingItemViewModel(
     public string Title => Record.Title;
 
     public string When => Record.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    // Kept apart from the list's selection: the meeting being recorded stays marked while the
+    // operator reads another one, which is the only way back to it.
+    [ObservableProperty]
+    private bool _isActive;
 
     [RelayCommand]
     private Task Import() => import(this);

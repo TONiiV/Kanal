@@ -272,5 +272,10 @@
   "workspace.nomeetings": "这里还没有会议。",
   "workspace.picker": "项目",
   "workspace.meetings": "会议",
-  "workspace.nomatches": "没有匹配的会议。"
+  "workspace.nomatches": "没有匹配的会议。",
+  "browse.recording": "正在录制《{0}》",
+  "browse.return": "返回",
+  "browse.notranscript": "这条会议记录里还没有转写内容。",
+  "browse.readonly": "只读",
+  "workspace.recording": "录制中"
 }

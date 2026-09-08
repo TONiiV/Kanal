@@ -272,5 +272,10 @@
   "workspace.nomeetings": "No meetings here yet.",
   "workspace.picker": "Project",
   "workspace.meetings": "Meetings",
-  "workspace.nomatches": "Nothing matches that."
+  "workspace.nomatches": "Nothing matches that.",
+  "browse.recording": "Recording “{0}”",
+  "browse.return": "Back",
+  "browse.notranscript": "Nothing has been written down in this meeting record yet.",
+  "browse.readonly": "Read only",
+  "workspace.recording": "Recording"
 }

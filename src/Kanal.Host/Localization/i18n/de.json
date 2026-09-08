@@ -272,5 +272,10 @@
   "workspace.nomeetings": "Hier gibt es noch keine Besprechungen.",
   "workspace.picker": "Projekt",
   "workspace.meetings": "Besprechungen",
-  "workspace.nomatches": "Nichts passt dazu."
+  "workspace.nomatches": "Nichts passt dazu.",
+  "browse.recording": "Nimmt „{0}“ auf",
+  "browse.return": "Zurück",
+  "browse.notranscript": "In dieser Besprechungsakte steht noch nichts.",
+  "browse.readonly": "Nur lesen",
+  "workspace.recording": "Nimmt auf"
 }

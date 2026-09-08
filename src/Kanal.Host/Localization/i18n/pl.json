@@ -272,5 +272,10 @@
   "workspace.nomeetings": "Nie ma tu jeszcze spotkań.",
   "workspace.picker": "Projekt",
   "workspace.meetings": "Spotkania",
-  "workspace.nomatches": "Nic nie pasuje."
+  "workspace.nomatches": "Nic nie pasuje.",
+  "browse.recording": "Trwa nagrywanie „{0}”",
+  "browse.return": "Wróć",
+  "browse.notranscript": "W tym zapisie spotkania nie ma jeszcze żadnej treści.",
+  "browse.readonly": "Tylko do odczytu",
+  "workspace.recording": "Nagrywanie"
 }
