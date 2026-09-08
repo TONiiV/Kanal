@@ -76,10 +76,11 @@ public class ExportTests
 
     /// <summary>
     /// The dialog opens where the operator said transcripts go, on a name they can recognise a
-    /// week later. Both are only suggestions — the picker can be pointed anywhere.
+    /// week later — the meeting's title, not the room id, which is a bearer capability with no
+    /// business in a file name. Both are only suggestions; the picker can be pointed anywhere.
     /// </summary>
     [AvaloniaFact]
-    public async Task ThePickerOpensOnTheConfiguredFolderAndTheRoomId()
+    public async Task ThePickerOpensOnTheConfiguredFolderAndTheMeetingTitle()
     {
         var dir = TempDir();
         var settings = new AppSettings { TranscriptFolder = dir };
@@ -97,8 +98,8 @@ public class ExportTests
         await vm.ExportMarkdownCommand.ExecuteAsync(null);
 
         Assert.Equal(dir, offeredFolder);
-        Assert.EndsWith(".md", offeredName);
-        Assert.StartsWith("kanal-", offeredName);
+        Assert.Equal($"{vm.MeetingTitle}.md", offeredName);
+        Assert.DoesNotContain(vm.LoadedRoomId, offeredName);
     }
 
     [AvaloniaFact]
@@ -137,35 +138,31 @@ public class ExportTests
     }
 }
 
-/// <summary>The settings view model round-trips the folders chosen by the operator.</summary>
+/// <summary>The settings view model round-trips what the operator chose.</summary>
 public class SettingsViewModelFolderTests
 {
     [AvaloniaFact]
-    public void SettingsStateRoundTripsBothFolders()
+    public void SettingsStateRoundTripsTheExportFolderAndTheRecordingSwitches()
     {
         var settings = new AppSettings
         {
             TranscriptFolder = @"D:\a",
-            AudioFolder = @"D:\b",
             RecordAudio = false,
             RecordOnlineAudio = true,
         };
         var vm = new SettingsViewModel(settings, () => null);
 
         Assert.Equal(@"D:\a", vm.TranscriptFolder);
-        Assert.Equal(@"D:\b", vm.AudioFolder);
         Assert.False(vm.RecordAudio);
         Assert.True(vm.RecordOnlineAudio);
 
         vm.TranscriptFolder = @"D:\c";
-        vm.AudioFolder = @"D:\d";
         vm.RecordAudio = true;
         vm.RecordOnlineAudio = false;
         var written = new AppSettings();
         vm.ApplyTo(written);
 
         Assert.Equal(@"D:\c", written.TranscriptFolder);
-        Assert.Equal(@"D:\d", written.AudioFolder);
         Assert.True(written.RecordAudio);
         Assert.False(written.RecordOnlineAudio);
     }
@@ -182,18 +179,17 @@ public class RecordingTests
     private static readonly PipelineMode Demo = PipelineMode.Of(PipelineModeId.Demo);
     private static readonly PipelineMode Live = PipelineMode.Of(PipelineModeId.CloudCloud);
 
+    // Built with Path.Combine rather than written out: CI runs on Linux, where the separator is
+    // "/", and a hardcoded backslash passes on the developer's machine and nowhere else.
+    private static readonly string Folder = Path.Combine("acme", "meetings", "a1b2c3");
+
     [Fact]
-    public void ALiveMeetingIsRecordedIntoTheAudioFolderUnderTheRoomId()
+    public void ALiveMeetingIsRecordedIntoItsOwnMeetingRecord()
     {
-        // Built with Path.Combine rather than written out: CI runs on Linux, where the separator
-        // is "/", and a hardcoded backslash passes on the developer's machine and nowhere else.
-        var folder = Path.Combine("meetings", "audio");
-        var settings = new AppSettings { AudioFolder = folder };
-
         var path = MainViewModel.RecordingPathFor(
-            Live, CaptureProfileId.InRoom, settings, "kanal-093005-x7kq");
+            Live, CaptureProfileId.InRoom, new AppSettings(), Folder);
 
-        Assert.Equal(Path.Combine(folder, "kanal-093005-x7kq.wav"), path);
+        Assert.Equal(Path.Combine(Folder, "audio.wav"), path);
     }
 
     /// <summary>A scripted run has no room audio to record — there is no microphone open.</summary>
@@ -201,7 +197,7 @@ public class RecordingTests
     public void ScriptedModesRecordNothing()
     {
         Assert.Null(MainViewModel.RecordingPathFor(
-            Demo, CaptureProfileId.InRoom, new AppSettings(), "kanal-1"));
+            Demo, CaptureProfileId.InRoom, new AppSettings(), Folder));
     }
 
     [Fact]
@@ -210,25 +206,14 @@ public class RecordingTests
         var settings = new AppSettings { RecordAudio = false };
 
         Assert.Null(MainViewModel.RecordingPathFor(
-            Live, CaptureProfileId.InRoom, settings, "kanal-1"));
-    }
-
-    [Fact]
-    public void UnsetAudioFolderFallsBackRatherThanWritingToNowhere()
-    {
-        var path = MainViewModel.RecordingPathFor(
-            Live, CaptureProfileId.InRoom, new AppSettings(), "kanal-1");
-
-        Assert.NotNull(path);
-        Assert.StartsWith(SettingsStore.DefaultOutputFolder, path);
-        Assert.EndsWith("kanal-1.wav", path);
+            Live, CaptureProfileId.InRoom, settings, Folder));
     }
 
     [Fact]
     public void OnlineMeetingsDoNotWriteAWavByDefault()
     {
         var path = MainViewModel.RecordingPathFor(
-            Live, CaptureProfileId.OnlineMeeting, new AppSettings(), "kanal-1");
+            Live, CaptureProfileId.OnlineMeeting, new AppSettings(), Folder);
 
         Assert.Null(path);
     }
@@ -239,7 +224,7 @@ public class RecordingTests
         var settings = new AppSettings { RecordOnlineAudio = true };
 
         var path = MainViewModel.RecordingPathFor(
-            Live, CaptureProfileId.OnlineMeeting, settings, "kanal-1");
+            Live, CaptureProfileId.OnlineMeeting, settings, Folder);
 
         Assert.NotNull(path);
     }

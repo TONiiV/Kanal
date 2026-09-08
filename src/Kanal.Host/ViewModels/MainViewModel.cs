@@ -38,6 +38,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
     private MeetingRecorder? _recorder;
+    private TranscriptLogWriter? _transcriptLog;
+    private string? _activeRecordId;
     private IAsrProvider? _asr;
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
@@ -228,15 +230,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public WorkspaceSidebarViewModel Sidebar { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MeetingTitle))]
     private string _loadedRoomId = "";
 
     public MeetingTitling Titling { get; }
 
+    // Never the room id: it is a bearer capability, and this string becomes the heading of an
+    // exported transcript and the name a save dialog offers.
     public string MeetingTitle =>
-        Titling.Title
-        ?? Sidebar.SelectedMeeting?.Title
-        ?? (LoadedRoomId.Length > 0 ? LoadedRoomId : L["meeting.untitled"]);
+        Titling.Title ?? Sidebar.SelectedMeeting?.Title ?? L["meeting.untitled"];
 
     public bool CanNameMeeting => Titling.CanSuggest;
 
@@ -774,6 +775,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             await _session.DisposeAsync();
             _session = null;
+            StopTranscript();
         }
 
         Columns.Clear();
@@ -966,6 +968,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ? ""
             : L.Format("join.unavailable", relayConnection.Warning);
 
+        // Opened after the session started: a start that fails must not leave a blank record
+        // behind, and both artefacts are named from the folder this hands back.
+        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
+        _activeRecordId = record?.Id;
+        StartTranscript(session, record);
+
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
         // in that minute is kept, and a second pause check here would be a second place for that
         // promise to quietly stop being true. Placed after the session started and the status
@@ -973,7 +981,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // a lit RECORDING label, and a recording that cannot start appends its failure to the
         // status rather than being overwritten by it. The tap only fires once the microphone
         // pump below pushes audio, so nothing is missed by attaching here.
-        StartRecording(session, mode, SelectedCaptureProfile.Id, settings, config.RoomId);
+        StartRecording(
+            session,
+            RecordingPathFor(
+                mode, SelectedCaptureProfile.Id, settings,
+                record is null ? null : Sidebar.FolderOf(record)));
+
+        // Written after the file is open, not before: a record pointing at a recording that
+        // never started reads on screen as an hour of audio nobody can find.
+        if (record is not null && RecordingPath.Length > 0)
+            Sidebar.SaveRecord(record with { AudioPath = RecordingPath });
+        if (record is null)
+            Status = $"{Status} {L["status.notsaved"]}";
 
         if (RelayEnabled && relayConnection.GatewayUrl is not null &&
             relayConnection.InviteTicket is not null)
@@ -1017,6 +1036,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             await DisposeProvidersAsync();
             StopRecording();
+            StopTranscript();
             JoinUrl = "";
             QrImage = null;
             JoinError = "";
@@ -1250,30 +1270,68 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Where a meeting's audio is written, or null when it is not being recorded — scripted
-    /// modes have no audio, and the operator can turn it off. Decided in one place so the
-    /// indicator on screen and the file on disk cannot disagree.
+    /// modes have no audio, the operator can turn it off, and without a meeting record there is
+    /// nowhere to write to. Decided in one place so the indicator on screen and the file on disk
+    /// cannot disagree.
     /// </summary>
     public static string? RecordingPathFor(
         PipelineMode mode,
         CaptureProfileId captureProfile,
         AppSettings settings,
-        string roomId) =>
+        string? meetingFolder) =>
+        meetingFolder is not null &&
         mode.NeedsMicrophone &&
         (captureProfile == CaptureProfileId.InRoom
             ? settings.RecordAudio
             : settings.RecordOnlineAudio)
-            ? Path.Combine(SettingsStore.ResolveAudioFolder(settings), $"{roomId}.wav")
+            ? Path.Combine(meetingFolder, WorkspaceStore.AudioFileName)
             : null;
 
-    private void StartRecording(
-        MeetingSession session,
-        PipelineMode mode,
-        CaptureProfileId captureProfile,
-        AppSettings settings,
-        string roomId)
+    /// <summary>
+    /// Appended as the meeting runs, for the reason the recording already is. Only finals are
+    /// written: a partial is replaced within seconds and would multiply the file for nothing.
+    /// </summary>
+    private void StartTranscript(MeetingSession session, MeetingRecord? record)
+    {
+        if (record?.TranscriptPath is not { } path)
+            return;
+
+        try
+        {
+            var log = new TranscriptLogWriter(path, reason =>
+            {
+                _transcriptLog = null;
+                Dispatcher.UIThread.Post(() => Status = L.Format("status.transcriptstopped", reason));
+            });
+            _transcriptLog = log;
+            session.Room.UtteranceUpserted += u =>
+            {
+                if (u.State == UtteranceState.Final)
+                    log.Append(u);
+            };
+        }
+        catch (Exception ex)
+        {
+            // Appended rather than assigned, as with the recording: the "Live —" line was just
+            // set, and a meeting believed to be written down when it is not is the worst outcome.
+            Status = $"{Status} {L.Format("status.transcriptstopped", ex.Message)}";
+            Log.Warning(RoomLog, $"The meeting is not being written down: {path} could not be opened.", ex);
+        }
+    }
+
+    private void StopTranscript()
+    {
+        _transcriptLog?.Dispose();
+        _transcriptLog = null;
+
+        if (_activeRecordId is { } id)
+            Sidebar.CloseRecord(id, _utcNow());
+        _activeRecordId = null;
+    }
+
+    private void StartRecording(MeetingSession session, string? path)
     {
         _lastRecording = ""; // a scripted run after a recorded one must not report the old file
-        var path = RecordingPathFor(mode, captureProfile, settings, roomId);
         if (path is null)
             return;
 
@@ -1368,9 +1426,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var snapshot = _session.Room.Snapshot();
         var folder = SettingsStore.ResolveTranscriptFolder(_loadSettings());
-        var name = $"{snapshot.Config.RoomId}.{extension}";
+        var name = $"{SuggestedFileName(MeetingTitle)}.{extension}";
 
         var path = ChooseExportPath is null
             ? Path.Combine(folder, name)
@@ -1404,6 +1461,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // The room id is a bearer capability bound for a public Realtime topic; it stopped being a
+    // file name here. Windows' invalid set is a superset of the others', so one list serves all.
+    private const string NotInAFileName = "/\\:*?\"<>|";
+
+    private static string SuggestedFileName(string title)
+    {
+        var cleaned = new string([.. title.Select(
+            c => NotInAFileName.Contains(c) || char.IsControl(c) ? '-' : c)]).Trim(' ', '.');
+        return cleaned.Length == 0 ? "meeting" : cleaned;
+    }
+
     public string BuildMarkdownExport()
     {
         if (_session is null)
@@ -1411,7 +1479,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         var snapshot = _session.Room.Snapshot();
         var sb = new StringBuilder();
-        sb.AppendLine($"# Kanal — {snapshot.Config.RoomId}");
+        sb.AppendLine($"# Kanal — {MeetingTitle}");
         if (_lastAttestation is { } attestation)
         {
             sb.AppendLine();

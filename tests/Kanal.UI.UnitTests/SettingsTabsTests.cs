@@ -17,7 +17,7 @@ public class SettingsTabsTests
         "InputDevice", "InputTest",
         "ApiKeys", "NewKeyName", "NewKeyValue", "AddKey",
         "TranslationModels",
-        "TranscriptFolder", "AudioFolder", "RecordAudio", "RecordOnlineAudio",
+        "TranscriptFolder", "RecordAudio", "RecordOnlineAudio",
         "LogLevel", "LogSize", "OpenLogFolder",
     ];
 
