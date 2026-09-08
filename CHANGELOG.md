@@ -14,9 +14,6 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Native computer-audio sources now cover Windows WASAPI loopback, macOS 14.2+ Core Audio
-  process taps, and a ScreenCaptureKit compatibility path on macOS 13–14.1. Stable output IDs,
-  permission guidance, and strict native teardown prepare the online profile for dual-source mixing.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

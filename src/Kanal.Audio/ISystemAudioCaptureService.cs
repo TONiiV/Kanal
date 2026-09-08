@@ -20,10 +20,7 @@ public sealed record SystemAudioSupport(
     SystemAudioBackend Backend,
     string? Reason = null);
 
-/// <summary>
-/// A platform system-output source. Like microphone capture, every implementation emits
-/// 16 kHz mono PCM16 and rejects a stale endpoint instead of choosing a different one.
-/// </summary>
+/// <summary>Rejects a stale endpoint instead of quietly capturing a different one.</summary>
 public interface ISystemAudioCaptureService : IAudioCaptureService
 {
     SystemAudioBackend Backend { get; }

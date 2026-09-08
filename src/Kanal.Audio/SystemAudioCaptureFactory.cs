@@ -1,6 +1,5 @@
 namespace Kanal.Audio;
 
-/// <summary>The only platform/version switch for native computer-audio capture.</summary>
 public static class SystemAudioCaptureFactory
 {
     public static SystemAudioSupport Support
@@ -33,14 +32,16 @@ public static class SystemAudioCaptureFactory
                 "Native computer-audio capture is available on Windows and macOS."),
         };
 
+    // The version cascade lives in DescribeSupport alone; the guards below only satisfy the
+    // platform analyzer, which cannot see through Support.
     public static ISystemAudioCaptureService? TryCreate()
     {
-        if (OperatingSystem.IsWindows())
+        var backend = Support.Backend;
+        if (backend == SystemAudioBackend.WasapiLoopback && OperatingSystem.IsWindows())
             return new WasapiLoopbackAudioCapture();
-        if (OperatingSystem.IsMacOSVersionAtLeast(14, 2))
-            return new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap);
-        if (OperatingSystem.IsMacOSVersionAtLeast(13))
-            return new MacSystemAudioCapture(SystemAudioBackend.ScreenCaptureKit);
+        if (backend is SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit
+            && OperatingSystem.IsMacOSVersionAtLeast(13))
+            return new MacSystemAudioCapture(backend);
         return null;
     }
 

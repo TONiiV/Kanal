@@ -192,7 +192,6 @@ internal static class MacCoreAudio
         }
     }
 
-    /// <summary>Output-capable devices, identified by their persistent Core Audio UID.</summary>
     internal static List<AudioDeviceInfo> GetOutputDevices()
     {
         var devices = GetDevicesWithChannels(ScopeOutput);

@@ -128,6 +128,43 @@ public class SystemAudioCaptureTests
     }
 
     [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeResamplesEachFrameAtTheRateItArrivedWith()
+    {
+        var native = new FakeMacNative(sampleRates: [48_000, 24_000]);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.ScreenCaptureKit, native);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        var samples = new List<int>();
+        await foreach (var frame in capture.CaptureAsync(null, cts.Token))
+        {
+            samples.Add(frame.Length / sizeof(short));
+            if (samples.Count == 2)
+                break;
+        }
+
+        Assert.InRange(samples[0], 30, 36); // 100 samples at 48 kHz
+        Assert.InRange(samples[1], 62, 70); // the same 100 samples at 24 kHz
+    }
+
+    /// <summary>A native session that never reports teardown must not freeze the operator's Stop.</summary>
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeGivesUpOnANativeSessionThatNeverReportsTeardown()
+    {
+        var native = new FakeMacNative(stopHangs: true);
+        var capture = new MacSystemAudioCapture(
+            SystemAudioBackend.CoreAudioProcessTap,
+            native,
+            stopTimeout: TimeSpan.FromMilliseconds(50));
+
+        var frames = capture.CaptureAsync(null, TestContext.Current.CancellationToken).GetAsyncEnumerator();
+        Assert.True(await frames.MoveNextAsync());
+
+        await frames.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public void MacBuildCarriesBothNativeCEntryPoints()
     {
         if (!OperatingSystem.IsMacOS())
@@ -162,15 +199,21 @@ public class SystemAudioCaptureTests
 
         if (OperatingSystem.IsMacOS())
         {
-            var executable = Path.Combine(Path.GetDirectoryName(plistPath)!, "MacOS/Kanal.Host");
-            Assert.True(File.Exists(executable), "the plist must belong to a runnable app bundle");
-            Assert.True(File.Exists(Path.Combine(
-                Path.GetDirectoryName(executable)!,
-                "libkanal_audio_native.dylib")));
+            var macOs = Path.Combine(Path.GetDirectoryName(plistPath)!, "MacOS");
+            Assert.True(
+                File.Exists(Path.Combine(macOs, "Kanal.Host")),
+                $"no host executable beside {plistPath} — build Kanal.slnx, not this project alone");
+            Assert.True(File.Exists(Path.Combine(macOs, "libkanal_audio_native.dylib")));
+            Assert.True(
+                Directory.Exists(Path.Combine(macOs, "runtimes")),
+                "a bundle without the native runtime assets cannot launch");
         }
     }
 
-    private sealed class FakeMacNative(string? failure = null) : IMacSystemAudioNative
+    private sealed class FakeMacNative(
+        string? failure = null,
+        int[]? sampleRates = null,
+        bool stopHangs = false) : IMacSystemAudioNative
     {
         public string? DeviceUid { get; private set; }
         public bool Stopped { get; private set; }
@@ -204,7 +247,8 @@ public class SystemAudioCaptureTests
                 try
                 {
                     Marshal.Copy(samples, 0, data, samples.Length);
-                    onFrame(data, bytes, 48_000, IntPtr.Zero);
+                    foreach (var rate in sampleRates ?? [48_000])
+                        onFrame(data, bytes, rate, IntPtr.Zero);
                 }
                 finally
                 {
@@ -219,7 +263,9 @@ public class SystemAudioCaptureTests
         {
             Assert.Equal(new IntPtr(42), handle);
             Stopped = true;
-            return ValueTask.CompletedTask;
+            return stopHangs
+                ? new ValueTask(new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task)
+                : ValueTask.CompletedTask;
         }
     }
 }
