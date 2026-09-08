@@ -10,11 +10,15 @@ namespace Kanal.Core.Room;
 /// </summary>
 public sealed class RoomState
 {
-    private static readonly string[] Palette =
+    private static readonly string[] Colours =
     [
         "#B23A2E", "#1C6B58", "#2B57A0", "#9A6B10",
         "#6B4FA0", "#A03A6E", "#4A7A2E", "#8A5A3A",
     ];
+
+    // Read back when a stored transcript is reopened: a meeting read a week later has to give
+    // each speaker the colour they had in the room.
+    public static IReadOnlyList<string> Palette => Colours;
 
     private readonly object _gate = new();
     private readonly Dictionary<string, Utterance> _utterances = new();
@@ -39,7 +43,7 @@ public sealed class RoomState
             var tag = ResolveTag(t.SpeakerTag);
             if (!_speakers.ContainsKey(tag))
             {
-                newSpeaker = new Speaker(tag, null, [], Palette[_speakers.Count % Palette.Length]);
+                newSpeaker = new Speaker(tag, null, [], Colours[_speakers.Count % Colours.Length]);
                 _speakers[tag] = newSpeaker;
             }
 
@@ -111,7 +115,7 @@ public sealed class RoomState
             var canonical = ResolveTag(tag);
             var existing = _speakers.TryGetValue(canonical, out var s)
                 ? s
-                : new Speaker(canonical, null, [], Palette[_speakers.Count % Palette.Length]);
+                : new Speaker(canonical, null, [], Colours[_speakers.Count % Colours.Length]);
             updated = existing with { DisplayName = displayName };
             _speakers[canonical] = updated;
         }
@@ -137,7 +141,7 @@ public sealed class RoomState
 
             var target = _speakers.TryGetValue(into, out var s)
                 ? s
-                : new Speaker(into, null, [], Palette[_speakers.Count % Palette.Length]);
+                : new Speaker(into, null, [], Colours[_speakers.Count % Colours.Length]);
 
             var mergedFrom = new List<string>(target.MergedFrom);
             if (_speakers.TryGetValue(from, out var source))

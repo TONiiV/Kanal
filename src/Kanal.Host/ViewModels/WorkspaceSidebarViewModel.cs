@@ -59,20 +59,41 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public string EmptyNote =>
         Search.Trim().Length > 0 ? L["workspace.nomatches"] : L["workspace.nomeetings"];
 
-    public bool RenameSelectedMeeting(string title)
+    public bool RenameMeeting(string meetingId, string title)
     {
-        if (SelectedWorkspace is not { } workspace || SelectedMeeting is not { } meeting)
+        if (SelectedWorkspace is not { } workspace)
             return false;
 
-        var (renamed, problem) = _store.RenameMeeting(workspace.Id, meeting.Id, title);
+        var (renamed, problem) = _store.RenameMeeting(workspace.Id, meetingId, title);
         if (Refused(problem) || renamed is null)
             return false;
 
-        meeting.Adopt(renamed);
+        Meetings.FirstOrDefault(m => m.Id == renamed.Id)?.Adopt(renamed);
         var held = _held.FindIndex(m => m.Id == renamed.Id);
         if (held >= 0)
             _held[held] = renamed;
         return true;
+    }
+
+    /// <summary>The title of a record whether or not the search box is currently showing it.</summary>
+    public string? TitleOf(string? meetingId) =>
+        meetingId is null ? null : _held.FirstOrDefault(m => m.Id == meetingId)?.Title;
+
+    public MeetingRecord? RecordOf(string? meetingId) =>
+        meetingId is null ? null : _held.FirstOrDefault(m => m.Id == meetingId);
+
+    public void Select(string? meetingId)
+    {
+        if (meetingId is null)
+            return;
+        if (Meetings.FirstOrDefault(m => m.Id == meetingId) is not { } row)
+        {
+            Search = "";
+            row = Meetings.FirstOrDefault(m => m.Id == meetingId);
+        }
+
+        if (row is not null)
+            SelectedMeeting = row;
     }
 
     /// <summary>

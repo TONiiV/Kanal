@@ -118,8 +118,18 @@
                             <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis"
                                            Foreground="{StaticResource Ink}" />
-                                <TextBlock Text="{Binding When}" FontSize="10.5"
-                                           Foreground="{StaticResource Ink3}" />
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="{Binding When}" FontSize="10.5"
+                                               Foreground="{StaticResource Ink3}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4"
+                                                IsVisible="{Binding IsRecording}">
+                                        <Ellipse Width="5" Height="5" VerticalAlignment="Center"
+                                                 Fill="{StaticResource Record}" />
+                                        <TextBlock x:Name="ActiveMeetingMark" FontSize="10.5"
+                                                   Text="{l:T workspace.recording}"
+                                                   Foreground="{StaticResource Ink2}" />
+                                    </StackPanel>
+                                </StackPanel>
                             </StackPanel>
                             <Button Grid.Column="1" Classes="ghost" x:Name="MeetingMenu" Padding="7,6"
                                     VerticalAlignment="Center"

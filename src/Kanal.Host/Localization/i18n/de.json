@@ -285,5 +285,10 @@
   "files.nomeeting": "Links eine Sitzung wählen, dann steht hier ihr Ordner.",
   "files.import": "Datei aufnehmen",
   "files.import.tip": "Eine Datei von diesem Rechner in den Anhang-Ordner dieser Sitzung kopieren",
-  "files.unreadable": "Dieser Ordner konnte nicht gelesen werden: {0}"
+  "files.unreadable": "Dieser Ordner konnte nicht gelesen werden: {0}",
+  "browse.recording": "Nimmt „{0}“ auf",
+  "browse.return": "Zurück",
+  "browse.notranscript": "In dieser Besprechungsakte steht noch nichts.",
+  "browse.readonly": "Nur lesen",
+  "workspace.recording": "Nimmt auf"
 }

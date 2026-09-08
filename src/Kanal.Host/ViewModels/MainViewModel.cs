@@ -41,7 +41,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _captureCts;
     private MeetingRecorder? _recorder;
     private TranscriptLogWriter? _transcriptLog;
-    private string? _activeRecordId;
+    /// <summary>
+    /// The record this session writes into. Outlives Stop — a title regenerated after the
+    /// meeting still belongs to the meeting it names — and is replaced by the next Start.
+    /// </summary>
+    private string? _sessionRecordId;
     private IAsrProvider? _asr;
     private IMtProvider? _mt;
     private readonly Func<AppSettings> _loadSettings;
@@ -104,10 +108,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
                 return;
-            // Browsing to another record must not carry this room's generated name onto it.
-            Titling.Reset();
             Files.Show(Sidebar.SelectedMeeting?.Record);
-            OnPropertyChanged(nameof(MeetingTitle));
+            RefreshBody();
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
@@ -143,7 +145,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             });
         RefreshSelectedLanguages();
 
-        Columns.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasColumns));
+        Columns.CollectionChanged += (_, _) => NotifyBody();
 
         _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _snapshotTimer.Tick += async (_, _) => await PublishSnapshotSafeAsync();
@@ -233,6 +235,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
+    private readonly ObservableCollection<ColumnViewModel> _stored = new();
+
     public WorkspaceSidebarViewModel Sidebar { get; }
 
     public MeetingFilesViewModel Files { get; }
@@ -242,12 +246,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public MeetingTitling Titling { get; }
 
-    // Never the room id: it is a bearer capability, and this string becomes the heading of an
-    // exported transcript and the name a save dialog offers.
-    public string MeetingTitle =>
-        Titling.Title ?? Sidebar.SelectedMeeting?.Title ?? L["meeting.untitled"];
+    /// <summary>The heading of whatever the body is showing — the browsed record while browsing.</summary>
+    public string MeetingTitle => IsBrowsingRecord
+        ? Sidebar.SelectedMeeting!.Title
+        : Titling.Title ?? Sidebar.SelectedMeeting?.Title ?? L["meeting.untitled"];
 
-    public bool CanNameMeeting => Titling.CanSuggest;
+    // Never the room id: it is a bearer capability, and this string becomes the heading of an
+    // exported transcript and the name a save dialog offers. It names the meeting that was
+    // recorded, not the record the operator wandered off to read.
+    private string ActiveMeetingTitle =>
+        Titling.Title ?? Sidebar.TitleOf(_sessionRecordId) ?? L["meeting.untitled"];
+
+    public bool CanNameMeeting => Titling.CanSuggest && !IsViewingAnotherRecord;
 
     public string TitleNote =>
         Titling.IsSuggesting ? L["title.naming"] : Titling.Failed ? L["title.failed"] : "";
@@ -263,6 +273,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void BeginRenameTitle()
     {
+        if (IsViewingAnotherRecord)
+            return;
         TitleDraft = MeetingTitle;
         IsRenamingTitle = true;
     }
@@ -277,7 +289,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void CancelRenameTitle() => IsRenamingTitle = false;
 
-    public bool CanRegenerateTitle => Titling.CanSuggest && !Titling.IsSuggesting;
+    public bool CanRegenerateTitle =>
+        Titling.CanSuggest && !Titling.IsSuggesting && !IsViewingAnotherRecord;
 
     [RelayCommand(CanExecute = nameof(CanRegenerateTitle))]
     private Task RegenerateTitle() => Titling.RegenerateAsync(FinalLines());
@@ -296,8 +309,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (Titling.Title != _titleOnRecord)
         {
             _titleOnRecord = Titling.Title;
-            if (_titleOnRecord is { } named)
-                Sidebar.RenameSelectedMeeting(named);
+            if (_titleOnRecord is { } named &&
+                (_sessionRecordId ?? Sidebar.SelectedMeeting?.Id) is { } target)
+                Sidebar.RenameMeeting(target, named);
         }
 
         OnPropertyChanged(nameof(MeetingTitle));
@@ -573,6 +587,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowPause))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
     [NotifyPropertyChangedFor(nameof(CompactState))]
+    [NotifyPropertyChangedFor(nameof(ShowRecordingBanner))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -613,8 +628,59 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool CanShowJoin => HasJoinInfo || HasJoinError;
 
-    /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
-    public bool HasColumns => Columns.Count > 0;
+    public bool HasColumns => ShownColumns.Count > 0;
+
+    /// <summary>
+    /// What the body renders: the live columns, or a chosen record's stored transcript. One
+    /// property rather than two panels, so the live columns are never rebuilt to make room for
+    /// a record being read, and coming back costs nothing.
+    /// </summary>
+    public IReadOnlyList<ColumnViewModel> ShownColumns => IsBrowsingRecord ? _stored : Columns;
+
+    public bool IsBrowsingRecord =>
+        Sidebar.SelectedMeeting is { } meeting && meeting.Id != _sessionRecordId;
+
+    /// <summary>The body is a viewer: this session has a record of its own and it is not on screen.</summary>
+    public bool IsViewingAnotherRecord => _sessionRecordId is not null && IsBrowsingRecord;
+
+    public bool ShowRecordingBanner =>
+        IsRunning && Sidebar.RecordingMeetingId is { } active && Sidebar.SelectedMeeting?.Id != active;
+
+    public string RecordingBannerText => L.Format(
+        "browse.recording", Sidebar.TitleOf(Sidebar.RecordingMeetingId) ?? L["meeting.untitled"]);
+
+    public bool ShowStartHint => !HasColumns && !IsBrowsingRecord;
+
+    public bool ShowNoStoredTranscript => !HasColumns && IsBrowsingRecord;
+
+    [RelayCommand]
+    private void ReturnToActiveMeeting() => Sidebar.Select(Sidebar.RecordingMeetingId ?? _sessionRecordId);
+
+    private void RefreshBody()
+    {
+        _stored.Clear();
+        if (IsBrowsingRecord && Sidebar.SelectedMeeting is { } meeting)
+            foreach (var column in StoredTranscript.Of(meeting.Record))
+                _stored.Add(column);
+
+        NotifyBody();
+    }
+
+    private void NotifyBody()
+    {
+        OnPropertyChanged(nameof(ShownColumns));
+        OnPropertyChanged(nameof(HasColumns));
+        OnPropertyChanged(nameof(IsBrowsingRecord));
+        OnPropertyChanged(nameof(IsViewingAnotherRecord));
+        OnPropertyChanged(nameof(ShowStartHint));
+        OnPropertyChanged(nameof(ShowNoStoredTranscript));
+        OnPropertyChanged(nameof(ShowRecordingBanner));
+        OnPropertyChanged(nameof(RecordingBannerText));
+        OnPropertyChanged(nameof(MeetingTitle));
+        OnPropertyChanged(nameof(CanNameMeeting));
+        OnPropertyChanged(nameof(CanRegenerateTitle));
+        RegenerateTitleCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>An input device and a level meter only mean something for captured audio.</summary>
     public bool NeedsMicrophone => SelectedMode.Mode.NeedsMicrophone;
@@ -792,6 +858,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Assistant.Forget();
         LoadedRoomId = "";
         Titling.Reset();
+        _sessionRecordId = null;
+        Sidebar.RecordingMeetingId = null;
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
@@ -963,9 +1031,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : null;
         IsRunning = true;
         IsTranscribing = session.IsTranscribing;
-        // No record is bound to a session yet, so the meeting being recorded is the one that was
-        // selected when the room opened — the same one this view model writes its title onto.
-        Sidebar.RecordingMeetingId = Sidebar.SelectedMeeting?.Id;
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
@@ -983,7 +1048,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // Opened after the session started: a start that fails must not leave a blank record
         // behind, and both artefacts are named from the folder this hands back.
         var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
-        _activeRecordId = record?.Id;
+        _sessionRecordId = record?.Id;
+        Sidebar.RecordingMeetingId = record?.Id;
+        RefreshBody();
         StartTranscript(session, record);
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
@@ -1049,6 +1116,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             await DisposeProvidersAsync();
             StopRecording();
             StopTranscript();
+            if (Sidebar.RecordingMeetingId is { } recorded)
+                Sidebar.CloseRecord(recorded, _utcNow());
             JoinUrl = "";
             QrImage = null;
             JoinError = "";
@@ -1336,10 +1405,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         _transcriptLog?.Dispose();
         _transcriptLog = null;
-
-        if (_activeRecordId is { } id)
-            Sidebar.CloseRecord(id, _utcNow());
-        _activeRecordId = null;
     }
 
     private void StartRecording(MeetingSession session, string? path)
@@ -1440,7 +1505,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var folder = SettingsStore.ResolveTranscriptFolder(_loadSettings());
-        var name = $"{SuggestedFileName(MeetingTitle)}.{extension}";
+        var name = $"{SuggestedFileName(ActiveMeetingTitle)}.{extension}";
 
         var path = ChooseExportPath is null
             ? Path.Combine(folder, name)
@@ -1492,7 +1557,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         var snapshot = _session.Room.Snapshot();
         var sb = new StringBuilder();
-        sb.AppendLine($"# Kanal — {MeetingTitle}");
+        sb.AppendLine($"# Kanal — {ActiveMeetingTitle}");
         if (_lastAttestation is { } attestation)
         {
             sb.AppendLine();

@@ -285,5 +285,10 @@
   "files.nomeeting": "在左栏选一场会议，这里显示它的文件夹。",
   "files.import": "导入文件",
   "files.import.tip": "把本机的文件复制进这场会议的 attachments 文件夹",
-  "files.unreadable": "该文件夹无法列出：{0}"
+  "files.unreadable": "该文件夹无法列出：{0}",
+  "browse.recording": "正在录制《{0}》",
+  "browse.return": "返回",
+  "browse.notranscript": "这条会议记录里还没有转写内容。",
+  "browse.readonly": "只读",
+  "workspace.recording": "录制中"
 }

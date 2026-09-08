@@ -57,10 +57,34 @@
     </UserControl.Styles>
 
     <DockPanel>
+        <Border DockPanel.Dock="Top" x:Name="RecordingBanner"
+                IsVisible="{Binding ShowRecordingBanner}"
+                Background="{StaticResource Paper}"
+                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                Padding="24,9">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                         Fill="{StaticResource Record}" />
+                <TextBlock x:Name="RecordingBannerText" Text="{Binding RecordingBannerText}"
+                           FontSize="12.5" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource Ink2}" />
+                <TextBlock Text="·" FontSize="12.5" VerticalAlignment="Center"
+                           Foreground="{StaticResource Ink3}" />
+                <Button x:Name="ReturnToActive" Classes="ghost" Padding="0"
+                        Command="{Binding ReturnToActiveMeetingCommand}"
+                        AutomationProperties.Name="{l:T browse.return}">
+                    <TextBlock Text="{l:T browse.return}" FontSize="12.5" FontWeight="SemiBold"
+                               TextDecorations="Underline" Foreground="{StaticResource Ink}" />
+                </Button>
+            </StackPanel>
+        </Border>
+
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="24,18,24,0" ColumnSpacing="16">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border x:Name="MeetingTitleField" Classes="rename" Background="Transparent"
                         Focusable="True" Cursor="Ibeam"
+                        IsEnabled="{Binding !IsViewingAnotherRecord}"
                         IsVisible="{Binding !IsRenamingTitle}"
                         PointerPressed="OnTitlePressed" KeyDown="OnTitleKeyDown"
                         ToolTip.Tip="{l:T title.rename.tip}"
@@ -75,6 +99,9 @@
                            IsVisible="{Binding HasTitleNote}"
                            FontSize="12" VerticalAlignment="Center"
                            Foreground="{StaticResource Ink3}" />
+
+                <TextBlock x:Name="ReadOnlyNote" Classes="label" Text="{l:T browse.readonly}"
+                           IsVisible="{Binding IsViewingAnotherRecord}" />
             </StackPanel>
 
             <TextBox Grid.Column="0" x:Name="MeetingTitleEditor" Text="{Binding TitleDraft}"
@@ -121,7 +148,15 @@
         </Grid>
 
         <Panel>
-        <StackPanel IsVisible="{Binding !HasColumns}" Margin="24,30,24,10" MaxWidth="440"
+        <StackPanel x:Name="NoStoredTranscript" IsVisible="{Binding ShowNoStoredTranscript}"
+                    Margin="24,30,24,10" MaxWidth="440"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
+            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" />
+            <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
+                       Foreground="{StaticResource Ink2}" Text="{l:T browse.notranscript}" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding ShowStartHint}" Margin="24,30,24,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
             <TextBlock Text="{l:T empty.heading}" Classes="label" />
             <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" />
@@ -132,7 +167,7 @@
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto">
-        <ItemsControl Grid.Column="0" ItemsSource="{Binding Columns}" Margin="24,22,0,10">
+        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="24,22,0,10">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
@@ -208,6 +243,7 @@
 
         <ItemsControl Grid.Column="1" ItemsSource="{Binding Ruler.Ticks}"
                       Width="30" Margin="0,22,12,10" VerticalAlignment="Top"
+                      IsVisible="{Binding !IsBrowsingRecord}"
                       AutomationProperties.Name="{l:T ruler.name}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RulerTickViewModel">

@@ -285,5 +285,10 @@
   "files.nomeeting": "Wybierz spotkanie po lewej, a tu pojawi się jego folder.",
   "files.import": "Wczytaj plik",
   "files.import.tip": "Skopiuj plik z tego komputera do folderu załączników tego spotkania",
-  "files.unreadable": "Nie udało się wypisać tego folderu: {0}"
+  "files.unreadable": "Nie udało się wypisać tego folderu: {0}",
+  "browse.recording": "Trwa nagrywanie „{0}”",
+  "browse.return": "Wróć",
+  "browse.notranscript": "W tym zapisie spotkania nie ma jeszcze żadnej treści.",
+  "browse.readonly": "Tylko do odczytu",
+  "workspace.recording": "Nagrywanie"
 }

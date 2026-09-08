@@ -115,6 +115,51 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### The meeting being recorded stops being the meeting on screen
+
+Slice 3 of [ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md) (decisions 12–14), and the
+acceptance line in [the workspace design](design/meeting-workspace.md) that asks a workspace switch
+not to confuse the active meeting with the record being browsed.
+
+Clicking a record in the sidebar set `SelectedMeeting` and did nothing else. The body stayed on the
+live meeting while the title row followed the record, so the heading and the transcript underneath
+it described two different meetings. The part of that which actually destroyed data was quieter:
+the selection change called `Titling.Reset()`, the next final of the live session started naming
+again, and `OnTitlingChanged` wrote the generated name through `RenameSelectedMeeting` — onto the
+old record the operator happened to be reading. Slice 1 widened the blast radius, because
+`MeetingTitle` had become the export dialog's suggested file name and the heading of the exported
+Markdown, and both of those followed the browsed record too.
+
+The fix is one distinction made explicit everywhere. `_sessionRecordId` is the record this session
+writes into; it is opened by Start, and it deliberately outlives Stop, because a title regenerated
+after a meeting still belongs to the meeting it names. Every write now names it: the title lands on
+it, the export is of it, and the speaker rename was already session-scoped and now has a test that
+says so. `Sidebar.RecordingMeetingId` (already there from #112, where it is what keeps the meeting being
+recorded undeletable) is the narrower thing — the record being recorded into right now
+— and it is what the sidebar marks and what the return banner talks about, so the banner cannot
+claim a meeting is being recorded after Stop.
+
+**The body switches rather than the columns being rebuilt.** `ShownColumns` returns the live
+`Columns` or a stored record's read-only ones, and the live collection is never touched while a
+record is read: `ApplyUtterance` keeps filling it in the background, so coming back is a property
+change rather than a replay, and there is no state to lose if the operator wanders off for a
+minute in the middle of an hour. The stored side reuses `ColumnViewModel` and `BubbleViewModel`
+unchanged, so a record read a week later is set exactly like the meeting it came from — same
+columns, same translation-over-source order, same speaker colours. That last one needed
+`RoomState`'s palette to become readable: colours are handed out in order of first speech, and
+reproducing that rule off the stored utterances is what makes a reopened meeting look like the
+meeting that was held. Nothing in a finished transcript is marked live, which is also how the read-
+only view reads as finished at a glance.
+
+**Three judgement calls the ticket left to us.** With nothing being recorded there is no active
+meeting, so browsing is simply what the middle column does — a chosen record is shown read-only and
+no banner appears, because a banner reading "recording X" would be a lie. A browsed record with no
+transcript says so in one line instead of falling back to the "pick your languages and press
+record" prose, which would be advice about a meeting the operator is not in; that prose is now
+shown only when no record is chosen at all. And the title row is inert while another record is on
+screen — editable it would be a write to a record the body is only viewing, which is the whole
+class of bug this slice exists to close.
+
 ### Deleting a meeting starts meaning what it is about to mean
 
 `WorkspaceStore.DeleteMeeting` has sat in the tree since #68 with nothing calling it, and as things
