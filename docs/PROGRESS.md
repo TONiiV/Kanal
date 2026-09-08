@@ -115,6 +115,42 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### The right column learns to hold a meeting's folder, and its tabs learn to slide
+
+The right column gained a third tab, **文件**, which lists whatever is sitting in
+`meetings/<id>/` for the record the operator has selected on the left, and copies files from the
+file system into `meetings/<id>/attachments/`. It is ADR 0054's decisions 18 and 19, and the second
+of those is the more important half: the tree **shows and imports, and nothing else**. Letting a
+model read an attachment is a separate decision with security consequences — the repository's
+standing invariant is that only text crosses the public network, and an operator's dropped contract
+or drawing is not text this tool produced. Nothing in this change hands a file to a provider.
+
+Three things were decided where the ticket was silent.
+
+**The tree lists the whole meeting folder, `meeting.json` and `audio.wav` included, rather than
+just `attachments/`.** A file tree that quietly omits files is worse than no file tree: the operator
+who opens the same folder in Finder sees more than Kanal showed them and has to work out which of
+the two is lying. Everything that is there is listed, folders first, each nested level indented, and
+each file carrying its size — which is also the quickest way to answer "did the recording actually
+happen?" without leaving the window.
+
+**An import never overwrites.** Two suppliers send `quotation.pdf` in the same week; the second
+import lands as `quotation (2).pdf` and the first is still there. This follows the same reasoning as
+decision 23 for record imports — an overwrite button promises merge semantics we have not built, and
+one mis-click costs a file the operator may not have a second copy of.
+
+**A linked folder is listed but not walked.** A symlink inside the meeting folder can point at an
+ancestor of itself, and a recursive walk into it never returns.
+
+The tab strip needed a retemplated `TabControl`. Fluent's has no `ScrollViewer` around its header,
+so a right column dragged down towards its 180 px floor wraps the tabs onto a second row — and with
+German chrome it does so with only three tabs, well before the Agent tab that decision 18 leaves
+room for. The strip now scrolls horizontally inside its own `ScrollViewer` with a horizontal
+`StackPanel` in place of Fluent's wrapping panel. The one non-obvious part is the strip's bottom
+padding: Avalonia overlays the horizontal scrollbar on the bottom edge of its `ScrollViewer`, which
+put the thumb on exactly the line the selected tab's pipe occupies, so a scrolled strip appeared to
+have two tabs selected. The padding gives the bar a lane of its own below the pipes.
+
 ### A meeting has one timeline, and it is not the clock on the wall
 
 `docs/design/meeting-evidence.md` has carried the same warning since the design review: nobody had

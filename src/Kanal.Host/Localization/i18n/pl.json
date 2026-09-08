@@ -241,6 +241,7 @@
   "settings.summary.note": "Podsumowania spotkań nie są jeszcze zbudowane. Gdy powstaną, tutaj wybierze się model i to, co wolno mu czytać.",
   "assistant.tab.points": "Ustalenia i decyzje",
   "assistant.tab.speakers": "Mówcy",
+  "assistant.tab.files": "Pliki",
   "assistant.noanalyst": "Żaden model nasłuchujący nie jest podłączony. Ustalenia i decyzje pojawią się tutaj po podłączeniu.",
   "assistant.nothingyet": "Nic jeszcze nie odnotowano.",
   "insight.kind.point": "USTALENIE",
@@ -272,5 +273,10 @@
   "workspace.nomeetings": "Nie ma tu jeszcze spotkań.",
   "workspace.picker": "Projekt",
   "workspace.meetings": "Spotkania",
-  "workspace.nomatches": "Nic nie pasuje."
+  "workspace.nomatches": "Nic nie pasuje.",
+  "files.empty": "Folder tego spotkania jest jeszcze pusty.",
+  "files.nomeeting": "Wybierz spotkanie po lewej, a tu pojawi się jego folder.",
+  "files.import": "Wczytaj plik",
+  "files.import.tip": "Skopiuj plik z tego komputera do folderu załączników tego spotkania",
+  "files.unreadable": "Nie udało się wypisać tego folderu: {0}"
 }

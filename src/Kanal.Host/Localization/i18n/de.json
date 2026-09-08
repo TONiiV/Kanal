@@ -241,6 +241,7 @@
   "settings.summary.note": "Sitzungszusammenfassungen sind noch nicht gebaut. Sobald es sie gibt, wird hier das Modell gewählt und was es lesen darf.",
   "assistant.tab.points": "Punkte und Entscheidungen",
   "assistant.tab.speakers": "Sprecher",
+  "assistant.tab.files": "Dateien",
   "assistant.noanalyst": "Kein mithörendes Modell verbunden. Punkte und Entscheidungen erscheinen hier, sobald eines verbunden ist.",
   "assistant.nothingyet": "Noch nichts festgehalten.",
   "insight.kind.point": "PUNKT",
@@ -272,5 +273,10 @@
   "workspace.nomeetings": "Hier gibt es noch keine Besprechungen.",
   "workspace.picker": "Projekt",
   "workspace.meetings": "Besprechungen",
-  "workspace.nomatches": "Nichts passt dazu."
+  "workspace.nomatches": "Nichts passt dazu.",
+  "files.empty": "Der Ordner dieser Sitzung ist noch leer.",
+  "files.nomeeting": "Links eine Sitzung wählen, dann steht hier ihr Ordner.",
+  "files.import": "Datei aufnehmen",
+  "files.import.tip": "Eine Datei von diesem Rechner in den Anhang-Ordner dieser Sitzung kopieren",
+  "files.unreadable": "Dieser Ordner konnte nicht gelesen werden: {0}"
 }

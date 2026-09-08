@@ -6,6 +6,33 @@
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.SidePanelView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
+        <!-- Retemplated only to put a ScrollViewer round the header strip: Fluent's TabControl has
+             none, so a narrow right column wraps the tabs onto a second row instead of scrolling. -->
+        <Style Selector="TabControl">
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </Setter>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <DockPanel>
+                        <!-- The padding is the lane the overlaid scrollbar lands in; without it the
+                             thumb sits level with the selection pipe and reads as a second tab. -->
+                        <ScrollViewer DockPanel.Dock="Top" Name="TabStrip" Padding="0,0,0,8"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Disabled">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        </ScrollViewer>
+                        <ContentPresenter Name="PART_SelectedContentHost"
+                                          Margin="{TemplateBinding Padding}"
+                                          Content="{TemplateBinding SelectedContent}"
+                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
         <Style Selector="TabItem">
             <Setter Property="FontFamily" Value="{StaticResource Sans}" />
             <Setter Property="FontSize" Value="10.5" />
@@ -167,6 +194,60 @@
                                                         VerticalAlignment="Bottom" Command="{Binding RenameCommand}"
                                                         ToolTip.Tip="{l:T speaker.apply.tip}" />
                                             </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </TabItem>
+
+                <TabItem x:Name="FilesTab" AutomationProperties.Name="{l:T assistant.tab.files}">
+                    <TabItem.Header>
+                        <TextBlock Text="{l:T assistant.tab.files}" Margin="0,0,0,7" />
+                    </TabItem.Header>
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                            BorderThickness="0,1,0,0">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Bottom" x:Name="ImportFile" Classes="ghost"
+                                    Margin="0,16,0,0" Padding="9,6" HorizontalAlignment="Left"
+                                    Command="{Binding Files.ImportCommand}"
+                                    ToolTip.Tip="{l:T files.import.tip}"
+                                    AutomationProperties.Name="{l:T files.import.tip}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
+                                    <TextBlock Text="{l:T files.import}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <TextBlock DockPanel.Dock="Bottom" x:Name="FilesProblem"
+                                       Text="{Binding Files.ProblemNote}" TextWrapping="Wrap"
+                                       Margin="0,12,0,0" FontSize="11.5" LineHeight="17"
+                                       Foreground="{StaticResource Alarm}"
+                                       IsVisible="{Binding Files.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                            <TextBlock DockPanel.Dock="Top" x:Name="NoFilesNote"
+                                       Text="{Binding Files.EmptyNote}" TextWrapping="Wrap"
+                                       FontSize="12.5" LineHeight="19" Foreground="{StaticResource Ink3}"
+                                       IsVisible="{Binding Files.IsEmpty}" />
+
+                            <ScrollViewer x:Name="FileTree">
+                                <ItemsControl ItemsSource="{Binding Files.Entries}"
+                                              AutomationProperties.Name="{l:T assistant.tab.files}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MeetingFileViewModel">
+                                            <Border BorderBrush="{StaticResource RuleFaint}"
+                                                    BorderThickness="0,0,0,1" Padding="0,8">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12"
+                                                      Margin="{Binding Nesting}">
+                                                    <TextBlock Text="{Binding Label}" FontSize="12.5"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{StaticResource Ink}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding SizeLabel}"
+                                                               FontSize="10.5" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource Ink3}" />
+                                                </Grid>
+                                            </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

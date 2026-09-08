@@ -241,6 +241,7 @@
   "settings.summary.note": "Meeting summaries are not built yet. When they are, this is where the model and what it may read are chosen.",
   "assistant.tab.points": "Points and decisions",
   "assistant.tab.speakers": "Speakers",
+  "assistant.tab.files": "Files",
   "assistant.noanalyst": "No listening model is connected. Points and decisions appear here once one is.",
   "assistant.nothingyet": "Nothing raised yet.",
   "insight.kind.point": "POINT",
@@ -272,5 +273,10 @@
   "workspace.nomeetings": "No meetings here yet.",
   "workspace.picker": "Project",
   "workspace.meetings": "Meetings",
-  "workspace.nomatches": "Nothing matches that."
+  "workspace.nomatches": "Nothing matches that.",
+  "files.empty": "This meeting's folder holds nothing yet.",
+  "files.nomeeting": "Choose a meeting on the left to see its folder.",
+  "files.import": "Import file",
+  "files.import.tip": "Copy a file from this computer into this meeting's attachments folder",
+  "files.unreadable": "That folder could not be listed: {0}"
 }
