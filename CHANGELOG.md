@@ -12,13 +12,15 @@ newest heading has to match the version the build reports, and a test holds the 
 
 ## 1.0.1
 
+The first release. Everything below is what Kanal does on the day it ships.
+
 - Settings is six tabs down the left instead of one long scroll: General, Audio input,
   Transcription, Translation, Summarisation and Workspace. Every setting that was there before is
   still there, in the tab it belongs to. Summarisation says plainly that it is not built yet rather
   than showing controls that would do nothing.
-
-The first release. Everything below is what Kanal does on the day it ships.
-
+- The left sidebar is now a workspace. Search your meetings, start a new one with the button beside
+  the search box, switch between projects, and reach import and export from each meeting's own
+  menu. A record that cannot be read is reported instead of quietly shrinking the list.
 - The meeting assistant on the right now has two tabs. **Points and decisions** collects what the
   meeting settled, grouped by topic, with the words that support each one printed underneath — and
   nothing is recorded as agreed until you confirm it. **Speakers** is the naming and merging you

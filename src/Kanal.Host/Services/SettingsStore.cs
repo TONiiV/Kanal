@@ -106,6 +106,9 @@ public static class SettingsStore
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "settings.json");
 
     /// <summary>Where downloaded GGUF translation models live.</summary>
+    public static string WorkspaceRegistryPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "workspaces.json");
+
     public static string ModelsPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
 
