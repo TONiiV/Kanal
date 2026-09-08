@@ -47,6 +47,13 @@ it goes red against a fixed-width mode box.
 
 ## 2026-09-07
 
+### Auth, feedback, relay hosting and recording import documentation PR
+
+- Product scope confirmed through Q1–Q16: accountless verified-email feedback to private issues, cloud accounts and invitations, a one-time 120-minute Gladia allowance, free local features and BYOK, mainland end-to-end availability, and consented cloud recording import (WAV/MP3/M4A, at most 60 minutes and 500 MB). Payments and paid listening-agent features are deferred.
+- Archived the [52-story specification](specs/auth-feedback-relay-import.md), [11-ticket breakdown](specs/auth-feedback-relay-import-tickets.md), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
+- Reuse existing settings/workspace tasks #67/#68/#69 and mainland gateway work #41. Provider compatibility, VibeVoice measurements, mainland-network tests and production configuration remain implementation/release prerequisites.
+- Documentation validation covers story numbering, per-ticket acceptance criteria, dependency order and local links. No application code or runtime behaviour changed.
+
 ### The transport marks become discs, and the capture picker stops cutting its own glyph off
 
 Three complaints from the bar as #66 shipped it, all about the middle of the row.
