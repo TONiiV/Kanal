@@ -14,10 +14,6 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Native computer-audio sources now cover Windows WASAPI loopback, macOS 14.2+ Core Audio
-  process taps, and a ScreenCaptureKit compatibility path on macOS 13–14.1. Stable output IDs,
-  permission guidance, and strict native teardown prepare the online profile for dual-source mixing.
-
 - The toolbar's marks sit square in the middle of the controls that carry them, and the capture
   picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
   tight. The mode box now draws a cloud and a laptop to say where each half of the pipeline runs,

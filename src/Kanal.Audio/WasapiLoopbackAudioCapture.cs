@@ -5,7 +5,6 @@ using NAudio.Wave;
 
 namespace Kanal.Audio;
 
-/// <summary>Captures the selected Windows render endpoint in WASAPI shared loopback mode.</summary>
 [SupportedOSPlatform("windows")]
 public sealed class WasapiLoopbackAudioCapture : ISystemAudioCaptureService
 {

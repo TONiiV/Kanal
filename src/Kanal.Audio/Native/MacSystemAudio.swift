@@ -84,7 +84,7 @@ private final class CaptureHandle: @unchecked Sendable {
     }
 
     private func report(_ value: Error) {
-        String(describing: value).withCString { errorCallback($0, context) }
+        reportError(value, to: errorCallback, context: context)
     }
 }
 
@@ -396,7 +396,7 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
     }
 
     private func report(_ value: Error) {
-        String(describing: value).withCString { errorCallback($0, context) }
+        reportError(value, to: errorCallback, context: context)
     }
 
     private var isStopped: Bool {
@@ -405,6 +405,14 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
         return stopped
     }
 
+}
+
+private func reportError(
+    _ value: Error,
+    to callback: ErrorCallback,
+    context: UnsafeMutableRawPointer?
+) {
+    String(describing: value).withCString { callback($0, context) }
 }
 
 private func emitMonoPcm16(
@@ -438,7 +446,9 @@ private func emitMonoPcm16(
                 let offset = (index * channels) + channel
                 if isFloat && bytesPerSample == 4 {
                     sum += Double(data.assumingMemoryBound(to: Float.self)[offset])
-                } else if bytesPerSample == 2 {
+                } else if bytesPerSample == 4 {
+                    sum += Double(data.assumingMemoryBound(to: Int32.self)[offset]) / 2_147_483_648.0
+                } else {
                     sum += Double(data.assumingMemoryBound(to: Int16.self)[offset]) / 32_768.0
                 }
                 channelCount += 1

@@ -43,9 +43,8 @@
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
 
-  <!-- macOS reads privacy purpose strings from Contents/Info.plist, never from a file placed
-       beside a raw Mach-O. Keep a runnable development bundle in every macOS build so the same
-       artifact that requests TCC permission is the one whose declarations are tested. -->
+  <!-- macOS reads privacy purpose strings from Contents/Info.plist, never from one beside a raw
+       Mach-O, so system-audio permission is unobtainable without a bundle. -->
   <Target Name="CreateMacAppBundle"
           AfterTargets="Build"
           Condition="$([MSBuild]::IsOSPlatform('OSX'))">
@@ -53,11 +52,13 @@
       <_MacAppDir>$(TargetDir)Kanal.app/Contents</_MacAppDir>
     </PropertyGroup>
     <ItemGroup>
-      <_MacHostFile Include="$(TargetDir)*"
-                    Exclude="$(TargetDir)Info.plist" />
+      <_MacHostFile Include="$(TargetDir)**/*"
+                    Exclude="$(TargetDir)Info.plist;$(TargetDir)Kanal.app/**/*" />
     </ItemGroup>
     <MakeDir Directories="$(_MacAppDir)/MacOS" />
-    <Copy SourceFiles="@(_MacHostFile)" DestinationFolder="$(_MacAppDir)/MacOS" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_MacHostFile)"
+          DestinationFiles="$(_MacAppDir)/MacOS/%(RecursiveDir)%(Filename)%(Extension)"
+          SkipUnchangedFiles="true" />
     <Copy SourceFiles="Info.plist" DestinationFiles="$(_MacAppDir)/Info.plist" SkipUnchangedFiles="true" />
   </Target>
 </Project>

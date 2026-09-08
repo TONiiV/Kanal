@@ -529,6 +529,30 @@ Deliberate limitations, all for the ticket queue rather than this PR:
   rejection. The host Info.plist declares microphone and system-audio usage descriptions.
 - The existing device watcher now observes output topology/default changes as well as microphone
   changes. Headless tests inject the native boundary and never trigger a real permission prompt.
+- No `CHANGELOG.md` bullet. Nothing in `src/Kanal.Host` consumes `ISystemAudioCaptureService` yet
+  and the online profile still reports `capture.online.unavailable`, so an operator reading the
+  changelog inside the application would be told about a capability they cannot reach. Slice 3
+  carries the bullet.
+
+### Three defects the slice-2 review found
+
+- `emitMonoPcm16` guarded on `bytesPerSample == 2 || bytesPerSample == 4`, then only summed float32
+  and int16 — while still counting the channel. A 32-bit integer tap format therefore produced a
+  full-rate stream of digital silence with no error on any channel: the worst failure shape
+  available, because it looks like a quiet room. Int32 is now scaled like the others, and the
+  int16 branch is the `else` rather than a second condition that can fall through to nothing.
+- The managed bridge bound its resampler to the first sample rate it ever saw
+  (`resampler ??= new LinearResampler(sampleRate, …)`), while `ScreenCaptureKitSession` reassigns
+  its format on every buffer. A rate change would have been resampled by the old ratio,
+  undetectably. The rate is now tracked and the resampler rebuilt when it changes.
+- `StopAsync` awaited the native stop completion with no bound. A session that never called back
+  would have hung the enumerator's `finally` — that is, the operator's Stop, mid-meeting. Stop now
+  gives up after five seconds and leaks the native session rather than freezing the host.
+
+`SystemAudioCaptureFactory.TryCreate` no longer repeats the version cascade that `DescribeSupport`
+already owns; it reads `Support.Backend` and keeps only the guards the platform analyzer needs.
+The app-bundle target copied `$(TargetDir)*`, which matches files and not directories, so the
+bundle it produced was missing `runtimes/` and could not have launched — the point of building it.
 
 ### The control bar reads as two groups
 

@@ -10,6 +10,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
 {
     private readonly IMacSystemAudioNative _native;
     private readonly Func<IReadOnlyList<AudioDeviceInfo>> _devices;
+    private readonly TimeSpan _stopTimeout;
 
     public MacSystemAudioCapture(SystemAudioBackend backend)
         : this(backend, MacSystemAudioNative.Instance, MacCoreAudio.GetOutputDevices)
@@ -19,13 +20,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     internal MacSystemAudioCapture(
         SystemAudioBackend backend,
         IMacSystemAudioNative native,
-        Func<IReadOnlyList<AudioDeviceInfo>>? devices = null)
+        Func<IReadOnlyList<AudioDeviceInfo>>? devices = null,
+        TimeSpan? stopTimeout = null)
     {
         if (backend is not (SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit))
             throw new ArgumentOutOfRangeException(nameof(backend));
         Backend = backend;
         _native = native;
         _devices = devices ?? MacCoreAudio.GetOutputDevices;
+        _stopTimeout = stopTimeout ?? TimeSpan.FromSeconds(5);
     }
 
     public SystemAudioBackend Backend { get; }
@@ -53,6 +56,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
             FullMode = BoundedChannelFullMode.DropOldest,
         });
         LinearResampler? resampler = null;
+        var resamplerInputRate = 0;
 
         MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, _) =>
         {
@@ -68,7 +72,12 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                     return;
                 }
 
-                resampler ??= new LinearResampler(sampleRate, AudioCaptureFormat.SampleRateHz);
+                if (resampler is null || resamplerInputRate != sampleRate)
+                {
+                    resampler = new LinearResampler(sampleRate, AudioCaptureFormat.SampleRateHz);
+                    resamplerInputRate = sampleRate;
+                }
+
                 var input = PcmConvert.BytesToShorts(bytes);
                 var output = new short[resampler.GetMaxOutputCount(input.Length)];
                 var count = resampler.Resample(input, output);
@@ -101,7 +110,16 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         }
         finally
         {
-            await _native.StopAsync(handle);
+            // A native session that never calls its stop completion would otherwise hang the
+            // operator's Stop; the leak is preferable to a frozen host.
+            try
+            {
+                await _native.StopAsync(handle).AsTask().WaitAsync(_stopTimeout);
+            }
+            catch (TimeoutException)
+            {
+            }
+
             GC.KeepAlive(onFrame);
             GC.KeepAlive(onError);
         }
