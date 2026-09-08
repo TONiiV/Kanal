@@ -3,6 +3,7 @@ using Kanal.Core.Meetings;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
+using Kanal.Core.Models;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.UI.UnitTests;

@@ -1,3 +1,5 @@
+using Kanal.Core.Models;
+
 namespace Kanal.Providers.LocalMt;
 
 /// <summary>One downloadable translation model. All values verified against the HF API 2026-07-31.</summary>
@@ -19,7 +21,7 @@ public sealed record LocalModelInfo(
     string Sha256,
     string License,
     string? LicenseNote = null,
-    string? AssistantPrefill = null)
+    string? AssistantPrefill = null) : IDownloadableFile
 {
     public string DownloadUrl => $"https://huggingface.co/{Repo}/resolve/main/{FileName}";
 

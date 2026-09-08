@@ -1,5 +1,6 @@
 using Kanal.Core.Providers;
 using Kanal.Host.Services;
+using Kanal.Core.Models;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Core.UnitTests;

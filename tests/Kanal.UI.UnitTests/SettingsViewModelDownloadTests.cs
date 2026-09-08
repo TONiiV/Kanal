@@ -2,6 +2,7 @@ using System.Net;
 using Avalonia.Headless.XUnit;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
+using Kanal.Core.Models;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.UI.UnitTests;
