@@ -69,6 +69,7 @@
   "speaker.apply.tip": "Zastosuj nazwę (lub naciśnij Enter)",
   "column.original": "· ORYGINAŁ",
   "column.original.tip": "Wypowiedziane w tym języku — zapis, nie tłumaczenie",
+  "lang.unknown": "NIEZNANY",
   "column.codeswitch.tip": "Mieszany język",
   "column.drag.tip": "Przeciągnij, aby przesunąć tę kolumnę — albo Alt+← / Alt+→",
   "status.idle": "Bezczynny.",

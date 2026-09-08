@@ -9,7 +9,7 @@ public class GladiaTranslationToggleTests
         new() { ApiKey = "test", EnableTranslation = enable };
 
     private static readonly AsrSessionOptions Session =
-        new(16_000, ["zh", "de", "pl"], ["zh", "de", "pl"]);
+        new(16_000, ["zh", "de", "pl"]);
 
     [Fact]
     public void TranslationIsOnByDefault()

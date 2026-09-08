@@ -69,6 +69,7 @@
   "speaker.apply.tip": "应用名称（或按回车）",
   "column.original": "· 原文",
   "column.original.tip": "用这种语言说出——转写，不是译文",
+  "lang.unknown": "未知语言",
   "column.codeswitch.tip": "混合语种",
   "column.drag.tip": "拖动可移动此列——或按 Alt+← / Alt+→",
   "status.idle": "空闲。",

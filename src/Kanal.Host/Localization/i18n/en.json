@@ -69,6 +69,7 @@
   "speaker.apply.tip": "Apply name (or press Enter)",
   "column.original": "· ORIGINAL",
   "column.original.tip": "Spoken in this language — transcript, not a translation",
+  "lang.unknown": "UNKNOWN",
   "column.codeswitch.tip": "Mixed language",
   "column.drag.tip": "Drag to move this column — or Alt+← / Alt+→",
   "status.idle": "Idle.",
