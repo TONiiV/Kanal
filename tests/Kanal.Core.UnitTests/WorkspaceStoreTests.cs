@@ -375,6 +375,25 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void DeletingAMeetingTakesItsTranscriptAndItsRecordingWithIt()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        var transcript = Path.Combine(folder, "transcript.jsonl");
+        var audio = Path.Combine(folder, "audio.wav");
+        File.WriteAllText(transcript, """{"text":"Guten Tag"}""");
+        File.WriteAllBytes(audio, [0x52, 0x49, 0x46, 0x46]);
+        Created(store.SaveMeeting(meeting with { TranscriptPath = transcript, AudioPath = audio }));
+
+        Assert.Null(store.DeleteMeeting(workspace.Id, meeting.Id));
+
+        Assert.False(File.Exists(transcript));
+        Assert.False(File.Exists(audio));
+    }
+
+    [Fact]
     public void AnUnknownWorkspaceIsReportedRatherThanCreated()
     {
         var store = Store();

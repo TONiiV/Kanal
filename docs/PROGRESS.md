@@ -115,6 +115,32 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### Deleting a meeting starts meaning what it is about to mean
+
+`WorkspaceStore.DeleteMeeting` has sat in the tree since #68 with nothing calling it, and as things
+stand it would destroy an empty shell: the transcript is exported to a global folder and the
+recording is written to another one, and neither is inside the record it belongs to. ADR 0054's
+first slice moves both into `meetings/<id>/`, and from that day the same
+`Directory.Delete(folder, recursive: true)` is the end of the only copy of an hour of speech. The
+confirmation was written for that meaning rather than for today's: it names the transcript and the
+recording, says they do not go to the trash, and says they cannot be recovered. A test asserts
+those three things in all four chrome languages, so the sentence cannot quietly soften when
+somebody shortens it.
+
+Two decisions inside the dialog are worth recording. The filled button is the one that keeps the
+meeting, and it is what both Enter and Escape press — the destructive action is never the one a
+hurried operator hits by reflex. And the menu entry carries no wastebasket: import and export sit
+above it with an arrow down and an arrow up, and a bin in that column would be the one mark on the
+screen promising a way back that does not exist.
+
+"The meeting being recorded" is, until the storage slice lands, whichever record was selected when
+Start was pressed: the room writes that id onto the sidebar as it opens and clears it as it closes,
+and the sidebar puts the flag back on every row it re-creates, because the list is rebuilt on every
+search keystroke. The command refuses as well as greying out. A disabled menu item is not a guard —
+the command is reachable from the keyboard — and the one meeting that must survive a mis-click is
+the one still being spoken into. When the active-meeting slice gives the workspace a real notion of
+which record the room is writing to, this is the property that gets pointed at it.
+
 ### The transcript grows a ruler down its right-hand edge
 
 A meeting that has run for an hour is a scroll with no landmarks. The middle column keeps no tabs

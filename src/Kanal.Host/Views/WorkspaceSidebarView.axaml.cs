@@ -21,6 +21,7 @@ public partial class WorkspaceSidebarView : UserControl
             vm.Sidebar.ChooseWorkspaceFolder = ChooseFolderAsync;
             vm.Sidebar.ChooseFileToImport = ChooseFileAsync;
             vm.Sidebar.ChooseExportPath = ChooseTargetAsync;
+            vm.Sidebar.ConfirmDeleteMeeting = ConfirmDeleteAsync;
         };
     }
 
@@ -31,6 +32,14 @@ public partial class WorkspaceSidebarView : UserControl
 
         await new SettingsWindow().ShowDialog(owner);
         (DataContext as MainViewModel)?.RefreshPipelineStatus();
+    }
+
+    private async Task<bool> ConfirmDeleteAsync(MeetingItemViewModel meeting)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+            return false;
+
+        return await new DeleteMeetingWindow(meeting.Title).ShowDialog<bool>(owner);
     }
 
     private async Task<string?> ChooseFolderAsync()

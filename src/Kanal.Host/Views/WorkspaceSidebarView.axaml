@@ -139,6 +139,11 @@
                                                 <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
                                             </MenuItem.Icon>
                                         </MenuItem>
+                                        <Separator />
+                                        <!-- No wastebasket glyph: nothing goes to a wastebasket,
+                                             and the mark would promise a way back. -->
+                                        <MenuItem Name="DeleteMeeting" Header="{l:T meeting.delete}"
+                                                  Command="{Binding DeleteCommand}" />
                                     </MenuFlyout>
                                 </Button.Flyout>
                                 <Path Classes="glyph" Data="{c:Icon ellipsis}" Width="14" Height="14" />

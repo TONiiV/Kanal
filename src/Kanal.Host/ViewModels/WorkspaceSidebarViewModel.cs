@@ -49,6 +49,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public Func<string, Task<string?>>? ChooseExportPath { get; set; }
 
+    public Func<MeetingItemViewModel, Task<bool>>? ConfirmDeleteMeeting { get; set; }
+
+    [ObservableProperty]
+    private string? _recordingMeetingId;
+
     public bool HasWorkspace => SelectedWorkspace is not null;
 
     public string EmptyNote =>
@@ -151,6 +156,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     partial void OnSearchChanged(string value) => Show();
 
+    partial void OnRecordingMeetingIdChanged(string? value)
+    {
+        foreach (var meeting in Meetings)
+            meeting.IsRecording = meeting.Id == value;
+    }
+
     private void LoadMeetings(IReadOnlyList<StoreProblem> carried)
     {
         _held.Clear();
@@ -172,7 +183,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         var keep = SelectedMeeting?.Id;
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
-            Meetings.Add(new MeetingItemViewModel(record, ImportIntoAsync, ExportAsync));
+            Meetings.Add(new MeetingItemViewModel(record, ImportIntoAsync, ExportAsync, DeleteAsync)
+            {
+                IsRecording = record.Id == RecordingMeetingId,
+            });
 
         SelectedMeeting = Meetings.FirstOrDefault(m => m.Id == keep);
     }
@@ -252,6 +266,22 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
         LoadMeetings([]);
         return Task.CompletedTask;
+    }
+
+    private async Task DeleteAsync(MeetingItemViewModel item)
+    {
+        if (SelectedWorkspace is not { } workspace || item.IsRecording)
+            return;
+
+        // An unwired confirmation reads as a refusal: this destroys the only copy of the
+        // transcript and the recording, and no path to it may skip the question.
+        if (ConfirmDeleteMeeting is null || !await ConfirmDeleteMeeting(item))
+            return;
+
+        if (Refused(_store.DeleteMeeting(workspace.Id, item.Id)))
+            return;
+
+        LoadMeetings([]);
     }
 
     private async Task ExportAsync(MeetingItemViewModel item)

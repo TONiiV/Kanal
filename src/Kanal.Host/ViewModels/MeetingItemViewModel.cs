@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Workspaces;
 
@@ -8,7 +9,8 @@ namespace Kanal.Host.ViewModels;
 public sealed partial class MeetingItemViewModel(
     MeetingRecord record,
     Func<MeetingItemViewModel, Task> import,
-    Func<MeetingItemViewModel, Task> export) : ViewModelBase
+    Func<MeetingItemViewModel, Task> export,
+    Func<MeetingItemViewModel, Task> delete) : ViewModelBase
 {
     public MeetingRecord Record { get; private set; } = record;
 
@@ -32,4 +34,13 @@ public sealed partial class MeetingItemViewModel(
 
     [RelayCommand]
     private Task Export() => export(this);
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
+    private bool _isRecording;
+
+    public bool CanDelete => !IsRecording;
+
+    [RelayCommand(CanExecute = nameof(CanDelete))]
+    private Task Delete() => delete(this);
 }

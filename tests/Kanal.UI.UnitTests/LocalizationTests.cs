@@ -198,6 +198,24 @@ public class LocalizationTests
     }
 
     /// <summary>
+    /// The record folder holds the only copy of both artefacts, so the sentence the operator
+    /// reads before agreeing has to name the transcript and the recording, say where they do not
+    /// go, and say it is final — in whichever language the chrome happens to be in.
+    /// </summary>
+    [Theory]
+    [InlineData("en", "transcript", "recording", "trash", "cannot be recovered")]
+    [InlineData("zh", "转写", "录音", "回收站", "无法恢复")]
+    [InlineData("de", "Transkript", "Aufnahme", "Papierkorb", "nicht wiederherstellen")]
+    [InlineData("pl", "Transkrypcja", "nagranie", "kosza", "nie da się ich odzyskać")]
+    public void TheDeleteWarningNamesBothArtefactsAndSaysItIsFinal(string code, params string[] phrases)
+    {
+        var text = Table(code)["meeting.delete.body"];
+
+        foreach (var phrase in phrases)
+            Assert.Contains(phrase, text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Switching has to reach windows that are already open — the operator changes it mid-meeting
     /// and the screen follows, without restarting a room.
     /// </summary>

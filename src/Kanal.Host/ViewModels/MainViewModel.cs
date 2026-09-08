@@ -963,6 +963,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : null;
         IsRunning = true;
         IsTranscribing = session.IsTranscribing;
+        // No record is bound to a session yet, so the meeting being recorded is the one that was
+        // selected when the room opened — the same one this view model writes its title onto.
+        Sidebar.RecordingMeetingId = Sidebar.SelectedMeeting?.Id;
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
@@ -1051,6 +1054,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             JoinError = "";
             IsRunning = false;
             IsTranscribing = false;
+            Sidebar.RecordingMeetingId = null;
             IsPaused = false;
             ConsentConfirmed = false;
             Status = _lastRecording.Length > 0
