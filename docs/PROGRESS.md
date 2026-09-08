@@ -4,7 +4,76 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-08
+
+### The icons become files, and stop drifting off centre
+
+Every mark in the chrome was a `StreamGeometry` in `App.axaml` — path data in a resource dictionary,
+sized by hand at each of its call sites. They are 21 SVG files under `src/Kanal.Host/Assets/Icons/`
+now, each a single `<path>` on a `0 0 16 16` view box, loaded through `Icons.Of(name)` and written
+in XAML as `{c:Icon record}`. They stay `Path` geometry rather than becoming `SvgImage`: a `Path`
+inherits the `Fill` its style sets, which is what makes hover and press invert a glyph to paper.
+
+**Why they looked off centre.** Avalonia measures a `Path` by its *ink*, then pins the uniformly
+scaled result to the top-left of the control's box — it does not centre it. A mark whose drawing is
+10 units wide in a 16-unit view box therefore lost the view box's own margins and sat 3 px left of
+where the drawing put it, differently for every icon. `Icons.Load` prefixes the path data with two
+draw-nothing move-tos at the view box corners, so the measured bounds *are* the view box and the ink
+lands where it was drawn. `IconTests` asserts `Bounds == 0,0,16,16` for all 21 files, which is the
+property that keeps a future icon from reintroducing the drift.
+
+The second half of it was arithmetic: an odd glyph box inside the 34 px transport disc cannot be
+centred, so every mark rounded half a pixel one way. The `Button.mark Path` box is 18 px now — even,
+8 px of slack on each side — and a test measures each glyph's centre against its disc's centre.
+
+**The mode box says where each half runs.** The chip glyph is deleted, not restyled: a CPU says
+"computer", which is true of both halves of every mode. A cloud mark and a laptop mark, drawn side
+by side, say which service transcribes and which one translates. The dropdown rows keep their
+availability square and their full sentence — the marks are the collapsed box's shorthand, and a
+row that already reads *Cloud transcription · Local translation* has nothing to abbreviate.
+`PipelineModeOption` exposes the pair as `TranscriptionMark`/`TranslationMark` so the view has no
+mapping of its own to drift out of date. The labels are `Cloud · Local` rather than
+`Cloud · local` in every language that has case, which needed the `de` short label added to the
+existing same-word-in-target-language exemption — capitalising it made it identical to English.
+
+**The capture picker keeps its chevron.** `LeftCluster` is a `Grid` rather than a `StackPanel`: a
+`StackPanel` hands every child its desired width and clips whatever runs past its right edge, which
+was always the capture picker. The mode box is the only star column, so it is the only thing that
+gives up width — and it can, because it has a label to trim, whereas the picker beside it is a glyph
+and a chevron with nothing to shorten. The picker is 68 px, the smallest width whose template leaves
+a content slot (`width − 50`) wide enough for a 16 px glyph. `TheModeLabelGivesUpWidthBeforeTheCapturePickerDoes`
+runs en and pl at 1320 px with a meeting running and asserts the mode box never overlaps the picker;
+it goes red against a fixed-width mode box.
+
 ## 2026-09-07
+
+### The transport marks become discs, and the capture picker stops cutting its own glyph off
+
+Three complaints from the bar as #66 shipped it, all about the middle of the row.
+
+**The capture picker was 62 px and needed 64.** A `ComboBox` at a fixed width narrower than its
+template's minimum does not shrink gracefully: the frame border is laid out at 64 px and then
+clipped away at 62, so the picker lost its left and right edges, and the content slot behind the
+chevron came out 12 px wide, which cut 2 px off a 14 px screen mark. It is 76 px now — the glyph
+gets its full width and the box draws all four sides. `MainWindowCompositionTests` measures the
+glyph against the first clipping ancestor above it, which is the assertion that failed before.
+
+The picker also drew one screen mark for both profiles, so a picker that fit would still not have
+said which of the two was selected. In-room now carries a two-person mark and online the screen,
+in the collapsed box and in the dropdown rows alike.
+
+**Record, pause and stop are discs.** Each mark is a 34 px circle carrying a paler wash of its own
+colour — `RecordWash` under the red marks, `HoldWash` under the ochre pause — with the mark itself
+at full strength on top. The wash is the colour the glyph already had, not a new one: the transport
+still owns the only two non-speaker hues on screen, and the pause mark still may not read as red.
+Hover and press flood the disc with that full colour and flip the glyph to paper, which is the
+inversion every other button in the chrome already does. Disabled drops the whole button to 0.45
+opacity rather than falling through to the base `Button:disabled` rule, which would have drawn a
+grey ring around a circle that never had one.
+
+**The microphone is redrawn.** The old glyph was a rectangle, two brackets and a stem assembled
+from axis-aligned segments. It is a rounded capsule in a cradle arc on a stand now, which is what
+the mark means everywhere else, and it survives being read at 16 px from a metre away.
 
 ### The language that was spoken, not the one that was picked ([#28](https://github.com/TONiiV/Kanal/issues/28))
 

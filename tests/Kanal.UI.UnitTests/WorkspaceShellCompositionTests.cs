@@ -175,7 +175,7 @@ public class WorkspaceShellCompositionTests
         var buttons = iconBar.GetLogicalDescendants().OfType<Button>().ToList();
         var expandLeft = Assert.Single(buttons, button => button.Name == "ExpandWorkspace");
         var expandRight = Assert.Single(buttons, button => button.Name == "ExpandAssistant");
-        var clipped = iconBar.GetLogicalDescendants().OfType<StackPanel>()
+        var clipped = iconBar.GetLogicalDescendants().OfType<Panel>()
             .Where(panel => panel.Name is "LeftCluster" or "RightCluster")
             .ToList();
         Assert.Equal(2, clipped.Count);

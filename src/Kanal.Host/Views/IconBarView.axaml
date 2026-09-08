@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
              xmlns:vm="using:Kanal.Host.ViewModels"
-             xmlns:controls="using:Kanal.Host.Controls"
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.IconBarView" x:DataType="vm:MainViewModel">
     <StackPanel>
@@ -14,24 +14,26 @@
                         Command="{Binding Shell.Left.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.workspace.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.workspace.show.tip}">
-                    <Path Classes="glyph" Data="{StaticResource GlyphChevronRight}" />
+                    <Path Classes="glyph" Data="{c:Icon chevron-right}" />
                 </Button>
                 <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="ExpandAssistant"
                         Margin="10,0,0,0" IsVisible="{Binding Shell.Right.CanExpand}"
                         Command="{Binding Shell.Right.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.assistant.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.assistant.show.tip}">
-                    <Path Classes="glyph" Data="{StaticResource GlyphChevronLeft}" />
+                    <Path Classes="glyph" Data="{c:Icon chevron-left}" />
                 </Button>
 
                 <!-- A starred column gives up width, an Auto one does not: the transport must keep
                      every pixel it asked for, so the side clusters clip instead of the bar scrolling. -->
                 <Grid ColumnDefinitions="*,Auto,*">
-                    <StackPanel Grid.Column="0" x:Name="LeftCluster" Orientation="Horizontal"
-                                Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                ClipToBounds="True">
-                        <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
-                                  Width="160" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
+                    <!-- The mode box is the one thing here that may give up width: the picker beside
+                         it is a glyph and a chevron with nothing to trim, so a cluster that shrank
+                         evenly would cut its chevron off rather than shorten a label. -->
+                    <Grid Grid.Column="0" x:Name="LeftCluster" ColumnDefinitions="*,Auto,Auto"
+                          ColumnSpacing="8" VerticalAlignment="Center" ClipToBounds="True">
+                        <ComboBox Grid.Column="0" ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
+                                  MaxWidth="208" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding SelectedMode.Name}"
                                   AutomationProperties.Name="{l:T mode.tip}">
                             <ComboBox.ItemContainerTheme>
@@ -42,23 +44,26 @@
                             </ComboBox.ItemContainerTheme>
                             <ComboBox.SelectionBoxItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
-                                    <StackPanel Orientation="Horizontal" Spacing="9">
-                                        <Path Classes="glyph" Data="{StaticResource GlyphChip}" Width="13" Height="13"
-                                              Stretch="Uniform" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Short}" VerticalAlignment="Center" FontSize="12.5" />
-                                    </StackPanel>
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                                            <Path Classes="glyph" Data="{Binding TranscriptionMark}" />
+                                            <Path Classes="glyph" Data="{Binding TranslationMark}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding Short}" FontSize="12.5"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
                                 </DataTemplate>
                             </ComboBox.SelectionBoxItemTemplate>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
                                     <Grid ColumnDefinitions="Auto,*" Margin="0,3,0,4" MaxWidth="330">
-                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
-                                              Margin="0,5,10,0" VerticalAlignment="Top"
-                                              Data="{StaticResource GlyphSquareFilled}" Fill="{StaticResource Ink}"
+                                        <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
+                                              Margin="0,3,8,0" VerticalAlignment="Top"
+                                              Data="{c:Icon square-filled}" Fill="{StaticResource Ink}"
                                               IsVisible="{Binding IsAvailable}" />
-                                        <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
-                                              Margin="0,5,10,0" VerticalAlignment="Top"
-                                              Data="{StaticResource GlyphSquareHollow}" Fill="{StaticResource Ink3}"
+                                        <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
+                                              Margin="0,3,8,0" VerticalAlignment="Top"
+                                              Data="{c:Icon square-hollow}" Fill="{StaticResource Ink3}"
                                               IsVisible="{Binding !IsAvailable}" />
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
@@ -71,7 +76,7 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <Button Classes="ghost" Content="?" Padding="9,5" FontWeight="Bold"
+                        <Button Grid.Column="1" Classes="ghost" Content="?" Padding="9,5" FontWeight="Bold"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="{l:T modes.tip}"
                                 AutomationProperties.Name="{l:T modes.tip}">
@@ -90,14 +95,14 @@
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:PipelineModeOption">
                                                         <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,14">
-                                                            <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
-                                                                  Margin="0,5,11,0" VerticalAlignment="Top"
-                                                                  Data="{StaticResource GlyphSquareFilled}"
+                                                            <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
+                                                                  Margin="0,3,9,0" VerticalAlignment="Top"
+                                                                  Data="{c:Icon square-filled}"
                                                                   Fill="{StaticResource Ink}"
                                                                   IsVisible="{Binding IsAvailable}" />
-                                                            <Path Grid.Column="0" Width="8" Height="8" Stretch="Uniform"
-                                                                  Margin="0,5,11,0" VerticalAlignment="Top"
-                                                                  Data="{StaticResource GlyphSquareHollow}"
+                                                            <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
+                                                                  Margin="0,3,9,0" VerticalAlignment="Top"
+                                                                  Data="{c:Icon square-hollow}"
                                                                   Fill="{StaticResource Ink3}"
                                                                   IsVisible="{Binding !IsAvailable}" />
                                                             <StackPanel Grid.Column="1" Spacing="3">
@@ -124,69 +129,76 @@
                             </Button.Flyout>
                         </Button>
 
-                        <ComboBox ItemsSource="{Binding CaptureProfiles}"
+                        <ComboBox Grid.Column="2" ItemsSource="{Binding CaptureProfiles}"
                                   SelectedItem="{Binding SelectedCaptureProfile}"
-                                  Width="62" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
+                                  Width="68" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
                                   IsVisible="{Binding NeedsMicrophone}"
                                   ToolTip.Tip="{Binding CaptureTip}"
                                   AutomationProperties.Name="{Binding CaptureTip}">
                             <ComboBox.SelectionBoxItemTemplate>
                                 <DataTemplate x:DataType="vm:CaptureProfileOption">
-                                    <Path Classes="glyph" Data="{StaticResource GlyphScreen}" Width="14" Height="14"
-                                          Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                    <Panel VerticalAlignment="Center" HorizontalAlignment="Left">
+                                        <Path Classes="glyph" Data="{c:Icon people}"
+                                              IsVisible="{Binding IsInRoom}" />
+                                        <Path Classes="glyph" Data="{c:Icon screen}"
+                                              IsVisible="{Binding !IsInRoom}" />
+                                    </Panel>
                                 </DataTemplate>
                             </ComboBox.SelectionBoxItemTemplate>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CaptureProfileOption">
-                                    <StackPanel Spacing="3" MaxWidth="300" Margin="0,3,0,4">
-                                        <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
-                                                   TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
-                                    </StackPanel>
+                                    <Grid ColumnDefinitions="Auto,*" MaxWidth="300" Margin="0,3,0,4">
+                                        <Panel Grid.Column="0" Margin="0,2,9,0" VerticalAlignment="Top">
+                                            <Path Classes="glyph" Data="{c:Icon people}" Width="15" Height="15"
+                                                  IsVisible="{Binding IsInRoom}" />
+                                            <Path Classes="glyph" Data="{c:Icon screen}" Width="15" Height="15"
+                                                  IsVisible="{Binding !IsInRoom}" />
+                                        </Panel>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
+                                                       TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                    </StackPanel>
+                    </Grid>
 
-                    <StackPanel Grid.Column="1" x:Name="Transport" Orientation="Horizontal" Spacing="4"
+                    <StackPanel Grid.Column="1" x:Name="Transport" Orientation="Horizontal" Spacing="6"
                                 VerticalAlignment="Center" Margin="16,0">
-                        <Button Classes="ghost mark" x:Name="RecordMark" Command="{Binding StartCommand}"
+                        <Button Classes="mark" x:Name="RecordMark" Command="{Binding StartCommand}"
                                 IsVisible="{Binding ShowRecord}"
                                 ToolTip.Tip="{l:T transport.record.tip}"
                                 AutomationProperties.Name="{l:T transport.start}">
-                            <Path Classes="record" Data="{StaticResource GlyphRecord}"
-                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
+                            <Path Classes="record" Data="{c:Icon record}" />
                         </Button>
 
-                        <Button Classes="ghost mark" x:Name="PauseMark" Command="{Binding PauseCommand}"
+                        <Button Classes="mark hold" x:Name="PauseMark" Command="{Binding PauseCommand}"
                                 IsVisible="{Binding ShowPause}"
                                 ToolTip.Tip="{Binding PauseTip}"
                                 AutomationProperties.Name="{Binding PauseLabel}">
                             <Panel>
-                                <Path Classes="hold" Data="{StaticResource GlyphPause}" IsVisible="{Binding !IsPaused}"
-                                      Width="11" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
-                                <Path Classes="hold" Data="{StaticResource GlyphPlay}" IsVisible="{Binding IsPaused}"
-                                      Width="11" Height="13" Stretch="Uniform" VerticalAlignment="Center" />
+                                <Path Classes="hold" Data="{c:Icon pause}" IsVisible="{Binding !IsPaused}" />
+                                <Path Classes="hold" Data="{c:Icon play}" IsVisible="{Binding IsPaused}" />
                             </Panel>
                         </Button>
 
-                        <Button Classes="ghost mark" x:Name="StopMark" Command="{Binding StopCommand}"
+                        <Button Classes="mark" x:Name="StopMark" Command="{Binding StopCommand}"
                                 IsVisible="{Binding ShowStop}"
                                 ToolTip.Tip="{Binding StopTip}"
                                 AutomationProperties.Name="{l:T transport.stop}">
-                            <Path Classes="record" Data="{StaticResource GlyphStop}"
-                                  Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" />
+                            <Path Classes="record" Data="{c:Icon stop}" />
                         </Button>
 
                         <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
-                                   VerticalAlignment="Center" Margin="4,0" />
+                                   VerticalAlignment="Center" Margin="6,0" />
 
                         <Button Classes="ghost" Padding="8,6" x:Name="AudioDevices"
                                 IsVisible="{Binding NeedsMicrophone}"
                                 ToolTip.Tip="{l:T audio.tip}"
                                 AutomationProperties.Name="{l:T audio.tip}">
-                            <Path Classes="glyph" Data="{StaticResource GlyphMicrophone}"
-                                  Width="10" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                            <Path Classes="glyph" Data="{c:Icon microphone}" Width="18" Height="18" />
                             <Button.Flyout>
                                 <Flyout Placement="Bottom">
                                     <StackPanel Margin="20,17,20,17" Width="292" Spacing="14">
@@ -227,8 +239,7 @@
                         <Button Classes="ghost" Padding="8,9" x:Name="MeetingMore"
                                 ToolTip.Tip="{l:T meeting.more.tip}"
                                 AutomationProperties.Name="{l:T meeting.more.tip}">
-                            <Path Classes="glyph" Data="{StaticResource GlyphEllipsis}"
-                                  Width="14" Height="3" Stretch="Uniform" VerticalAlignment="Center" />
+                            <Path Classes="glyph" Data="{c:Icon ellipsis}" />
                             <Button.Flyout>
                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
                                     <MenuItem Header="{l:T export.button}" Command="{Binding ExportMarkdownCommand}" />
@@ -241,8 +252,7 @@
                                 IsEnabled="{Binding CanShowJoin}"
                                 ToolTip.Tip="{l:T join.tip}"
                                 AutomationProperties.Name="{l:T join.tip}">
-                            <Path Classes="glyph" Data="{StaticResource GlyphQr}"
-                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                            <Path Classes="glyph" Data="{c:Icon qr}" />
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
                                     <StackPanel Margin="20,17,20,17" Width="236">

@@ -10,6 +10,8 @@ public sealed class CaptureProfileOption(CaptureProfile profile) : ViewModelBase
 
     public CaptureProfileId Id => Profile.Id;
 
+    public bool IsInRoom => Profile.Id == CaptureProfileId.InRoom;
+
     public string Name => Localizer.Instance[Profile.NameKey];
 
     public string Guidance => Localizer.Instance[Profile.GuidanceKey];

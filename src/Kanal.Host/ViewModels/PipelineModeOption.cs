@@ -1,4 +1,6 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Kanal.Host.Controls;
 using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
@@ -21,6 +23,10 @@ public partial class PipelineModeOption : ViewModelBase
     public string Name => Mode.Name;
 
     public string Short => Mode.Short;
+
+    public Geometry TranscriptionMark => Icons.Stage(Mode.Transcription);
+
+    public Geometry TranslationMark => Icons.Stage(Mode.Translation);
 
     public string Help => Mode.Help;
 

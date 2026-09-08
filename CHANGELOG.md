@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The toolbar's marks sit square in the middle of the controls that carry them, and the capture
+  picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
+  tight. The mode box now draws a cloud and a laptop to say where each half of the pipeline runs,
+  in place of the chip that said nothing.
+
 - A meeting can now name itself. With a local translation model in use, Kanal proposes a short
   title once the meeting is a minute or so in, and a control beside the title asks for another one
   at any time. Click the title to rename it by hand — that name is kept, is never overwritten by a
@@ -43,6 +48,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   assistant on the right; either can be collapsed out of the way and dragged wider, and the width
   you pick comes back when you expand it again. The transcript keeps a usable width whatever the
   sidebars do.
+- Record, pause and stop are round marks, each sitting on a larger, paler disc of its own colour,
+  so the transport is easier to hit and easier to read across the room. The capture picker shows
+  a whole, unclipped mark, and a different one per profile — people around a table for in-room,
+  a screen for an online meeting — so you can see which is selected without opening it. The
+  microphone mark has been redrawn.
 - The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
   stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
   window gets; the processing and capture pickers hold the left edge and the join QR the right. A

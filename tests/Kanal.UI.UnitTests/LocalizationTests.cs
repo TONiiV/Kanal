@@ -59,6 +59,7 @@ public class LocalizationTests
         ("de", "log.level.info"),
         ("pl", "transport.start"),
         ("de", "mode.demo.short"),
+        ("de", "mode.cloudcloud.short"),
         ("pl", "mode.demo.short"),
     ];
 
@@ -217,6 +218,37 @@ public class LocalizationTests
         finally
         {
             localizer.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// The toolbar's mode label names two stages either side of a middle dot. They are labels,
+    /// not a sentence, so the second one is capitalised like the first — "Cloud · cloud" read as
+    /// a typo on the one control the operator sets before every meeting.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh")]
+    [InlineData("de")]
+    [InlineData("pl")]
+    public void BothStagesOfAModeLabelAreCapitalisedTheSameWay(string code)
+    {
+        var table = Table(code);
+
+        foreach (var mode in PipelineMode.All)
+        {
+            foreach (var stage in table[mode.ShortKey].Split('\u00b7'))
+            {
+                var first = stage.Trim().FirstOrDefault();
+                if (char.ToUpperInvariant(first) == char.ToLowerInvariant(first))
+                {
+                    continue;
+                }
+
+                Assert.True(
+                    char.IsUpper(first),
+                    $"{code} {mode.ShortKey} reads \"{table[mode.ShortKey]}\"");
+            }
         }
     }
 }

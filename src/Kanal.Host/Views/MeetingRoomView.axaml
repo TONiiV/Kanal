@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
-             xmlns:controls="using:Kanal.Host.Controls"
              x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
         <Style Selector="Border.rec">
@@ -75,8 +75,7 @@
                     Command="{Binding RegenerateTitleCommand}"
                     ToolTip.Tip="{l:T title.regenerate.tip}"
                     AutomationProperties.Name="{l:T title.regenerate.tip}">
-                <Path Classes="glyph" Data="{StaticResource GlyphRegenerate}" Width="13" Height="13"
-                      Stretch="Uniform" VerticalAlignment="Center" />
+                <Path Classes="glyph" Data="{c:Icon regenerate}" Width="15" Height="15" />
             </Button>
 
             <Button Grid.Column="2" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
@@ -94,7 +93,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:LanguageOption">
                                 <Border Background="{StaticResource Sheet}" CornerRadius="13" Padding="2">
-                                    <controls:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
+                                    <c:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
