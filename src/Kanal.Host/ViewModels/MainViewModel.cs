@@ -208,6 +208,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
+    public AssistantViewModel Assistant { get; } = new();
+
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
     /// <summary>Filled by the native adapter slice; kept separate from microphone endpoints.</summary>
@@ -683,6 +685,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         Columns.Clear();
         Speakers.Clear();
+        Assistant.Forget();
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
@@ -845,6 +848,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         _session = session;
+        Assistant.Follow(session.Room);
         _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
             ? new MeetingAttestation(SelectedCaptureProfile.Profile, confirmedAt)
             : null;

@@ -63,7 +63,6 @@
   "empty.body2": "Der Modus wählt beide Stufen — wo transkribiert und wo übersetzt wird — und nennt, was diesen Rechner verlässt. Demo braucht keinen Schlüssel. Rechts erscheint ein QR-Code zum Beitreten; alle anderen lesen auf dem eigenen Telefon, in der eigenen Sprache.",
   "join.label": "BEITRETEN",
   "join.unavailable": "Der QR-Code wurde nicht erzeugt, weil das mobile Relay nicht verfügbar ist. {0}",
-  "speakers.label": "SPRECHER",
   "merge.label": "ZUSAMMENFÜHREN",
   "merge.button": "Zusammenführen",
   "speaker.placeholder": "Anzeigename",
@@ -238,5 +237,17 @@
   "settings.tab.workspace": "Arbeitsbereich",
   "settings.localasr.heading": "LOKALE MODELLE",
   "settings.summary.heading": "ZUSAMMENFASSUNG",
-  "settings.summary.note": "Sitzungszusammenfassungen sind noch nicht gebaut. Sobald es sie gibt, wird hier das Modell gewählt und was es lesen darf."
+  "settings.summary.note": "Sitzungszusammenfassungen sind noch nicht gebaut. Sobald es sie gibt, wird hier das Modell gewählt und was es lesen darf.",
+  "assistant.tab.points": "Punkte und Entscheidungen",
+  "assistant.tab.speakers": "Sprecher",
+  "assistant.noanalyst": "Kein mithörendes Modell verbunden. Punkte und Entscheidungen erscheinen hier, sobald eines verbunden ist.",
+  "assistant.nothingyet": "Noch nichts festgehalten.",
+  "insight.kind.point": "PUNKT",
+  "insight.kind.proposal": "VORSCHLAG",
+  "insight.kind.decision": "ENTSCHEIDUNG",
+  "insight.candidate": "Vorgeschlagen",
+  "insight.confirmed": "Bestätigt",
+  "insight.confirm.tip": "Bestätigen — als vereinbart festhalten",
+  "insight.dismiss.tip": "Verwerfen — aus der Leiste entfernen",
+  "insight.confirm": "Bestätigen"
 }

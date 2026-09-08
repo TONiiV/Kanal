@@ -63,7 +63,6 @@
   "empty.body2": "The mode picks both stages — where speech is transcribed and where it is translated — and says what leaves this machine. Demo needs no key. A join QR appears on the right; everyone else reads on their own phone, in their own language.",
   "join.label": "JOIN",
   "join.unavailable": "QR code was not generated because the mobile relay is unavailable. {0}",
-  "speakers.label": "SPEAKERS",
   "merge.label": "MERGE",
   "merge.button": "Merge",
   "speaker.placeholder": "display name",
@@ -238,5 +237,17 @@
   "settings.tab.workspace": "Workspace",
   "settings.localasr.heading": "LOCAL MODELS",
   "settings.summary.heading": "SUMMARISATION",
-  "settings.summary.note": "Meeting summaries are not built yet. When they are, this is where the model and what it may read are chosen."
+  "settings.summary.note": "Meeting summaries are not built yet. When they are, this is where the model and what it may read are chosen.",
+  "assistant.tab.points": "Points and decisions",
+  "assistant.tab.speakers": "Speakers",
+  "assistant.noanalyst": "No listening model is connected. Points and decisions appear here once one is.",
+  "assistant.nothingyet": "Nothing raised yet.",
+  "insight.kind.point": "POINT",
+  "insight.kind.proposal": "PROPOSAL",
+  "insight.kind.decision": "DECISION",
+  "insight.candidate": "Suggested",
+  "insight.confirmed": "Confirmed",
+  "insight.confirm.tip": "Confirm — record this as agreed",
+  "insight.dismiss.tip": "Dismiss — take this off the panel",
+  "insight.confirm": "Confirm"
 }

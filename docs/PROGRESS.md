@@ -6,6 +6,44 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### The assistant sidebar becomes points and speakers ([#71](https://github.com/TONiiV/Kanal/issues/71))
+
+The right sidebar held one list — speakers, plus the merge box. It now carries two tabs, "Points and
+decisions" and "Speakers", the second being what was already there. The tab header names the list,
+so the pane's own `SPEAKERS` heading and its rule went with the move.
+
+`MeetingInsights` (`Kanal.Core/Insights`) is a plain aggregate over `RoomState`, not a provider
+interface. #34 will bring a model; inventing an `IMeetingAnalyst` now would be an abstraction with
+one imaginary implementer, and the panel would still have nothing to show. What the panel does
+instead is state the absence: with no model connected it prints that sentence where the items would
+go, rather than an empty list an operator would read as "no decisions were made". `Nothing raised
+yet` is a *different* message, shown only once something is connected — the two states must not
+collapse into one blank pane.
+
+Two rules hold the record honest:
+
+- **An item that leads back to nothing said is refused, not shown.** `Record` filters the source
+  utterance ids against the room and drops the item entirely if none survive. The candidate state
+  exists to stop a guess reading as a commitment; an item with no source behind it is that same
+  failure with nothing left to check it against.
+- **A decision arrives as a candidate and only a person makes it a commitment.** Every item renders
+  its state beside its kind, and the confirm control is present only while it is a candidate. The
+  supporting utterances are printed under the item, so "leads back to what was said" is something
+  the operator reads rather than something they have to trust.
+
+Two Avalonia notes, both cheap to re-break:
+
+- The selected pane is a logical child of *both* its `TabItem` and the `TabControl`'s presenter, so
+  an unfiltered walk of the logical tree meets the same control twice. The tests de-duplicate.
+- Fluent's selection marker sits flush under the header content, and `TabItem.Padding` moves the
+  marker with the text rather than away from it. The clearance comes from a bottom margin on each
+  header instead; without it the rule strikes through the descenders of "Points".
+
+Dismissing takes an item off the panel without deleting it — `MeetingInsights` keeps it in the
+dismissed state, and a dismissed item can never be confirmed afterwards. The third tab the design
+sketches, the listening agent itself, is not built here; `docs/design/meeting-intelligence.md` is a
+discussion document and its open branches are not decided.
+
 ### Settings becomes six tabs ([#67](https://github.com/TONiiV/Kanal/issues/67))
 
 The settings window was one 640 px column of eight stacked sections, so finding the log level meant

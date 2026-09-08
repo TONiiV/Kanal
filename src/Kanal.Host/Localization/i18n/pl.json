@@ -63,7 +63,6 @@
   "empty.body2": "Tryb wybiera oba etapy — gdzie mowa jest transkrybowana i gdzie tłumaczona — oraz mówi, co opuszcza tę maszynę. Demo nie wymaga klucza. Po prawej pojawi się kod QR; pozostali czytają na własnych telefonach, we własnym języku.",
   "join.label": "DOŁĄCZ",
   "join.unavailable": "Kod QR nie został wygenerowany, ponieważ przekaźnik mobilny jest niedostępny. {0}",
-  "speakers.label": "MÓWIĄCY",
   "merge.label": "SCAL",
   "merge.button": "Scal",
   "speaker.placeholder": "nazwa wyświetlana",
@@ -238,5 +237,17 @@
   "settings.tab.workspace": "Obszar roboczy",
   "settings.localasr.heading": "MODELE LOKALNE",
   "settings.summary.heading": "PODSUMOWANIE",
-  "settings.summary.note": "Podsumowania spotkań nie są jeszcze zbudowane. Gdy powstaną, tutaj wybierze się model i to, co wolno mu czytać."
+  "settings.summary.note": "Podsumowania spotkań nie są jeszcze zbudowane. Gdy powstaną, tutaj wybierze się model i to, co wolno mu czytać.",
+  "assistant.tab.points": "Ustalenia i decyzje",
+  "assistant.tab.speakers": "Mówcy",
+  "assistant.noanalyst": "Żaden model nasłuchujący nie jest podłączony. Ustalenia i decyzje pojawią się tutaj po podłączeniu.",
+  "assistant.nothingyet": "Nic jeszcze nie odnotowano.",
+  "insight.kind.point": "USTALENIE",
+  "insight.kind.proposal": "PROPOZYCJA",
+  "insight.kind.decision": "DECYZJA",
+  "insight.candidate": "Sugerowane",
+  "insight.confirmed": "Potwierdzone",
+  "insight.confirm.tip": "Potwierdź — zapisz jako uzgodnione",
+  "insight.dismiss.tip": "Odrzuć — usuń z panelu",
+  "insight.confirm": "Potwierdź"
 }
