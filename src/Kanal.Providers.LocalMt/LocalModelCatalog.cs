@@ -23,7 +23,7 @@ public sealed record LocalModelInfo(
     string? LicenseNote = null,
     string? AssistantPrefill = null) : IDownloadableFile
 {
-    public string DownloadUrl => $"https://huggingface.co/{Repo}/resolve/main/{FileName}";
+    public string DownloadUrl => HuggingFace.FileUrl(Repo, FileName);
 
     public string SizeLabel => $"{SizeBytes / (1024.0 * 1024 * 1024):0.0} GB";
 }

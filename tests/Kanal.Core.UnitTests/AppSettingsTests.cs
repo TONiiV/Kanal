@@ -17,6 +17,17 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void ActiveTranscriptionModelIdRoundTrips()
+    {
+        var settings = new AppSettings { ActiveTranscriptionModelId = "nemotron-3.5-asr-560ms-int8" };
+
+        var json = JsonSerializer.Serialize(settings);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal("nemotron-3.5-asr-560ms-int8", loaded.ActiveTranscriptionModelId);
+    }
+
+    [Fact]
     public void LegacySettingsFileLoadsWithCloudDefault()
     {
         // settings written before this feature carry no model field — null means Gladia cloud
@@ -24,6 +35,7 @@ public class AppSettingsTests
             """{"ApiKeys":[],"ActiveGladiaKeyName":null}""")!;
 
         Assert.Null(loaded.ActiveTranslationModelId);
+        Assert.Null(loaded.ActiveTranscriptionModelId);
     }
 
     [Fact]
