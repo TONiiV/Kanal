@@ -6,6 +6,48 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-07
 
+### A meeting names itself, and the operator has the last word ([#73](https://github.com/TONiiV/Kanal/issues/73))
+
+The ticket asked for three contracts to be fixed here rather than left open. They are:
+
+**When the first title generates.** Once the room holds six finalised utterances, and once only.
+Six is roughly the first minute of a meeting — enough for a model to see what the meeting is about,
+early enough that the row is named before anyone screenshots it. It never fires again on its own,
+however long the meeting runs: a title that changes under the operator mid-sentence is worse than a
+dull one.
+
+**Whether a generated title overwrites a hand-typed name.** Never automatically. `NamedByHand` is
+set the moment the operator commits a rename, and an automatic suggestion is refused from then on.
+The one exception is the operator pressing the regenerate control, which is a request, not a guess.
+A result that was already in flight when the operator typed is *dropped* rather than applied late —
+that race is the only way an unasked-for overwrite could otherwise happen.
+
+**What is shown in flight and on failure.** The title row keeps whatever title it already has and
+puts a muted `Naming…` beside it. On failure — a thrown provider, a cancelled request, an empty or
+essay-length answer — the title is left exactly as it was and the note reads `Could not name this
+meeting.` There is no dialog and no blank row; the regenerate control is right there.
+
+`MeetingTitling` (`Kanal.Core/Meetings`) holds that policy and nothing else. The model behind it is
+`IMeetingTitler`, a one-shot `SuggestAsync(lines, ct)` — deliberately not an agent runtime, no loop,
+no tools, no state between calls. `GeneratedMeetingTitler` is the production implementation: it
+sends the meeting's first forty finals to the same `ITextGenerator` the local translator already
+uses, and refuses anything longer than eight words rather than truncating a sentence into a name
+the meeting does not have. `PipelinePlanner` builds **one** `LlamaSharpTextGenerator` and hands it
+to both the MT provider and the titler — a second one over the same file is a second multi-gigabyte
+model in memory. Where there is no local model there is no titler, and the regenerate control is
+absent rather than dead.
+
+Every title reaches the record, whoever asked for it — a generated name the operator never touched
+is exactly the one that has to survive the app being closed, so the write-through sits on the
+titling change rather than on the two operator commands. Renaming updates the meeting item in place
+rather than rebuilding the list; a fresh item instance reads as the operator selecting a different
+meeting, and the sidebar would have reset the title it had just been given.
+
+Renaming is durable: the title row's text becomes an editor in place (Enter commits, Escape
+abandons, clicking away commits), and the committed name is written through `WorkspaceStore` onto
+the selected meeting record. "Meeting title" stays distinct from the workspace name — the workspace
+picker is in the sidebar and this touches only `MeetingRecord.Title`.
+
 ### The meeting title takes the top of the transcript ([#69](https://github.com/TONiiV/Kanal/issues/69))
 
 #66 had already put the room's overlapping circular language flags at the top of the transcript.

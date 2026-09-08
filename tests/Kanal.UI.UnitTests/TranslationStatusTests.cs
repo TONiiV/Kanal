@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
-using Kanal.Host.Services;
+using Kanal.Core.Meetings;
 using Kanal.Core.Workspaces;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Providers.LocalMt;
 
@@ -21,7 +22,8 @@ internal static class TestViewModels
         AppSettings? settings = null,
         string? modelsDir = null,
         Func<DateTimeOffset>? utcNow = null,
-        Func<WorkspaceStore>? workspaces = null)
+        Func<WorkspaceStore>? workspaces = null,
+        IMeetingTitler? titler = null)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -35,7 +37,8 @@ internal static class TestViewModels
             // Same reason as the settings seam: a real registry would list the developer's own
             // workspaces into every headless run.
             workspaces: workspaces
-                ?? (() => new WorkspaceStore(Path.Combine(EmptyModelsDir(), "workspaces.json"))))
+                ?? (() => new WorkspaceStore(Path.Combine(EmptyModelsDir(), "workspaces.json"))),
+            titler: titler)
         {
             RelayEnabled = false,
         };

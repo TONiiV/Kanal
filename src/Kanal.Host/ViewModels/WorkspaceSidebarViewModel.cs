@@ -54,6 +54,22 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public string EmptyNote =>
         Search.Trim().Length > 0 ? L["workspace.nomatches"] : L["workspace.nomeetings"];
 
+    public bool RenameSelectedMeeting(string title)
+    {
+        if (SelectedWorkspace is not { } workspace || SelectedMeeting is not { } meeting)
+            return false;
+
+        var (renamed, problem) = _store.RenameMeeting(workspace.Id, meeting.Id, title);
+        if (Refused(problem) || renamed is null)
+            return false;
+
+        meeting.Adopt(renamed);
+        var held = _held.FindIndex(m => m.Id == renamed.Id);
+        if (held >= 0)
+            _held[held] = renamed;
+        return true;
+    }
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();

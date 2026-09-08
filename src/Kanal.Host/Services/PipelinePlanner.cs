@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Kanal.Core.Meetings;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
 using Kanal.Host.Localization;
@@ -34,7 +35,8 @@ public sealed record PipelinePlan(
     IAsrProvider? Asr,
     IMtProvider? Mt,
     bool CloudTranslation,
-    string? Substitution);
+    string? Substitution,
+    IMeetingTitler? Titler);
 
 /// <summary>
 /// Resolves a mode to a provider pair. This is the only place a mode is inspected — the
@@ -57,7 +59,7 @@ public static class PipelinePlanner
     {
         var resolved = Resolve(mode, settings, downloads, key ?? SettingsStore.ResolveGladiaKey);
         if (resolved.Status.Unavailable is not null)
-            return new PipelinePlan(resolved.Status, null, null, false, null);
+            return new PipelinePlan(resolved.Status, null, null, false, null, null);
 
         var asr = mode.Transcription switch
         {
@@ -73,13 +75,22 @@ public static class PipelinePlanner
 
         // Demo must always run: a model that was chosen but never downloaded falls back to the
         // scripted translator rather than blocking, and Substitution says so out loud.
-        var mt = resolved.Model is not null
-            ? new LlamaSharpMtProvider(new LlamaSharpTextGenerator(
-                downloads.GetPath(resolved.Model), resolved.Model.AssistantPrefill))
+        // Translation and titling share one generator, and so one loaded copy of the weights:
+        // a second LlamaSharpTextGenerator over the same file is a second multi-gigabyte model.
+        var generator = resolved.Model is not null
+            ? new LlamaSharpTextGenerator(downloads.GetPath(resolved.Model), resolved.Model.AssistantPrefill)
+            : null;
+        var mt = generator is not null
+            ? new LlamaSharpMtProvider(generator)
             : mode.Translation == StageKind.Cloud ? null : (IMtProvider)new FakeMtProvider();
 
         return new PipelinePlan(
-            resolved.Status, asr, mt, mode.Translation == StageKind.Cloud, resolved.Substitution);
+            resolved.Status,
+            asr,
+            mt,
+            mode.Translation == StageKind.Cloud,
+            resolved.Substitution,
+            generator is null ? null : new GeneratedMeetingTitler(generator));
     }
 
     private sealed record Resolution(

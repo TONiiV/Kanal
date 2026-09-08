@@ -25,6 +25,13 @@
         </Style>
         <Style Selector="Border.rec TextBlock.who"><Setter Property="FontSize" Value="10.5" /></Style>
         <Style Selector="Border.rec.live TextBlock.who"><Setter Property="FontSize" Value="11.5" /></Style>
+        <Style Selector="Border.rename">
+            <Setter Property="BorderThickness" Value="0,0,0,2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.rename:pointerover, Border.rename:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+        </Style>
         <Style Selector="Border.colhead:focus">
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="3,0,0,0" />
@@ -34,13 +41,45 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="24,18,24,0" ColumnSpacing="16">
-            <TextBlock Grid.Column="0" x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
-                       FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
-                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                       Foreground="{StaticResource Ink}" />
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="24,18,24,0" ColumnSpacing="16">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <Border x:Name="MeetingTitleField" Classes="rename" Background="Transparent"
+                        Focusable="True" Cursor="Ibeam"
+                        IsVisible="{Binding !IsRenamingTitle}"
+                        PointerPressed="OnTitlePressed" KeyDown="OnTitleKeyDown"
+                        ToolTip.Tip="{l:T title.rename.tip}"
+                        AutomationProperties.Name="{l:T title.rename.tip}">
+                    <TextBlock x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
+                               FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               Foreground="{StaticResource Ink}" />
+                </Border>
 
-            <Button Grid.Column="1" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
+                <TextBlock x:Name="TitleNote" Text="{Binding TitleNote}"
+                           IsVisible="{Binding HasTitleNote}"
+                           FontSize="12" VerticalAlignment="Center"
+                           Foreground="{StaticResource Ink3}" />
+            </StackPanel>
+
+            <TextBox Grid.Column="0" x:Name="MeetingTitleEditor" Text="{Binding TitleDraft}"
+                     IsVisible="{Binding IsRenamingTitle}"
+                     FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
+                     Padding="0" BorderThickness="0,0,0,2"
+                     BorderBrush="{StaticResource Ink}"
+                     Background="Transparent" Foreground="{StaticResource Ink}"
+                     KeyDown="OnTitleEditorKeyDown" LostFocus="OnTitleEditorLostFocus"
+                     AutomationProperties.Name="{l:T title.rename.tip}" />
+
+            <Button Grid.Column="1" x:Name="RegenerateTitle" Classes="ghost" Padding="7,6"
+                    IsVisible="{Binding CanNameMeeting}"
+                    Command="{Binding RegenerateTitleCommand}"
+                    ToolTip.Tip="{l:T title.regenerate.tip}"
+                    AutomationProperties.Name="{l:T title.regenerate.tip}">
+                <Path Classes="glyph" Data="{StaticResource GlyphRegenerate}" Width="13" Height="13"
+                      Stretch="Uniform" VerticalAlignment="Center" />
+            </Button>
+
+            <Button Grid.Column="2" x:Name="RoomLanguages" Classes="ghost" Padding="6,4"
                     HorizontalAlignment="Right" Click="OnLanguagesClick"
                     IsEnabled="{Binding !IsRunning}"
                     ToolTip.Tip="{l:T languages.tip}"

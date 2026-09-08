@@ -291,6 +291,26 @@ public class PipelineModeTests
     }
 
     [Fact]
+    public void TheMeetingIsOnlyNameableWhereALocalModelIsAlreadyLoaded()
+    {
+        var model = LocalModelCatalog.Models[0];
+        var dir = DownloadedModelsDir(model);
+        var settings = new AppSettings { ActiveTranslationModelId = model.Id };
+
+        var local = PipelinePlanner.Plan(
+            PipelineMode.Of(PipelineModeId.Demo), settings, new ModelDownloadManager(dir), NoKey);
+        Assert.NotNull(local.Titler);
+        (local.Mt as IDisposable)?.Dispose();
+
+        var (empty, _) = TempDownloads();
+        var scripted = PipelinePlanner.Plan(
+            PipelineMode.Of(PipelineModeId.Demo), settings, empty, NoKey);
+        Assert.Null(scripted.Titler);
+
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public void UnknownModelIdIsNamedRatherThanSilentlyIgnored()
     {
         var (downloads, _) = TempDownloads();
