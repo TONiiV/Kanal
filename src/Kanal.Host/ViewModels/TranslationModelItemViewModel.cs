@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Host.Localization;
+using Kanal.Core.Models;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.ViewModels;

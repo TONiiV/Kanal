@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 
-namespace Kanal.Providers.LocalMt;
+namespace Kanal.Core.Models;
 
 /// <summary>
-/// Streams GGUF files into a models directory with progress, cancellation and
+/// Streams model files into a models directory with progress, cancellation and
 /// SHA256 verification. Interrupted or failed downloads leave nothing behind —
-/// a model is either fully verified on disk or absent.
+/// a file is either fully verified on disk or absent.
 /// </summary>
 public sealed class ModelDownloadManager
 {
@@ -18,16 +18,16 @@ public sealed class ModelDownloadManager
         _http = http ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
     }
 
-    public string GetPath(LocalModelInfo model) => Path.Combine(_directory, model.FileName);
+    public string GetPath(IDownloadableFile file) => Path.Combine(_directory, file.FileName);
 
-    public bool IsDownloaded(LocalModelInfo model) => File.Exists(GetPath(model));
+    public bool IsDownloaded(IDownloadableFile file) => File.Exists(GetPath(file));
 
-    public void Delete(LocalModelInfo model)
+    public void Delete(IDownloadableFile file)
     {
-        var path = GetPath(model);
+        var path = GetPath(file);
         if (File.Exists(path))
             File.Delete(path);
-        foreach (var part in LeftoverParts(model))
+        foreach (var part in LeftoverParts(file))
             TryDelete(part);
     }
 
@@ -35,8 +35,8 @@ public sealed class ModelDownloadManager
     /// Part files of interrupted downloads — one per call, so there may be several. The bare
     /// <c>&lt;file&gt;.part</c> an older build left behind is matched too.
     /// </summary>
-    private IEnumerable<string> LeftoverParts(LocalModelInfo model) => Directory.Exists(_directory)
-        ? Directory.EnumerateFiles(_directory, model.FileName + "*.part")
+    private IEnumerable<string> LeftoverParts(IDownloadableFile file) => Directory.Exists(_directory)
+        ? Directory.EnumerateFiles(_directory, file.FileName + "*.part")
         : [];
 
     private static void TryDelete(string path)
@@ -55,10 +55,10 @@ public sealed class ModelDownloadManager
     }
 
     /// <summary>Progress is 0..1 of the expected byte count.</summary>
-    public async Task DownloadAsync(LocalModelInfo model, IProgress<double>? progress, CancellationToken ct)
+    public async Task DownloadAsync(IDownloadableFile file, IProgress<double>? progress, CancellationToken ct)
     {
         Directory.CreateDirectory(_directory);
-        var finalPath = GetPath(model);
+        var finalPath = GetPath(file);
 
         // Each call streams into its own part file. Sharing one path keyed on the model id
         // meant a second download of the same model truncated — and then, in the finally,
@@ -70,10 +70,10 @@ public sealed class ModelDownloadManager
         try
         {
             using var response = await _http.GetAsync(
-                model.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                file.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
 
-            var total = response.Content.Headers.ContentLength ?? model.SizeBytes;
+            var total = response.Content.Headers.ContentLength ?? file.SizeBytes;
             using var sha = SHA256.Create();
             await using (var source = await response.Content.ReadAsStreamAsync(ct))
             await using (var destination = File.Create(partPath))
@@ -94,9 +94,9 @@ public sealed class ModelDownloadManager
 
             sha.TransformFinalBlock([], 0, 0);
             var actual = Convert.ToHexStringLower(sha.Hash!);
-            if (!actual.Equals(model.Sha256, StringComparison.OrdinalIgnoreCase))
+            if (!actual.Equals(file.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException(
-                    $"SHA256 mismatch for {model.FileName}: expected {model.Sha256}, got {actual}.");
+                    $"SHA256 mismatch for {file.FileName}: expected {file.Sha256}, got {actual}.");
 
             File.Move(partPath, finalPath, overwrite: true);
             progress?.Report(1.0);
