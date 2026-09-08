@@ -4,6 +4,53 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-09
+
+### One mark per mode, and a record button that reads as one
+
+**A mode is one thing, so it gets one mark.** The pair of stage marks said the same word twice for
+three of the five modes and made the operator read two glyphs to learn one fact. Each mode now
+carries a single icon, and the rule behind the set is that the *shape* is where transcription runs
+while an *arrow* on it means the second stage is handed to the other side: a cloud for cloud on
+cloud, a cloud with a down arrow for cloud transcription landing in a local translator, a laptop
+with an up arrow for the reverse, a bare laptop for local on local, and the script page for demo.
+`Icons.Mode(PipelineModeId)` owns the mapping and `Icons.Stage` is gone with the last caller.
+
+The first draft used a cloud with an up arrow for `Local · Cloud`, mirroring the down-arrow cloud.
+It failed at the size it has to work at: two clouds differing only in the direction of a 4 px
+arrowhead are one glyph in a dropdown row. Changing the base shape as well as the arrow is what
+makes the five separable at 16 px.
+
+The list follows the box. Every row leads with the same mark the collapsed box will show, so the
+mark the operator learns while choosing still means something back in the bar. The availability
+square that used to lead the row went with it: two marks on one row is the thing being fixed, and
+a row that cannot be picked is already disabled and already names its blocker in the second line.
+The square stays in the help flyout, which is the reference list and has the room for it. Losing
+the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
+instead of trimming.
+
+**The help button belongs to the mode box.** `LeftCluster`'s first column was an open starred
+column, so it took every spare pixel the window had: the mode box sat at its left edge and the `?`
+that explains the mode was arranged at the right edge of the column — 293 px away at a 1600 px
+window, close enough to the transport to read as belonging to it. The column is capped at 200 px
+and the box stretches to fill it. The cap has to be on the column rather than on the box, and the
+box has to stretch: with `Auto` the column hugs the box and the cluster stops giving up width when
+it is squeezed, and with a left-aligned box the button follows the column edge rather than the box,
+which moves by 75 px between `Demo` and `Cloud · Cloud`. Stretching also holds the button still as
+the mode and the language change.
+
+**The record disc nearly fills its button.** It was a 13-unit circle inside a 16-unit view box
+inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark is 28 px now, the
+even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box
+and the circle are the same thing. The wash reads as a ring.
+
+That last part needed the circle redrawn. Written as two half arcs between antipodal points —
+`M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser
+measures the geometry as a flat line of zero height and `FillContains` answers no everywhere, even
+though Skia renders it as a circle. Four quarter arcs have no antipodal endpoints and measure
+correctly. Only the record disc is measured rather than padded to its view box, so only it had to
+change; the rest of the set is padded and never asks the parser for its ink.
+
 ## 2026-09-08
 
 ### The icons become files, and stop drifting off centre

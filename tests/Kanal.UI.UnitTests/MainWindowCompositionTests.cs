@@ -332,7 +332,7 @@ public class MainWindowCompositionTests
     /// about where either half of the pipeline runs — the one thing the mode names.
     /// </summary>
     [AvaloniaFact]
-    public void TheModeBoxMarksWhereBothStagesRun()
+    public void TheModeBoxMarksTheModeItIsOn()
     {
         var vm = TestViewModels.Hermetic();
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
@@ -347,15 +347,91 @@ public class MainWindowCompositionTests
             vm.SelectedMode = option;
             Dispatcher.UIThread.RunJobs();
 
-            var marks = modes.GetVisualDescendants().OfType<Shape>()
-                .Where(path => path.Classes.Contains("glyph") && path.IsVisible)
-                .Select(path => path.Data)
-                .ToList();
+            var mark = Assert.Single(modes.GetVisualDescendants().OfType<Shape>()
+                .Where(path => path.Classes.Contains("mode") && path.IsVisible));
 
-            Assert.Equal(
-                [Icons.Stage(option.Mode.Transcription), Icons.Stage(option.Mode.Translation)],
-                marks);
+            Assert.Equal(Icons.Mode(option.Mode.Id), mark.Data);
         }
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The open list and the collapsed box have to agree, or the mark the operator learns in the
+    /// list means nothing back in the bar.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheModeListLeadsEveryRowWithThatModesOwnMark()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+
+        var modes = Assert.Single(
+            Bar(window).GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+        modes.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var (option, index) in vm.Modes.Select((option, index) => (option, index)))
+        {
+            var row = Assert.IsType<ComboBoxItem>(modes.ContainerFromIndex(index));
+            var mark = Assert.Single(row.GetVisualDescendants().OfType<Shape>()
+                .Where(path => path.Classes.Contains("mode")));
+
+            Assert.Equal(Icons.Mode(option.Mode.Id), mark.Data);
+        }
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The help button explains the mode, so it has to belong to the mode box. In an uncapped
+    /// starred column the box sits at the left of whatever width the window has spare and the
+    /// button lands at the far right of it, next to the transport it says nothing about.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1320.0)]
+    [InlineData(1600.0)]
+    public void TheHelpButtonStaysAgainstTheModeBox(double width)
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = width, Height = 700 };
+        window.Show();
+
+        var cluster = Cluster(window, "LeftCluster");
+        var modes = Assert.Single(
+            cluster.GetLogicalDescendants().OfType<ComboBox>(),
+            combo => ReferenceEquals(combo.ItemsSource, vm.Modes));
+        var help = Assert.Single(
+            cluster.GetLogicalDescendants().OfType<Button>(),
+            button => (button.Content as string) == "?");
+
+        var gap = help.TranslatePoint(new Point(0, 0), cluster)!.Value.X
+            - modes.TranslatePoint(new Point(modes.Bounds.Width, 0), cluster)!.Value.X;
+
+        Assert.InRange(gap, 0, 9);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// A record button reads as a record button when the disc nearly fills it and the wash is
+    /// left as a ring, not as a field with a dot in the middle of it.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheRecordDiscNearlyFillsTheButtonItSitsIn()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+
+        var button = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
+            candidate => candidate.Name == "RecordMark");
+        var disc = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
+        var ratio = disc.Bounds.Width / button.Bounds.Width;
+
+        Assert.InRange(ratio, 0.80, 0.88);
 
         window.Close();
     }

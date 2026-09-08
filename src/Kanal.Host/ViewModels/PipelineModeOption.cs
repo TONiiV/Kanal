@@ -24,9 +24,7 @@ public partial class PipelineModeOption : ViewModelBase
 
     public string Short => Mode.Short;
 
-    public Geometry TranscriptionMark => Icons.Stage(Mode.Transcription);
-
-    public Geometry TranslationMark => Icons.Stage(Mode.Translation);
+    public Geometry Mark => Icons.Mode(Mode.Id);
 
     public string Help => Mode.Help;
 

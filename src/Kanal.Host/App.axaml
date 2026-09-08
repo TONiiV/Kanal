@@ -216,6 +216,13 @@
             <Setter Property="Stretch" Value="Uniform" />
         </Style>
 
+        <!-- 28 is the even width nearest 85% of the 34 px disc: even so the mark still centres on
+             a whole pixel, and wide enough that the wash reads as a ring rather than a field. -->
+        <Style Selector="Button.mark Path.disc">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+        </Style>
+
         <Style Selector="Button.mark Path.record">
             <Setter Property="Fill" Value="{StaticResource Record}" />
         </Style>
