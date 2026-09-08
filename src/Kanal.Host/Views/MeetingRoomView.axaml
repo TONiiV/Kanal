@@ -38,6 +38,22 @@
             <Setter Property="Padding" Value="6,0,0,0" />
             <Setter Property="Margin" Value="-9,0,0,16" />
         </Style>
+        <Style Selector="Border.tickrow">
+            <Setter Property="Height" Value="9" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Rectangle.tick">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="2" />
+        </Style>
+        <Style Selector="Rectangle.tick.current">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="3" />
+        </Style>
+        <Style Selector="Border.tickrow:pointerover Rectangle.tick">
+            <Setter Property="Width" Value="20" />
+        </Style>
     </UserControl.Styles>
 
     <DockPanel>
@@ -115,7 +131,8 @@
                        Foreground="{StaticResource Ink3}" Text="{l:T empty.body2}" />
         </StackPanel>
 
-        <ItemsControl ItemsSource="{Binding Columns}" Margin="24,22,0,10">
+        <Grid ColumnDefinitions="*,Auto">
+        <ItemsControl Grid.Column="0" ItemsSource="{Binding Columns}" Margin="24,22,0,10">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
@@ -188,6 +205,62 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding Ruler.Ticks}"
+                      Width="30" Margin="0,22,12,10" VerticalAlignment="Top"
+                      AutomationProperties.Name="{l:T ruler.name}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RulerTickViewModel">
+                    <Border Classes="tickrow"
+                            PointerEntered="OnTickEntered" PointerExited="OnTickExited"
+                            PointerPressed="OnTickPressed"
+                            AutomationProperties.Name="{Binding AccessibleName}">
+                        <Rectangle Classes="tick" Classes.current="{Binding IsCurrent}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   Fill="{Binding SpeakerColor}" />
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,22,12,10" IsHitTestVisible="False"
+                IsVisible="{Binding Ruler.IsPreviewOpen}">
+            <ContentControl Canvas.Right="40" Canvas.Top="{Binding Ruler.PreviewTop}"
+                            Content="{Binding Ruler.HoveredTick}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:RulerTickViewModel">
+                        <Border Width="308" Height="96"
+                                Background="{StaticResource Sheet}"
+                                BorderBrush="{StaticResource Rule}" BorderThickness="1">
+                            <Panel>
+                                <StackPanel Margin="15,11" Spacing="7">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <TextBlock Text="{Binding SpeakerName}" FontSize="10.5"
+                                                   FontWeight="Bold" LetterSpacing="1.2" MaxWidth="176"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{Binding SpeakerColor}" />
+                                        <TextBlock Text="{Binding TimeLabel}" FontSize="10.5"
+                                                   LetterSpacing="1.5"
+                                                   Foreground="{StaticResource Ink3}" />
+                                        <TextBlock Text="{Binding FoldBadge}" FontSize="10.5"
+                                                   LetterSpacing="1.5"
+                                                   Foreground="{StaticResource Ink3}" />
+                                    </StackPanel>
+                                    <Border BorderBrush="{StaticResource RuleFaint}"
+                                            BorderThickness="0,0,0,1" />
+                                    <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2"
+                                               TextTrimming="CharacterEllipsis" FontSize="12.5"
+                                               LineHeight="20" Foreground="{StaticResource Ink2}" />
+                                </StackPanel>
+                                <Rectangle Width="3" HorizontalAlignment="Right"
+                                           Fill="{StaticResource Ink}" />
+                            </Panel>
+                        </Border>
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </Canvas>
+        </Grid>
         </Panel>
     </DockPanel>
 </UserControl>

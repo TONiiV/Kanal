@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A long transcript is now navigable. A strip of short marks runs down the right-hand edge of the
+  transcript, one for each time the speaker changes, drawn in that speaker's colour and growing as
+  the meeting runs. Rest the pointer on a mark to see who spoke, how far into the meeting it was
+  and how the turn opened; click it to jump the transcript to that sentence. A meeting with more
+  turns than the strip has room for folds neighbouring marks together rather than dropping any.
+
 - The right-hand column now has a Files tab. It lists what is in the selected meeting's folder —
   transcript, recording, and anything already filed under it — and an Import file button copies a
   drawing, quotation or specification from the laptop into that meeting's attachments folder, where

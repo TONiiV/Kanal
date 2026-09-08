@@ -30,6 +30,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 {
     public WorkspaceShellViewModel Shell { get; } = new();
 
+    public TranscriptRulerViewModel Ruler { get; }
+
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;
@@ -91,6 +93,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null)
     {
         _titler = titler;
+        Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         Titling = new MeetingTitling(() => _titler);
         Titling.Changed += OnTitlingChanged;
         var store = (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))();
@@ -785,6 +788,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         Columns.Clear();
         Speakers.Clear();
+        Ruler.Clear();
         Assistant.Forget();
         LoadedRoomId = "";
         Titling.Reset();
@@ -1494,7 +1498,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         sb.AppendLine();
         foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
         {
-            var (speaker, _) = ResolveSpeaker(u.SpeakerTag);
+            var (_, speaker, _) = ResolveSpeaker(u.SpeakerTag);
             sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");
@@ -1529,7 +1533,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (u.State == UtteranceState.Final)
             _ = Titling.OfferAsync(FinalLines());
 
-        var (speakerName, speakerColor) = ResolveSpeaker(u.SpeakerTag);
+        Ruler.Observe(u);
+
+        var (_, speakerName, speakerColor) = ResolveSpeaker(u.SpeakerTag);
         foreach (var column in Columns)
         {
             var isSourceColumn = string.Equals(column.Language, u.SrcLang, StringComparison.OrdinalIgnoreCase);
@@ -1586,17 +1592,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // re-resolve every history bubble — renames and merges rewrite the past
         foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
         {
-            var (name, color) = ResolveSpeaker(bubble.SpeakerTag);
+            var (_, name, color) = ResolveSpeaker(bubble.SpeakerTag);
             bubble.SpeakerName = name;
             bubble.SpeakerColor = color;
         }
+
+        Ruler.Reresolve();
     }
 
-    private (string Name, string Color) ResolveSpeaker(string tag)
+    private (string Tag, string Name, string Color) ResolveSpeaker(string tag)
     {
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
-            return (speaker.DisplayName ?? speaker.Tag, speaker.Color);
-        return (tag, "#4C5C68");
+            return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);
+        return (canonical, tag, "#4C5C68");
     }
 }

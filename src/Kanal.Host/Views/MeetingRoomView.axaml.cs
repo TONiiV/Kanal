@@ -17,8 +17,56 @@ public partial class MeetingRoomView : UserControl
         DataFormat.CreateStringApplicationFormat("kanal-column");
 
     private readonly Dictionary<ScrollViewer, bool> _following = new();
+    private MainViewModel? _bound;
 
     public MeetingRoomView() => InitializeComponent();
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        if (_bound is not null)
+            _bound.Ruler.JumpRequested -= ScrollTo;
+
+        _bound = DataContext as MainViewModel;
+        if (_bound is not null)
+            _bound.Ruler.JumpRequested += ScrollTo;
+
+        base.OnDataContextChanged(e);
+    }
+
+    private void OnTickEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control row && row.DataContext is RulerTickViewModel tick &&
+            DataContext is MainViewModel vm)
+            vm.Ruler.Hover(tick);
+    }
+
+    private void OnTickExited(object? sender, PointerEventArgs e) =>
+        (DataContext as MainViewModel)?.Ruler.Hover(null);
+
+    private void OnTickPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control row || row.DataContext is not RulerTickViewModel tick ||
+            DataContext is not MainViewModel vm ||
+            !e.GetCurrentPoint(row).Properties.IsLeftButtonPressed)
+            return;
+
+        vm.Ruler.Jump(tick);
+        e.Handled = true;
+    }
+
+    private void ScrollTo(string utteranceId)
+    {
+        foreach (var scroller in _following.Keys.ToList())
+        {
+            if (scroller.Content is not ItemsControl items)
+                continue;
+
+            var bubble = items.ItemsSource?.OfType<BubbleViewModel>()
+                .FirstOrDefault(b => b.UtteranceId == utteranceId);
+            if (bubble is not null && items.ContainerFromItem(bubble) is Control container)
+                container.BringIntoView();
+        }
+    }
 
     private async void OnLanguagesClick(object? sender, RoutedEventArgs e)
     {
