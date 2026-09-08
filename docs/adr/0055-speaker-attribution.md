@@ -112,8 +112,9 @@ pyannote，是**事后**处理。没有一个本地优先的会议工具在做�
 14. 分离模型进 Settings 的模型目录，复用 #88 的共享下载器与 #90 的目录记录形状（id、显示名、
     仓库、文件、大小、SHA-256、许可证）。
 15. **下载地址不是 HuggingFace 形状。** sherpa-onnx 的模型挂在 GitHub release 上，不走 HF 的
-    gated 授权、不需要 token；而 `LocalModelInfo.DownloadUrl` 今天把
-    `huggingface.co/{Repo}/resolve/main/` 写死了。共享下载器要接受一个完整 URL，而不是拼一个。
+    gated 授权、不需要 token。共享下载器已经能接受完整 URL——[#88](https://github.com/TONiiV/Kanal/pull/88)
+    把 `IDownloadableFile.DownloadUrl` 定义成一个地址而不是一段路径，是 `LocalModelInfo` 自己在为
+    它那批条目拼 HF 路径。所以本文不需要改下载器，分离模型直接给出 release 地址即可。
 16. 默认嵌入模型**由实测决定**，不由参数量决定。候选：`3dspeaker_campplus_zh_en_16k-common_advanced`
     （28.3 MB）、`3dspeaker_eres2net_base_sv_zh-cn`（39.6 MB）、`wespeaker_zh_cnceleb_resnet34_LM`
     （26.5 MB）、`nemo_en_titanet_small`（40.3 MB，RTF 最好）。**3D-Speaker 的 zh-cn 模型训练自
@@ -152,7 +153,7 @@ ASR 时间戳与录音偏移的对齐，跨暂停、重连、分段；有界音�
 
 ### 2. 分离模型目录与下载（决定 14–17）
 
-目录记录、共享下载器接受完整 URL、就绪状态、未就绪时的静默降级。
+目录记录（含许可证）、就绪状态、未就绪时的静默降级。下载器不需要改。
 
 实现注意：嵌入模型的 release tag 是 `speaker-recongition-models`——上游把 recognition 拼错了，
 URL 必须照抄。
@@ -226,5 +227,4 @@ URL 必须照抄。
 |---|---|
 | `GladiaAsrProvider.Caps` | `Diarization: true` → `false`（该声明一直是假的） |
 | `docs/PRD-v0.3.md` | 基于「Gladia 提供分离」的推理需复核 |
-| `LocalModelInfo.DownloadUrl` | 不再假定 HuggingFace 形状的地址 |
 | `docs/design/meeting-evidence.md` | 待答问题 S1 由本文的「明确排除」回答 |
