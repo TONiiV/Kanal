@@ -2,6 +2,26 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>Kanal.Host</string>
+  <key>CFBundleIdentifier</key>
+  <string>app.kanal.desktop</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Kanal</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.1</string>
+  <key>CFBundleVersion</key>
+  <string>1.0.1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
   <key>NSMicrophoneUsageDescription</key>
   <string>Kanal uses the selected microphone to transcribe and translate a meeting after every participant consents.</string>
   <key>NSAudioCaptureUsageDescription</key>

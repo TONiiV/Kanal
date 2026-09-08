@@ -10,10 +10,20 @@ public typealias FrameCallback = @convention(c) (
 public typealias ErrorCallback = @convention(c) (
     UnsafePointer<CChar>?, UnsafeMutableRawPointer?
 ) -> Void
+public typealias StopCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
+private enum NativeBackend: Int32 {
+    case coreAudioProcessTap = 2
+    case screenCaptureKit = 3
+}
+
+private struct SendablePointer: @unchecked Sendable {
+    let value: UnsafeMutableRawPointer?
+}
 
 private protocol SystemAudioSession: AnyObject, Sendable {
     func start() throws
-    func stop()
+    func stop(completion: @escaping @Sendable () -> Void)
 }
 
 private final class CaptureHandle: @unchecked Sendable {
@@ -24,7 +34,7 @@ private final class CaptureHandle: @unchecked Sendable {
     private var stopped = false
 
     init(
-        backend: Int32,
+        backend: NativeBackend,
         outputDeviceUID: String?,
         frame: @escaping FrameCallback,
         error: @escaping ErrorCallback,
@@ -33,7 +43,8 @@ private final class CaptureHandle: @unchecked Sendable {
         self.errorCallback = error
         self.context = context
 
-        if backend == 2 {
+        switch backend {
+        case .coreAudioProcessTap:
             if #available(macOS 14.2, *) {
                 session = CoreAudioTapSession(
                     outputDeviceUID: outputDeviceUID,
@@ -42,7 +53,7 @@ private final class CaptureHandle: @unchecked Sendable {
             } else {
                 session = UnsupportedSession("Core Audio process taps require macOS 14.2 or later")
             }
-        } else if backend == 3 {
+        case .screenCaptureKit:
             session = ScreenCaptureKitSession(frame: frame, error: error, context: context)
         }
     }
@@ -54,17 +65,21 @@ private final class CaptureHandle: @unchecked Sendable {
                 try session.start()
             } catch {
                 self.report(error)
-                session.stop()
+                session.stop {}
             }
         }
     }
 
-    func stop() {
-        queue.sync {
-            guard !stopped else { return }
-            stopped = true
-            session?.stop()
-            session = nil
+    func stop(completion: @escaping @Sendable () -> Void) {
+        queue.async {
+            guard !self.stopped else {
+                completion()
+                return
+            }
+            self.stopped = true
+            let active = self.session
+            self.session = nil
+            active?.stop(completion: completion) ?? completion()
         }
     }
 
@@ -81,7 +96,7 @@ public func kanalSystemAudioStart(
     _ error: @escaping ErrorCallback,
     _ context: UnsafeMutableRawPointer?
 ) -> UnsafeMutableRawPointer? {
-    guard backend == 2 || backend == 3 else {
+    guard let backend = NativeBackend(rawValue: backend) else {
         "unsupported macOS audio backend".withCString { error($0, context) }
         return nil
     }
@@ -98,11 +113,19 @@ public func kanalSystemAudioStart(
     return opaque
 }
 
-@_cdecl("kanal_system_audio_stop")
-public func kanalSystemAudioStop(_ opaque: UnsafeMutableRawPointer?) {
-    guard let opaque else { return }
+@_cdecl("kanal_system_audio_stop_with_completion")
+public func kanalSystemAudioStopWithCompletion(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ completion: @escaping StopCallback,
+    _ context: UnsafeMutableRawPointer?
+) {
+    guard let opaque else {
+        completion(context)
+        return
+    }
     let handle = Unmanaged<CaptureHandle>.fromOpaque(opaque).takeRetainedValue()
-    handle.stop()
+    let sendableContext = SendablePointer(value: context)
+    handle.stop { completion(sendableContext.value) }
 }
 
 @available(macOS 14.2, *)
@@ -145,12 +168,12 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             try createAggregateDevice(outputUID: uid, tapUUID: description.uuid.uuidString)
             try createAndStartIOProc()
         } catch {
-            stop()
+            stop {}
             throw error
         }
     }
 
-    func stop() {
+    func stop(completion: @escaping @Sendable () -> Void) {
         if aggregateDeviceID != kAudioObjectUnknown {
             _ = AudioDeviceStop(aggregateDeviceID, ioProcID)
             if let ioProcID {
@@ -164,6 +187,7 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             _ = AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
         }
+        completion()
     }
 
     private func readTapFormat() throws {
@@ -255,7 +279,6 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
     private let callbackQueue = DispatchQueue(label: "app.kanal.system-audio.sck", qos: .userInitiated)
     private let stateLock = NSLock()
     private var stream: SCStream?
-    private var startTask: Task<Void, Never>?
     private var stopped = false
     private var format = AudioStreamBasicDescription()
 
@@ -270,56 +293,64 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
     }
 
     func start() throws {
-        startTask = Task { [weak self] in
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { [weak self] content, error in
             guard let self else { return }
-            do {
-                let content = try await SCShareableContent.excludingDesktopWindows(
-                    false,
-                    onScreenWindowsOnly: false)
-                guard !Task.isCancelled, !self.isStopped else { return }
-                guard let display = content.displays.first else {
-                    throw NativeAudioError.message("ScreenCaptureKit found no display to anchor audio capture")
-                }
-
-                let filter = SCContentFilter(display: display, excludingWindows: [])
-                let configuration = SCStreamConfiguration()
-                configuration.width = 2
-                configuration.height = 2
-                configuration.showsCursor = false
-                configuration.queueDepth = 3
-                configuration.capturesAudio = true
-                configuration.excludesCurrentProcessAudio = true
-                configuration.sampleRate = 48_000
-                configuration.channelCount = 1
-
-                let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-                try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: callbackQueue)
-                guard self.install(stream) else { return }
-                try await stream.startCapture()
-                if Task.isCancelled || self.isStopped {
-                    try? await stream.stopCapture()
-                }
-            } catch {
-                if !Task.isCancelled, !self.isStopped {
-                    self.report(error)
-                }
+            guard !self.isStopped else { return }
+            if let error {
+                self.report(error)
+                return
             }
+            guard let display = content?.displays.first else {
+                self.report(NativeAudioError.message(
+                    "ScreenCaptureKit found no display to anchor audio capture"))
+                return
+            }
+
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let configuration = SCStreamConfiguration()
+            configuration.width = 2
+            configuration.height = 2
+            configuration.showsCursor = false
+            configuration.queueDepth = 3
+            configuration.capturesAudio = true
+            configuration.excludesCurrentProcessAudio = true
+            configuration.sampleRate = 48_000
+            configuration.channelCount = 1
+
+            let candidate = SCStream(filter: filter, configuration: configuration, delegate: self)
+            do {
+                try candidate.addStreamOutput(self, type: .audio, sampleHandlerQueue: self.callbackQueue)
+            } catch {
+                self.report(error)
+                return
+            }
+
+            self.stateLock.lock()
+            guard !self.stopped else {
+                self.stateLock.unlock()
+                return
+            }
+            self.stream = candidate
+            candidate.startCapture { [weak self] error in
+                guard let self, !self.isStopped, let error else { return }
+                self.report(error)
+            }
+            self.stateLock.unlock()
         }
     }
 
-    func stop() {
+    func stop(completion: @escaping @Sendable () -> Void) {
         stateLock.lock()
         stopped = true
-        let task = startTask
-        startTask = nil
         let running = stream
         stream = nil
         stateLock.unlock()
 
-        task?.cancel()
-        if let running {
-            Task { try? await running.stopCapture() }
+        guard let running else {
+            completion()
+            return
         }
+        running.stopCapture { _ in completion() }
     }
 
     func stream(
@@ -327,7 +358,8 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of outputType: SCStreamOutputType
     ) {
-        guard outputType == .audio,
+        guard !isStopped,
+              outputType == .audio,
               CMSampleBufferDataIsReady(sampleBuffer),
               let description = CMSampleBufferGetFormatDescription(sampleBuffer),
               let basic = CMAudioFormatDescriptionGetStreamBasicDescription(description)
@@ -358,7 +390,9 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        report(error)
+        if !isStopped {
+            report(error)
+        }
     }
 
     private func report(_ value: Error) {
@@ -371,13 +405,6 @@ private final class ScreenCaptureKitSession: NSObject, @unchecked Sendable, Syst
         return stopped
     }
 
-    private func install(_ candidate: SCStream) -> Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        guard !stopped else { return false }
-        stream = candidate
-        return true
-    }
 }
 
 private func emitMonoPcm16(
@@ -452,7 +479,9 @@ private final class UnsupportedSession: @unchecked Sendable, SystemAudioSession 
         throw NativeAudioError.message(message)
     }
 
-    func stop() {}
+    func stop(completion: @escaping @Sendable () -> Void) {
+        completion()
+    }
 }
 
 private func checked(_ status: OSStatus, _ operation: String) throws {

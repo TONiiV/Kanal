@@ -83,9 +83,11 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         MacSystemAudioErrorCallback onError = (message, _) =>
         {
             var detail = Marshal.PtrToStringUTF8(message) ?? "unknown native error";
+            var permissionAdvice = IsPermissionFailure(detail)
+                ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
+                : " Re-select an active computer output and try again.";
             frames.Writer.TryComplete(new InvalidOperationException(
-                $"Computer audio capture could not start: {detail} " +
-                "Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."));
+                $"Computer audio capture stopped: {detail}.{permissionAdvice}"));
         };
 
         var handle = _native.Start(Backend, deviceId, onFrame, onError);
@@ -99,11 +101,18 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         }
         finally
         {
-            _native.Stop(handle);
+            await _native.StopAsync(handle);
             GC.KeepAlive(onFrame);
             GC.KeepAlive(onError);
         }
     }
+
+    private static bool IsPermissionFailure(string detail) =>
+        detail.Contains("permission", StringComparison.OrdinalIgnoreCase) ||
+        detail.Contains("denied", StringComparison.OrdinalIgnoreCase) ||
+        detail.Contains("declined", StringComparison.OrdinalIgnoreCase) ||
+        detail.Contains("not authorized", StringComparison.OrdinalIgnoreCase) ||
+        detail.Contains("-3801", StringComparison.Ordinal);
 }
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -120,7 +129,7 @@ internal interface IMacSystemAudioNative
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError);
 
-    void Stop(IntPtr handle);
+    ValueTask StopAsync(IntPtr handle);
 }
 
 internal sealed class MacSystemAudioNative : IMacSystemAudioNative
@@ -134,7 +143,14 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
         MacSystemAudioErrorCallback onError) =>
         NativeStart((int)backend, outputDeviceUid, onFrame, onError, IntPtr.Zero);
 
-    public void Stop(IntPtr handle) => NativeStop(handle);
+    public async ValueTask StopAsync(IntPtr handle)
+    {
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        MacSystemAudioStopCallback callback = _ => stopped.TrySetResult();
+        NativeStop(handle, callback, IntPtr.Zero);
+        await stopped.Task.ConfigureAwait(false);
+        GC.KeepAlive(callback);
+    }
 
     [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_start", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr NativeStart(
@@ -144,6 +160,12 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
         MacSystemAudioErrorCallback onError,
         IntPtr context);
 
-    [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_stop", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void NativeStop(IntPtr handle);
+    [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_stop_with_completion", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void NativeStop(
+        IntPtr handle,
+        MacSystemAudioStopCallback onStopped,
+        IntPtr context);
 }
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void MacSystemAudioStopCallback(IntPtr context);
