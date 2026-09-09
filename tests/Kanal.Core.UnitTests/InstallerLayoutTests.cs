@@ -161,6 +161,20 @@ public class InstallerLayoutTests
     }
 
     [Fact]
+    public void SystemAudioUsageDescriptionIsPresentAndNotEmpty()
+    {
+        // The counterpart for the online-meeting source. Without it macOS refuses the process tap
+        // and the ScreenCaptureKit stream the same way it refuses the microphone: no prompt, no
+        // error, and a meeting recorded with half the room missing.
+        var plist = ReadPlist(Staged.Value.InfoPlist);
+
+        Assert.True(
+            plist.TryGetValue("NSAudioCaptureUsageDescription", out var reason),
+            "NSAudioCaptureUsageDescription missing — computer audio would be denied with no prompt");
+        Assert.False(string.IsNullOrWhiteSpace(reason), "NSAudioCaptureUsageDescription is empty");
+    }
+
+    [Fact]
     public void BundleDeclaresRetinaSupportAndAMinimumSystemVersion()
     {
         var plist = ReadPlist(Staged.Value.InfoPlist);
@@ -173,7 +187,7 @@ public class InstallerLayoutTests
     [InlineData("zh-Hans")]
     [InlineData("de")]
     [InlineData("pl")]
-    public void MicrophonePromptIsLocalisedForEveryLanguageTheAppSpeaks(string language)
+    public void BothAudioPromptsAreLocalisedForEveryLanguageTheAppSpeaks(string language)
     {
         // The prompt is the one piece of Kanal's text macOS renders rather than the app, and it is
         // asked in a room whose premise is that nobody shares a language. InfoPlist.strings is the
@@ -183,7 +197,10 @@ public class InstallerLayoutTests
             Staged.Value.Contents, "Resources", $"{language}.lproj", "InfoPlist.strings");
 
         Assert.True(File.Exists(strings), $"{language}.lproj/InfoPlist.strings missing");
-        Assert.Contains("NSMicrophoneUsageDescription", File.ReadAllText(strings));
+
+        var localised = File.ReadAllText(strings);
+        Assert.Contains("NSMicrophoneUsageDescription", localised);
+        Assert.Contains("NSAudioCaptureUsageDescription", localised);
     }
 
     [Fact]

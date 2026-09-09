@@ -1,4 +1,5 @@
-/* Shown in the macOS microphone permission prompt. Staged into
+/* Shown in the macOS microphone and computer-audio permission prompts. Staged into
    Kanal.app/Contents/Resources/de.lproj/InfoPlist.strings by the
    StageMacAppLayout target in installers/Kanal.Installers.csproj. */
 "NSMicrophoneUsageDescription" = "Kanal nimmt den Besprechungston über dieses Mikrofon auf, um daraus Live-Transkripte und Übersetzungen zu erzeugen.";
+"NSAudioCaptureUsageDescription" = "Kanal nimmt den Ton auf, der über diesen Ausgang wiedergegeben wird, damit auch zugeschaltete Teilnehmende transkribiert und übersetzt werden.";
