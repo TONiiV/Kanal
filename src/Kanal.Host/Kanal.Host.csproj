@@ -41,4 +41,32 @@
     <ProjectReference Include="..\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
+
+  <!-- macOS reads privacy purpose strings from Contents/Info.plist, never from one beside a raw
+       Mach-O, so system-audio permission is unobtainable without a bundle. The declarations come
+       from the installer's template rather than a copy: a second plist here would drift from the
+       shipped one, and a permission the developer sees granted would be denied for the operator. -->
+  <Target Name="CreateMacAppBundle"
+          AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <_MacAppDir>$(TargetDir)Kanal.app/Contents</_MacAppDir>
+      <_MacPlistSource>$(MSBuildThisFileDirectory)../../installers/macos/</_MacPlistSource>
+      <!-- Read as a property: item values split on semicolons, which would mangle the plist. -->
+      <_MacPlist>$([System.IO.File]::ReadAllText('$(_MacPlistSource)Info.plist.template').Replace('__VERSION__', '$(Version)'))</_MacPlist>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MacHostFile Include="$(TargetDir)**/*" Exclude="$(TargetDir)Kanal.app/**/*" />
+      <_MacPlistStrings Include="$(_MacPlistSource)lproj/*.strings" />
+    </ItemGroup>
+    <MakeDir Directories="$(_MacAppDir)/MacOS" />
+    <Copy SourceFiles="@(_MacHostFile)"
+          DestinationFiles="$(_MacAppDir)/MacOS/%(RecursiveDir)%(Filename)%(Extension)"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="$(_MacAppDir)/Info.plist" Lines="$(_MacPlist)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="@(_MacPlistStrings)"
+          DestinationFiles="@(_MacPlistStrings->'$(_MacAppDir)/Resources/%(Filename).lproj/InfoPlist.strings')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

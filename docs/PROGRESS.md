@@ -563,6 +563,84 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 
 ## 2026-09-04
 
+### Native meeting audio, slice 2: operating-system sources
+
+- Windows enumerates active render endpoints, keeps the multimedia default first, and captures
+  the selected stable endpoint with WASAPI shared loopback. Microphone and loopback now share one
+  float/PCM downmix and resampling path to the existing 16 kHz mono PCM16 contract.
+- macOS 14.2+ uses a private global Core Audio process tap bound to the selected output, a private
+  aggregate device, and an IOProc; teardown stops and destroys the IOProc, aggregate device, then
+  tap. macOS 13–14.1 uses an audio-only ScreenCaptureKit stream anchored to the current display.
+- A small C ABI wraps the Apple APIs in a source-built universal Swift dylib. The managed boundary
+  owns bounded delivery, resampling, cancellation, actionable permission errors, and stale-output
+  rejection.
+- The existing device watcher now observes output topology/default changes as well as microphone
+  changes. Headless tests inject the native boundary and never trigger a real permission prompt.
+- No `CHANGELOG.md` bullet. Nothing in `src/Kanal.Host` consumes `ISystemAudioCaptureService` yet
+  and the online profile still reports `capture.online.unavailable`, so an operator reading the
+  changelog inside the application would be told about a capability they cannot reach. Slice 3
+  carries the bullet.
+
+### Three defects the slice-2 review found
+
+- `emitMonoPcm16` guarded on `bytesPerSample == 2 || bytesPerSample == 4`, then only summed float32
+  and int16 — while still counting the channel. A 32-bit integer tap format therefore produced a
+  full-rate stream of digital silence with no error on any channel: the worst failure shape
+  available, because it looks like a quiet room. Int32 is now scaled like the others, and the
+  int16 branch is the `else` rather than a second condition that can fall through to nothing.
+- The managed bridge bound its resampler to the first sample rate it ever saw
+  (`resampler ??= new LinearResampler(sampleRate, …)`), while `ScreenCaptureKitSession` reassigns
+  its format on every buffer. A rate change would have been resampled by the old ratio,
+  undetectably. The rate is now tracked and the resampler rebuilt when it changes.
+- `StopAsync` awaited the native stop completion with no bound. A session that never called back
+  would have hung the enumerator's `finally` — that is, the operator's Stop, mid-meeting. Stop now
+  gives up after five seconds and leaks the native session rather than freezing the host.
+
+`SystemAudioCaptureFactory.TryCreate` no longer repeats the version cascade that `DescribeSupport`
+already owns; it reads `Support.Backend` and keeps only the guards the platform analyzer needs.
+The app-bundle target copied `$(TargetDir)*`, which matches files and not directories, so the
+bundle it produced was missing `runtimes/` and could not have launched — the point of building it.
+
+### Three managed defects a second review found
+
+- A native session that never reports teardown is deliberately leaked rather than allowed to hang
+  the operator's Stop. It keeps the function pointers it was handed, and a marshalled delegate's
+  thunk dies with the delegate — so `GC.KeepAlive` in the `finally` rooted the callbacks only up to
+  the moment the iterator became unreachable, after which the audio thread could call into freed
+  memory. A leaked session now leaks its callbacks too. The test holds a `WeakReference` to them,
+  forces a collection, and fails if either is gone.
+- `WasapiPcmCapture` chose its conversion on `BitsPerSample` alone, so a device reporting 32-bit
+  **integer** PCM was read as float32: noise around silence, which sounds like a room nobody is
+  speaking in rather than a format the host declined. The encoding is now read as well as the width.
+  This logic predates the refactor, but the refactor pointed the loopback path at it too.
+- `PcmConvert` — the downmix and float conversion both capture paths now share — had no tests at
+  all. It has value assertions now, including the clamp that keeps the loudest moment in the meeting
+  from coming out with the opposite sign.
+
+### One plist, written twice, would have shipped the wrong half
+
+This slice started life with its own `src/Kanal.Host/Info.plist`, because a `dotnet build` artifact
+has no bundle and therefore no way to ask macOS for system audio. The installer work
+([#27](https://github.com/TONiiV/Kanal/pull/27)) landed first and brought a second declaration of
+the same bundle — `installers/macos/Info.plist.template` — and the two disagreed on three things:
+the bundle identifier, the minimum system version, and, fatally, whether
+`NSAudioCaptureUsageDescription` existed at all.
+
+Only the second copy is shipped. So the developer who tested the permission flow would have been
+granted computer audio, and the operator running the notarised dmg would have been refused it with
+no prompt and no error — the same silent-denial shape the microphone string exists to prevent,
+reintroduced by having two files where the system reads one.
+
+The duplicate is gone. `CreateMacAppBundle` now writes the development bundle from the installer's
+template with the same `__VERSION__` substitution the release path uses, and stages the same
+`lproj` strings, so the prompt a developer sees is the prompt the room sees. The identifier
+disagreement resolves to the installer's `io.github.toniiv.kanal`: TCC keys its grants on the
+bundle identifier, and changing it after the first signed build looks to macOS like a different
+application. The minimum system version stays at 12.0 — .NET 10's own runtime is built to load
+there, and `DescribeSupport` already degrades computer audio to an explained refusal below macOS
+13, so raising the floor would lock out microphone-only operators for a capability they were never
+offered.
+
 ### The control bar reads as two groups
 
 - The toolbar is a `DockPanel` with a left cluster (transport, mode, languages) and a right cluster

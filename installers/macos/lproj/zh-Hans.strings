@@ -1,4 +1,5 @@
-/* Shown in the macOS microphone permission prompt. Staged into
+/* Shown in the macOS microphone and computer-audio permission prompts. Staged into
    Kanal.app/Contents/Resources/zh-Hans.lproj/InfoPlist.strings by the
    StageMacAppLayout target in installers/Kanal.Installers.csproj. */
 "NSMicrophoneUsageDescription" = "Kanal 通过该麦克风采集会议音频，用于生成实时字幕和翻译。";
+"NSAudioCaptureUsageDescription" = "Kanal 采集该输出设备播放的声音，以便对远程参会者同样进行转写和翻译。";

@@ -14,4 +14,27 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kanal.Core.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <None Include="Native/MacSystemAudio.swift" />
+    <None Include="$(IntermediateOutputPath)libkanal_audio_native.dylib"
+          Link="libkanal_audio_native.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+  <Target Name="BuildMacSystemAudioBridge"
+          BeforeTargets="CoreCompile"
+          Inputs="Native/MacSystemAudio.swift"
+          Outputs="$(IntermediateOutputPath)libkanal_audio_native.dylib"
+          Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <MakeDir Directories="$(IntermediateOutputPath)native" />
+    <Exec Command="xcrun swiftc -parse-as-library -emit-library -O -target arm64-apple-macos13.0 -Xlinker -install_name -Xlinker @rpath/libkanal_audio_native.dylib Native/MacSystemAudio.swift -o $(IntermediateOutputPath)native/libkanal_audio_native_arm64.dylib" />
+    <Exec Command="xcrun swiftc -parse-as-library -emit-library -O -target x86_64-apple-macos13.0 -Xlinker -install_name -Xlinker @rpath/libkanal_audio_native.dylib Native/MacSystemAudio.swift -o $(IntermediateOutputPath)native/libkanal_audio_native_x64.dylib" />
+    <Exec Command="xcrun lipo -create $(IntermediateOutputPath)native/libkanal_audio_native_arm64.dylib $(IntermediateOutputPath)native/libkanal_audio_native_x64.dylib -output $(IntermediateOutputPath)libkanal_audio_native.dylib" />
+  </Target>
+
 </Project>
