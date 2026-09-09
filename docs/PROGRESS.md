@@ -55,13 +55,31 @@ pixel of difference between them reads as an off-centre hole. The mark now scale
 140 ms on `CubicEaseOut`, about `RenderTransformOrigin` 50 %/50 %, and nothing changes colour.
 Pressed repeats the hover scale so the theme's own press shrink cannot take over.
 
-Measured headless, the wash disc and the red disc are concentric at rest — both centred on the same
-pixel, the ring exactly 3 px on every side — and the hovered disc is 30 px against the resting 28 px
-on that same centre. The two `:pointerover`/`:pressed` content-presenter rules stay, restated to
+Measured headless at 1:1, the wash disc and the red disc are concentric at rest — both centred on
+the same pixel, the ring exactly 3 px on every side — and the hovered disc is 30 px against the
+resting 28 px on that same centre. The two `:pointerover`/`:pressed` content-presenter rules stay, restated to
 carry the wash rather than the record colour: a pseudo-class rule that activates later beats the
 plain one, so dropping them would let the base button's hover ink flood the disc. They also had to
 be split into one style per selector — `{TemplateBinding}` in a comma-separated `/template/` style
 fails to compile with `AVLN3000: Unable to find the ControlTemplate scope`.
+
+**1:1 was the wrong place to measure it.** The disc still looked crooked on a real screen, and it
+was. Laying a 28 px circle inside a 34 px button leaves a 3 px inset, which is 4.5 device pixels at
+1.5x scaling; layout rounding snaps that to 4, so the red circle sits half a device pixel up and
+left of the wash it is supposed to be centred in. Against a ring only 3 px thick that is enough to
+read as a crooked hole, which is what it was mistaken for the first time round. The scalings that
+happen to be clean — 1, 1.25, 2 — are exactly the ones a headless test runs at by default, so
+nothing caught it.
+
+The disc now takes the button's whole 34 px box and is shrunk to 28 by a render transform about its
+own centre. Render transforms are not rounded, so the two circles share one layout rectangle and
+stay concentric at every scaling: measured on the rendered frame, the offset at 1.5x goes from
+0.40 device pixels to 0.00. `TheRecordDiscStaysCentredInItsWashAtFractionalScaling` guards it by
+calling `SetRenderScaling(1.5)` before measuring, because at 1:1 there is nothing to catch.
+
+Measuring it wants one piece of care: `Bounds` already carries the offset inside the parent and
+`TransformToVisual` adds it again, so the rectangle handed to the transform has to start at the
+origin or the answer comes back with the inset counted twice.
 
 That last part needed the circle redrawn. Written as two half arcs between antipodal points —
 `M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser

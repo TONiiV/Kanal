@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Shape = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -17,6 +18,11 @@ public class MainWindowCompositionTests
 {
     private static IconBarView Bar(Window window) =>
         window.GetLogicalDescendants().OfType<IconBarView>().Single();
+
+    // Bounds carries the offset inside the parent and TransformToVisual adds it again, so the
+    // rectangle handed to the transform has to start at the origin.
+    private static Rect Painted(Visual visual, Visual within) =>
+        new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(within)!.Value);
 
     private static Panel Cluster(Window window, string name) =>
         Assert.Single(
@@ -465,9 +471,34 @@ public class MainWindowCompositionTests
         var button = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
             candidate => candidate.Name == "RecordMark");
         var disc = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
-        var ratio = disc.Bounds.Width / button.Bounds.Width;
+        var ratio = Painted(disc, button).Width / button.Bounds.Width;
 
         Assert.InRange(ratio, 0.80, 0.88);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// Only a fractional render scaling exposes this: an inset of 3 px is 4.5 device pixels at
+    /// 1.5x, layout rounding snaps it to 4, and the red disc slides half a device pixel off the
+    /// centre of the wash it sits in. Against a 3 px ring that reads as a crooked hole.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheRecordDiscStaysCentredInItsWashAtFractionalScaling()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        window.SetRenderScaling(1.5);
+        Dispatcher.UIThread.RunJobs();
+
+        var button = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
+            candidate => candidate.Name == "RecordMark");
+        var disc = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
+        var painted = Painted(disc, button);
+
+        Assert.Equal(button.Bounds.Width / 2, painted.Center.X, precision: 2);
+        Assert.Equal(button.Bounds.Height / 2, painted.Center.Y, precision: 2);
 
         window.Close();
     }

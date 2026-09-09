@@ -240,11 +240,17 @@
             <Setter Property="Stretch" Value="Uniform" />
         </Style>
 
-        <!-- 28 is the even width nearest 85% of the 34 px disc: even so the mark still centres on
-             a whole pixel, and wide enough that the wash reads as a ring rather than a field. -->
+        <!-- The disc takes the button's whole box and is shrunk by a render transform instead of
+             being laid out 3 px inside it. Laid out, that inset is 4.5 device pixels at 1.5x
+             scaling, which layout rounding snaps to 4 and leaves the red circle half a pixel up
+             and left of the centre of the wash. Render transforms are not rounded, so the two
+             circles stay concentric at every scaling. 0.8235 is 28/34 — enough slack that the
+             wash reads as a ring rather than a field. -->
         <Style Selector="Button.mark Path.disc">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform" Value="scale(0.8235)" />
         </Style>
 
         <Style Selector="Button.mark Path.record">

@@ -18,8 +18,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   arrow showing which way the work is handed over — in the mode box and against every row of the
   list, so the mode is readable at a glance instead of by reading its label. The help button now
   sits against the mode box it explains instead of drifting across the bar, and the record button
-  is a full red disc rather than a dot in a pale field. Reaching for a transport button grows it
-  slightly instead of inverting its colours.
+  is a full red disc rather than a dot in a pale field, sitting square in the middle of its ring on
+  every display scaling. Reaching for a transport button grows it slightly instead of inverting its
+  colours.
 
 - The toolbar's marks sit square in the middle of the controls that carry them, and the capture
   picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
