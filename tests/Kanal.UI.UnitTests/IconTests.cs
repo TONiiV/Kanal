@@ -28,9 +28,9 @@ public class IconTests
     }
 
     [AvaloniaFact]
-    public void EveryStageHasItsOwnMark()
+    public void EveryModeHasAMarkOfItsOwn()
     {
-        var marks = Enum.GetValues<StageKind>().Select(Icons.Stage).ToList();
+        var marks = Enum.GetValues<PipelineModeId>().Select(Icons.Mode).ToList();
 
         Assert.All(marks, Assert.NotNull);
         Assert.Equal(marks.Count, marks.Distinct().Count());

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Staged into Kanal.app/Contents/Info.plist by the StageMacAppLayout target, which substitutes
+  __VERSION__ and nothing else.
+
+  Do not use semicolons anywhere in this file. MSBuild splits item values on them, so a semicolon
+  in a description string would be rewritten as a line break on the way out.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.toniiv.kanal</string>
+
+	<!-- Must match the apphost filename under Contents/MacOS exactly, or the bundle will not
+	     launch at all. Asserted in InstallerLayoutTests. -->
+	<key>CFBundleExecutable</key>
+	<string>Kanal.Host</string>
+
+	<key>CFBundleName</key>
+	<string>Kanal</string>
+	<key>CFBundleDisplayName</key>
+	<string>Kanal</string>
+
+	<!-- Extension deliberately omitted - the Resources file is kanal.icns. -->
+	<key>CFBundleIconFile</key>
+	<string>kanal</string>
+
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__VERSION__</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<!-- Without this key macOS denies microphone access with no prompt and no error - the host
+	     captures silence. An unbundled `dotnet run` inherits the terminal's permission, so this
+	     only ever fails once the app is a real bundle. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kanal captures room audio to transcribe and translate what is said in the meeting.</string>
+
+	<!-- The prompt above is the English fallback. macOS reads the operator's own language from
+	     Resources/<lang>.lproj/InfoPlist.strings, staged from installers/macos/lproj - and a room
+	     whose whole point is that nobody shares a language should not ask for the microphone in a
+	     language the operator may not read. -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+		<string>de</string>
+		<string>pl</string>
+	</array>
+
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+</dict>
+</plist>

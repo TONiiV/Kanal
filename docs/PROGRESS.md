@@ -4,6 +4,53 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-09
+
+### One mark per mode, and a record button that reads as one
+
+**A mode is one thing, so it gets one mark.** The pair of stage marks said the same word twice for
+three of the five modes and made the operator read two glyphs to learn one fact. Each mode now
+carries a single icon, and the rule behind the set is that the *shape* is where transcription runs
+while an *arrow* on it means the second stage is handed to the other side: a cloud for cloud on
+cloud, a cloud with a down arrow for cloud transcription landing in a local translator, a laptop
+with an up arrow for the reverse, a bare laptop for local on local, and the script page for demo.
+`Icons.Mode(PipelineModeId)` owns the mapping and `Icons.Stage` is gone with the last caller.
+
+The first draft used a cloud with an up arrow for `Local · Cloud`, mirroring the down-arrow cloud.
+It failed at the size it has to work at: two clouds differing only in the direction of a 4 px
+arrowhead are one glyph in a dropdown row. Changing the base shape as well as the arrow is what
+makes the five separable at 16 px.
+
+The list follows the box. Every row leads with the same mark the collapsed box will show, so the
+mark the operator learns while choosing still means something back in the bar. The availability
+square that used to lead the row went with it: two marks on one row is the thing being fixed, and
+a row that cannot be picked is already disabled and already names its blocker in the second line.
+The square stays in the help flyout, which is the reference list and has the room for it. Losing
+the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
+instead of trimming.
+
+**The help button belongs to the mode box.** `LeftCluster`'s first column was an open starred
+column, so it took every spare pixel the window had: the mode box sat at its left edge and the `?`
+that explains the mode was arranged at the right edge of the column — 293 px away at a 1600 px
+window, close enough to the transport to read as belonging to it. The column is capped at 200 px
+and the box stretches to fill it. The cap has to be on the column rather than on the box, and the
+box has to stretch: with `Auto` the column hugs the box and the cluster stops giving up width when
+it is squeezed, and with a left-aligned box the button follows the column edge rather than the box,
+which moves by 75 px between `Demo` and `Cloud · Cloud`. Stretching also holds the button still as
+the mode and the language change.
+
+**The record disc nearly fills its button.** It was a 13-unit circle inside a 16-unit view box
+inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark is 28 px now, the
+even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box
+and the circle are the same thing. The wash reads as a ring.
+
+That last part needed the circle redrawn. Written as two half arcs between antipodal points —
+`M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser
+measures the geometry as a flat line of zero height and `FillContains` answers no everywhere, even
+though Skia renders it as a circle. Four quarter arcs have no antipodal endpoints and measure
+correctly. Only the record disc is measured rather than padded to its view box, so only it had to
+change; the rest of the set is padded and never asks the parser for its ink.
+
 ## 2026-09-08
 
 ### The icons become files, and stop drifting off centre
@@ -700,6 +747,56 @@ bundle it produced was missing `runtimes/` and could not have launched — the p
   `tools/Kanal.Doctor`, and process attach; build/test tasks over `Kanal.slnx`; C# Dev Kit and
   Avalonia extension recommendations; and search/watch exclusions for `.worktrees/`, `bin/`, `obj/`.
 
+## 2026-09-02
+
+### The installer chain, aimed at a private alpha (`feat/installers`)
+
+The 2026-08-01 packaging work was written for a public, tag-driven release. The first release is
+not that: `docs/04-风控管理/上线执行方案.md` sends `0.1.0-alpha.1` to named testers over a private,
+revocable link. Rebased onto main and amended for that, rather than rewritten.
+
+- **Nothing installable leaves CI.** `gh release create` on a public repo is public even for a
+  Pre-release — and so is an Actions artifact, which is the trap the first attempt at this fell
+  into. Measured on this repository: the artifact list is readable with no login at all, and
+  downloading one needs only a GitHub account, because public means everyone has read access.
+  Swapping a Pre-release for an artifact changed the shape and not the exposure. So the release
+  gear is `workflow_dispatch` with a version input, it proves the chain works, and it discards the
+  package; the dmg testers get is built locally and distributed over a link GitHub never sees. That
+  is also the only version of this where "pull the download" is a thing that can be done.
+- **Signing is mandatory on that gear, not best-effort.** It used to fall back to an unsigned build
+  when the secrets were absent. A release that quietly comes out unsigned is worse than one that
+  fails: it looks shippable, and Gatekeeper refuses it on every Mac except the one that built it.
+  Any unset secret now fails the job before the build starts. The PR gear stays unsigned, which is
+  what lets fork PRs exercise the same path.
+- **`runtimes/` is pruned to the target RID.** LLamaSharp ships a backend for every platform it
+  supports and a RID-specific publish still carries all of them. The bundle drops from 207 MB to
+  119 MB and the dmg from 88 MB to 53 MB; on macOS it also stops asking Apple to notarise `osx-x64`
+  dylibs for an architecture the package does not target.
+- **Staging wipes the bundle first.** Staging copies into `Kanal.app`, it never removed anything, so
+  a file from an earlier build survived into the next dmg — which is how a bundle ends up carrying
+  binaries the current run never signed. It does not reproduce on a fresh runner, only on the
+  maintainer machine that packages twice, and it was found exactly that way: the first local dmg
+  after the pruning change was still 88 MB, carrying August's `runtimes/` tree.
+- **The microphone prompt speaks the operator's language.** `NSMicrophoneUsageDescription` is the
+  one piece of Kanal's text macOS renders rather than the app, asked in a room whose premise is that
+  nobody shares a language. zh-Hans, de and pl `InfoPlist.strings` are staged beside the icon.
+- **The signing path was wrong, and the first run with a real certificate is what said so.** It
+  signed the Mach-O files it could find and left the ~200 managed `.dll` assemblies beside them
+  alone — but `codesign` treats all of `Contents/MacOS` as nested code, so sealing the bundle failed
+  with `code object is not signed at all` naming a `.dll`. Everything in that directory is signed
+  now, batched through `xargs` so 240 files do not each pay a timestamp round-trip, with the apphost
+  excluded because signing the main executable alone makes codesign seal the bundle prematurely.
+  `sign.sh` also asserts the Authority, timestamp and runtime flag afterwards: `codesign --verify`
+  passes on an ad-hoc signature, which is exactly the one Gatekeeper refuses.
+- 4 new test cases (12 total in `InstallerLayoutTests`, now under `Kanal.Core.UnitTests` after the
+  test split): the three localised prompts, and staging clearing what an earlier build left behind.
+- **The chain is no longer unrun.** A dispatched release build signed 250 nested binaries, got
+  `Accepted` from the notary service for both the `.app` and the dmg, and stapled both. Verified on
+  a second machine from the downloaded file: `stapler validate` passes, `spctl` reports
+  `source=Notarized Developer ID`, the app inside the mounted dmg validates on its own, and the
+  bundle carries no credential-shaped files. Local signing steps in the design note. What is still
+  unrun is everything a human has to look at — first launch on a clean Mac, the microphone prompt,
+  and whether the hardened runtime lets llama.cpp load a local model.
 ## 2026-08-05
 
 ### A comment now has to earn its place
@@ -1199,6 +1296,63 @@ Four small host-UI fixes from screenshot review, one PR:
 - **Model-row Delete matches its neighbours.** It was the only `ghost` (borderless) button in a
   row of outlined ones (Download / Cancel); it now wears the default outlined face. The last
   two are style-only changes verified by the existing suite.
+
+---
+
+## 2026-08-01
+
+### Installers
+
+The host now ships as a double-clickable install on both platforms, driven by
+`installers/Kanal.Installers.csproj`. Design and rationale in
+[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+
+**No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
+advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is
+notarised. The audience is a meeting operator, not a developer, and homebrew-core does not take
+internal tools, so it would mean a private tap and a hand-updated `sha256` per release. Revisit only
+if Developer ID turns out to be unavailable.
+
+**One machine cannot build both artefacts.** `codesign`/`notarytool` are macOS-only and WiX is
+Windows-only, so the csproj packages for whichever OS it runs on and `release.yml` fans out over a
+two-entry matrix. Signing is a switch (`-p:SignBuild=true`), never a branch: an unsigned build must
+always succeed, or fork PRs — which cannot read secrets — could not exercise the chain at all.
+
+Three things that only fail once the app is a real bundle, and so are covered by
+`InstallerLayoutTests` rather than left to a rehearsal:
+
+- `NSMicrophoneUsageDescription` missing → macOS denies the microphone with no prompt and no error,
+  and the host captures silence. `dotnet run` inherits the terminal's permission, so it never shows.
+- `com.apple.security.cs.allow-jit` missing → the .NET JIT cannot map executable pages under the
+  hardened runtime (which notarisation requires) and the app dies at startup.
+- `CFBundleExecutable` not matching the apphost filename → the bundle does not launch at all.
+
+The bundle and the dmg are **both** notarised and stapled. Stapling only the dmg leaves the `.app`
+without its own ticket, so its first launch needs a network round-trip to Apple — unacceptable for a
+tool whose premise is running a meeting on local models with no connectivity.
+
+Measured: unsigned `PackDmg` takes ~25 s and yields an 88 MB dmg. The bundle carries **36 dylibs**
+(LLamaSharp plus the .NET runtime), which is why `sign.sh` finds Mach-O binaries with `file(1)`
+instead of trusting a list of extensions — missing one makes the notary service reject everything.
+
+**WiX is pinned to 5.0.2 for licensing reasons.** Taking the newest version instead fails the build
+with `WIX7015: You must accept the Open Source Maintenance Fee (OSMF) EULA` — WiX introduced a paid
+EULA for commercial use in v6, and an internal tool counts. 5.0.2 is the last release before it, on
+the same schema. Do not let a dependency bump carry this past 5.x without deciding to pay.
+
+CI green on both platforms: 54 s for the dmg, 2m03 s for a well-formed 75 MB MSI (`Template: x64`,
+`WiX Toolset (5.0.2.0)`). Getting there took two red runs, and both failures were the kind that
+*only* show up on a real Windows runner — the OSMF licence gate, and an icon `SourceFile` whose
+relative path resolved against the wix process's working directory rather than the `.wxs` file, so
+it pointed outside the repository. All paths are now passed in absolute via `-d`. One diagnostic to
+ignore off Windows: `WIX0389` on a plain `Directory/@Name` is a platform artefact and does not
+appear on the runner.
+
+Unrun so far, stated rather than discovered later: the signing/notarisation path (needs a
+`Developer ID Application` certificate — the only local identity is an `Apple Development` one,
+which notarisation rejects), what the MSI does when actually *run* (per-user install location,
+shortcut, uninstall, launching from an installed copy — CI proves it builds, not that it works),
+and the release job (fires only on a tag).
 
 ---
 

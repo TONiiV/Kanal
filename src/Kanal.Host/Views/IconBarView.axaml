@@ -27,13 +27,25 @@
                 <!-- A starred column gives up width, an Auto one does not: the transport must keep
                      every pixel it asked for, so the side clusters clip instead of the bar scrolling. -->
                 <Grid ColumnDefinitions="*,Auto,*">
-                    <!-- The mode box is the one thing here that may give up width: the picker beside
-                         it is a glyph and a chevron with nothing to trim, so a cluster that shrank
-                         evenly would cut its chevron off rather than shorten a label. -->
-                    <Grid Grid.Column="0" x:Name="LeftCluster" ColumnDefinitions="*,Auto,Auto"
+                    <Grid Grid.Column="0" x:Name="LeftCluster"
                           ColumnSpacing="8" VerticalAlignment="Center" ClipToBounds="True">
+                        <Grid.ColumnDefinitions>
+                            <!-- Starred so the mode box is the one thing here that gives up width -
+                                 the picker beside it is a glyph and a chevron with nothing to trim,
+                                 so a cluster that shrank evenly would cut its chevron off rather
+                                 than shorten a label. Capped so the column stops at the box: an
+                                 open starred column takes every spare pixel in the window, and the
+                                 help button that explains the mode lands at the far right of it,
+                                 against the transport it says nothing about. The box stretches to
+                                 the cap rather than to its own text, so the button beside it holds
+                                 still as the mode and the language change. -->
+                            <ColumnDefinition Width="*" MaxWidth="200" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <ComboBox Grid.Column="0" ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
-                                  MaxWidth="208" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
+                                  HorizontalAlignment="Stretch"
+                                  IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding SelectedMode.Name}"
                                   AutomationProperties.Name="{l:T mode.tip}">
                             <ComboBox.ItemContainerTheme>
@@ -45,10 +57,7 @@
                             <ComboBox.SelectionBoxItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
-                                            <Path Classes="glyph" Data="{Binding TranscriptionMark}" />
-                                            <Path Classes="glyph" Data="{Binding TranslationMark}" />
-                                        </StackPanel>
+                                        <Path Grid.Column="0" Classes="glyph mode" Data="{Binding Mark}" />
                                         <TextBlock Grid.Column="1" Text="{Binding Short}" FontSize="12.5"
                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     </Grid>
@@ -57,14 +66,9 @@
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PipelineModeOption">
                                     <Grid ColumnDefinitions="Auto,*" Margin="0,3,0,4" MaxWidth="330">
-                                        <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
-                                              Margin="0,3,8,0" VerticalAlignment="Top"
-                                              Data="{c:Icon square-filled}" Fill="{StaticResource Ink}"
-                                              IsVisible="{Binding IsAvailable}" />
-                                        <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
-                                              Margin="0,3,8,0" VerticalAlignment="Top"
-                                              Data="{c:Icon square-hollow}" Fill="{StaticResource Ink3}"
-                                              IsVisible="{Binding !IsAvailable}" />
+                                        <Path Grid.Column="0" Classes="mode" Width="16" Height="16"
+                                              Stretch="Uniform" Margin="0,1,10,0" VerticalAlignment="Top"
+                                              Data="{Binding Mark}" Fill="{StaticResource Ink}" />
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Detail}" FontSize="10.5" LineHeight="15"
@@ -171,7 +175,7 @@
                                 IsVisible="{Binding ShowRecord}"
                                 ToolTip.Tip="{l:T transport.record.tip}"
                                 AutomationProperties.Name="{l:T transport.start}">
-                            <Path Classes="record" Data="{c:Icon record}" />
+                            <Path Classes="record disc" Data="{c:Icon record}" />
                         </Button>
 
                         <Button Classes="mark hold" x:Name="PauseMark" Command="{Binding PauseCommand}"

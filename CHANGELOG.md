@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each pipeline mode now has a mark of its own — a cloud, a laptop, or one of the two with an
+  arrow showing which way the work is handed over — in the mode box and against every row of the
+  list, so the mode is readable at a glance instead of by reading its label. The help button now
+  sits against the mode box it explains instead of drifting across the bar, and the record button
+  is a full red disc rather than a dot in a pale field.
+
 - The toolbar's marks sit square in the middle of the controls that carry them, and the capture
   picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
   tight. The mode box now draws a cloud and a laptop to say where each half of the pipeline runs,
