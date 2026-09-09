@@ -217,6 +217,59 @@ public class SystemAudioCaptureTests
             "a bundle without the native runtime assets cannot launch");
     }
 
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeKeepsTheCallbacksOfALeakedSessionReachable()
+    {
+        // A session that never reports teardown is deliberately leaked rather than allowed to hang
+        // the operator's Stop. It keeps the function pointers it was handed, so collecting the
+        // delegates behind them frees the thunks under a callback that can still fire.
+        var native = new FakeMacNative(stopHangs: true);
+        var capture = new MacSystemAudioCapture(
+            SystemAudioBackend.CoreAudioProcessTap,
+            native,
+            () => [new AudioDeviceInfo("out", "Output")],
+            TimeSpan.FromMilliseconds(50));
+
+        await using (var frames = capture
+            .CaptureAsync(null, TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken))
+        {
+            Assert.True(await frames.MoveNextAsync());
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.True(native.FrameCallback!.IsAlive, "the frame callback of a leaked session was collected");
+        Assert.True(native.ErrorCallback!.IsAlive, "the error callback of a leaked session was collected");
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeDoesNotRootTheCallbacksOfASessionThatStoppedCleanly()
+    {
+        var native = new FakeMacNative();
+        var capture = new MacSystemAudioCapture(
+            SystemAudioBackend.CoreAudioProcessTap,
+            native,
+            () => [new AudioDeviceInfo("out", "Output")],
+            TimeSpan.FromSeconds(5));
+
+        var before = MacSystemAudioCapture.LeakedCallbackCount;
+
+        await using (var frames = capture
+            .CaptureAsync(null, TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken))
+        {
+            Assert.True(await frames.MoveNextAsync());
+        }
+
+        Assert.True(native.Stopped);
+        Assert.Equal(before, MacSystemAudioCapture.LeakedCallbackCount);
+    }
+
     private sealed class FakeMacNative(
         string? failure = null,
         int[]? sampleRates = null,
@@ -226,6 +279,10 @@ public class SystemAudioCaptureTests
         public bool Stopped { get; private set; }
         public int StartCount { get; private set; }
 
+        // Weak, so the test observes whether the bridge roots them rather than rooting them itself.
+        public WeakReference? FrameCallback { get; private set; }
+        public WeakReference? ErrorCallback { get; private set; }
+
         public IntPtr Start(
             SystemAudioBackend backend,
             string? outputDeviceUid,
@@ -234,6 +291,8 @@ public class SystemAudioCaptureTests
         {
             StartCount++;
             DeviceUid = outputDeviceUid;
+            FrameCallback = new WeakReference(onFrame);
+            ErrorCallback = new WeakReference(onError);
             if (failure is not null)
             {
                 var message = Marshal.StringToCoTaskMemUTF8(failure);

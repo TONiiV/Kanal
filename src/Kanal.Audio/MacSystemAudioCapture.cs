@@ -8,6 +8,11 @@ namespace Kanal.Audio;
 [SupportedOSPlatform("macos13.0")]
 public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
 {
+    // A leaked native session keeps the function pointers it was handed, and a marshalled delegate's
+    // thunk dies with the delegate. So a session that outlives its stop leaks its callbacks too:
+    // two objects against a call into freed memory from the audio thread.
+    private static readonly List<object> Leaked = [];
+
     private readonly IMacSystemAudioNative _native;
     private readonly Func<IReadOnlyList<AudioDeviceInfo>> _devices;
     private readonly TimeSpan _stopTimeout;
@@ -118,11 +123,21 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
             }
             catch (TimeoutException)
             {
+                lock (Leaked)
+                {
+                    Leaked.Add(onFrame);
+                    Leaked.Add(onError);
+                }
             }
 
             GC.KeepAlive(onFrame);
             GC.KeepAlive(onError);
         }
+    }
+
+    internal static int LeakedCallbackCount
+    {
+        get { lock (Leaked) { return Leaked.Count; } }
     }
 
     private static bool IsPermissionFailure(string detail) =>
