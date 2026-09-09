@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows installer definition. Built by the PackMsi target via the `wix` local tool, which only
+  runs on Windows - the toolset says so itself on any other host - so this file is exercised by the
+  windows-latest CI job and nowhere else.
+
+  Preprocessor variables come from the command line: -d Version=... -d PublishDir=... -d IconPath=...
+
+  Every path here arrives as an absolute value rather than being written relative. Relative paths in
+  a .wxs resolve against the wix process's working directory, not against this file, which is a
+  quiet way to reference something outside the repository entirely.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="Kanal"
+           Manufacturer="Kanal"
+           Version="$(Version)"
+           Scope="perUser"
+           Compressed="yes"
+           UpgradeCode="49907851-1726-470B-A773-9F62E492913F">
+
+    <!--
+      The UpgradeCode above is fixed for the lifetime of the product. Regenerating it makes every
+      new version install alongside the old one instead of replacing it, and the operator ends up
+      running whichever copy their shortcut happens to point at.
+    -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Kanal is already installed. Uninstall it first." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="KanalIcon" SourceFile="$(IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="KanalIcon" />
+
+    <Feature Id="Main" Title="Kanal">
+      <ComponentGroupRef Id="KanalFiles" />
+      <ComponentGroupRef Id="KanalShortcuts" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <!--
+      Per-user under LocalAppData, so installing raises no UAC prompt. An operator setting up a
+      laptop before a meeting should not need to find someone with admin rights.
+    -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="Kanal" />
+    </StandardDirectory>
+
+    <!--
+      Self-contained publish output is several hundred files including the .NET runtime and the
+      LLamaSharp native libraries. Files/@Include harvests the tree rather than listing them.
+    -->
+    <ComponentGroup Id="KanalFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(PublishDir)\**" />
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!--
+      The ComponentGroup sits beside StandardDirectory rather than inside it - a StandardDirectory
+      takes Directory and Component children, not ComponentGroup - and the Component points back at
+      it by id.
+
+      The shortcut goes straight into the start menu root, so there is no installer-created folder
+      to clean up and deliberately no RemoveFolder: pointing one at ProgramMenuFolder asks Windows
+      to remove the user's entire start menu directory on uninstall.
+    -->
+    <ComponentGroup Id="KanalShortcuts">
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+        <Shortcut Id="KanalStartMenuShortcut"
+                  Name="Kanal"
+                  Description="Meeting transcription and translation"
+                  Target="[INSTALLFOLDER]Kanal.Host.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="KanalIcon" />
+        <!-- A per-user component needs a per-user keypath, and HKCU is the conventional one. -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\Kanal"
+                       Name="installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
