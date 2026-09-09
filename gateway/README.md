@@ -10,8 +10,53 @@ meeting. Hibernated Durable Object sockets have no wall-clock limit and are incl
 Functions (no WebSockets) would forcibly disconnect every phone every few minutes.
 
 No backing store is involved: the Worker holds no Supabase/database URL or key, messages are
-fanned out in memory and never stored, and the repository, desktop build, and mobile page
+fanned out in memory and never written to disk — a room holds only a bounded in-memory replay
+buffer, to greet a reconnecting phone — and the repository, desktop build, and mobile page
 contain no server credential of any kind.
+
+## Replay to a reconnecting reader
+
+A room keeps the latest `room.snapshot` envelope **and every frame published after it**, and
+sends that sequence to a newly accepted reader right after `gateway.session`. A phone that
+locks, roams, or joins late sees exactly what a phone connected the whole time saw, instead of
+waiting up to 15 s for the host's next snapshot heartbeat.
+
+The tail is not optional. The mobile page replaces its whole transcript when it applies a
+snapshot, and caches every incremental frame as it arrives, so a phone reconnecting between
+heartbeats already holds newer state than the snapshot — a snapshot replayed alone would delete
+up to 15 s of transcript on screen.
+
+`room.closed` and `room.moved` are appended and make the room terminal: no ordinary frame is
+buffered afterwards. This is the case the replay matters most for — the host publishes a final
+snapshot, then the announcement, then stops, so a phone that was locked when the meeting ended has
+nothing left running to correct it. Replaying snapshot → tail → announcement lands it in "ended",
+or follows the move to the room the meeting continues in.
+
+A *later* announcement supersedes an earlier one rather than stacking on it. A closed room can
+legitimately receive one more: the host's publisher outlives its session, so a restart announces
+`room.moved` on the room it already closed. Superseding means a phone locked across a stop-then-
+restart follows the meeting instead of sitting on "ended" for good, and the buffer still holds at
+most one terminal frame per dead room.
+
+The buffer is bounded at 256 frames and 1 MiB (4 × the per-frame `MAX_PAYLOAD_BYTES`). On
+overflow it is **dropped whole, snapshot and tail together**, rather than truncated: a snapshot
+without its tail is the rollback above, whereas an empty buffer only degrades to no replay at
+all, and the next `room.snapshot` starts a fresh one. The one exception is a terminal
+announcement, which survives an overflow and stands alone if it has to — unlike a snapshot, it
+does not rewrite the transcript from its own contents, so on its own it can only add the true
+fact that the room ended or moved.
+
+Headroom is thinner than the caps suggest. Every relay message is one publish, partials included
+and nothing coalesced, so 15 s of continuous speech is roughly 35–80 frames at a streaming ASR's
+usual 2–5 partials/s plus one `translation.upsert` per final — about 3–7× under the 256-frame cap,
+and it is the frame cap rather than the byte cap that binds (256 partial envelopes at 0.4–1 KB is
+a quarter of 1 MiB). Raising the frame cap costs almost nothing in memory and is worth doing —
+but only once the mobile page serialises `onmessage`, since a larger cap means a larger replay
+burst arriving at a client that does not yet apply frames in arrival order.
+
+The buffer lives in the object's memory, not in Durable Object storage: an evicted object refills
+it within one 15 s heartbeat, whereas storage would put a write on the fan-out path of every
+frame for the whole meeting.
 
 ## Deploy (once)
 
@@ -57,6 +102,45 @@ curl -s -X POST "https://<worker-host>/?action=activate" \
 # -> {"deviceId":"...","deviceToken":"..."}
 ```
 
+**A code is valid for 24 hours.** Mint it when the machine is in front of you, not in advance:
+after 24 hours it is refused with the same `401 Invalid activation code` an unknown code gets,
+and you mint a new one. This is what keeps a code that leaks — shell history, a pasted message,
+a note — from still being redeemable weeks later. Nothing has to be cleaned up when a code
+expires; unredeemed codes simply stop working.
+
+`?action=activate` is unauthenticated by necessity (a new desktop has nothing to authenticate
+with), so it is rate limited to **10 attempts per 10 minutes per client address**; over that it
+answers `429 Too many activation attempts`. The budget is checked *before* the code is looked up,
+so **successful activations spend it too** — provisioning an eleventh machine from one office
+address inside ten minutes gets a `429`, as does fumbling a paste eleven times. Either way, wait
+out the window and retry. `create`, `publish` and `stream` are not affected.
+
+IPv4 callers are counted per address. IPv6 callers are counted per **/64**, since the smallest
+prefix an ordinary subscriber holds is a /64 and counting per address would hand one caller 2^64
+budgets. The prefixes that carry an IPv4 address in their low bits (`::ffff:a.b.c.d` and its
+deprecated and translated siblings) count as that IPv4, so every spelling of one caller is one
+bucket instead of all of them sharing the all-zero /64.
+
+One thing the limit does not do, and one thing it costs. It does not reduce the Worker requests
+billed against the free plan — an in-Worker limit still costs a request to answer, and only an
+edge WAF rate-limiting rule rejects before the Worker runs. And every attempt now costs the
+registry one row write: an attempt with an invalid code used to be effectively a read (the
+single-use `UPDATE` matched no rows and wrote nothing), whereas the window row is now inserted or
+incremented before the limiter can engage. That extra cost does **not** grow with the size of the
+table — the window sweep runs on the `activation_attempts_window` index, so it reads only the
+rows it actually retires and nothing more. 20 000 live windows with none expired costs one row
+read; 20 000 *expired* windows costs 20 000, because each is read as it is deleted. The cost is
+therefore **amortised**-constant: every row is read and deleted exactly once in its life, so
+total work is linear in rows created rather than quadratic, with a burst-then-silence worst case
+where one unlucky attempt pays off an entire expired window.
+
+That distinction is the whole point, because the table's size is the caller's to choose: a caller
+rotating source prefixes never trips the limit and inserts a fresh row per request. Unindexed,
+every attempt would read the *entire* table — expired or not — and the limiter would make the
+abuse case worse than having no limiter at all; a vitest case pins the sweep's cost so that
+cannot silently regress. The extra write is the price of a *durable* counter, and it is the right
+price: an in-memory one would be reset for free by a Durable Object eviction.
+
 Provision the desktop at runtime (not during compilation or packaging):
 
 ```bash
@@ -88,14 +172,26 @@ curl -s -X POST "https://<worker-host>/?action=admin.revoke" \
 ## Wire protocol
 
 Frozen against `src/Kanal.Core/Relay/GatewayRelayPublisher.cs` and `web/index.html`; the vitest
-suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract:
+suite (`npm test`, real workerd via `@cloudflare/vitest-pool-workers`) is the contract.
+
+The five tests that fill the replay buffer to a cap carry an explicit `CAP_TIMEOUT_MS` instead of
+vitest's 5 s default. **Leave them.** A per-test timeout that fires mid-request corrupts
+`vitest-pool-workers`' isolated-storage teardown, and the resulting failures are reported against
+unrelated tests: the symptom is `Isolated storage failed… Expected .sqlite, got …sqlite-shm` on
+cases that have nothing to do with the change you made. The suite passes on a fast laptop and fails
+on CI, which is what makes it expensive to diagnose.
+
+Give any new test the same treatment if its runtime scales with a loop count, a payload size, or a
+cap — those grow on a slower runner and again if a cap is ever raised. Do not reach for
+`isolatedStorage: false`: it drops storage isolation for the whole suite and leaves the timeouts in
+place.
 
 | Route | Auth | Purpose |
 |---|---|---|
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
-| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames |
-| `POST ?action=activate` | activation code | one-time exchange for a device credential |
+| `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the room's replay buffer first, if it has one |
+| `POST ?action=activate` | activation code | one-time exchange for a device credential; code expires 24 h after minting, 10 attempts / 10 min / address (IPv6: per /64) |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 
 The gateway never sees cleartext credentials at rest (codes and device tokens are stored as

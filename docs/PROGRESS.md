@@ -4,7 +4,533 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-09
+
+### One mark per mode, and a record button that reads as one
+
+**A mode is one thing, so it gets one mark.** The pair of stage marks said the same word twice for
+three of the five modes and made the operator read two glyphs to learn one fact. Each mode now
+carries a single icon, and the rule behind the set is that the *shape* is where transcription runs
+while an *arrow* on it means the second stage is handed to the other side: a cloud for cloud on
+cloud, a cloud with a down arrow for cloud transcription landing in a local translator, a laptop
+with an up arrow for the reverse, a bare laptop for local on local, and the script page for demo.
+`Icons.Mode(PipelineModeId)` owns the mapping and `Icons.Stage` is gone with the last caller.
+
+The first draft used a cloud with an up arrow for `Local · Cloud`, mirroring the down-arrow cloud.
+It failed at the size it has to work at: two clouds differing only in the direction of a 4 px
+arrowhead are one glyph in a dropdown row. Changing the base shape as well as the arrow is what
+makes the five separable at 16 px.
+
+The list follows the box. Every row leads with the same mark the collapsed box will show, so the
+mark the operator learns while choosing still means something back in the bar. The availability
+square that used to lead the row went with it: two marks on one row is the thing being fixed, and
+a row that cannot be picked is already disabled and already names its blocker in the second line.
+The square stays in the help flyout, which is the reference list and has the room for it. Losing
+the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
+instead of trimming.
+
+**The help button belongs to the mode box.** `LeftCluster`'s first column was an open starred
+column, so it took every spare pixel the window had: the mode box sat at its left edge and the `?`
+that explains the mode was arranged at the right edge of the column — 293 px away at a 1600 px
+window, close enough to the transport to read as belonging to it. The column is capped at 200 px
+and the box stretches to fill it. The cap has to be on the column rather than on the box, and the
+box has to stretch: with `Auto` the column hugs the box and the cluster stops giving up width when
+it is squeezed, and with a left-aligned box the button follows the column edge rather than the box,
+which moves by 75 px between `Demo` and `Cloud · Cloud`. Stretching also holds the button still as
+the mode and the language change.
+
+**The record disc nearly fills its button.** It was a 13-unit circle inside a 16-unit view box
+inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark is 28 px now, the
+even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box
+and the circle are the same thing. The wash reads as a ring.
+
+That last part needed the circle redrawn. Written as two half arcs between antipodal points —
+`M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser
+measures the geometry as a flat line of zero height and `FillContains` answers no everywhere, even
+though Skia renders it as a circle. Four quarter arcs have no antipodal endpoints and measure
+correctly. Only the record disc is measured rather than padded to its view box, so only it had to
+change; the rest of the set is padded and never asks the parser for its ink.
+
+## 2026-09-08
+
+### The icons become files, and stop drifting off centre
+
+Every mark in the chrome was a `StreamGeometry` in `App.axaml` — path data in a resource dictionary,
+sized by hand at each of its call sites. They are 21 SVG files under `src/Kanal.Host/Assets/Icons/`
+now, each a single `<path>` on a `0 0 16 16` view box, loaded through `Icons.Of(name)` and written
+in XAML as `{c:Icon record}`. They stay `Path` geometry rather than becoming `SvgImage`: a `Path`
+inherits the `Fill` its style sets, which is what makes hover and press invert a glyph to paper.
+
+**Why they looked off centre.** Avalonia measures a `Path` by its *ink*, then pins the uniformly
+scaled result to the top-left of the control's box — it does not centre it. A mark whose drawing is
+10 units wide in a 16-unit view box therefore lost the view box's own margins and sat 3 px left of
+where the drawing put it, differently for every icon. `Icons.Load` prefixes the path data with two
+draw-nothing move-tos at the view box corners, so the measured bounds *are* the view box and the ink
+lands where it was drawn. `IconTests` asserts `Bounds == 0,0,16,16` for all 21 files, which is the
+property that keeps a future icon from reintroducing the drift.
+
+The second half of it was arithmetic: an odd glyph box inside the 34 px transport disc cannot be
+centred, so every mark rounded half a pixel one way. The `Button.mark Path` box is 18 px now — even,
+8 px of slack on each side — and a test measures each glyph's centre against its disc's centre.
+
+**The mode box says where each half runs.** The chip glyph is deleted, not restyled: a CPU says
+"computer", which is true of both halves of every mode. A cloud mark and a laptop mark, drawn side
+by side, say which service transcribes and which one translates. The dropdown rows keep their
+availability square and their full sentence — the marks are the collapsed box's shorthand, and a
+row that already reads *Cloud transcription · Local translation* has nothing to abbreviate.
+`PipelineModeOption` exposes the pair as `TranscriptionMark`/`TranslationMark` so the view has no
+mapping of its own to drift out of date. The labels are `Cloud · Local` rather than
+`Cloud · local` in every language that has case, which needed the `de` short label added to the
+existing same-word-in-target-language exemption — capitalising it made it identical to English.
+
+**The capture picker keeps its chevron.** `LeftCluster` is a `Grid` rather than a `StackPanel`: a
+`StackPanel` hands every child its desired width and clips whatever runs past its right edge, which
+was always the capture picker. The mode box is the only star column, so it is the only thing that
+gives up width — and it can, because it has a label to trim, whereas the picker beside it is a glyph
+and a chevron with nothing to shorten. The picker is 68 px, the smallest width whose template leaves
+a content slot (`width − 50`) wide enough for a 16 px glyph. `TheModeLabelGivesUpWidthBeforeTheCapturePickerDoes`
+runs en and pl at 1320 px with a meeting running and asserts the mode box never overlaps the picker;
+it goes red against a fixed-width mode box.
+
 ## 2026-09-07
+
+### The transport marks become discs, and the capture picker stops cutting its own glyph off
+
+Three complaints from the bar as #66 shipped it, all about the middle of the row.
+
+**The capture picker was 62 px and needed 64.** A `ComboBox` at a fixed width narrower than its
+template's minimum does not shrink gracefully: the frame border is laid out at 64 px and then
+clipped away at 62, so the picker lost its left and right edges, and the content slot behind the
+chevron came out 12 px wide, which cut 2 px off a 14 px screen mark. It is 76 px now — the glyph
+gets its full width and the box draws all four sides. `MainWindowCompositionTests` measures the
+glyph against the first clipping ancestor above it, which is the assertion that failed before.
+
+The picker also drew one screen mark for both profiles, so a picker that fit would still not have
+said which of the two was selected. In-room now carries a two-person mark and online the screen,
+in the collapsed box and in the dropdown rows alike.
+
+**Record, pause and stop are discs.** Each mark is a 34 px circle carrying a paler wash of its own
+colour — `RecordWash` under the red marks, `HoldWash` under the ochre pause — with the mark itself
+at full strength on top. The wash is the colour the glyph already had, not a new one: the transport
+still owns the only two non-speaker hues on screen, and the pause mark still may not read as red.
+Hover and press flood the disc with that full colour and flip the glyph to paper, which is the
+inversion every other button in the chrome already does. Disabled drops the whole button to 0.45
+opacity rather than falling through to the base `Button:disabled` rule, which would have drawn a
+grey ring around a circle that never had one.
+
+**The microphone is redrawn.** The old glyph was a rectangle, two brackets and a stem assembled
+from axis-aligned segments. It is a rounded capsule in a cradle arc on a stand now, which is what
+the mark means everywhere else, and it survives being read at 16 px from a metre away.
+
+### The language that was spoken, not the one that was picked ([#28](https://github.com/TONiiV/Kanal/issues/28))
+
+The room's language columns were being sent to Gladia as `language_config.languages`, which does not
+hint at recognition — it restricts it. An English sentence in a zh/de/pl room therefore came back
+tagged as one of those three, and the column that never heard it was labelled ORIGINAL over text
+nobody had said in that language. In a meeting where a part number is read out in the one language
+everybody happens to share, that is the worst place to be confidently wrong.
+
+Recognition is now unconstrained: `code_switching` stays on, the `languages` field is gone, and what
+comes back is what was heard. Translation targets are untouched — those are the columns on screen,
+and they were always a separate list. The cost is that Gladia no longer has the room's languages as
+a prior; the benefit is that the label under an utterance is now a fact rather than a projection.
+
+`AsrSessionOptions.ExpectedLanguages` went with it. Nothing else read it, and a field that exists to
+be ignored is the one a later reader wires back up. A local ASR provider that genuinely wants a
+prior can reintroduce it with a consumer attached.
+
+When the recogniser cannot place a language at all it answers `und`, and upper-cased raw that reads
+like an ISO code the operator has never heard of rather than an admission. Host and phone both now
+name it as unknown, in the reader's own language.
+
+The rest of the display half turned out to be right already, and now has a guard: `UnexpectedLanguageTests`
+starts a zh/de/pl room, has one English sentence spoken into it, and asserts every column shows `EN`,
+no column claims to be the original, and the English words stay on screen under each translation.
+
+### A meeting names itself, and the operator has the last word ([#73](https://github.com/TONiiV/Kanal/issues/73))
+
+The ticket asked for three contracts to be fixed here rather than left open. They are:
+
+**When the first title generates.** Once the room holds six finalised utterances, and once only.
+Six is roughly the first minute of a meeting — enough for a model to see what the meeting is about,
+early enough that the row is named before anyone screenshots it. It never fires again on its own,
+however long the meeting runs: a title that changes under the operator mid-sentence is worse than a
+dull one.
+
+**Whether a generated title overwrites a hand-typed name.** Never automatically. `NamedByHand` is
+set the moment the operator commits a rename, and an automatic suggestion is refused from then on.
+The one exception is the operator pressing the regenerate control, which is a request, not a guess.
+A result that was already in flight when the operator typed is *dropped* rather than applied late —
+that race is the only way an unasked-for overwrite could otherwise happen.
+
+**What is shown in flight and on failure.** The title row keeps whatever title it already has and
+puts a muted `Naming…` beside it. On failure — a thrown provider, a cancelled request, an empty or
+essay-length answer — the title is left exactly as it was and the note reads `Could not name this
+meeting.` There is no dialog and no blank row; the regenerate control is right there.
+
+`MeetingTitling` (`Kanal.Core/Meetings`) holds that policy and nothing else. The model behind it is
+`IMeetingTitler`, a one-shot `SuggestAsync(lines, ct)` — deliberately not an agent runtime, no loop,
+no tools, no state between calls. `GeneratedMeetingTitler` is the production implementation: it
+sends the meeting's first forty finals to the same `ITextGenerator` the local translator already
+uses, and refuses anything longer than eight words rather than truncating a sentence into a name
+the meeting does not have. `PipelinePlanner` builds **one** `LlamaSharpTextGenerator` and hands it
+to both the MT provider and the titler — a second one over the same file is a second multi-gigabyte
+model in memory. Where there is no local model there is no titler, and the regenerate control is
+absent rather than dead.
+
+Every title reaches the record, whoever asked for it — a generated name the operator never touched
+is exactly the one that has to survive the app being closed, so the write-through sits on the
+titling change rather than on the two operator commands. Renaming updates the meeting item in place
+rather than rebuilding the list; a fresh item instance reads as the operator selecting a different
+meeting, and the sidebar would have reset the title it had just been given.
+
+Renaming is durable: the title row's text becomes an editor in place (Enter commits, Escape
+abandons, clicking away commits), and the committed name is written through `WorkspaceStore` onto
+the selected meeting record. "Meeting title" stays distinct from the workspace name — the workspace
+picker is in the sidebar and this touches only `MeetingRecord.Title`.
+
+### The meeting title takes the top of the transcript ([#69](https://github.com/TONiiV/Kanal/issues/69))
+
+#66 had already put the room's overlapping circular language flags at the top of the transcript.
+This gives that row its left half: the meeting title, set at 22 px semi-bold, sharing one grid row
+with the flags. The starred column is the title, so a long German compound truncates and the flags
+keep every pixel they asked for.
+
+There is no project-name header above it and there never was — #64's story 31 asks for its absence,
+and nothing in the host had built one. The transcript/summary/decision tabs of story 38 are the
+same: never built, so there was nothing to remove. Both are recorded here rather than silently
+counted as delivered.
+
+The title names whatever transcript is on screen: `SelectedMeeting.Title` when the operator is
+browsing a record, otherwise the id of the room that is loaded, otherwise a placeholder — never
+blank. `LoadedRoomId` is cleared when the *next* room opens rather than when this one stops,
+because `Stop` deliberately leaves the session in place for rename, merge and export; a row reading
+"New meeting" above a finished transcript would name the wrong thing. Generating a title with a
+local model and renaming it by hand are [#73](https://github.com/TONiiV/Kanal/issues/73); this is
+the row that displays whatever those produce.
+
+One existing guard moved rather than weakened. `SettingsTheJoinCodeAndTheFlagsMovedOutOfTheirOldHomes`
+asserted the flags button was docked to the top of the transcript; the flags are now inside the
+title's row, so the assertion is on that row instead. What it defends is unchanged — the flags
+belong at the top of the transcript, not in the toolbar or the side panel.
+
+### The left sidebar becomes a workspace ([#69](https://github.com/TONiiV/Kanal/issues/69))
+
+#65 left the left sidebar as a header and a settings button. It now reads top to bottom: the brand
+lockup and collapse control, a search box with the new-meeting button beside it, the workspace
+picker with its add menu, the meeting list, and settings at the foot. `WorkspaceSidebarViewModel`
+sits on #68's `WorkspaceStore`, so nothing here invents a second idea of where records live.
+
+The new-meeting button is the one solid control in the sidebar. It began as a ghost `+` like the
+add menu beside it and the two were indistinguishable at a glance, which is the failure the
+criterion names — creating a meeting has to be one clear action, not something the operator hunts
+for. Weight, not colour, separates them.
+
+Selection is styled off Fluent's accent onto ink and paper: a selected meeting takes a paper fill
+and a two-pixel ink bar down its left edge. An accent-blue row would be the only chrome on screen
+carrying colour, and colour here belongs to people.
+
+Import and export are file moves, not parsers. The add menu's "import meeting record" makes a new
+meeting named after the file and copies it into the meeting's folder; a meeting's own ellipsis menu
+does the same into that record, and exports by copying the transcript back out. Reading a foreign
+transcript into `RoomState` is a different job, and neither #69 nor the record model asks for it
+yet — a parser written now would have no consumer.
+
+Search filters the list held in memory and never touches disk; `Refresh` is the only path that
+re-reads. A meeting folder that cannot be read is counted in a note above settings rather than
+swallowing the meetings that still read — the store already separates the two, and the sidebar
+keeps that separation instead of collapsing it into an empty list.
+
+**What this does not do yet.** Selecting a meeting sets `SelectedMeeting` and nothing else. The
+criterion "selecting a meeting shows its transcript and summary" needs an answer to a question the
+design has not settled — what happens to a running meeting when the operator browses a past one —
+and summaries do not exist until [#34](https://github.com/TONiiV/Kanal/issues/34). The meeting
+title row and the language flags, the other half of #69, are their own change.
+
+### The assistant sidebar becomes points and speakers ([#71](https://github.com/TONiiV/Kanal/issues/71))
+
+The right sidebar held one list — speakers, plus the merge box. It now carries two tabs, "Points and
+decisions" and "Speakers", the second being what was already there. The tab header names the list,
+so the pane's own `SPEAKERS` heading and its rule went with the move.
+
+`MeetingInsights` (`Kanal.Core/Insights`) is a plain aggregate over `RoomState`, not a provider
+interface. #34 will bring a model; inventing an `IMeetingAnalyst` now would be an abstraction with
+one imaginary implementer, and the panel would still have nothing to show. What the panel does
+instead is state the absence: with no model connected it prints that sentence where the items would
+go, rather than an empty list an operator would read as "no decisions were made". `Nothing raised
+yet` is a *different* message, shown only once something is connected — the two states must not
+collapse into one blank pane.
+
+Two rules hold the record honest:
+
+- **An item that leads back to nothing said is refused, not shown.** `Record` filters the source
+  utterance ids against the room and drops the item entirely if none survive. The candidate state
+  exists to stop a guess reading as a commitment; an item with no source behind it is that same
+  failure with nothing left to check it against.
+- **A decision arrives as a candidate and only a person makes it a commitment.** Every item renders
+  its state beside its kind, and the confirm control is present only while it is a candidate. The
+  supporting utterances are printed under the item, so "leads back to what was said" is something
+  the operator reads rather than something they have to trust.
+
+Two Avalonia notes, both cheap to re-break:
+
+- The selected pane is a logical child of *both* its `TabItem` and the `TabControl`'s presenter, so
+  an unfiltered walk of the logical tree meets the same control twice. The tests de-duplicate.
+- Fluent's selection marker sits flush under the header content, and `TabItem.Padding` moves the
+  marker with the text rather than away from it. The clearance comes from a bottom margin on each
+  header instead; without it the rule strikes through the descenders of "Points".
+
+Dismissing takes an item off the panel without deleting it — `MeetingInsights` keeps it in the
+dismissed state, and a dismissed item can never be confirmed afterwards. The third tab the design
+sketches, the listening agent itself, is not built here; `docs/design/meeting-intelligence.md` is a
+discussion document and its open branches are not decided.
+
+### Settings becomes six tabs ([#67](https://github.com/TONiiV/Kanal/issues/67))
+
+The settings window was one 640 px column of eight stacked sections, so finding the log level meant
+scrolling past every API key and both folder pickers. It is now a `TabControl` with
+`TabStripPlacement="Left"`: General, Audio input, Transcription, Translation, Summarisation,
+Workspace. Nothing was dropped — a test walks every tab and asserts each of the eighteen named
+controls has exactly one home, so a setting cannot be lost or accidentally duplicated into two panes.
+
+**The tab list departs from the ticket in one word.** #67 names the third tab "Local transcription".
+The only transcription settings that exist today are the Gladia cloud keys, and the ticket gives them
+no other tab; putting them under "General" would file the most-used setting in the drawer for
+odds and ends. The tab is therefore **Transcription**, holding the cloud keys now and a `LOCAL MODELS`
+section that says local transcription is not built yet — which is the home #72 will fill. The
+alternative, keeping the ticket's name and moving the keys, buys literal compliance at the cost of
+the arrangement the rest of the tabs follow: one pipeline stage per tab.
+
+Summarisation is a pane with no controls at all, only a sentence saying it is not built and what will
+be chosen there when it is. A test finds every pane that offers no interactive control and requires
+it to say something instead, so an empty tab cannot ship by accident.
+
+Two Avalonia notes worth keeping. A `TabItem`'s content stays a **logical** child of the tab whether
+or not the tab is selected, so `GetLogicalDescendants` sees all six panes at once - which is why the
+existing `SettingsWindowBindingTests` still find their controls without selecting anything, and why
+the test that asserts selection actually swaps the pane has to read the **visual** tree instead.
+Fluent draws the selected tab's marker in the system accent colour; the host is ink and paper, so
+`Border#PART_SelectedPipe` is restyled.
+
+Settings opening from the foot of the workspace sidebar was already done in #66; this ticket's first
+acceptance criterion was met there.
+
+### The centre toolbar becomes marks, and the two status bands go ([#66](https://github.com/TONiiV/Kanal/issues/66))
+
+The bar #65 left behind was the old labelled row moved into a 766 px column, and it scrolled
+sideways at the default window size to reach export and settings. [The approved
+design](design/meeting-workspace.md) forbids both the scrolling and the wrapping, and its
+prototype settles the arrangement: processing and capture pickers at the left, transport with the
+microphone beside it in the middle, join QR at the right, and nothing else.
+
+**The narrowing rule is three column definitions.** The bar is `*,Auto,*`. A starred column gives up
+width when there is not enough; an `Auto` one does not. So the transport keeps every pixel it asked
+for at any window size, and the two side clusters — which are `ClipToBounds` and aligned outward —
+lose their innermost controls instead. There is no `ScrollViewer` left in the bar. The two expand
+chevrons stay docked outside the three columns, because a collapsed sidebar is reachable only
+through them and they may not be what gets clipped.
+
+**One control per choice, not three.** The mode picker was a 300 px combo box plus a `?` flyout. It
+is now a 160 px combo whose `SelectionBoxItemTemplate` shows a chip mark and two words
+(`Local · local`), while its dropdown carries the full name and the privacy consequence per row.
+Capture mode is the same trick at 62 px — a screen mark, with the two profiles and their guidance in
+the dropdown. The `?` flyout stays: `modes.intro` is where the operator learns that captions always
+reach the phones as text through the relay, and that is a paragraph, not a tooltip.
+
+**Colour enters the chrome, once.** `Record` (`#C42B22`) and `Hold` (`#C08A12`) are the only
+non-ink brushes on a control. The design fixes them — a red record dot idle, a yellow pause and a
+red stop while running — and the worktree's `CLAUDE.md` says the approved design supersedes the
+older chrome-colour guidance where they conflict. Both sit off the speaker palette so a transport
+mark is never mistaken for a person, and both marks carry a shape, a tooltip and an accessible name,
+so colour is never the only signal. They keep their brush through hover and press: which mark is
+record and which is stop is the last thing that may change under the pointer mid-meeting.
+
+**`CompactState` replaces `LiveNoticeText` and `ShowProcessingNotice`.** The two full-width Ink bands
+are gone. Their strings were written to be shouted across a band — `RECORDING, TRANSCRIPTION AND
+TRANSLATION ARE LIVE` — and none of them fits a line beside the transport, so the seven
+`*.notice` keys and `paused.band` were replaced by six short `state.*` ones. Every branch is spelled
+out rather than collapsed: a line that says `Live · saving audio` while nothing is being written is
+the one failure the property exists to prevent.
+
+**Three controls left the bar, and each had to land somewhere real rather than nowhere.**
+
+- Settings is at the foot of the workspace sidebar, where story 19 and the design put it. #67 still
+  owns what the dialog looks like inside; this is the button and its new home.
+- The room's language flags are at the head of the transcript, where the design puts them next to
+  the meeting title. #69 adds the title beside them. Leaving them in the bar was the alternative,
+  and it did not fit: at 1320 px with both sidebars open the left cluster has about 310 px, and mode
+  plus capture plus flags is closer to 340 — the flags would have been clipped in the default state.
+- Export is behind an ellipsis in the right cluster. It belongs on the meeting record's own menu
+  (#69), and this is the same affordance parked one place early rather than two labelled buttons.
+
+The join QR moved out of the assistant sidebar into the bar, which #71 needs anyway — that sidebar
+becomes points, decisions and speakers.
+
+**What this deliberately does not do.** The capture picker and the `?` flyout are the first things
+clipped when the window narrows or the status line grows; both are set before a meeting rather than
+during one.
+
+The three paused variants the bands used to distinguish - held while recording, held while recording
+only, held while transcribing - collapse into one `state.paused`. The line describes what is
+happening now, and while paused nothing is being written whichever of the three preceded it; naming
+the suspended activity would put "saving audio" on screen at the one moment it is false. The cost is
+that the line no longer says whether a WAV was open before the pause.
+
+The marks also shift sideways when the status line changes length, because the line shares the
+transport's `Auto` column: pressing pause swaps "Live" for "Paused - nothing captured" and the marks
+slide about 68 px left. Reserving a fixed width for the line would hold them still, but at the
+default 1320 px window the bar has only about 50 px of slack per side, and reserving the widest
+state's 135 px would clip the capture picker permanently. Holding the marks still is worth less than
+keeping a control reachable, so this stays. Should the marks need to be fixed, the answer is a
+narrower bar budget - a sidebar collapsed by default, or the state line moved off the bar
+entirely - not a spacer paid for out of the left cluster.
+
+The recording state machine is untouched — start, pause/resume, stop, load cancellation
+and the stop-in-progress guard are the same code, and `MeetingSessionTests` still holds the line
+that a paused session reaches neither the ASR provider nor the WAV writer.
+
+### An expired room says so once, instead of refusing 2000 times
+
+- Reader tickets last 12 h. Past that the phone's backoff loop retried forever at its 15 s cap,
+  collecting a 401 each time and showing "reconnecting" — a tab left open overnight made roughly
+  2000 pointless requests and never told the participant the room was simply over. Item 3 of #40,
+  now #70.
+- The room object closes an expired socket with **4001** rather than 1000. A tidy normal closure is
+  indistinguishable from every other tidy closure, so the phone had nothing to reason about and
+  reasonably guessed "reconnect". 4001 is in the application-private range and is terminal.
+- The phone acts only on that authenticated gateway decision. A failed upgrade still appears as
+  1006 and keeps the existing retry behavior; it is never reclassified from an unverified ticket
+  timestamp or the phone clock.
+- Every other close code keeps the existing backoff. A locked phone, a lost cell and a roamed
+  network all still have a live room to come back to, and must still come back to it. The
+  transcript stays on the page either way.
+- Tests: the gateway side is driven through the room object directly, because a 12 h ticket cannot
+  be aged out through `?action=stream` inside a test — the Worker refuses it long before the room
+  sees it. Both paths that can close a socket are covered: the expiry **alarm**, which is the only
+  one that fires in the real overnight case where nobody is publishing, and `publish()`. The page
+  test reads the close code from the shipped HTML rather than restating it, so the two cannot drift
+  apart.
+
+### Meeting records get a home on disk ([#68](https://github.com/TONiiV/Kanal/issues/68))
+
+- `WorkspaceStore` is the single seam between the application and meeting records on disk. Layout,
+  under a folder the operator picks: `kanal-workspace.json` for the workspace's identity, and
+  `meetings/<id>/meeting.json`, one folder per meeting holding its own artefacts. Every file
+  carries a schema version.
+- The list of *which* folders are workspaces lives outside them all, in the application's own
+  profile. A workspace on a drive that is not plugged in has to keep its row in the sidebar, so the
+  list cannot be a scan of folders that happen to be reachable.
+- Meeting folders are named by id, never by title. Two meetings about the same thing on the same
+  day is the ordinary case in this room, not the odd one, and neither may land on the other.
+- Failures are reported next to whatever could still be read, never instead of it. An empty list
+  where a year of meetings used to be is the one outcome the store may never produce, so a vanished
+  workspace or meetings folder, an unopenable file, a corrupt payload, an orphaned meeting folder,
+  and an unsupported schema each produce a `StoreProblem` while the surviving records still list.
+  `StoreProblem` distinguishes what the operator can act on: `Invalid` (a blank name), `NotFound`, `FolderMissing`
+  (plug the drive in), `Unreadable`, `Unwritable`, `UnsupportedVersion`.
+- Three things a JSON deserializer does quietly that this store refuses. A missing or unsupported
+  schema version is not half-parsed, because the next save could write unknown fields back as loss.
+  A record whose id or title is simply absent is not a record: `System.Text.Json` fills a missing
+  field with null, which would list a phantom meeting whose folder no later operation could open.
+  And a record has to agree with where it is: an id becomes a folder name, so a hand-edited
+  `"id": ".."` would otherwise have listed as an ordinary meeting whose Delete button took the
+  workspace and every transcript in it with it. Ids are plain `[A-Za-z0-9_-]` tokens, and the folder
+  a record sits in is the id that counts — which also stops a duplicated folder from listing one
+  meeting twice, where only one of the two could ever be renamed or deleted again. Stored artifact
+  locations are portable file names inside that folder; the public meeting record resolves them to
+  full transcript and audio paths and refuses any path that escapes its meeting folder.
+- Adding a folder that already holds a workspace adopts it under the name already on disk — picking
+  last year's folder means "open this", so the stored name outranks the one typed into the box. A
+  *copy* of such a folder — a restored backup, a share mounted twice — carries the original's id, so
+  it is reported rather than adopted; registering it by id alone would silently repoint the one row
+  at the copy and leave the original's meetings unreachable. A workspace that has simply *moved* is
+  not that: the copy is only a copy while the folder already listed is still there. Paths are stored
+  canonical — absolute, without a trailing separator, and with every symlink on the way down
+  resolved, because on macOS `/tmp` and `/var` are themselves links and one folder reached by two
+  spellings would otherwise become two workspaces over one set of files, and the second could delete
+  the first's meetings. One folder holds one row, checked on both routes in — a `kanal-workspace.json`
+  restored into the wrong folder cannot take it over. The list, not the folder's own marker file,
+  holds the workspace's name: a rename made while the drive was out could not reach the marker, and
+  reconnecting must not undo it.
+- `ForgetWorkspace` is the workspace-removal operation: it removes the row and touches no file. The
+  folder is the operator's, may be a share, and may hold the only copy of the transcripts; removing
+  it from the sidebar must stay reversible. Meetings, which Kanal itself created, do delete.
+- One limitation, taken deliberately. A registry file that cannot be parsed at all blocks every
+  operation, including `ForgetWorkspace`; there is no repair from inside the application. A single
+  unreadable *row* is reported and skipped, so it cannot hide its neighbours, but the file as a
+  whole is refused rather than replaced. `SettingsStore` copies an unreadable file aside and carries
+  on with defaults; doing that here would answer "you have no workspaces", which is the one thing
+  this store may not say.
+- Nothing is wired to the UI yet. This is the model the workspace sidebar ([#69](https://github.com/TONiiV/Kanal/issues/69))
+  and meeting titles ([#73](https://github.com/TONiiV/Kanal/issues/73)) will sit on.
+
+### The window becomes three declared regions ([#65](https://github.com/TONiiV/Kanal/issues/65))
+
+The host window was one `DockPanel`: a top bar, a bottom status line, a fixed 272 px assistant
+panel, and a transcript that was whatever remained. Batch 1 of
+[#64](https://github.com/TONiiV/Kanal/issues/64) needs a workspace sidebar as well, and a
+leftover-space transcript cannot survive two collapsible neighbours — that is precisely how the
+prototype failed, and [the approved design](design/meeting-workspace.md) rules it out.
+
+`MainWindow` is now a five-column grid: workspace sidebar, splitter, centre, splitter, assistant
+sidebar. Only the centre column is starred, and it carries a `MinWidth` of 320 px, so no
+combination of collapse and drag can squeeze the transcript to nothing — the grid refuses before
+the layout does. The toolbar and status line moved inside the centre column with the transcript,
+which is why they now stop at the sidebar edges rather than spanning the window.
+
+Collapse and width live in one `SidebarViewModel`, instantiated twice — the left and right
+behaviours are identical, and a mirrored `Left*`/`Right*` pair would be the same code written twice:
+
+- A width is clamped to 180–480 px on the way in, so a drag cannot leave a sidebar at a width the
+  next expansion has to inherit. The prototype's range is a calibration start, not an acceptance
+  number, and the constants are one edit away.
+- Collapsing sets the column to zero but keeps the chosen width, so re-expanding returns to it.
+  The grid writes a collapsed column back as zero on every layout pass; the setter ignores that
+  write rather than clamping it up to 180 and losing what the operator chose.
+- The bounds are published to the `ColumnDefinition` as well, because `GridSplitter` takes its drag
+  limits from the definition rather than from the binding source. Without that the pointer would
+  keep travelling past 480 while the column snapped back — the handle and the edge coming apart.
+  Those column bounds fall to zero while the sidebar is collapsed, or a `MinWidth` of 180 would
+  hold the column open against the collapse.
+- `CanExpand` gates the two expand affordances in the centre toolbar. They sit *outside* the
+  toolbar's scroller: a collapsed sidebar is reachable only through them, so they may not be the
+  part that scrolls out of sight.
+
+The three header rules land on one line because the two sidebars **follow the toolbar's measured
+height**, rather than all three sharing a constant. A constant lines them up only while the bar fits
+it: with a microphone mode selected and no local model downloaded, the mode picker's description
+wraps and the bar measures 96 px against the sidebars' 76 — a five-to-twenty pixel step in the one
+rule that runs across the whole window. `Grid.IsSharedSizeScope` was tried first and does not
+equalise these rows. So the bar reports its own height to the shell and the sidebars bind to it,
+which also survives whatever #66 does to the bar's contents.
+
+The window's floor is computed from the widths the sidebars currently hold, not fixed. Two sidebars
+dragged to 480 demand 1290 px; against a fixed 690 the window could be shrunk until the assistant —
+and the only control that reopens it — was off the right of the screen with no way back. The two
+splitter columns are pinned rather than `Auto` for the same reason: `Auto` measured a pixel wider
+than the handle, and a floor cannot account for a column whose width it does not set.
+
+The two sidebar headers are mirrored rather than parallel. Each collapse control sits on the edge
+its sidebar shares with the meeting and each title on the outer margin, so the two chevrons flank
+the centre and point away from it. The assistant header previously carried both on the left, which
+read as an accident rather than a choice once the workspace header stood beside it.
+
+Deliberate limitations, all for the ticket queue rather than this PR:
+
+- The workspace sidebar is a header and nothing else. Its contents — search, project selector,
+  meeting list, settings — are [#69](https://github.com/TONiiV/Kanal/issues/69) and
+  [#67](https://github.com/TONiiV/Kanal/issues/67). The header reads `WORKSPACE` as a placeholder;
+  the design puts the brand lockup there, and #69 replaces it.
+- The two full-width status rows are still present. The design removes them in favour of a compact
+  state beside the transport, which is [#66](https://github.com/TONiiV/Kanal/issues/66)'s
+  acceptance criterion, not this one's.
+- **The centre toolbar's horizontal scrollbar is now visible at the default 1320 px window**, where
+  before it appeared only on a narrow one: the bar has 776 px instead of the whole window. The
+  design asks for clipping with the transport held visible instead, and #66 carries that same
+  criterion — but it gets there by replacing every labelled control in the bar with an icon mark.
+  Fitting the labelled bar into 776 px would be work the next ticket throws away, so this ships as
+  a known regression rather than a silent one. The expand affordances are outside the scroller, so
+  neither sidebar becomes unreachable in the meantime.
 
 ### Meeting workspace prototype approved and archived
 
@@ -58,6 +584,27 @@ Living log. Update in the same PR as the work it describes. Newest section on to
   case into one of them.
 - The capture profile joins the left cluster beside the mode it qualifies; the computer-output
   selector joins the input selector on the right, and the JSON export sits beside the Markdown one.
+
+### Language rows sit on one centre line
+
+- Fluent pins a checkbox's tick box to the top of whatever height the control is given — as a local
+  value inside its template, so no style can override it. The language rows set `MinHeight="42"` on
+  the checkbox itself, which left the tick box five pixels above the flag and the name it belongs
+  to. The offset was the same five pixels on every row, `(42−32)/2`; what varied was nothing, which
+  is why it read as a systematic mistake rather than a glitch.
+- The height now belongs to the row border and the checkbox keeps its natural height, centred
+  inside it. Tick box, flag and name share one centre line. The band is `MinHeight="43"`, because
+  Avalonia counts the hairline inside it: 42 px of content over a 1 px rule, the pitch the rows
+  already had.
+- The row's click target is the checkbox rather than the full band — the full width still toggles,
+  the outer five pixels above and below no longer do. This is a choice, not a constraint: a style
+  putting `Margin="0,5,0,0"` on the tick grid aligns the rows while keeping the full-height target.
+  It was not taken because it depends on the internal shape of another library's template and would
+  fail silently, and without a layout test in the suite nothing would say so.
+- The fix holds while the row's content stays within the tick grid's fixed 32 px; the comment in
+  the view names that dependency, since no test can.
+- No test: this is layout, which `CLAUDE.md` keeps out of the suite. It was verified by measuring
+  the rendered row geometry headlessly, before and after, on all twelve rows.
 
 ### Native meeting audio, slice 1: capture intent and informed Start
 
@@ -332,6 +879,187 @@ overwrote.
 
 Two of three: the changelog viewer and the open-source list follow on their own branches, since
 they are independent of this one beyond sharing a dialog.
+
+### A reconnecting phone gets the room state at once, not at the next heartbeat
+
+- The room Durable Object now keeps the most recent `room.snapshot` envelope **and every frame
+  published after it**, and sends that sequence to a reader immediately after `gateway.session`. A
+  phone that locks, roams, or joins late used to render its `localStorage` copy and then wait up to
+  15 s for the host's next snapshot heartbeat before the live meeting appeared; that gap is now ~0.
+  Issue #40, item 1.
+- The tail is what makes the replay safe. The phone's `applySnapshot()` clears its speakers,
+  aliases, and utterances before repopulating, and every incremental frame is cached as it
+  arrives — so a phone reconnecting between heartbeats holds *newer* state than the snapshot, and a
+  snapshot replayed on its own would visibly delete up to 15 s of transcript mid-meeting. Replaying
+  snapshot → tail in the original order gives a reconnecting reader exactly the sequence a reader
+  connected the whole time saw.
+- The buffer is bounded: 256 frames and 1 MiB, four times the per-frame `MAX_PAYLOAD_BYTES`. On
+  overflow it is dropped **whole, snapshot and tail together**, never truncated — a snapshot
+  without its tail is precisely the rollback above, whereas an empty buffer only degrades to no
+  replay at all, which is what the phone did before. The next `room.snapshot` starts a fresh buffer.
+- Headroom under those caps is ~3–7×, not the order of magnitude first claimed here. Every relay
+  message is one publish (`MeetingSession.PublishSafeAsync`), partials included and nothing
+  coalesced, so 15 s of continuous speech is roughly 35–80 frames at a streaming ASR's usual 2–5
+  partials/s, plus one `translation.upsert` per final — one per final, not per language, since
+  `TranslateAsync` sends every target in a single message. The frame cap binds before the byte cap:
+  256 partial envelopes at 0.4–1 KB is about a quarter of 1 MiB. Overflow is a degrade rather than
+  a failure, so 256 stands for now, but raising it is nearly free in memory and worth doing once
+  the mobile page serialises `onmessage` — until then a larger cap only enlarges a burst the client
+  cannot yet apply in arrival order.
+- `room.closed` and `room.moved` are appended to the buffer and make the room terminal: no ordinary
+  frame is buffered afterwards. The first cut of this change dropped the buffer on both, and
+  had the rationale exactly inverted — dropping is what produced the outcome it was trying to
+  avoid. The host publishes a final snapshot, then the announcement, then stops
+  (`MainViewModel.StopAsync`), so a phone locked when the meeting ended reconnected, got only
+  `gateway.session`, and rendered its own `localStorage`: truncated to `CACHE_LIMIT` = 50
+  utterances and flagged `closed:false`, which makes `lifecycleStatus()` return `""` and hides the
+  status bar entirely. A finished, truncated meeting presented as live, with the host stopped and
+  nothing ever arriving to correct it — and the room was holding the two frames that would have
+  fixed it. Replaying snapshot → tail → announcement now puts the phone in "ended" via
+  `applyClosed()`, or follows the relocation via `moveToRoom()`, which re-subscribes to the new
+  room and receives a fresh snapshot there.
+- A later announcement supersedes an earlier one instead of stacking on it, because a closed room
+  can legitimately receive one more. `MainViewModel` keeps `_relay` alive past `StopAsync` — the
+  field's own comment says "Outlives its session: the next Start uses it to redirect phones to the
+  new room" — so a restart publishes `room.moved` on the room it already closed. Gating that frame
+  out would leave a phone locked across a stop-then-restart sitting on "ended" permanently while
+  every phone that stayed awake followed the move. The buffer still holds at most one terminal
+  frame per dead room: `_relay` is disposed immediately after the move is published.
+- A terminal announcement is the one frame exempt from the overflow rule: if it does not fit, the
+  snapshot and tail are dropped and it stands alone. Safe where a lone snapshot is not, because
+  neither client handler rebuilds the transcript from the announcement's own contents —
+  `applyClosed()` sets a flag and leaves the records untouched, `moveToRoom()` clears deliberately
+  and resubscribes. A lone announcement can only add the true fact that the room ended or moved.
+- Nothing on the wire changed for either client. The replayed frames are ordinary `{type:"relay"}`
+  frames carrying the exact bytes the host published, so the phone verifies and applies them
+  through the path it already uses, and the desktop is not involved at all.
+- To recognise a snapshot the gateway base64url-decodes the envelope's `data` and reads the `type`
+  discriminator. Envelopes are signed, not encrypted — this reveals nothing the gateway was not
+  already forwarding — and the gateway does not have to trust what it reads, because the phone
+  verifies the host's P-256 signature on every frame regardless. A mislabelled envelope costs one
+  discarded frame; it cannot inject content.
+- The buffer lives in the object's memory rather than in Durable Object storage. A hibernated
+  object can be evicted and lose it, but the host republishes a snapshot every 15 s and each
+  publish wakes the object, so it refills within one heartbeat and the worst case is exactly the
+  behaviour being replaced. Storage would instead add a write to the fan-out path of every frame
+  for the whole meeting.
+- The replay loop is wrapped like the fan-out loop it mirrors. A `send()` that throws mid-replay
+  would otherwise escape `fetch()` and turn the 101 into a 500 — the reader would fail to connect
+  at all rather than merely miss its replay.
+- Known residual: the buffer is in memory, so an eviction between `room.closed` and a phone's
+  reconnect still leaves that phone on a stale cache with no correction coming. Persisting the
+  terminal frame would close that gap, and an earlier draft of this entry gave the wrong reason for
+  not doing it — it claimed reading the frame back would reintroduce the `await` between accepting
+  the socket and replaying. It would not: the Durable Object idiom is to hydrate in the constructor
+  under `ctx.blockConcurrencyWhile()`, which completes before any `fetch()` or RPC is delivered, so
+  that window stays await-free. Nor does the write-on-the-fan-out-path objection apply — a terminal
+  frame is one `storage.put` per room, at close, not one per frame. The real reason is scope: the
+  in-memory buffer is the right shape for the live path, and persistence is a separate concern that
+  deserves its own design and tests rather than being appended to this one.
+- `scheduleExpiry()` now runs *before* `acceptWebSocket()`. It was the only `await` between
+  accepting the socket — which puts it in `getWebSockets()` immediately — and finishing the
+  session and replay sends, so a concurrent `publish()` resuming across that yield could reach the
+  new reader ahead of `gateway.session`. Nothing in `scheduleExpiry()` needs the socket, and with
+  it moved there is no yield point left in that window.
+- Gateway suite: 25 → 39 vitest cases.
+
+### Activation codes expire, and the one anonymous route is bounded
+
+Two hardening changes to the gateway's device-authorization flow (issue #40, item 2). Neither
+touches the `create`/`publish`/`stream` wire protocol.
+
+- **Codes are valid for 24 hours.** An unused code used to live in the registry forever, so one
+  that leaked through shell history, a pasted message or a note stayed redeemable months later —
+  and the operator had no way to know. `redeemCode` now refuses a code whose `created_at` is
+  older than 24 h. Enforcement is at redeem time and reads the `created_at` the `codes` table
+  already stored, so the **deployed registry needs no migration**: the Durable Object constructor
+  runs `CREATE TABLE IF NOT EXISTS`, which would silently not add a column to the table that
+  already exists on `kanal-relay.toniiv.workers.dev`. An expired code returns the same
+  `401 Invalid activation code` an unknown code does — a distinct status would tell someone
+  holding a leaked code that it was once real.
+- **`?action=activate` is rate limited**, 10 attempts per 10 minutes per `CF-Connecting-IP`,
+  answered with `429` over the budget. It is the only route an anonymous caller may reach and
+  therefore the only one on which an anonymous caller can make the registry Durable Object do
+  work; the limit bounds that, and bounds how fast a stolen-but-unspent code can be paired with
+  guesses. The counter lives in a new `activation_attempts` table inside the existing
+  `DeviceRegistry` — a new table is created by the existing `IF NOT EXISTS` block, unlike a new
+  column. It is durable rather than in-memory because a caller pacing requests slowly enough for
+  the object to be evicted would otherwise reset the counter for free. Rows expire with their
+  window. Chosen over the Workers `ratelimit` binding because the binding's local simulation is
+  process-memory-scoped and its periods are fixed at 10 or 60 s, i.e. not something the suite
+  could assert on honestly.
+- **The bucket key is the /64, not the address.** An IPv4 caller is counted per address, but the
+  smallest prefix an ordinary IPv6 subscriber is handed is a /64, so keying IPv6 on the exact
+  address would give one caller 2^64 budgets and leave the limit inert against every IPv6 source.
+  `clientKey` normalises IPv6 to its first four hextets, accepting the forms Cloudflare can emit:
+  fully expanded, `::`-compressed, leading-zero, and zone-suffixed. The three prefixes that carry
+  an IPv4 client in their low bits are the exception and bucket on that IPv4 — mapped
+  (`::ffff:a.b.c.d`), compatible (`::a.b.c.d`, deprecated) and translated (`::ffff:0:a.b.c.d`,
+  RFC 2765) all sit in the same all-zero /64, so prefix-bucketing them would push every such
+  caller — unrelated IPv4 clients, plus `::` and `::1` — into one shared budget. It also makes
+  every spelling of one IPv4 caller a single bucket. `64:ff9b::/96` (NAT64) and Teredo
+  `2001:0::/32` collapse the same way and are recorded in the source as known and accepted:
+  neither is realistically emittable as a *source* address at the Cloudflare edge.
+- **The window sweep is indexed.** `activation_attempts` gained
+  `CREATE INDEX IF NOT EXISTS activation_attempts_window ON activation_attempts (window_start)`,
+  provisioned on the deployed registry for the same reason the table itself is. Without it the
+  sweep is a `SCAN`: measured inside a real Durable Object, one attempt read 1 000 / 10 000 /
+  50 000 rows against a table of that size and usually deleted nothing. That is the wrong shape
+  entirely, because the table's size belongs to the attacker — a caller rotating source /64s (a
+  routed /48 hands out 65 536) never trips the limit and inserts a fresh row per request, so cost
+  per request would grow linearly with a table he is filling and total work would be quadratic,
+  on a store that bills per row read. Indexed, the same sweep reads **1** row and the plan becomes
+  `SEARCH ... USING INDEX activation_attempts_window (window_start<?)`. Precisely: it reads one
+  row per row it *retires*, so the cost is amortised-constant rather than constant — each row is
+  read and deleted exactly once in its life, total work linear in rows created instead of
+  quadratic, with a burst worst case where one attempt pays off a whole expired window. What
+  matters is that it is not proportional to a table the caller keeps growing. Chosen over scoping
+  the `DELETE` to `client = ?` and sweeping the rest from an alarm: smaller, and no new machinery.
+- **What this does not close.** Neither change reduces the raw request count against the Workers
+  free-plan budget — an in-Worker limit still costs a Worker request to answer. Only an edge WAF
+  rate-limiting rule rejects before the Worker runs; the free plan allows one such rule and it
+  remains available as a dashboard-side complement, not a substitute. And an attacker who does
+  obtain a fresh code within its 24 h window still gets a device credential — what that buys is
+  the ability to create *their own* rooms, never to read anyone else's, because reader tickets
+  are room-scoped and every envelope is verified against the host's P-256 key on the phone. That
+  is the per-device design working as intended, and revocation (`?action=admin.revoke`) is the
+  answer to it.
+- **The limiter costs the registry one extra write on every attempt.** Before this change, an
+  attempt with an invalid code cost essentially a read: the single-use `UPDATE ... WHERE` matched
+  no rows and wrote nothing. Now every attempt performs a guaranteed row write — the window row
+  inserted or incremented — *before* the limiter can engage. With the index above that cost does
+  not grow with a table the caller controls, which is what makes it an acceptable trade rather
+  than a regression. Against one address hammering the route the limiter
+  wins decisively after the first N attempts; against a caller rotating across many addresses it
+  never trips and each request costs one constant extra write more than it used to. That is the
+  price of a *durable* counter and it is written down rather than discovered later: an in-memory
+  counter would cost nothing extra and be reset for free by an eviction. Deliberately *not*
+  mitigated with an in-memory pre-check, which would re-introduce exactly the eviction hole the
+  durable counter closes. The bucket key is also capped at 64 characters before parsing — an
+  unparseable address is used verbatim as a durable primary key, and Cloudflare overwriting
+  `CF-Connecting-IP` is an assumption the code should not depend on silently.
+- 16 new vitest cases (suite 25 → 41): an expired code that enrols nothing and cannot be revived
+  by retrying, a code just inside the window that still burns on first use, a caller cut off at
+  the budget without spending a neighbour's, the budget returning once the window passes, one
+  budget shared across three spellings of a single /64 while a neighbouring /64 keeps its own,
+  plain / mapped / compatible / translated IPv4 callers each keeping their own budget while every
+  spelling of *one* IPv4 caller shares a single one, a bucket key that stays capped however long
+  the header is, and room creation, publishing and streaming proven untouched by the limit.
+  `Date.now()` advances in real time inside workerd, so the TTL and window cases age the specific
+  row through `runInDurableObject` rather than sleeping. The suite imports
+  `ACTIVATION_CODE_TTL_MS`, `ACTIVATE_WINDOW_MS` and `ACTIVATE_MAX_ATTEMPTS` from the Worker
+  instead of restating them — a constant kept in step by a comment drifts.
+- The sweep's cost has its own regression guard. Rather than restate the sweep's SQL in the test
+  (which would drift from the query it is meant to pin) or assert on an `EXPLAIN QUERY PLAN`
+  string (which pins the plan's wording, not the cost), the case wraps the registry instance's
+  own `SqlStorage` handle and sums `rowsRead` across every cursor one `allowActivationAttempt`
+  opens. It then asserts that serving an attempt against 5 000 open windows reads no more than a
+  handful of rows, and no more than serving one against 200 — a flatness assertion that fails
+  loudly at 5 000 if the index is ever dropped, whatever the statements look like by then. The
+  guard also checks its own premises before trusting that comparison: that the seed really left
+  5 000 rows behind (a collapsed seed would let the flat assertion pass over an empty table —
+  demonstrated, not hypothesised) and that all three statements still ran through the wrapped
+  handle (a refactor onto `ctx.storage.sql` would otherwise measure nothing and stay green).
 
 ### Kanal traffic is behind an authenticated gateway
 

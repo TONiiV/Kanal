@@ -22,6 +22,11 @@
             <SolidColorBrush x:Key="Rule" Color="#D5DCE1" />
             <SolidColorBrush x:Key="RuleFaint" Color="#E7EBEE" />
             <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
+            <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
+            <SolidColorBrush x:Key="Record" Color="#C42B22" />
+            <SolidColorBrush x:Key="Hold" Color="#C08A12" />
+            <SolidColorBrush x:Key="RecordWash" Color="#F2CFCC" />
+            <SolidColorBrush x:Key="HoldWash" Color="#F2E6C6" />
 
             <!-- FluentTheme paints checked boxes, radios and selection in the OS accent, which put a
                  saturated blue beside the speaker hues and out-shouted them. Redirect the accent ramp
@@ -33,23 +38,6 @@
             <Color x:Key="SystemAccentColorDark1">#111A21</Color>
             <Color x:Key="SystemAccentColorDark2">#111A21</Color>
             <Color x:Key="SystemAccentColorDark3">#111A21</Color>
-
-            <!-- Transport glyphs. Drawn as geometry rather than set as characters (▶ ❚❚ ■): the
-                 font stack here is chosen for three scripts, and which face ends up supplying a
-                 symbol from it is not something to leave to chance on the one row of controls the
-                 operator uses mid-meeting. Standard equipment shapes, so nothing has to be learned. -->
-            <StreamGeometry x:Key="GlyphPlay">M0,0 L10,6 L0,12 Z</StreamGeometry>
-            <StreamGeometry x:Key="GlyphPause">M0,0 H3.4 V12 H0 Z M6.6,0 H10 V12 H6.6 Z</StreamGeometry>
-            <StreamGeometry x:Key="GlyphStop">M0,0 H11 V11 H0 Z</StreamGeometry>
-            <!-- Availability marker on a mode row. Filled = this can run now, hollow = it cannot.
-                 Even-odd fill turns the inner square into a hole rather than a second block. -->
-            <StreamGeometry x:Key="GlyphSquareFilled">M0,0 H8 V8 H0 Z</StreamGeometry>
-            <StreamGeometry x:Key="GlyphSquareHollow">M0,0 H8 V8 H0 Z M1.6,1.6 H6.4 V6.4 H1.6 Z</StreamGeometry>
-
-            <!-- Settings as three sliders, not a gear: it is drawn from the same rules-and-blocks
-                 vocabulary as the rest of the screen, and it reads at a glance at 14 px. F1 =
-                 non-zero fill, or each knob would punch a hole in the rule it sits on. -->
-            <StreamGeometry x:Key="GlyphSettings">F1 M0,2.5 H14 V3.9 H0 Z M3.2,0.9 H6.2 V5.5 H3.2 Z M0,6.5 H14 V7.9 H0 Z M8.4,4.9 H11.4 V9.5 H8.4 Z M0,10.5 H14 V11.9 H0 Z M1.6,8.9 H4.6 V13.5 H1.6 Z</StreamGeometry>
 
             <!-- Latin first so Polish diacritics come from the grotesque, CJK from the fallback.
                  No embedded font: a Latin-only face would clash with the CJK fallback it sits next to. -->
@@ -73,6 +61,12 @@
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="LetterSpacing" Value="1.6" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="Border.rule">
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="0,0,0,2" />
+            <Setter Property="Margin" Value="0,7,0,10" />
         </Style>
 
         <Style Selector="Button">
@@ -122,6 +116,19 @@
              reason every other colour here is: an icon that stays ink on an ink hover fill
              disappears, and the transport row is the one thing the operator reaches for
              while a meeting is running. -->
+        <!-- Declared before the button rules so those still win: a glyph outside a button - in a
+             combo box's selection box, say - would otherwise draw with no brush at all. -->
+        <!-- Square, and 16 to match the icons' own view box: an icon carries its margins inside
+             that box, and a control box of another shape scales it to the smaller side and pins
+             what is left to the top-left rather than centring it. -->
+        <Style Selector="Path.glyph">
+            <Setter Property="Fill" Value="{StaticResource Ink2}" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
         <Style Selector="Button Path.glyph">
             <Setter Property="Fill" Value="{StaticResource Ink}" />
         </Style>
@@ -147,6 +154,12 @@
             <Setter Property="Fill" Value="{StaticResource Sheet}" />
         </Style>
 
+        <Style Selector="Border.sidebar-header">
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="0,0,0,2" />
+            <Setter Property="Padding" Value="20,9,12,9" />
+        </Style>
+
         <!-- Quiet secondary actions: no box until you reach for them. -->
         <Style Selector="Button.ghost">
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -154,6 +167,78 @@
             <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="Padding" Value="10,6" />
         </Style>
+        <!-- Without this the base disabled rule draws the box a ghost never had. -->
+        <Style Selector="Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <!-- Declared after Button.ghost so a mark keeps its own fill through hover and press. -->
+        <Style Selector="Button.mark">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="17" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{StaticResource RecordWash}" />
+        </Style>
+
+        <Style Selector="Button.mark.hold">
+            <Setter Property="Background" Value="{StaticResource HoldWash}" />
+        </Style>
+
+        <Style Selector="Button.mark /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <!-- Restated for :disabled, which would otherwise fall through to the base rule and ring
+             the disc in Rule grey. -->
+        <Style Selector="Button.mark:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Record}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.mark.hold:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.mark.hold:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Hold}" />
+        </Style>
+
+        <!-- Even, so the 34 px disc has the same slack on both sides of it. -->
+        <Style Selector="Button.mark Path">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Stretch" Value="Uniform" />
+        </Style>
+
+        <!-- 28 is the even width nearest 85% of the 34 px disc: even so the mark still centres on
+             a whole pixel, and wide enough that the wash reads as a ring rather than a field. -->
+        <Style Selector="Button.mark Path.disc">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+        </Style>
+
+        <Style Selector="Button.mark Path.record">
+            <Setter Property="Fill" Value="{StaticResource Record}" />
+        </Style>
+
+        <Style Selector="Button.mark Path.hold">
+            <Setter Property="Fill" Value="{StaticResource Hold}" />
+        </Style>
+
+        <Style Selector="Button.mark:pointerover Path, Button.mark:pressed Path">
+            <Setter Property="Fill" Value="{StaticResource Sheet}" />
+        </Style>
+
+        <Style Selector="Button.mark:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+
 
         <Style Selector="ToggleButton">
             <Setter Property="Background" Value="{StaticResource Sheet}" />

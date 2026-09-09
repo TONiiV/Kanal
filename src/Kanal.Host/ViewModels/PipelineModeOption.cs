@@ -1,4 +1,6 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Kanal.Host.Controls;
 using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
@@ -19,6 +21,10 @@ public partial class PipelineModeOption : ViewModelBase
     public PipelineMode Mode { get; }
 
     public string Name => Mode.Name;
+
+    public string Short => Mode.Short;
+
+    public Geometry Mark => Icons.Mode(Mode.Id);
 
     public string Help => Mode.Help;
 
@@ -41,6 +47,7 @@ public partial class PipelineModeOption : ViewModelBase
     public void RefreshText()
     {
         OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(Short));
         OnPropertyChanged(nameof(Help));
         OnPropertyChanged(nameof(Detail));
         OnPropertyChanged(nameof(Status));

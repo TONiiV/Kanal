@@ -20,6 +20,14 @@ public partial class MeetingRoomView : UserControl
 
     public MeetingRoomView() => InitializeComponent();
 
+    private async void OnLanguagesClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+            return;
+
+        await new LanguagesWindow { DataContext = DataContext }.ShowDialog(owner);
+    }
+
     private void OnColumnScrollLoaded(object? sender, RoutedEventArgs e)
     {
         if (sender is not ScrollViewer scroller || _following.ContainsKey(scroller))
@@ -144,6 +152,46 @@ public partial class MeetingRoomView : UserControl
         e.Handled = true;
         Dispatcher.UIThread.Post(() => FocusColumnHead(column));
     }
+
+    private void OnTitlePressed(object? sender, PointerPressedEventArgs e) => BeginRename();
+
+    private void OnTitleKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space)) return;
+        BeginRename();
+        e.Handled = true;
+    }
+
+    private void BeginRename()
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        vm.BeginRenameTitleCommand.Execute(null);
+        Dispatcher.UIThread.Post(() =>
+        {
+            MeetingTitleEditor.Focus();
+            MeetingTitleEditor.SelectAll();
+        });
+    }
+
+    private void OnTitleEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        if (e.Key == Key.Enter)
+            vm.CommitRenameTitleCommand.Execute(null);
+        else if (e.Key == Key.Escape)
+            vm.CancelRenameTitleCommand.Execute(null);
+        else
+            return;
+
+        e.Handled = true;
+    }
+
+    // Clicking away commits rather than discards: the operator typed the name they wanted, and
+    // losing it to a stray click is worse than committing one they can retype.
+    private void OnTitleEditorLostFocus(object? sender, RoutedEventArgs e) =>
+        (DataContext as MainViewModel)?.CommitRenameTitleCommand.Execute(null);
 
     private void FocusColumnHead(ColumnViewModel column) =>
         this.GetVisualDescendants().OfType<Border>()

@@ -14,22 +14,73 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each pipeline mode now has a mark of its own — a cloud, a laptop, or one of the two with an
+  arrow showing which way the work is handed over — in the mode box and against every row of the
+  list, so the mode is readable at a glance instead of by reading its label. The help button now
+  sits against the mode box it explains instead of drifting across the bar, and the record button
+  is a full red disc rather than a dot in a pale field.
+
+- The toolbar's marks sit square in the middle of the controls that carry them, and the capture
+  picker shows its whole dropdown arrow at every window width — it used to lose it as the row got
+  tight. The mode box now draws a cloud and a laptop to say where each half of the pipeline runs,
+  in place of the chip that said nothing.
+
+- A meeting can now name itself. With a local translation model in use, Kanal proposes a short
+  title once the meeting is a minute or so in, and a control beside the title asks for another one
+  at any time. Click the title to rename it by hand — that name is kept, is never overwritten by a
+  suggestion, and is saved with the meeting record.
+
+- The meeting title now sits above the transcript, with the room's language flags on the same line.
+- Settings is six tabs down the left instead of one long scroll: General, Audio input,
+  Transcription, Translation, Summarisation and Workspace. Every setting that was there before is
+  still there, in the tab it belongs to. Summarisation says plainly that it is not built yet rather
+  than showing controls that would do nothing.
+- If somebody speaks a language the room has no column for, Kanal now says which language it was
+  instead of picking one of the columns and calling it the original. The words that were actually
+  said stay on screen under every translation. When it cannot tell which language was spoken, it
+  says so rather than printing a code.
+- The left sidebar is now a workspace. Search your meetings, start a new one with the button beside
+  the search box, switch between projects, and reach import and export from each meeting's own
+  menu. A record that cannot be read is reported instead of quietly shrinking the list.
+- The meeting assistant on the right now has two tabs. **Points and decisions** collects what the
+  meeting settled, grouped by topic, with the words that support each one printed underneath — and
+  nothing is recorded as agreed until you confirm it. **Speakers** is the naming and merging you
+  already had. Until a listening model is connected the first tab says so plainly, so an empty
+  panel is never mistaken for a meeting that decided nothing.
+- Workspaces keep their meeting records in operator-selected local folders, survive restarts,
+  and report missing or damaged records without hiding the meetings that remain readable.
+
+- The meeting window is now three columns. A workspace sidebar sits on the left and the meeting
+  assistant on the right; either can be collapsed out of the way and dragged wider, and the width
+  you pick comes back when you expand it again. The transcript keeps a usable width whatever the
+  sidebars do.
+- Record, pause and stop are round marks, each sitting on a larger, paler disc of its own colour,
+  so the transport is easier to hit and easier to read across the room. The capture picker shows
+  a whole, unclipped mark, and a different one per profile — people around a table for in-room,
+  a screen for an online meeting — so you can see which is selected without opening it. The
+  microphone mark has been redrawn.
+- The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
+  stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
+  window gets; the processing and capture pickers hold the left edge and the join QR the right. A
+  short line beside the transport says what is happening, replacing the two full-width bands that
+  used to push the transcript down. Settings moved to the foot of the workspace sidebar, export to
+  the bar's ellipsis menu, and the room's language flags to the top of the transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
   audio file is recorded, and Markdown/JSON exports retain the attestation.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
-- The host uses one compact, horizontally scrollable control bar, leaving the meeting more room
-  while keeping every mode, language, microphone and transport control available in long locales.
-- The control bar is arranged in two groups: transport, mode and languages sit together on the
-  left, and the microphone, export and settings controls are held against the right edge, so the
-  controls used mid-meeting no longer sit next to the ones set up once.
+- A phone whose join link has expired now shows the meeting as ended and stops trying to
+  reconnect, instead of sitting on "reconnecting" and retrying every 15 seconds for as long as
+  the tab stays open. The transcript already on the page is kept.
 - Live meeting translation: the host captures the room, transcribes what is said and translates
   it, and everyone reads along on their own phone by scanning the join QR code. Only text ever
   reaches the phones.
 - Up to four language columns on the host, reorderable by drag or Alt+←/→; each phone chooses one
   language for itself.
+- In the language dialog each tick box sits on the same centre line as the flag and the language
+  name beside it, and every row lands on that same line.
 - Modes describe the pipeline rather than the vendor: five combinations of transcription and
   translation, each stating what leaves the machine, with the ones that cannot run right now shown
   greyed out and explaining why.

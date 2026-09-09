@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.StatusBarView" x:DataType="vm:MainViewModel">
@@ -15,9 +16,9 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="7"
                         Margin="0,0,22,0" VerticalAlignment="Center"
                         IsVisible="{Binding IsRecording}" ToolTip.Tip="{Binding RecordingPath}">
-                <Path Data="{StaticResource GlyphStop}" Width="7" Height="7" Stretch="Uniform"
+                <Path Data="{c:Icon stop}" Width="10" Height="10" Stretch="Uniform"
                       VerticalAlignment="Center" Fill="{StaticResource Ink}" IsVisible="{Binding !IsPaused}" />
-                <Path Data="{StaticResource GlyphSquareHollow}" Width="7" Height="7" Stretch="Uniform"
+                <Path Data="{c:Icon square-hollow}" Width="10" Height="10" Stretch="Uniform"
                       VerticalAlignment="Center" Fill="{StaticResource Ink3}" IsVisible="{Binding IsPaused}" />
                 <TextBlock Text="{l:T recording.on}" Classes="label" IsVisible="{Binding !IsPaused}" />
                 <TextBlock Text="{l:T recording.held}" Classes="label" IsVisible="{Binding IsPaused}" />

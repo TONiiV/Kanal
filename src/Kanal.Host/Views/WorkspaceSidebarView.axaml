@@ -1,0 +1,152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
+             xmlns:ws="using:Kanal.Core.Workspaces"
+             xmlns:vm="using:Kanal.Host.ViewModels"
+             xmlns:l="using:Kanal.Host.Localization"
+             x:Class="Kanal.Host.Views.WorkspaceSidebarView" x:DataType="vm:MainViewModel">
+    <UserControl.Styles>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="7,8" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="2,0,0,0" />
+        </Style>
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Paper}" />
+        </Style>
+        <!-- Fluent selects in the system accent; a meeting is chrome, and only people carry colour. -->
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="2,0,0,0" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
+        <DockPanel>
+            <Border DockPanel.Dock="Top" Classes="sidebar-header"
+                    MinHeight="{Binding Shell.HeaderHeight}">
+                <DockPanel LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Left" x:Name="WorkspaceTitle"
+                                Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Image Source="/Assets/kanal.ico" Width="20" Height="20" Stretch="Uniform"
+                               AutomationProperties.Name="Kanal" />
+                        <TextBlock Text="kanal" FontSize="15.5" FontWeight="Bold"
+                                   LetterSpacing="-0.4" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="CollapseWorkspace"
+                            Command="{Binding Shell.Left.ToggleCommand}"
+                            ToolTip.Tip="{l:T sidebar.collapse.tip}"
+                            AutomationProperties.Name="{l:T sidebar.collapse.tip}">
+                        <Path Classes="glyph" Data="{c:Icon chevron-left}" />
+                    </Button>
+                </DockPanel>
+            </Border>
+
+            <Button DockPanel.Dock="Bottom" Classes="ghost" x:Name="Settings"
+                    Click="OnSettingsClick" Margin="14,0,14,14" Padding="8,7"
+                    HorizontalAlignment="Left"
+                    ToolTip.Tip="{l:T settings.tip}"
+                    AutomationProperties.Name="{l:T settings.tip}">
+                <Path Classes="glyph" Data="{c:Icon settings}" />
+            </Button>
+
+            <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
+                       Text="{Binding Sidebar.ProblemNote}" TextWrapping="Wrap"
+                       Margin="14,0,14,12" FontSize="11.5" LineHeight="17"
+                       Foreground="{StaticResource Alarm}"
+                       IsVisible="{Binding Sidebar.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="14,14,14,0" ColumnSpacing="7">
+                <TextBox x:Name="MeetingSearch" Text="{Binding Sidebar.Search}"
+                         Watermark="{l:T workspace.search}"
+                         AutomationProperties.Name="{l:T workspace.search}" />
+                <Button Grid.Column="1" Classes="accent" x:Name="NewMeeting" Padding="8,7"
+                        Command="{Binding Sidebar.NewMeetingCommand}"
+                        ToolTip.Tip="{l:T workspace.newmeeting.tip}"
+                        AutomationProperties.Name="{l:T workspace.newmeeting.tip}">
+                    <Path Classes="glyph" Data="{c:Icon plus}" Width="14" Height="14" />
+                </Button>
+            </Grid>
+
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="14,10,14,0" ColumnSpacing="7">
+                <ComboBox x:Name="WorkspacePicker" HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding Sidebar.Workspaces}"
+                          SelectedItem="{Binding Sidebar.SelectedWorkspace}"
+                          PlaceholderText="{l:T workspace.noproject}"
+                          AutomationProperties.Name="{l:T workspace.picker}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="ws:Workspace">
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="1" Classes="ghost" x:Name="WorkspaceAdd" Padding="8,7"
+                        ToolTip.Tip="{l:T workspace.add.tip}"
+                        AutomationProperties.Name="{l:T workspace.add.tip}">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Name="NewProject" Header="{l:T workspace.newproject}"
+                                      Command="{Binding Sidebar.NewProjectCommand}" />
+                            <MenuItem Name="ImportRecord" Header="{l:T workspace.importrecord}"
+                                      Command="{Binding Sidebar.ImportMeetingRecordCommand}">
+                                <MenuItem.Icon>
+                                    <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <Path Classes="glyph" Data="{c:Icon plus}" Width="14" Height="14" />
+                </Button>
+            </Grid>
+
+            <TextBlock DockPanel.Dock="Top" x:Name="NoMeetings" Text="{Binding Sidebar.EmptyNote}"
+                       Margin="14,16,14,0" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{StaticResource Ink3}"
+                       IsVisible="{Binding !Sidebar.Meetings.Count}" />
+
+            <ListBox x:Name="MeetingList" Margin="7,12,7,10" Background="Transparent"
+                     BorderThickness="0"
+                     ItemsSource="{Binding Sidebar.Meetings}"
+                     SelectedItem="{Binding Sidebar.SelectedMeeting}"
+                     AutomationProperties.Name="{l:T workspace.meetings}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MeetingItemViewModel">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis"
+                                           Foreground="{StaticResource Ink}" />
+                                <TextBlock Text="{Binding When}" FontSize="10.5"
+                                           Foreground="{StaticResource Ink3}" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Classes="ghost" x:Name="MeetingMenu" Padding="7,6"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="{l:T meeting.menu.tip}"
+                                    AutomationProperties.Name="{l:T meeting.menu.tip}">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"
+                                                  Command="{Binding ImportCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Name="ExportMeeting" Header="{l:T meeting.export}"
+                                                  Command="{Binding ExportCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                                <Path Classes="glyph" Data="{c:Icon ellipsis}" Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Border>
+</UserControl>

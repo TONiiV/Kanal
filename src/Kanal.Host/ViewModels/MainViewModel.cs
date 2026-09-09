@@ -13,10 +13,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
 using Kanal.Core.Room;
+using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Providers.LocalMt;
@@ -26,6 +28,8 @@ namespace Kanal.Host.ViewModels;
 
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
+    public WorkspaceShellViewModel Shell { get; } = new();
+
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;
@@ -55,6 +59,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
     private int _dragSource = -1;
+    private IMeetingTitler? _titler;
+    private string? _titleOnRecord;
 
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
@@ -78,8 +84,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         PipelinePlanner.KeyResolver? resolveKey = null,
         Func<IAudioCaptureService?>? captureFactory = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
-        Func<DateTimeOffset>? utcNow = null)
+        Func<DateTimeOffset>? utcNow = null,
+        Func<WorkspaceStore>? workspaces = null,
+        IMeetingTitler? titler = null)
     {
+        _titler = titler;
+        Titling = new MeetingTitling(() => _titler);
+        Titling.Changed += OnTitlingChanged;
+        Sidebar = new WorkspaceSidebarViewModel(
+            (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))());
+        Sidebar.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
+                return;
+            // Browsing to another record must not carry this room's generated name onto it.
+            Titling.Reset();
+            OnPropertyChanged(nameof(MeetingTitle));
+        };
         _loadSettings = loadSettings;
         _downloads = downloads;
         _resolveKey = resolveKey;
@@ -144,9 +165,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
+            OnPropertyChanged(nameof(PauseTip));
+            OnPropertyChanged(nameof(StopTip));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
+            OnPropertyChanged(nameof(CaptureTip));
             OnPropertyChanged(nameof(ConsentReminder));
-            OnPropertyChanged(nameof(LiveNoticeText));
+            OnPropertyChanged(nameof(CompactState));
             RefreshPipelineStatus();
         };
     }
@@ -201,7 +225,83 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
+    public WorkspaceSidebarViewModel Sidebar { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MeetingTitle))]
+    private string _loadedRoomId = "";
+
+    public MeetingTitling Titling { get; }
+
+    public string MeetingTitle =>
+        Titling.Title
+        ?? Sidebar.SelectedMeeting?.Title
+        ?? (LoadedRoomId.Length > 0 ? LoadedRoomId : L["meeting.untitled"]);
+
+    public bool CanNameMeeting => Titling.CanSuggest;
+
+    public string TitleNote =>
+        Titling.IsSuggesting ? L["title.naming"] : Titling.Failed ? L["title.failed"] : "";
+
+    public bool HasTitleNote => TitleNote.Length > 0;
+
+    [ObservableProperty]
+    private bool _isRenamingTitle;
+
+    [ObservableProperty]
+    private string _titleDraft = "";
+
+    [RelayCommand]
+    private void BeginRenameTitle()
+    {
+        TitleDraft = MeetingTitle;
+        IsRenamingTitle = true;
+    }
+
+    [RelayCommand]
+    private void CommitRenameTitle()
+    {
+        IsRenamingTitle = false;
+        Titling.Rename(TitleDraft);
+    }
+
+    [RelayCommand]
+    private void CancelRenameTitle() => IsRenamingTitle = false;
+
+    public bool CanRegenerateTitle => Titling.CanSuggest && !Titling.IsSuggesting;
+
+    [RelayCommand(CanExecute = nameof(CanRegenerateTitle))]
+    private Task RegenerateTitle() => Titling.RegenerateAsync(FinalLines());
+
+    private IReadOnlyList<string> FinalLines() =>
+        _session is null
+            ? []
+            : [.. _session.Room.Snapshot().Utterances
+                .Where(u => u.State == UtteranceState.Final)
+                .Select(u => u.SrcText)];
+
+    private void OnTitlingChanged()
+    {
+        // Every title reaches the record here, whoever asked for it: a generated name the operator
+        // never touched is exactly the one that has to survive the app being closed.
+        if (Titling.Title != _titleOnRecord)
+        {
+            _titleOnRecord = Titling.Title;
+            if (_titleOnRecord is { } named)
+                Sidebar.RenameSelectedMeeting(named);
+        }
+
+        OnPropertyChanged(nameof(MeetingTitle));
+        OnPropertyChanged(nameof(TitleNote));
+        OnPropertyChanged(nameof(HasTitleNote));
+        OnPropertyChanged(nameof(CanNameMeeting));
+        OnPropertyChanged(nameof(CanRegenerateTitle));
+        RegenerateTitleCommand.NotifyCanExecuteChanged();
+    }
+
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
+
+    public AssistantViewModel Assistant { get; } = new();
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
 
@@ -459,15 +559,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
     [NotifyPropertyChangedFor(nameof(ShowConsentGate))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(ShowRecord))]
+    [NotifyPropertyChangedFor(nameof(ShowPause))]
+    [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isTranscribing;
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
@@ -485,6 +586,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
+    [NotifyPropertyChangedFor(nameof(CanShowJoin))]
     private string _joinUrl = "";
 
     [ObservableProperty]
@@ -492,12 +594,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinError))]
+    [NotifyPropertyChangedFor(nameof(CanShowJoin))]
     private string _joinError = "";
 
     public bool HasJoinInfo => JoinUrl.Length > 0;
 
     /// <summary>Shows relay bootstrap failures where the operator expected the join QR.</summary>
     public bool HasJoinError => JoinError.Length > 0;
+
+    public bool CanShowJoin => HasJoinInfo || HasJoinError;
 
     /// <summary>False before the first Start — the column area shows what to do instead of a void.</summary>
     public bool HasColumns => Columns.Count > 0;
@@ -511,24 +616,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
-    public bool ShowProcessingNotice =>
-        IsRunning && NeedsMicrophone && (IsTranscribing || IsRecording);
-
     public string CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
+
+    /// <summary>The capture mark is an icon in both states, so which one it is has to be said.</summary>
+    public string CaptureTip => $"{L["capture.tip"]} — {SelectedCaptureProfile.Name}";
 
     public string ConsentReminder => NeedsComputerAudio
         ? L["consent.remote.reminder"]
         : L["consent.room.reminder"];
-
-    public string LiveNoticeText => (IsRecording, IsTranscribing, IsPaused) switch
-    {
-        (true, true, true) => L["recording.held.notice"],
-        (true, true, false) => L["recording.live.notice"],
-        (true, false, true) => L["recording.only.held.notice"],
-        (true, false, false) => L["recording.only.notice"],
-        (false, _, true) => L["transcription.held.notice"],
-        _ => L["transcription.live.notice"],
-    };
 
     partial void OnSelectedModeChanged(PipelineModeOption value)
     {
@@ -545,6 +640,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ConsentConfirmed = false;
         OnPropertyChanged(nameof(ShowConsentGate));
         OnPropertyChanged(nameof(ConsentReminder));
+        OnPropertyChanged(nameof(CaptureTip));
     }
 
     partial void OnConsentConfirmedChanged(bool value) =>
@@ -590,6 +686,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowRecord))]
+    [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(StopTip))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isStarting;
 
     /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
@@ -601,10 +701,39 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
+    [NotifyPropertyChangedFor(nameof(PauseTip))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isPaused;
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
+
+    public string PauseTip => L[IsPaused ? "transport.resume.tip" : "transport.pause.tip"];
+
+    public string StopTip => L[IsStarting ? "transport.cancel.tip" : "transport.stop.tip"];
+
+    public bool ShowRecord => !IsRunning && !IsStarting;
+
+    public bool ShowPause => IsRunning;
+
+    // Stop stands in for the record mark while a model loads, because aborting the load is the
+    // only thing there is to do in that phase.
+    public bool ShowStop => IsRunning || IsStarting;
+
+    // Every branch is spelled out rather than collapsed: a line reading "saving audio" while
+    // nothing is being written is the one failure this replacement for the bands has to rule out.
+    public string CompactState => (IsStarting, IsRunning) switch
+    {
+        (true, _) => L["state.loading"],
+        (_, false) => "",
+        _ when IsPaused => L["state.paused"],
+        _ => (IsRecording, IsTranscribing) switch
+        {
+            (true, true) => L["state.recording"],
+            (true, false) => L["state.recordingonly"],
+            (false, true) => L["state.live"],
+            _ => L["state.open"],
+        },
+    };
 
     private bool CanStart() =>
         !IsRunning && !IsStopping && !IsStarting &&
@@ -649,6 +778,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         Columns.Clear();
         Speakers.Clear();
+        Assistant.Forget();
+        LoadedRoomId = "";
+        Titling.Reset();
         _speakerModels.Clear();
         _tagToCanonical.Clear();
         IsPaused = false; // a new room is never inheriting the last one's pause
@@ -692,6 +824,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var mt = plan.Mt;
         _asr = asr;
         _mt = mt;
+        _titler = plan.Titler;
+        OnTitlingChanged();
 
         // A local translation model loads to a working state *before* the room opens. Loading
         // it on the first final — which is what lazy loading did — meant the meeting's opening
@@ -731,6 +865,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
+        LoadedRoomId = config.RoomId;
         var relaySettings = RelaySettingsFactory();
         var signingKey = RelaySigningKey.Create();
         RelayConnection relayConnection;
@@ -811,6 +946,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         _session = session;
+        Assistant.Follow(session.Room);
         _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
             ? new MeetingAttestation(SelectedCaptureProfile.Profile, confirmedAt)
             : null;
@@ -1198,8 +1334,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The file the meeting is being written to; empty when nothing is being recorded.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRecording))]
-    [NotifyPropertyChangedFor(nameof(LiveNoticeText))]
-    [NotifyPropertyChangedFor(nameof(ShowProcessingNotice))]
+    [NotifyPropertyChangedFor(nameof(CompactState))]
     private string _recordingPath = "";
 
     public bool IsRecording => RecordingPath.Length > 0;
@@ -1318,6 +1453,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ApplyUtterance(Utterance u)
     {
+        if (u.State == UtteranceState.Final)
+            _ = Titling.OfferAsync(FinalLines());
+
         var (speakerName, speakerColor) = ResolveSpeaker(u.SpeakerTag);
         foreach (var column in Columns)
         {
@@ -1328,7 +1466,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.SpeakerTag = u.SpeakerTag;
             bubble.SpeakerName = speakerName;
             bubble.SpeakerColor = speakerColor;
-            bubble.SourceLang = u.SrcLang.ToUpperInvariant();
+            bubble.SourceLang = Spoken(u.SrcLang);
             bubble.IsPartial = u.State == UtteranceState.Partial;
             bubble.CodeSwitch = u.CodeSwitch;
             // each column reads in its own language: the source column carries the transcript
@@ -1340,6 +1478,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
     }
+
+    // "und" is Gladia's answer when it could not place the language; printed raw it reads like an
+    // ISO code the operator has never heard of rather than an admission.
+    private static string Spoken(string srcLang) =>
+        srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
     private void ApplySpeaker(Speaker speaker)
     {

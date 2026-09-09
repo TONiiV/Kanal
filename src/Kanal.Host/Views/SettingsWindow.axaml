@@ -5,265 +5,327 @@
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="{l:T settings.title}"
-        Width="620" Height="640"
+        Width="780" Height="660"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
         Background="{StaticResource Sheet}">
 
+    <Window.Styles>
+        <Style Selector="TabItem">
+            <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0,8" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="TabItem:pointerover">
+            <Setter Property="Foreground" Value="{StaticResource Ink2}" />
+        </Style>
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Fluent draws the selection marker in the system accent; the host is ink and paper. -->
+        <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="TabControl WrapPanel">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </Window.Styles>
+
     <DockPanel Margin="24,20,24,20">
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
-        <!-- The scrollbar takes layout space instead of floating over the content: an overlay
-             bar sat on top of the rightmost controls and section rules. The margin keeps the
-             ragged right edge clear of the bar even while it is being dragged. -->
-        <ScrollViewer AllowAutoHide="False">
-            <StackPanel Margin="0,0,14,0">
-                <!-- The check that has to happen before anyone sits down. Everything below this
-                     is configuration; this is the one thing that can only be found out by
-                     listening, and the only place a dead or clipping microphone gets caught
-                     before it costs a meeting. -->
-                <!-- First, because an operator who cannot read the screen cannot use anything
-                     below it. Applied on selection rather than on Save for the same reason. -->
-                <TextBlock Text="{l:T settings.applang.heading}" Classes="label" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
-                    <TextBlock Grid.Column="0" Text="{l:T settings.applang.label}" FontSize="12.5"
-                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" />
-                    <ComboBox Grid.Column="1" ItemsSource="{Binding AppLanguages}"
-                              SelectedItem="{Binding AppLanguage}" HorizontalAlignment="Left" Width="200">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="l:AppLanguage">
-                                <TextBlock Text="{Binding NativeName}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </Grid>
-                <TextBlock Text="{l:T settings.applang.note}" FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,28" />
+        <TabControl TabStripPlacement="Left" Padding="22,0,0,0">
+            <TabItem Header="{l:T settings.tab.general}"
+                     AutomationProperties.Name="{l:T settings.tab.general}">
+                <!-- The scrollbar takes layout space instead of floating over the content: an
+                     overlay bar sat on top of the rightmost controls and section rules. -->
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T settings.applang.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                            <TextBlock Grid.Column="0" Text="{l:T settings.applang.label}" FontSize="12.5"
+                                       FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" />
+                            <ComboBox Grid.Column="1" x:Name="AppLanguage" ItemsSource="{Binding AppLanguages}"
+                                      SelectedItem="{Binding AppLanguage}" HorizontalAlignment="Left" Width="200">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="l:AppLanguage">
+                                        <TextBlock Text="{Binding NativeName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <TextBlock Text="{l:T settings.applang.note}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" />
 
-                <TextBlock Text="{l:T settings.input.heading}" Classes="label" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{l:T settings.input.title}" FontSize="12.5" FontWeight="SemiBold"
-                           Margin="0,0,0,6" />
+                        <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
+                        <Border Classes="rule" />
+                        <TextBlock x:Name="Version" Text="{Binding VersionLabel}" FontSize="12.5"
+                                   FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{l:T settings.about.note}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                        <Button x:Name="Changelog" Content="{l:T settings.about.changelog}"
+                                HorizontalAlignment="Left" Click="OnChangelogClick" />
 
-                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
-                    <ComboBox Grid.Column="0" ItemsSource="{Binding Devices}"
-                              SelectedItem="{Binding TestDevice}" HorizontalAlignment="Stretch"
-                              IsEnabled="{Binding !IsTesting}" Margin="0,0,8,0">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Name}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <Button Grid.Column="1" Content="{l:T settings.input.test}" Command="{Binding StartTestCommand}"
-                            IsVisible="{Binding !IsTesting}" />
-                    <Button Grid.Column="2" Content="{l:T settings.input.stop}" Command="{Binding StopTestCommand}"
-                            IsVisible="{Binding IsTesting}" />
-                </Grid>
+                        <TextBlock Text="{l:T settings.licenses.heading}" Classes="label" Margin="0,28,0,0" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{Binding LicenseNote}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                        <Button x:Name="Licenses" Content="{l:T settings.licenses.open}"
+                                HorizontalAlignment="Left" Click="OnOpenSourceClick" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                <!-- Live level over a held peak: one bar showing both what is arriving now and
-                     the loudest thing heard, because the judgement is about the pair. -->
-                <Panel Height="10" Margin="0,0,0,7">
-                    <Rectangle Fill="{StaticResource RuleFaint}" />
-                    <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
-                                 Foreground="{StaticResource Rule}" Background="Transparent"
-                                 CornerRadius="0" />
-                    <ProgressBar Value="{Binding LevelScale}" Maximum="100" Height="10"
-                                 Foreground="{StaticResource Ink}" Background="Transparent"
-                                 CornerRadius="0" />
-                </Panel>
-                <TextBlock Text="{Binding LevelReadout}" FontSize="11"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,8" />
+            <TabItem Header="{l:T settings.tab.audio}"
+                     AutomationProperties.Name="{l:T settings.tab.audio}">
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T settings.input.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.input.title}" FontSize="12.5" FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
 
-                <TextBlock Text="{Binding VerdictLabel}" FontSize="13" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding VerdictDetail}" FontSize="11.5" TextWrapping="Wrap"
-                           LineHeight="18" Foreground="{StaticResource Ink2}" Margin="0,3,0,10" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+                            <ComboBox Grid.Column="0" x:Name="InputDevice" ItemsSource="{Binding Devices}"
+                                      SelectedItem="{Binding TestDevice}" HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding !IsTesting}" Margin="0,0,8,0">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Grid.Column="1" x:Name="InputTest" Content="{l:T settings.input.test}"
+                                    Command="{Binding StartTestCommand}" IsVisible="{Binding !IsTesting}" />
+                            <Button Grid.Column="2" Content="{l:T settings.input.stop}"
+                                    Command="{Binding StopTestCommand}" IsVisible="{Binding IsTesting}" />
+                        </Grid>
 
-                <TextBlock Text="{Binding ProcessingNote}" FontSize="11" TextWrapping="Wrap"
-                           LineHeight="17" Foreground="{StaticResource Ink3}" Margin="0,0,0,4" />
+                        <!-- Live level over a held peak: one bar showing both what is arriving now and
+                             the loudest thing heard, because the judgement is about the pair. -->
+                        <Panel Height="10" Margin="0,0,0,7">
+                            <Rectangle Fill="{StaticResource RuleFaint}" />
+                            <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
+                                         Foreground="{StaticResource Rule}" Background="Transparent"
+                                         CornerRadius="0" />
+                            <ProgressBar Value="{Binding LevelScale}" Maximum="100" Height="10"
+                                         Foreground="{StaticResource Ink}" Background="Transparent"
+                                         CornerRadius="0" />
+                        </Panel>
+                        <TextBlock Text="{Binding LevelReadout}" FontSize="11"
+                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,8" />
 
-                <!-- Grouped by pipeline stage, the same two stages the mode names. A provider
-                     is named here and only here: this is where the operator types its key. -->
-                <TextBlock Text="{l:T settings.transcription.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{l:T settings.transcription.keys}" FontSize="12.5"
-                           FontWeight="SemiBold" Margin="0,0,0,6" />
-                <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                        <TextBlock Text="{Binding VerdictLabel}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding VerdictDetail}" FontSize="11.5" TextWrapping="Wrap"
+                                   LineHeight="18" Foreground="{StaticResource Ink2}" Margin="0,3,0,10" />
 
-                <ItemsControl ItemsSource="{Binding Keys}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ApiKeyItemViewModel">
-                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
-                                <Grid ColumnDefinitions="Auto,152,*,Auto">
-                                    <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
-                                                 VerticalAlignment="Center" ToolTip.Tip="{l:T settings.usekey.tip}" />
-                                    <TextBox Grid.Column="1" Text="{Binding Name}" Margin="6,0" />
-                                    <TextBox Grid.Column="2" Text="{Binding Key}" PasswordChar="•" Margin="6,0" />
-                                    <Button Grid.Column="3" Content="✕" Classes="ghost" Padding="10,5"
-                                            Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveCommand}"
-                                            CommandParameter="{Binding}" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                        <TextBlock Text="{Binding ProcessingNote}" FontSize="11" TextWrapping="Wrap"
+                                   LineHeight="17" Foreground="{StaticResource Ink3}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Text="{l:T settings.addkey}" Classes="label" Margin="0,18,0,0" />
-                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBox Text="{Binding NewName}" PlaceholderText="{l:T settings.key.name}" Width="152" />
-                    <TextBox Text="{Binding NewKey}" PlaceholderText="{l:T settings.key.value}" PasswordChar="•" Width="258" />
-                    <Button Content="{l:T settings.add}" Command="{Binding AddCommand}" />
+            <TabItem Header="{l:T settings.tab.transcription}"
+                     AutomationProperties.Name="{l:T settings.tab.transcription}">
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T settings.transcription.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.transcription.keys}" FontSize="12.5"
+                                   FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+
+                        <ItemsControl x:Name="ApiKeys" ItemsSource="{Binding Keys}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ApiKeyItemViewModel">
+                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
+                                        <Grid ColumnDefinitions="Auto,152,*,Auto">
+                                            <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
+                                                         VerticalAlignment="Center" ToolTip.Tip="{l:T settings.usekey.tip}" />
+                                            <TextBox Grid.Column="1" Text="{Binding Name}" Margin="6,0" />
+                                            <TextBox Grid.Column="2" Text="{Binding Key}" PasswordChar="•" Margin="6,0" />
+                                            <Button Grid.Column="3" Content="✕" Classes="ghost" Padding="10,5"
+                                                    Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="{l:T settings.addkey}" Classes="label" Margin="0,18,0,0" />
+                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="NewKeyName" Text="{Binding NewName}"
+                                     PlaceholderText="{l:T settings.key.name}" Width="152" />
+                            <TextBox x:Name="NewKeyValue" Text="{Binding NewKey}"
+                                     PlaceholderText="{l:T settings.key.value}" PasswordChar="•" Width="258" />
+                            <Button x:Name="AddKey" Content="{l:T settings.add}" Command="{Binding AddCommand}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{l:T settings.localasr.heading}" Classes="label" Margin="0,28,0,0" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.localasr.note}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{l:T settings.tab.translation}"
+                     AutomationProperties.Name="{l:T settings.tab.translation}">
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T settings.translation.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.translation.localmodel}" FontSize="12.5"
+                                   FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                                   Text="{l:T settings.translation.note}" />
+
+                        <ItemsControl x:Name="TranslationModels" ItemsSource="{Binding TranslationModels}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TranslationModelItemViewModel">
+                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                            <RadioButton Grid.Column="0" GroupName="activeModel"
+                                                         IsChecked="{Binding IsActive}"
+                                                         VerticalAlignment="Top" Margin="0,1,0,0"
+                                                         ToolTip.Tip="{l:T settings.model.usetip}" />
+                                            <StackPanel Grid.Column="1" Margin="6,0,10,0">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding MetaLabel}" FontSize="11"
+                                                           Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
+                                                           IsVisible="{Binding HasLicenseNote}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
+                                                       Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
+                                                       Margin="0,0,12,0" />
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center">
+                                                <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
+                                                        IsVisible="{Binding CanDownload}" />
+                                                <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
+                                                        IsVisible="{Binding IsDownloading}" />
+                                                <!-- Same outlined face as Download and Cancel beside it: the three
+                                                     are one family of actions, and a borderless odd one out read
+                                                     as a different kind of control rather than a quieter one. -->
+                                                <Button Content="{l:T settings.model.delete}"
+                                                        Command="{Binding DeleteCommand}"
+                                                        IsVisible="{Binding CanDelete}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                                   Margin="0,14,0,0" Text="{l:T settings.translation.cloudnote}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{l:T settings.tab.summary}"
+                     AutomationProperties.Name="{l:T settings.tab.summary}">
+                <StackPanel Margin="0,0,14,0">
+                    <TextBlock Text="{l:T settings.summary.heading}" Classes="label" />
+                    <Border Classes="rule" />
+                    <TextBlock Text="{l:T settings.summary.note}" FontSize="11.5" TextWrapping="Wrap"
+                               LineHeight="18" Foreground="{StaticResource Ink3}" />
                 </StackPanel>
+            </TabItem>
 
-                <TextBlock Text="{l:T settings.localasr.note}" FontSize="11.5"
-                           Foreground="{StaticResource Ink3}" Margin="0,16,0,0" />
+            <TabItem Header="{l:T settings.tab.workspace}"
+                     AutomationProperties.Name="{l:T settings.tab.workspace}">
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T settings.files.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.files.title}" FontSize="12.5" FontWeight="SemiBold"
+                                   Margin="0,0,0,4" />
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                                   Text="{l:T settings.files.note}" />
+                        <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
 
-                <!-- Local translation models: downloaded once, then all translation
-                     text stays on this machine. One choice is always active. -->
-                <TextBlock Text="{l:T settings.translation.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{l:T settings.translation.localmodel}" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Text="{l:T settings.translation.note}" />
+                        <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:T settings.files.transcripts}"
+                                       Classes="label" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="0" Grid.Column="1" x:Name="TranscriptFolder"
+                                     Text="{Binding TranscriptFolder}"
+                                     PlaceholderText="{l:T settings.files.placeholder}" Margin="0,0,8,0" />
+                            <Button Grid.Row="0" Grid.Column="2" Content="{l:T settings.browse}"
+                                    Click="OnBrowseTranscriptsClick" />
 
-                <ItemsControl ItemsSource="{Binding TranslationModels}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:TranslationModelItemViewModel">
-                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                    <RadioButton Grid.Column="0" GroupName="activeModel"
-                                                 IsChecked="{Binding IsActive}"
-                                                 VerticalAlignment="Top" Margin="0,1,0,0"
-                                                 ToolTip.Tip="{l:T settings.model.usetip}" />
-                                    <StackPanel Grid.Column="1" Margin="6,0,10,0">
-                                        <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding MetaLabel}" FontSize="11"
-                                                   Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
-                                        <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
-                                                   Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
-                                                   IsVisible="{Binding HasLicenseNote}" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
-                                               Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
-                                               Margin="0,0,12,0" />
-                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
-                                                VerticalAlignment="Center">
-                                        <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
-                                                IsVisible="{Binding CanDownload}" />
-                                        <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
-                                                IsVisible="{Binding IsDownloading}" />
-                                        <!-- Same outlined face as Download and Cancel beside it:
-                                             the three are one family of actions on one row, and
-                                             a borderless odd one out read as a different kind of
-                                             control rather than a quieter one. -->
-                                        <Button Content="{l:T settings.model.delete}"
-                                                Command="{Binding DeleteCommand}"
-                                                IsVisible="{Binding CanDelete}" />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:T settings.files.audio}"
+                                       Classes="label" VerticalAlignment="Center" Margin="0,9,0,0" />
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="AudioFolder"
+                                     Text="{Binding AudioFolder}"
+                                     PlaceholderText="{l:T settings.files.placeholder}" Margin="0,9,8,0" />
+                            <Button Grid.Row="1" Grid.Column="2" Content="{l:T settings.browse}" Margin="0,9,0,0"
+                                    Click="OnBrowseAudioClick" />
+                        </Grid>
 
-                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Margin="0,14,0,0"
-                           Text="{l:T settings.translation.cloudnote}" />
+                        <CheckBox x:Name="RecordAudio" IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
+                                  Content="{l:T settings.record}" />
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                                   Margin="0,2,0,0" Text="{l:T settings.record.note}" />
+                        <CheckBox x:Name="RecordOnlineAudio" IsChecked="{Binding RecordOnlineAudio}" Margin="0,9,0,0"
+                                  Content="{l:T settings.record.online}" />
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                                   Margin="0,2,0,0" Text="{l:T settings.record.online.note}" />
 
-                <!-- Where a meeting's two artefacts land. These are the operator's files, not
-                     the application's: a transcript gets mailed to a supplier, so it has to be
-                     somewhere findable without knowing where an app hides things. -->
-                <TextBlock Text="{l:T settings.files.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{l:T settings.files.title}" FontSize="12.5" FontWeight="SemiBold"
-                           Margin="0,0,0,4" />
-                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Text="{l:T settings.files.note}" />
-                <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
+                        <TextBlock Text="{l:T settings.logs.heading}" Classes="label" Margin="0,28,0,0" />
+                        <Border Classes="rule" />
+                        <TextBlock Text="{l:T settings.logs.title}" FontSize="12.5" FontWeight="SemiBold"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding LogNote}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
 
-                <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:T settings.files.transcripts}" Classes="label"
-                               VerticalAlignment="Center" />
-                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TranscriptFolder}"
-                             PlaceholderText="{l:T settings.files.placeholder}" Margin="0,0,8,0" />
-                    <Button Grid.Row="0" Grid.Column="2" Content="{l:T settings.browse}" Click="OnBrowseTranscriptsClick" />
+                        <Grid ColumnDefinitions="Auto,180,Auto,110,*" Margin="0,0,0,10">
+                            <TextBlock Grid.Column="0" Text="{l:T settings.logs.level}" Classes="label"
+                                       VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <ComboBox Grid.Column="1" x:Name="LogLevel" ItemsSource="{Binding LogLevels}"
+                                      SelectedItem="{Binding LogLevel}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LogLevelOption">
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Grid.Column="2" Text="{l:T settings.logs.size}" Classes="label"
+                                       VerticalAlignment="Center" Margin="18,0,10,0" />
+                            <NumericUpDown Grid.Column="3" x:Name="LogSize" Value="{Binding LogMaxFileSizeMb}"
+                                           Minimum="{Binding LogMinSizeMb}" Maximum="{Binding LogMaxSizeMb}"
+                                           ClipValueToMinMax="True" Increment="1" FormatString="0" />
+                        </Grid>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:T settings.files.audio}" Classes="label"
-                               VerticalAlignment="Center" Margin="0,9,0,0" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AudioFolder}"
-                             PlaceholderText="{l:T settings.files.placeholder}" Margin="0,9,8,0" />
-                    <Button Grid.Row="1" Grid.Column="2" Content="{l:T settings.browse}" Margin="0,9,0,0"
-                            Click="OnBrowseAudioClick" />
-                </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button x:Name="OpenLogFolder" Content="{l:T settings.logs.open}"
+                                    Command="{Binding OpenLogFolderCommand}" />
+                            <TextBlock Text="{Binding LogFolder}" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
+                        </StackPanel>
 
-                <CheckBox IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
-                          Content="{l:T settings.record}" />
-                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Margin="0,2,0,0"
-                           Text="{l:T settings.record.note}" />
-                <CheckBox IsChecked="{Binding RecordOnlineAudio}" Margin="0,9,0,0"
-                          Content="{l:T settings.record.online}" />
-                <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
-                           Margin="0,2,0,0"
-                           Text="{l:T settings.record.online.note}" />
-
-                <TextBlock Text="{l:T settings.logs.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{l:T settings.logs.title}" FontSize="12.5" FontWeight="SemiBold"
-                           Margin="0,0,0,4" />
-                <TextBlock Text="{Binding LogNote}" FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
-
-                <Grid ColumnDefinitions="Auto,180,Auto,110,*" Margin="0,0,0,10">
-                    <TextBlock Grid.Column="0" Text="{l:T settings.logs.level}" Classes="label"
-                               VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <ComboBox Grid.Column="1" ItemsSource="{Binding LogLevels}"
-                              SelectedItem="{Binding LogLevel}" HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:LogLevelOption">
-                                <TextBlock Text="{Binding Name}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Grid.Column="2" Text="{l:T settings.logs.size}" Classes="label"
-                               VerticalAlignment="Center" Margin="18,0,10,0" />
-                    <NumericUpDown Grid.Column="3" Value="{Binding LogMaxFileSizeMb}"
-                                   Minimum="{Binding LogMinSizeMb}" Maximum="{Binding LogMaxSizeMb}"
-                                   ClipValueToMinMax="True" Increment="1" FormatString="0" />
-                </Grid>
-
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button Content="{l:T settings.logs.open}" Command="{Binding OpenLogFolderCommand}" />
-                    <TextBlock Text="{Binding LogFolder}" FontSize="11" TextWrapping="Wrap"
-                               Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
-                </StackPanel>
-
-                <TextBlock Text="{Binding LogFailureNote}" IsVisible="{Binding !LogIsWritable}"
-                           FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
-                           Foreground="{StaticResource Alarm}" />
-
-                <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{Binding VersionLabel}" FontSize="12.5" FontWeight="SemiBold"
-                           Margin="0,0,0,4" />
-                <TextBlock Text="{l:T settings.about.note}" FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
-                <Button Content="{l:T settings.about.changelog}" HorizontalAlignment="Left"
-                        Click="OnChangelogClick" />
-
-                <TextBlock Text="{l:T settings.licenses.heading}" Classes="label" Margin="0,28,0,0" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,10" />
-                <TextBlock Text="{Binding LicenseNote}" FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
-                <Button Content="{l:T settings.licenses.open}" HorizontalAlignment="Left"
-                        Click="OnOpenSourceClick" />
-            </StackPanel>
-        </ScrollViewer>
+                        <TextBlock Text="{Binding LogFailureNote}" IsVisible="{Binding !LogIsWritable}"
+                                   FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Foreground="{StaticResource Alarm}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
     </DockPanel>
 </Window>

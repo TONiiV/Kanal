@@ -17,10 +17,14 @@ import { DurableObject } from "cloudflare:workers";
  *   POST ?action=publish  Bearer <host ticket>    {payload: <relay.signed envelope>}
  *   GET  ?action=stream   WebSocket upgrade, subprotocols "kanal, ticket.<reader ticket>"
  *                         -> "kanal", then {type:"gateway.session"|"relay", ...}
+ *                         close 4001 = ticket expired, terminal; the phone must not reconnect
  *
  * Device authorization (operator-only, curl or a future settings pane):
  *   POST ?action=admin.code     Bearer <KANAL_ADMIN_TOKEN>  {note?} -> {code}
  *   POST ?action=activate       {code, deviceName?} -> {deviceId, deviceToken}
+ *                               codes are single-use and expire 24 h after minting; the route
+ *                               is rate limited per client address, per /64 for IPv6
+ *                               (429 once the budget is up)
  *   POST ?action=admin.revoke   Bearer <KANAL_ADMIN_TOKEN>  {deviceId}
  *   GET  ?action=admin.devices  Bearer <KANAL_ADMIN_TOKEN>
  */
@@ -37,7 +41,31 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_ROOM_SECONDS = 12 * 60 * 60;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
+/**
+ * Bounds on a room's replay buffer (one snapshot plus the frames published after it). Each frame
+ * is already capped at `MAX_PAYLOAD_BYTES` on the way in; these cap the buffer as a whole.
+ *
+ * Every relay message is one publish — partials included, nothing coalesced — so 15 s of
+ * continuous speech is roughly 35-80 frames at a streaming ASR's usual 2-5 partials/s, plus one
+ * `translation.upsert` per final. That makes 256 frames about 3-7x a busy heartbeat interval, and
+ * the frame cap, not the byte cap, is what binds: a partial envelope runs 0.4-1 KB, so 256 of them
+ * is a quarter of 1 MiB. The margin is thinner than it looks but the overflow is a degrade, not a
+ * failure — no replay until the next snapshot. Raising the frame cap is cheap in memory and is
+ * worth doing once the mobile page serialises `onmessage`; until then it would only enlarge a
+ * burst the client cannot yet order correctly.
+ */
+const MAX_REPLAY_FRAMES = 256;
+const MAX_REPLAY_BYTES = 4 * MAX_PAYLOAD_BYTES;
 const DEFAULT_ALLOWED_ORIGIN = "https://toniiv.github.io";
+// A 1000 is indistinguishable from any other tidy close, so the phone reconnects into 401s.
+const ROOM_EXPIRED_CLOSE = 4001;
+/**
+ * A code is handed over for one machine; a leaked one must not still work weeks later.
+ * Exported so the suite asserts against these numbers rather than copies of them.
+ */
+export const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+export const ACTIVATE_WINDOW_MS = 10 * 60 * 1000;
+export const ACTIVATE_MAX_ATTEMPTS = 10;
 
 type Role = "host" | "reader";
 
@@ -130,6 +158,24 @@ async function verifyTicket(env: Env, ticket: string, role: Role): Promise<Ticke
   }
 }
 
+/**
+ * The discriminator of the relay message inside a signed envelope, or null if it cannot be
+ * read. Envelopes are signed, not encrypted, so this is a plain base64url decode — the gateway
+ * learns nothing it was not already forwarding. It also does not have to trust the answer: the
+ * phone verifies the host's P-256 signature on every frame, so a mislabelled or forged envelope
+ * costs at most one discarded frame and can never inject content.
+ */
+function envelopeType(payload: unknown): string | null {
+  const data = (payload as { data?: unknown }).data;
+  if (typeof data !== "string") return null;
+  try {
+    const message = JSON.parse(decoder.decode(decodeBase64Url(data))) as { type?: unknown };
+    return typeof message.type === "string" ? message.type : null;
+  } catch {
+    return null;
+  }
+}
+
 function bearer(request: Request): string {
   return request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
 }
@@ -172,12 +218,93 @@ async function mintActivationCode(request: Request, env: Env): Promise<Response>
   return response({ code });
 }
 
+/**
+ * `activate` is the one route an anonymous caller may reach, so it is the one route on which
+ * an anonymous caller can make the registry do work. Cloudflare overwrites `CF-Connecting-IP`
+ * at the edge, so it is a usable bucket key; a caller arriving without one (curl against a
+ * bare workerd, an internal probe) shares a single bucket rather than escaping the limit.
+ *
+ * `admin.code` is deliberately not limited: its unauthenticated path returns 401 at the admin
+ * token check, before any Durable Object call, so flooding it costs the registry nothing —
+ * and limiting it by address would only throttle the operator, who holds the token anyway.
+ */
+function clientKey(request: Request): string {
+  const address = request.headers.get("CF-Connecting-IP");
+  // Truncated before parsing: the longest textual IPv6 address is 45 characters, and an
+  // unparseable value is used verbatim as a durable primary key. Cloudflare overwrites the
+  // header so this is not client-reachable, but the cap is what makes that safe to rely on.
+  return address ? bucketAddress(address.trim().slice(0, 64)) : "unknown";
+}
+
+/**
+ * IPv4 buckets on the whole address. IPv6 buckets on the /64, because the smallest prefix an
+ * ordinary subscriber is handed is a /64 — keying on the exact address would give one caller
+ * 2^64 budgets and leave the limit inert. The prefixes that carry an IPv4 client in their last
+ * two hextets bucket on that IPv4 instead, which also makes every spelling of one IPv4 caller
+ * a single bucket.
+ */
+function bucketAddress(address: string): string {
+  if (!address.includes(":")) return address;
+  const hextets = expandIpv6(address.split("%")[0].toLowerCase());
+  if (!hextets) return address;
+  return embeddedIpv4(hextets)
+    ?? `${hextets.slice(0, 4).map((hextet) => hextet.toString(16)).join(":")}::/64`;
+}
+
+/**
+ * The IPv4 address carried by `::ffff:a.b.c.d` (mapped), `::a.b.c.d` (compatible, deprecated)
+ * and `::ffff:0:a.b.c.d` (translated, RFC 2765); null for anything else. All three sit in the
+ * same all-zero /64, so bucketing them by prefix would put every such caller — who are
+ * unrelated IPv4 clients — into one shared budget.
+ *
+ * Known and accepted: two further prefixes also put unrelated clients in one bucket, for
+ * different reasons. Under NAT64 `64:ff9b::/96` the prefix is fixed and identical for every
+ * translated client, so they share the `64:ff9b:0:0` /64 whatever their own IPv4 is. Under
+ * Teredo `2001:0::/32` hextets 2-3 carry the *server's* IPv4, so one /64 covers every client of
+ * that server. Neither is realistically emittable as a source address at the Cloudflare edge —
+ * 64:ff9b is a destination-synthesis prefix and Teredo is effectively dead — so both are left
+ * to the /64 rule rather than special-cased.
+ */
+function embeddedIpv4(hextets: number[]): string | null {
+  if (!hextets.slice(0, 4).every((hextet) => hextet === 0)) return null;
+  const carrier = (hextets[4] === 0 && (hextets[5] === 0 || hextets[5] === 0xffff)) ||
+    (hextets[4] === 0xffff && hextets[5] === 0);
+  if (!carrier) return null;
+  return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+}
+
+/** The eight hextets of an IPv6 address, accepting `::` and a trailing dotted quad; null if malformed. */
+function expandIpv6(address: string): number[] | null {
+  let text = address;
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (dotted) {
+    const octets = dotted.slice(1).map(Number);
+    if (octets.some((octet) => octet > 255)) return null;
+    const pair = [(octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]];
+    text = text.slice(0, dotted.index) + pair.map((v) => v.toString(16)).join(":");
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  const groups = halves.length === 2
+    ? [...head, ...Array<string>(missing).fill("0"), ...tail]
+    : head;
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
+}
+
 async function activateDevice(request: Request, env: Env): Promise<Response> {
   const body = await request.json().catch(() => null) as
     | { code?: unknown; deviceName?: unknown }
     | null;
   if (!body || typeof body.code !== "string" || body.code.length < 8) {
     return response({ error: "Invalid activation code" }, 401);
+  }
+  if (!(await registry(env).allowActivationAttempt(clientKey(request)))) {
+    return response({ error: "Too many activation attempts" }, 429);
   }
   const deviceId = randomToken(8);
   const deviceToken = randomToken(32);
@@ -334,6 +461,28 @@ export default {
  * of compute, and nothing ever forces the phones to reconnect.
  */
 export class RoomRelay extends DurableObject<Env> {
+  /**
+   * The last `room.snapshot` frame followed by every frame published since, verbatim and in
+   * order, replayed to each reader that arrives after them. A phone that reconnects otherwise
+   * shows its `localStorage` copy until the host's next snapshot heartbeat, up to 15 s later.
+   *
+   * The tail is the whole point. The phone's `applySnapshot()` clears its speakers, aliases, and
+   * utterances before repopulating, and it caches every incremental frame as it arrives — so a
+   * phone reconnecting between heartbeats holds newer state than the snapshot alone, and a
+   * snapshot replayed without its tail would delete up to 15 s of transcript in front of the
+   * room. Replaying the sequence gives a reconnecting reader exactly what a reader connected
+   * the whole time saw.
+   *
+   * Held in memory, not in storage: the host republishes a snapshot every 15 s and each publish
+   * wakes this object, so a buffer lost to eviction refills within one heartbeat — the worst case
+   * is exactly the pre-replay behaviour. Storage would instead put a write on the fan-out path of
+   * every frame for the whole meeting.
+   */
+  private replay: string[] = [];
+  private replayBytes = 0;
+  /** A closed or moved room is over: its buffer is final and takes nothing further. */
+  private terminal = false;
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return response({ error: "WebSocket upgrade required" }, 426);
@@ -343,17 +492,34 @@ export class RoomRelay extends DurableObject<Env> {
     const verificationKey = url.searchParams.get("vk") ?? "";
     const expiresAt = Number(url.searchParams.get("exp") ?? "0");
 
+    // Before the socket exists, because this is the only await in the method and everything after
+    // `acceptWebSocket` must reach the wire as one uninterrupted run: the accepted socket is in
+    // `getWebSockets()` at once, so a concurrent publish resuming across a yield here could fan a
+    // live frame out ahead of `gateway.session` and the replay. Nothing in it needs the socket.
+    await this.scheduleExpiry(expiresAt);
+
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ expiresAt });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
-    await this.scheduleExpiry(expiresAt);
 
     // Same contract as before: the reader treats the session message as proof it is
     // subscribed to the room it was invited to, before trusting any relayed envelope.
     server.send(JSON.stringify({ type: "gateway.session", room, verificationKey, expiresAt }));
+    // Ordinary relay frames, indistinguishable from live ones — the phone verifies and applies
+    // them through the same path, so late join needs no client change.
+    for (const frame of this.replay) {
+      try {
+        server.send(frame);
+      } catch {
+        // Same containment as the fan-out loop, and for the same reason: a send that throws
+        // must cost this reader its replay, not its connection. Escaping here would turn the
+        // 101 into a 500. Once one send fails the socket is gone, so stop rather than continue.
+        break;
+      }
+    }
 
     return new Response(null, {
       status: 101,
@@ -365,6 +531,7 @@ export class RoomRelay extends DurableObject<Env> {
   /** Fan a signed envelope out to every live reader. Called over RPC from the Worker. */
   async publish(payload: unknown): Promise<void> {
     const message = JSON.stringify({ type: "relay", payload });
+    this.buffer(message, envelopeType(payload));
     const now = Math.floor(Date.now() / 1000);
     for (const socket of this.ctx.getWebSockets()) {
       if (this.expired(socket, now)) continue;
@@ -399,11 +566,92 @@ export class RoomRelay extends DurableObject<Env> {
     if (Number.isFinite(next)) await this.ctx.storage.setAlarm(next * 1000);
   }
 
+  /**
+   * Fold one published frame into the replay buffer.
+   *
+   * A snapshot supersedes the previous one and its tail: the heartbeat already contains
+   * everything those frames said. Anything else extends the tail, but only once a snapshot has
+   * anchored it — a frame on its own is not something a phone that has never seen this room can
+   * apply.
+   *
+   * `room.closed` and `room.moved` end the buffer instead of clearing it, which is the reverse of
+   * this code's first cut. That version dropped the buffer on both, reasoning that a late reader
+   * must not be greeted with a finished meeting rendered as live — but dropping is what *produces*
+   * that. The host publishes a final snapshot, then the announcement, then stops (`MainViewModel`),
+   * so a reader arriving afterwards received only `gateway.session` and fell back to its own
+   * `localStorage`: truncated to `CACHE_LIMIT` utterances and flagged `closed:false`, a finished
+   * meeting shown as live, with nothing left running to correct it. Replaying
+   * snapshot → tail → announcement is what prevents it — `applyClosed()` puts the phone in
+   * "ended", `moveToRoom()` takes it to the room the meeting continues in.
+   */
+  private buffer(message: string, type: string | null): void {
+    switch (type) {
+      case "room.closed":
+      case "room.moved":
+        // A later announcement supersedes an earlier one rather than stacking on it, because a
+        // closed room can legitimately receive one more: `MainViewModel` keeps `_relay` alive
+        // past `StopAsync` ("Outlives its session: the next Start uses it to redirect phones to
+        // the new room"), so a restart publishes `room.moved` on the room it already closed. A
+        // phone locked across the restart must follow the meeting, not sit on "ended" for good.
+        // Bounded at one terminal frame per dead room: `_relay` is disposed straight afterwards.
+        if (this.terminal) this.dropLast();
+        // The caps apply to an announcement like any other frame, but it is the one frame that
+        // must outlive them: nothing follows it to make good its loss. If it does not fit, the
+        // snapshot and tail go and it stands alone. That is safe where a lone snapshot is not —
+        // neither client handler rebuilds the transcript from the announcement's own contents:
+        // `applyClosed()` sets a flag and leaves the records untouched, and `moveToRoom()` clears
+        // deliberately and resubscribes, so a full snapshot follows from the new room.
+        if (!this.remember(message)) {
+          // remember() emptied the buffer on overflow; one frame on its own always fits.
+          this.remember(message);
+        }
+        this.terminal = true;
+        break;
+      // Everything else stops at a terminal room: the host has moved on, and a frame published
+      // to a room it no longer drives is not part of any state a late reader should be given.
+      case "room.snapshot":
+        if (this.terminal) break;
+        this.forgetReplay();
+        this.remember(message);
+        break;
+      default:
+        if (!this.terminal && this.replay.length > 0) this.remember(message);
+    }
+  }
+
+  /** Drop the frame at the end of the buffer, keeping the byte count honest. */
+  private dropLast(): void {
+    const last = this.replay.pop();
+    if (last !== undefined) this.replayBytes -= encoder.encode(last).byteLength;
+  }
+
+  /**
+   * Append one frame; drop the buffer whole and return false if it no longer fits. Truncating the
+   * tail is not an option: a snapshot delivered without the frames that followed it is precisely
+   * the rollback this buffer exists to prevent, whereas an empty buffer only degrades to the
+   * pre-replay behaviour — the phone renders its own cache and waits for the next heartbeat,
+   * which starts a fresh buffer.
+   */
+  private remember(message: string): boolean {
+    this.replay.push(message);
+    this.replayBytes += encoder.encode(message).byteLength;
+    if (this.replay.length <= MAX_REPLAY_FRAMES && this.replayBytes <= MAX_REPLAY_BYTES) {
+      return true;
+    }
+    this.forgetReplay();
+    return false;
+  }
+
+  private forgetReplay(): void {
+    this.replay = [];
+    this.replayBytes = 0;
+  }
+
   private expired(socket: WebSocket, now: number): boolean {
     const { expiresAt } = (socket.deserializeAttachment() ?? {}) as { expiresAt?: number };
     if (expiresAt && expiresAt > now) return false;
     try {
-      socket.close(1000, "Room expired");
+      socket.close(ROOM_EXPIRED_CLOSE, "Room expired");
     } catch {
       // already closing
     }
@@ -442,7 +690,55 @@ export class DeviceRegistry extends DurableObject<Env> {
         created_at INTEGER NOT NULL,
         revoked_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS activation_attempts (
+        client TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        attempts INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS activation_attempts_window
+        ON activation_attempts (window_start);
     `);
+  }
+
+  /**
+   * Fixed window per calling address. Durable rather than in-memory because a caller who
+   * paces requests slowly enough for this object to be evicted would otherwise reset the
+   * counter for free. Rows expire with their window, so the table stays the size of the set
+   * of addresses currently trying.
+   *
+   * The sweep runs on `activation_attempts_window`, not as a scan. A caller rotating source
+   * prefixes never trips the limit and inserts a row per request, so the table's size is his
+   * to choose; an unindexed sweep would read all of it on every attempt and make the limiter
+   * worse than no limiter. Indexed, the sweep reads only the rows it actually retires — each
+   * row read and deleted exactly once in its life — so the cost is amortised-constant and
+   * total work is linear in rows created rather than quadratic in table size.
+   */
+  allowActivationAttempt(client: string): boolean {
+    const now = Date.now();
+    this.sql.exec(
+      "DELETE FROM activation_attempts WHERE window_start <= ?",
+      now - ACTIVATE_WINDOW_MS,
+    );
+    const open = this.sql
+      .exec<{ attempts: number }>(
+        "SELECT attempts FROM activation_attempts WHERE client = ?",
+        client,
+      )
+      .toArray();
+    if (open.length === 0) {
+      this.sql.exec(
+        "INSERT INTO activation_attempts (client, window_start, attempts) VALUES (?, ?, 1)",
+        client,
+        now,
+      );
+      return true;
+    }
+    if (open[0].attempts >= ACTIVATE_MAX_ATTEMPTS) return false;
+    this.sql.exec(
+      "UPDATE activation_attempts SET attempts = attempts + 1 WHERE client = ?",
+      client,
+    );
+    return true;
   }
 
   registerCode(codeHash: string, note: string): void {
@@ -454,12 +750,18 @@ export class DeviceRegistry extends DurableObject<Env> {
     );
   }
 
-  /** Atomically burns the code and enrols the device; false if the code is unknown or spent. */
+  /**
+   * Atomically burns the code and enrols the device; false if the code is unknown, spent, or
+   * older than `ACTIVATION_CODE_TTL_MS`. The age comes from the `created_at` the code was
+   * already stored with, so no schema change reaches the deployed registry.
+   */
   redeemCode(codeHash: string, deviceId: string, name: string, tokenHash: string): boolean {
+    const now = Date.now();
     const burned = this.sql.exec(
-      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL",
-      Date.now(),
+      "UPDATE codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL AND created_at > ?",
+      now,
       codeHash,
+      now - ACTIVATION_CODE_TTL_MS,
     );
     if (burned.rowsWritten === 0) return false;
     this.sql.exec(

@@ -21,7 +21,6 @@ public sealed record AsrCapabilities(
 
 public sealed record AsrSessionOptions(
     int SampleRateHz,
-    IReadOnlyList<string> ExpectedLanguages,
     IReadOnlyList<string> TargetLanguages);
 
 public interface IAsrProvider

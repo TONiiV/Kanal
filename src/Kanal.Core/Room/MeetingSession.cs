@@ -71,7 +71,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
         var config = Room.Config;
         _session = await _asr.StartAsync(
-            new AsrSessionOptions(16_000, config.Languages, config.Languages), ct);
+            new AsrSessionOptions(16_000, config.Languages), ct);
         Interlocked.Exchange(ref _transcribing, _announceTranscription ? 1 : 0);
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
         await _relay.PublishAsync(new RoomTranscribingMessage(IsTranscribing), ct);

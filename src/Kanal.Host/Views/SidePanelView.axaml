@@ -1,72 +1,180 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Kanal.Host.Controls"
+             xmlns:sys="using:System"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
-             x:Class="Kanal.Host.Views.SidePanelView" x:DataType="vm:MainViewModel"
-             Width="272">
-    <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0" Padding="20,20,20,16">
+             x:Class="Kanal.Host.Views.SidePanelView" x:DataType="vm:MainViewModel">
+    <UserControl.Styles>
+        <Style Selector="TabItem">
+            <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,20,0" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+        <Style Selector="TabItem:pointerover">
+            <Setter Property="Foreground" Value="{StaticResource Ink2}" />
+        </Style>
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <!-- Fluent draws the marker in the system accent; the host is ink and paper. It sits flush
+             under the header content, which is why each header carries its own bottom margin -
+             without it the rule strikes through the descenders of "Points". -->
+        <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
-            <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasJoinInfo}" Margin="0,0,0,22">
-                <TextBlock Text="{l:T join.label}" Classes="label" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,12" />
-                <Image Source="{Binding QrImage}" Width="196" Height="196" HorizontalAlignment="Left"
-                       RenderOptions.BitmapInterpolationMode="None" />
-                <TextBox Text="{Binding JoinUrl}" IsReadOnly="True" FontSize="10" Height="48"
-                         TextWrapping="Wrap" AcceptsReturn="True" Margin="0,10,0,0" />
-            </StackPanel>
+            <Border DockPanel.Dock="Top" Classes="sidebar-header"
+                    MinHeight="{Binding Shell.HeaderHeight}">
+                <DockPanel LastChildFill="False">
+                    <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="CollapseAssistant"
+                            Command="{Binding Shell.Right.ToggleCommand}"
+                            ToolTip.Tip="{l:T sidebar.collapse.tip}"
+                            AutomationProperties.Name="{l:T sidebar.collapse.tip}">
+                        <Path Classes="glyph" Data="{c:Icon chevron-right}" />
+                    </Button>
+                    <TextBlock DockPanel.Dock="Right" Classes="label" x:Name="AssistantTitle"
+                               Text="{l:T sidebar.assistant}" />
+                </DockPanel>
+            </Border>
 
-            <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasJoinError}" Margin="0,0,0,22">
-                <TextBlock Text="{l:T join.label}" Classes="label" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,12" />
-                <TextBlock Text="{Binding JoinError}" TextWrapping="Wrap"
-                           Foreground="{StaticResource Ink2}" FontSize="12" />
-            </StackPanel>
+            <TabControl Padding="0" Margin="20,14,0,0">
+                <TabItem x:Name="PointsTab" AutomationProperties.Name="{l:T assistant.tab.points}">
+                    <TabItem.Header>
+                        <TextBlock Text="{l:T assistant.tab.points}" Margin="0,0,0,7" />
+                    </TabItem.Header>
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                            BorderThickness="0,1,0,0">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" x:Name="NoAnalystNote"
+                                       Text="{l:T assistant.noanalyst}" TextWrapping="Wrap"
+                                       FontSize="12.5" LineHeight="19" Foreground="{StaticResource Ink3}"
+                                       IsVisible="{Binding Assistant.ShowNoAnalystNote}" />
+                            <TextBlock DockPanel.Dock="Top" x:Name="NothingYetNote"
+                                       Text="{l:T assistant.nothingyet}" TextWrapping="Wrap"
+                                       FontSize="12.5" Foreground="{StaticResource Ink3}"
+                                       IsVisible="{Binding Assistant.ShowNothingFoundYet}" />
+                            <ScrollViewer x:Name="InsightList"
+                                          IsVisible="{Binding Assistant.IsAnalystConnected}">
+                                <ItemsControl ItemsSource="{Binding Assistant.Topics}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:InsightTopicViewModel">
+                                            <StackPanel Margin="0,0,0,22">
+                                                <TextBlock Text="{Binding Topic}" Classes="label" />
+                                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1"
+                                                        Margin="0,6,0,12" />
+                                                <ItemsControl ItemsSource="{Binding Items}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:InsightItemViewModel">
+                                                            <StackPanel Margin="0,0,0,18" Spacing="6">
+                                                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                                                    <TextBlock Text="{Binding KindLabel}" FontSize="10"
+                                                                               FontWeight="Bold" LetterSpacing="1.2"
+                                                                               Foreground="{StaticResource Ink2}" />
+                                                                    <TextBlock Text="{Binding StateLabel}" FontSize="10"
+                                                                               LetterSpacing="0.6"
+                                                                               Foreground="{StaticResource Ink3}" />
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                           FontSize="13.5" LineHeight="21"
+                                                                           Foreground="{StaticResource Ink}" />
+                                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="sys:String">
+                                                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                                                       FontSize="11.5" LineHeight="17"
+                                                                                       Margin="9,0,0,3"
+                                                                                       Foreground="{StaticResource Ink3}" />
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                    <Button Content="{l:T insight.confirm}"
+                                                                            Classes="ghost" Padding="9,4"
+                                                                            IsVisible="{Binding IsCandidate}"
+                                                                            Command="{Binding ConfirmCommand}"
+                                                                            ToolTip.Tip="{l:T insight.confirm.tip}"
+                                                                            AutomationProperties.Name="{l:T insight.confirm.tip}" />
+                                                                    <Button Content="×" Classes="ghost" Padding="9,4"
+                                                                            Command="{Binding DismissCommand}"
+                                                                            ToolTip.Tip="{l:T insight.dismiss.tip}"
+                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}" />
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </TabItem>
 
-            <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
-                <TextBlock Text="{l:T merge.label}" Classes="label" />
-                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
-                <StackPanel Orientation="Horizontal" Spacing="7">
-                    <TextBox Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
-                    <TextBlock Text="→" VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />
-                    <TextBox Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="58" />
-                </StackPanel>
-                <Button Content="{l:T merge.button}" Command="{Binding MergeSpeakersCommand}"
-                        HorizontalAlignment="Left" Margin="0,8,0,0" />
-            </StackPanel>
+                <TabItem x:Name="SpeakersTab" AutomationProperties.Name="{l:T assistant.tab.speakers}">
+                    <TabItem.Header>
+                        <TextBlock Text="{l:T assistant.tab.speakers}" Margin="0,0,0,7" />
+                    </TabItem.Header>
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                            BorderThickness="0,1,0,0">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
+                                <TextBlock Text="{l:T merge.label}" Classes="label" />
+                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBox x:Name="MergeFrom" Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
+                                    <TextBlock Text="→" VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />
+                                    <TextBox x:Name="MergeInto" Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="58" />
+                                </StackPanel>
+                                <Button x:Name="MergeSpeakers" Content="{l:T merge.button}"
+                                        Command="{Binding MergeSpeakersCommand}"
+                                        HorizontalAlignment="Left" Margin="0,8,0,0" />
+                            </StackPanel>
 
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="{l:T speakers.label}" Classes="label" />
-                <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1"
-                        Margin="0,6,0,12" />
-                <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding Speakers}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SpeakerItemViewModel">
-                                <Grid ColumnDefinitions="3,*,Auto" Margin="0,0,0,14">
-                                    <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
-                                               VerticalAlignment="Stretch" />
-                                    <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="5">
-                                        <StackPanel Orientation="Horizontal" Spacing="7">
-                                            <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
-                                                       LetterSpacing="1.2" Foreground="{Binding Color}" />
-                                            <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
-                                                       Foreground="{StaticResource Ink3}" />
-                                        </StackPanel>
-                                        <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
-                                            <TextBox.KeyBindings>
-                                                <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
-                                            </TextBox.KeyBindings>
-                                        </TextBox>
-                                    </StackPanel>
-                                    <Button Grid.Column="2" Content="✓" Classes="ghost" Padding="10,5"
-                                            VerticalAlignment="Bottom" Command="{Binding RenameCommand}"
-                                            ToolTip.Tip="{l:T speaker.apply.tip}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </DockPanel>
+                            <ScrollViewer>
+                                <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SpeakerItemViewModel">
+                                            <Grid ColumnDefinitions="3,*,Auto" Margin="0,0,0,14">
+                                                <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
+                                                           VerticalAlignment="Stretch" />
+                                                <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="5">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                                        <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
+                                                                   LetterSpacing="1.2" Foreground="{Binding Color}" />
+                                                        <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
+                                                                   Foreground="{StaticResource Ink3}" />
+                                                    </StackPanel>
+                                                    <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
+                                                </StackPanel>
+                                                <Button Grid.Column="2" Content="✓" Classes="ghost" Padding="10,5"
+                                                        VerticalAlignment="Bottom" Command="{Binding RenameCommand}"
+                                                        ToolTip.Tip="{l:T speaker.apply.tip}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </TabItem>
+            </TabControl>
         </DockPanel>
     </Border>
 </UserControl>

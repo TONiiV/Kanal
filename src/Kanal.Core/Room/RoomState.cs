@@ -170,6 +170,14 @@ public sealed class RoomState
         }
     }
 
+    public Utterance? Find(string utteranceId)
+    {
+        lock (_gate)
+        {
+            return _utterances.GetValueOrDefault(utteranceId);
+        }
+    }
+
     /// <summary>Resolve a raw diarization tag to its canonical (post-merge) speaker tag.</summary>
     public string ResolveTag(string tag)
     {
