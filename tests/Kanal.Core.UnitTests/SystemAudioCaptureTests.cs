@@ -186,28 +186,35 @@ public class SystemAudioCaptureTests
     [Fact]
     public void BuiltMacAppCarriesBothAudioPermissionPurposes()
     {
+        // What the release bundle declares is asserted by InstallerLayoutTests against the template
+        // both bundles are written from. What is asserted here is that a plain `dotnet build`
+        // produced a bundle at all: without one the purpose strings are never read, and the
+        // developer testing the permission flow gets a denial the operator will not see.
+        if (!OperatingSystem.IsMacOS())
+            return;
+
         var output = new DirectoryInfo(AppContext.BaseDirectory);
         var configuration = output.Parent!.Name;
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-        var plistPath = OperatingSystem.IsMacOS()
-            ? Path.Combine(root, $"src/Kanal.Host/bin/{configuration}/{output.Name}/Kanal.app/Contents/Info.plist")
-            : Path.Combine(root, "src/Kanal.Host/Info.plist");
-        var plist = File.ReadAllText(plistPath);
+        var contents = Path.Combine(
+            root, $"src/Kanal.Host/bin/{configuration}/{output.Name}/Kanal.app/Contents");
+        var plistPath = Path.Combine(contents, "Info.plist");
 
+        Assert.True(
+            File.Exists(plistPath),
+            $"no bundle at {plistPath} — build Kanal.slnx, not this project alone");
+
+        var plist = File.ReadAllText(plistPath);
         Assert.Contains("NSAudioCaptureUsageDescription", plist, StringComparison.Ordinal);
         Assert.Contains("NSMicrophoneUsageDescription", plist, StringComparison.Ordinal);
+        Assert.DoesNotContain("__VERSION__", plist, StringComparison.Ordinal);
 
-        if (OperatingSystem.IsMacOS())
-        {
-            var macOs = Path.Combine(Path.GetDirectoryName(plistPath)!, "MacOS");
-            Assert.True(
-                File.Exists(Path.Combine(macOs, "Kanal.Host")),
-                $"no host executable beside {plistPath} — build Kanal.slnx, not this project alone");
-            Assert.True(File.Exists(Path.Combine(macOs, "libkanal_audio_native.dylib")));
-            Assert.True(
-                Directory.Exists(Path.Combine(macOs, "runtimes")),
-                "a bundle without the native runtime assets cannot launch");
-        }
+        var macOs = Path.Combine(contents, "MacOS");
+        Assert.True(File.Exists(Path.Combine(macOs, "Kanal.Host")));
+        Assert.True(File.Exists(Path.Combine(macOs, "libkanal_audio_native.dylib")));
+        Assert.True(
+            Directory.Exists(Path.Combine(macOs, "runtimes")),
+            "a bundle without the native runtime assets cannot launch");
     }
 
     private sealed class FakeMacNative(

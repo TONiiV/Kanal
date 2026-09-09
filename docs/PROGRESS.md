@@ -573,7 +573,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
   tap. macOS 13–14.1 uses an audio-only ScreenCaptureKit stream anchored to the current display.
 - A small C ABI wraps the Apple APIs in a source-built universal Swift dylib. The managed boundary
   owns bounded delivery, resampling, cancellation, actionable permission errors, and stale-output
-  rejection. The host Info.plist declares microphone and system-audio usage descriptions.
+  rejection.
 - The existing device watcher now observes output topology/default changes as well as microphone
   changes. Headless tests inject the native boundary and never trigger a real permission prompt.
 - No `CHANGELOG.md` bullet. Nothing in `src/Kanal.Host` consumes `ISystemAudioCaptureService` yet
@@ -600,6 +600,30 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 already owns; it reads `Support.Backend` and keeps only the guards the platform analyzer needs.
 The app-bundle target copied `$(TargetDir)*`, which matches files and not directories, so the
 bundle it produced was missing `runtimes/` and could not have launched — the point of building it.
+
+### One plist, written twice, would have shipped the wrong half
+
+This slice started life with its own `src/Kanal.Host/Info.plist`, because a `dotnet build` artifact
+has no bundle and therefore no way to ask macOS for system audio. The installer work
+([#27](https://github.com/TONiiV/Kanal/pull/27)) landed first and brought a second declaration of
+the same bundle — `installers/macos/Info.plist.template` — and the two disagreed on three things:
+the bundle identifier, the minimum system version, and, fatally, whether
+`NSAudioCaptureUsageDescription` existed at all.
+
+Only the second copy is shipped. So the developer who tested the permission flow would have been
+granted computer audio, and the operator running the notarised dmg would have been refused it with
+no prompt and no error — the same silent-denial shape the microphone string exists to prevent,
+reintroduced by having two files where the system reads one.
+
+The duplicate is gone. `CreateMacAppBundle` now writes the development bundle from the installer's
+template with the same `__VERSION__` substitution the release path uses, and stages the same
+`lproj` strings, so the prompt a developer sees is the prompt the room sees. The identifier
+disagreement resolves to the installer's `io.github.toniiv.kanal`: TCC keys its grants on the
+bundle identifier, and changing it after the first signed build looks to macOS like a different
+application. The minimum system version stays at 12.0 — .NET 10's own runtime is built to load
+there, and `DescribeSupport` already degrades computer audio to an explained refusal below macOS
+13, so raising the floor would lock out microphone-only operators for a capability they were never
+offered.
 
 ### The control bar reads as two groups
 
