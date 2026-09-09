@@ -5,11 +5,6 @@ using NAudio.Wave;
 
 namespace Kanal.Audio;
 
-/// <summary>
-/// Windows capture via WASAPI shared mode. Accepts whatever mix format the device
-/// delivers (typically float32 stereo at 44.1/48 kHz) and converts to 16 kHz mono PCM16.
-/// The macOS counterpart is the open D0-A item and lives behind the same interface.
-/// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WasapiAudioCapture : IAudioCaptureService
 {

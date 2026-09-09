@@ -601,6 +601,22 @@ already owns; it reads `Support.Backend` and keeps only the guards the platform 
 The app-bundle target copied `$(TargetDir)*`, which matches files and not directories, so the
 bundle it produced was missing `runtimes/` and could not have launched — the point of building it.
 
+### Three managed defects a second review found
+
+- A native session that never reports teardown is deliberately leaked rather than allowed to hang
+  the operator's Stop. It keeps the function pointers it was handed, and a marshalled delegate's
+  thunk dies with the delegate — so `GC.KeepAlive` in the `finally` rooted the callbacks only up to
+  the moment the iterator became unreachable, after which the audio thread could call into freed
+  memory. A leaked session now leaks its callbacks too. The test holds a `WeakReference` to them,
+  forces a collection, and fails if either is gone.
+- `WasapiPcmCapture` chose its conversion on `BitsPerSample` alone, so a device reporting 32-bit
+  **integer** PCM was read as float32: noise around silence, which sounds like a room nobody is
+  speaking in rather than a format the host declined. The encoding is now read as well as the width.
+  This logic predates the refactor, but the refactor pointed the loopback path at it too.
+- `PcmConvert` — the downmix and float conversion both capture paths now share — had no tests at
+  all. It has value assertions now, including the clamp that keeps the loudest moment in the meeting
+  from coming out with the opposite sign.
+
 ### One plist, written twice, would have shipped the wrong half
 
 This slice started life with its own `src/Kanal.Host/Info.plist`, because a `dotnet build` artifact

@@ -23,10 +23,14 @@ internal static class WasapiPcmCapture
         {
             try
             {
-                var mono = format.BitsPerSample switch
+                // 32-bit integer PCM has float32's sample width and none of its meaning, so the
+                // encoding has to be read as well as the width: reinterpreted, it is noise around
+                // silence, which reads as a room nobody is speaking in rather than a refusal.
+                var mono = (format.BitsPerSample, format.Encoding) switch
                 {
-                    32 => PcmConvert.Float32ToMonoPcm16(e.Buffer.AsSpan(0, e.BytesRecorded), format.Channels),
-                    16 => PcmConvert.DownmixToMono(
+                    (32, not WaveFormatEncoding.Pcm) =>
+                        PcmConvert.Float32ToMonoPcm16(e.Buffer.AsSpan(0, e.BytesRecorded), format.Channels),
+                    (16, _) => PcmConvert.DownmixToMono(
                         PcmConvert.BytesToShorts(e.Buffer.AsSpan(0, e.BytesRecorded)), format.Channels),
                     _ => throw new NotSupportedException($"Unsupported capture format: {format}"),
                 };
