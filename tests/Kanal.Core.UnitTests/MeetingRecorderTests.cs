@@ -1,4 +1,5 @@
 using Kanal.Audio;
+using Kanal.Core.Meetings;
 using Kanal.Host.Services;
 
 namespace Kanal.Core.UnitTests;
@@ -68,6 +69,50 @@ public class MeetingRecorderTests
         recorder.Write(new byte[320]);
 
         Assert.Equal(0, stopped);
+    }
+
+    /// <summary>
+    /// The recorder is the only thing that knows which byte of the meeting the file starts at,
+    /// so it is the thing that tells the timeline — rather than a second copy of that arithmetic
+    /// at the call site, which would be right only as long as both are edited together.
+    /// </summary>
+    [Fact]
+    public void TheTimelineLearnsWhichStretchOfTheMeetingTheFileHolds()
+    {
+        var timeline = new MeetingTimeline();
+        var path = TempFile();
+        timeline.Append(new byte[32_000]);
+
+        using (new MeetingRecorder(new WavWriter(path), _ => { }, timeline))
+        {
+            timeline.Append(new byte[32_000]);
+            timeline.Observe("u1", 1_000, 2_000);
+        }
+
+        timeline.Append(new byte[32_000]);
+        timeline.Observe("after", 2_000, 3_000);
+
+        var during = timeline.LocateInRecording("u1");
+        Assert.Equal(AudioAvailability.Available, during.Availability);
+        Assert.Equal(path, during.Path);
+        Assert.Equal(0, during.StartDataByte);
+        Assert.Equal(32_000, during.EndDataByte);
+        Assert.Equal(AudioAvailability.NotRecorded, timeline.LocateInRecording("after").Availability);
+    }
+
+    [Fact]
+    public void AFailedWriteClosesTheRecordingOnTheTimelineToo()
+    {
+        var timeline = new MeetingTimeline();
+        var writer = new WavWriter(TempFile());
+        var recorder = new MeetingRecorder(writer, _ => { }, timeline);
+        writer.Dispose();
+
+        recorder.Write(new byte[320]);
+
+        timeline.Append(new byte[32_000]);
+        timeline.Observe("after", 0, 1_000);
+        Assert.Equal(AudioAvailability.NotRecorded, timeline.LocateInRecording("after").Availability);
     }
 
     [Fact]

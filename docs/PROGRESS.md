@@ -115,6 +115,61 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### A meeting has one timeline, and it is not the clock on the wall
+
+`docs/design/meeting-evidence.md` has carried the same warning since the design review: nobody had
+checked whether an ASR timestamp and an offset into the WAV still agree after a pause, a reconnect,
+or a second file. Two features are about to depend on that agreement — speaker attribution needs the
+samples of a sentence that just finalised, click-to-replay needs the byte range of a sentence spoken
+an hour ago — and answering it twice would have produced two inconsistent wrong answers.
+`MeetingTimeline` is the one answer, and [ADR 0055](adr/0055-speaker-attribution.md) makes it the
+first slice for exactly that reason.
+
+The unit it counts in is bytes of *accepted* audio. Wall-clock time is the obvious unit and the
+wrong one: the operator steps out of the negotiation, `MeetingSession.PushAudioAsync` drops the next
+minute at the door, and a timeline keeping time would have to remember to subtract that minute — in
+the same second place the pause promise already refuses to live. Counting only what the session took
+makes the gap not exist at all. `AudioAccepted` already fires for precisely that audio, which is why
+the recorder hangs off it; the timeline hangs off the same fact one layer earlier.
+
+The other clock in play is the transcriber's, and it is only trustworthy inside one ASR session —
+reconnect and it restarts at zero. `AsrClockRestarted()` records where on the timeline the new zero
+sits, and the offset is pinned to a sentence the first time that sentence is seen rather than looked
+up fresh on every partial. Without the pin, a restart landing between a sentence's last partial and
+its final would move that sentence forwards by the length of the meeting so far.
+
+There are two lookups because there are two questions. `LocateInRecording` answers with a path and a
+byte range inside that file's PCM data; it works for any sentence the timeline ever saw, and a
+recording that started ten minutes in, stopped on a full disk, or restarted into a second file gives
+each sentence the segment that was actually running when it was spoken — and `NotRecorded` for the
+ones spoken between segments. `TakeRecentAudio` answers with the samples themselves, out of a
+bounded ring of the last sixty seconds, which is what the per-utterance embedding of slice 4 will
+consume. A final arriving after its audio has been overwritten gets `AgedOut` — an answer — rather
+than a plausible byte range from somewhere else in the meeting. Spans are clamped to the audio
+actually accepted, which is what leaves the ring with exactly one failure to report instead of two.
+
+`TEndMs` is nullable, and partials never carry it. Those resolve to a span ending at everything
+accepted so far, flagged `EndIsOpen`: a sentence cannot have ended after audio that had not arrived
+yet, so it is an honest upper bound, and the flag stops a consumer reading it as a measured end.
+The recorder is what tells the timeline where its file begins, rather than the view model computing
+that at the call site — `MeetingRecorder` is already the single place that knows when a recording
+starts and the single place that knows a failed write ended one.
+
+Two things this does not fix, written down before they are rediscovered the expensive way.
+`GladiaAsrSession` reconnects to the same session URL and *drops every frame pushed while it is
+reconnecting*, silently: Core hands those bytes to the timeline, the transcriber never hears them,
+and nothing in `IAsrSession` lets a session report the audio it refused. A reconnect therefore
+introduces a bounded drift that no amount of care on this side can correct; the fix belongs on the
+contract. And nothing restarts an ASR session today, so `AsrClockRestarted()` is called exactly once,
+at start — it is tested directly anyway, because the day something does restart is not the day to
+discover the timeline never handled it.
+
+Also settled here: `GladiaAsrProvider.Caps.Diarization` is `false`. It was `true`, and had been
+false in fact since it was written — the live request body has no diarization parameter to set, live
+transcripts carry no speaker, and `GladiaWire` falls back to a single tag for the whole meeting.
+`FakeAsrProvider` keeps `true`, which is what holds the "the provider brings its own" branch under
+test.
+
 ### A meeting now writes itself down while it is still happening
 
 Slice 1 of [ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md) (decisions 5–8). Until now

@@ -1353,7 +1353,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     RecordingPath = "";
                     Status = L.Format("status.recordingstopped", reason);
                 });
-            });
+            }, session.Timeline);
             _recorder = recorder;
             RecordingPath = path;
             session.AudioAccepted += frame => recorder.Write(frame.Span);

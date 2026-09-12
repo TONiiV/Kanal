@@ -1,3 +1,4 @@
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Relay;
@@ -52,6 +53,8 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public RoomState Room { get; }
 
+    public MeetingTimeline Timeline { get; } = new();
+
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
     public event Action<bool>? TranscribingChanged;
@@ -72,6 +75,7 @@ public sealed class MeetingSession : IAsyncDisposable
         var config = Room.Config;
         _session = await _asr.StartAsync(
             new AsrSessionOptions(16_000, config.Languages), ct);
+        Timeline.AsrClockRestarted();
         Interlocked.Exchange(ref _transcribing, _announceTranscription ? 1 : 0);
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
         await _relay.PublishAsync(new RoomTranscribingMessage(IsTranscribing), ct);
@@ -126,6 +130,7 @@ public sealed class MeetingSession : IAsyncDisposable
         if (IsPaused)
             return ValueTask.CompletedTask;
 
+        Timeline.Append(pcm16.Span);
         AudioAccepted?.Invoke(pcm16);
         return session.PushAudioAsync(pcm16, ct);
     }
@@ -179,6 +184,7 @@ public sealed class MeetingSession : IAsyncDisposable
                         if (IsPaused && !Room.Contains(t.UtteranceId))
                             break;
 
+                        Timeline.Observe(t.UtteranceId, t.TStartMs, t.TEndMs);
                         var utterance = Room.ApplyTranscript(NormalizeChinese(t));
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)

@@ -1,5 +1,6 @@
 using System;
 using Kanal.Audio;
+using Kanal.Core.Meetings;
 
 namespace Kanal.Host.Services;
 
@@ -15,6 +16,7 @@ public sealed class MeetingRecorder : IDisposable
 {
     private readonly WavWriter _writer;
     private readonly Action<string> _onStopped;
+    private readonly MeetingTimeline? _timeline;
     private bool _stopped;
 
     /// <param name="writer">Owned by the recorder from here on.</param>
@@ -22,10 +24,12 @@ public sealed class MeetingRecorder : IDisposable
     /// The reason the recording ended early. Invoked at most once, on whatever thread the
     /// failing write ran on — the caller marshals to the UI thread, not this class.
     /// </param>
-    public MeetingRecorder(WavWriter writer, Action<string> onStopped)
+    public MeetingRecorder(WavWriter writer, Action<string> onStopped, MeetingTimeline? timeline = null)
     {
         _writer = writer;
         _onStopped = onStopped;
+        _timeline = timeline;
+        timeline?.RecordingStarted(writer.Path);
     }
 
     public string Path => _writer.Path;
@@ -52,6 +56,7 @@ public sealed class MeetingRecorder : IDisposable
                 // the same dead disk the write just met; the frames that reached it are kept
             }
 
+            _timeline?.RecordingStopped();
             _onStopped(ex.Message);
         }
     }
@@ -64,5 +69,6 @@ public sealed class MeetingRecorder : IDisposable
     {
         _stopped = true;
         _writer.Dispose();
+        _timeline?.RecordingStopped();
     }
 }

@@ -26,7 +26,10 @@
 这不等于 TTS；译文若提供回放入口，也应定位到同一原始发言。
 
 已有 `Utterance.Id`、`TStartMs`、可空 `TEndMs`、revision，以及 `MeetingRecorder`／`WavWriter`。
-这些仅是候选基础，尚未验证 ASR 时间轴与录音文件偏移在暂停、分段及重连之后仍一致。
+对齐已由 `MeetingTimeline`（#106）建立并测试：暂停不推进时间轴、ASR 时钟重启不把句子拖回开头、
+每段录音各自计偏移、音频老化出环形缓冲的句子返回「不可用」而非错误区间。仍未解决的是重连丢帧：
+`GladiaAsrSession` 静默丢弃重连窗口内推给它的音频，`IAsrSession` 没有任何途径把丢了多少告诉 Core，
+因此一次重连会引入有界漂移，修法在契约上。
 
 实现工作项：
 
