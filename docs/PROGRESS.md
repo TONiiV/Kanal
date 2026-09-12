@@ -115,6 +115,36 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### The local ASR model was re-verified, and it changed the plan ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+[ADR 0053](adr/0053-local-transcription-model-and-runtime.md) records the whole check. Three things
+came out of it that were not assumptions anyone had made:
+
+**Nemotron 3.5 ASR Streaming 0.6B covers the room.** Its own `processor_config.json` carries
+`de`, `pl` and `zh-CN` prompts plus an `auto` prompt, and takes 16 kHz mono audio — the format
+`PcmConvert.Float32ToMonoPcm16` already emits. Bare `zh` is *not* in the dictionary, so the provider
+owes a `zh` → `zh-CN` mapping instead of a lookup that quietly falls through to auto.
+
+**It streams natively, so the streaming layer #49 planned is not built.** #49 committed Kanal to VAD
+segmentation plus LocalAgreement-2 because Whisper is a batch model and someone had to make it look
+live. This model is a cache-aware FastConformer-RNNT: caches carry across strictly non-overlapping
+chunks, and chunk size is a runtime dial (80/160/320/560/1120 ms). Writing an agreement layer over
+it would add latency and a second opinion about what was said.
+
+**There is a .NET runtime, and there is only one.** sherpa-onnx supports this model upstream and
+publishes `org.k2fsa.sherpa.onnx` on NuGet. The official repo's other artefacts are `.nemo`
+(PyTorch) and a GGUF for `transcribe.cpp` — the Rust runtime Handy uses, which has no .NET binding.
+The ONNX Runtime GenAI export is a different runtime with an unproven .NET speech path and licence
+metadata that disagrees with the base model. CoreML and MLX are macOS-only.
+
+Two smaller facts with consequences: the licence is **OpenMDW-1.1**, not Apache — permissive in
+intent, not OSI-listed, so it needs a review note in the catalog the way Gemma does. And a
+transcription model is **four files** (encoder, decoder, joiner, tokens; ≈682 MB for the 560 ms int8
+package), not one GGUF, which is why the shared downloader was widened to describe a file rather
+than a model.
+
+---
+
 ### The icons become files, and stop drifting off centre
 
 Every mark in the chrome was a `StreamGeometry` in `App.axaml` — path data in a resource dictionary,
