@@ -18,6 +18,18 @@ The human-readable name of a meeting record, distinct from its workspace name. I
 A meeting assistant that follows an ongoing meeting, answers questions and offers suggestions or fact-check findings.
 _Avoid_: ASR provider, translator
 
+**User feedback**:
+A suggestion, bug report or question submitted to the maintainers with a contact email. Submitting feedback does not require a Kanal account.
+_Avoid_: GitHub issue (a separate maintainer tracking item)
+
+**Kanal account**:
+A user's identity for accessing Kanal cloud features and future subscription entitlements. Multiple verified sign-in methods can belong to the same account; local features do not require it.
+_Avoid_: Relay device credential
+
+**Mobile caption page**:
+The page a participant opens on their phone to read captions from a Kanal session.
+_Avoid_: Relay backend
+
 **Utterance playback**:
 Playback of the original recorded audio corresponding to a selected utterance in a meeting transcript.
 _Avoid_: Text-to-speech
