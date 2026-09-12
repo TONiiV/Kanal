@@ -122,12 +122,13 @@ public class AssistantPanelTests
             .Where(control => control.Name == name).Distinct().Single();
 
     [AvaloniaFact]
-    public void TheAssistantPanelIsPointsAndSpeakersSideBySide()
+    public void TheAssistantPanelIsPointsThenSpeakersThenFiles()
     {
         var panel = Panel(out var window, out _);
         var tabs = panel.GetLogicalDescendants().OfType<TabControl>().Single();
 
-        Assert.Equal(2, tabs.Items.Count);
+        Assert.Equal(
+            ["PointsTab", "SpeakersTab", "FilesTab"], tabs.Items.OfType<TabItem>().Select(t => t.Name));
         foreach (var tab in tabs.Items.OfType<TabItem>())
             Assert.False(string.IsNullOrWhiteSpace(
                 Avalonia.Automation.AutomationProperties.GetName(tab)));

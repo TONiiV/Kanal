@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The right-hand column now has a Files tab. It lists what is in the selected meeting's folder —
+  transcript, recording, and anything already filed under it — and an Import file button copies a
+  drawing, quotation or specification from the laptop into that meeting's attachments folder, where
+  it stays with the meeting. Nothing is ever overwritten: a second file of the same name is kept
+  alongside the first. The tabs slide sideways when the column is narrow instead of stacking.
+
 - Meetings now save themselves. The moment recording starts, the transcript is written into the
   meeting's own record — line by line as people speak, not at the end — and the room recording goes
   in beside it. Nothing has to be exported to keep it, and a host that dies mid-meeting leaves

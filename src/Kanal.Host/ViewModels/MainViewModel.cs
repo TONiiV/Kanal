@@ -93,14 +93,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = titler;
         Titling = new MeetingTitling(() => _titler);
         Titling.Changed += OnTitlingChanged;
-        Sidebar = new WorkspaceSidebarViewModel(
-            (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))());
+        var store = (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))();
+        Sidebar = new WorkspaceSidebarViewModel(store);
+        Files = new MeetingFilesViewModel(
+            store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
         Sidebar.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
                 return;
             // Browsing to another record must not carry this room's generated name onto it.
             Titling.Reset();
+            Files.Show(Sidebar.SelectedMeeting?.Record);
             OnPropertyChanged(nameof(MeetingTitle));
         };
         _loadSettings = loadSettings;
@@ -228,6 +231,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     public WorkspaceSidebarViewModel Sidebar { get; }
+
+    public MeetingFilesViewModel Files { get; }
 
     [ObservableProperty]
     private string _loadedRoomId = "";

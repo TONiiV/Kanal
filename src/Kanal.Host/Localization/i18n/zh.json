@@ -241,6 +241,7 @@
   "settings.summary.note": "会议摘要尚未开发。开发之后，在这里选择所用模型以及它可以读取的内容。",
   "assistant.tab.points": "要点与决定",
   "assistant.tab.speakers": "发言人",
+  "assistant.tab.files": "文件",
   "assistant.noanalyst": "尚未接入旁听模型。接入后，要点与决定会出现在这里。",
   "assistant.nothingyet": "暂无内容。",
   "insight.kind.point": "要点",
@@ -272,5 +273,10 @@
   "workspace.nomeetings": "这里还没有会议。",
   "workspace.picker": "项目",
   "workspace.meetings": "会议",
-  "workspace.nomatches": "没有匹配的会议。"
+  "workspace.nomatches": "没有匹配的会议。",
+  "files.empty": "这场会议的文件夹里还没有东西。",
+  "files.nomeeting": "在左栏选一场会议，这里显示它的文件夹。",
+  "files.import": "导入文件",
+  "files.import.tip": "把本机的文件复制进这场会议的 attachments 文件夹",
+  "files.unreadable": "该文件夹无法列出：{0}"
 }
