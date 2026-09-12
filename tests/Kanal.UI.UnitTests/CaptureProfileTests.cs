@@ -28,23 +28,25 @@ public class CaptureProfileTests
         Assert.Same(pipeline, vm.SelectedMode);
         Assert.True(vm.NeedsComputerAudio);
         Assert.Contains("headphone", vm.CaptureProfileGuidance, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("chat", vm.ConsentReminder, StringComparison.OrdinalIgnoreCase);
     }
 
+    // The gate moved from the toolbar into the dialog record opens (ADR 0054, decisions 24–27):
+    // record is offered, and a cancelled dialog is what refuses the meeting.
     [AvaloniaFact]
-    public void ARealMeetingCannotStartUntilTheOperatorAttestsConsent()
+    public async Task ARealMeetingCannotStartUntilTheOperatorAttestsConsent()
     {
         var settings = new AppSettings { RecordAudio = false };
         settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
         settings.ActiveGladiaKeyName = "meeting-room";
         var vm = TestViewModels.Hermetic(settings);
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
-
-        Assert.False(vm.StartCommand.CanExecute(null));
-
-        vm.ConsentConfirmed = true;
+        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
 
         Assert.True(vm.StartCommand.CanExecute(null));
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsRunning);
     }
 
     [AvaloniaFact]
@@ -68,10 +70,10 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConsentConfirmed = true;
-        now = now.AddMinutes(7); // model startup must not rewrite when consent was actually given
+        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
+        now = now.AddMinutes(7); // a later export must not rewrite when consent was actually given
 
         Assert.True(vm.IsRunning);
         Assert.True(vm.IsLiveTranscription);
@@ -80,8 +82,10 @@ public class CaptureProfileTests
 
         await vm.StopCommand.ExecuteAsync(null);
 
-        Assert.False(vm.ConsentConfirmed);
-        Assert.False(vm.StartCommand.CanExecute(null));
+        // Every start asks again: the next meeting is a different room full of people.
+        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRunning);
     }
 
     [AvaloniaFact]
@@ -123,7 +127,7 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConsentConfirmed = true;
+        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         var deadline = Environment.TickCount64 + 2_000;
@@ -184,7 +188,6 @@ public class CaptureProfileTests
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
         vm.SelectedCaptureProfile = vm.CaptureProfiles.Single(p => p.Id == CaptureProfileId.OnlineMeeting);
-        vm.ConsentConfirmed = true;
 
         Assert.False(vm.SelectedCaptureProfile.IsAvailable);
         Assert.False(vm.StartCommand.CanExecute(null));

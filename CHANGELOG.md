@@ -14,6 +14,17 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Pressing record now asks before anything is captured. A dialog says the meeting will be
+  transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two
+  ticks: whether to save the audio file as well, and that you have informed everyone. Confirm and
+  start is dead until the second one is ticked. Cancel, or press Esc, and nothing happens at all —
+  no meeting record is left behind. The tick for the audio file counts for this meeting only and
+  never changes the setting, so switching it off for one sensitive meeting cannot quietly switch it
+  off for the next. The consent checkbox that used to sit in the toolbar is gone.
+  A meeting is named after the workspace and the minute it started — `Kanal 2026-09-08 14:30` —
+  until Kanal names it from what was said. Two meetings in one workspace cannot be given the same
+  name by hand; a name Kanal generates takes the next free number instead of interrupting.
+
 - A meeting can now be packed into a single migration bundle from its three-dot menu and imported
   into any other workspace — the transcript in both forms, the attachments, and the recording only
   if the box in the export dialog is ticked, because an hour of audio is about 115 MB and most

@@ -180,8 +180,9 @@ public class MeetingRecordStorageTests : IDisposable
     }
 
     /// <summary>
-    /// Until the consent dialog creates records of its own (issue #98), a host with no workspace
-    /// open still holds the meeting — it just says plainly that nothing is being kept.
+    /// The first launch creates a workspace without asking, so no workspace open means the folder
+    /// went away — an unplugged drive must not cancel the meeting. The host holds it and says
+    /// plainly that nothing is being kept.
     /// </summary>
     [AvaloniaFact]
     public async Task WithNoWorkspaceTheMeetingRunsAndSaysItIsNotBeingKept()

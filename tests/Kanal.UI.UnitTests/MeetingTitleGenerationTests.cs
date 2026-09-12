@@ -164,6 +164,54 @@ public class MeetingTitleGenerationTests : IDisposable
     }
 
     [Fact]
+    public async Task AGeneratedTitleReplacesTheDefaultAndIsStillNotAHandTypedName()
+    {
+        var (vm, store, workspace) = WithMeeting("Kappa 2026-09-08 14:30", new Titler());
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        await vm.Titling.OfferAsync([.. Enumerable.Repeat("line", 6)]);
+
+        Assert.Equal("Tolerance review", store.ListMeetings(workspace.Id).Meetings.Single().Title);
+        Assert.Equal("Tolerance review", vm.MeetingTitle);
+        Assert.False(vm.Titling.NamedByHand);
+    }
+
+    [Fact]
+    public async Task AGeneratedTitleThatCollidesTakesASuffixRatherThanInterrupt()
+    {
+        var (vm, store, workspace) = WithMeeting("Tolerance review", new Titler());
+        store.CreateMeeting(workspace.Id, "New meeting");
+        vm.Sidebar.Refresh();
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single(m => m.Title == "New meeting");
+
+        await vm.Titling.OfferAsync([.. Enumerable.Repeat("line", 6)]);
+
+        Assert.Equal("Tolerance review 2", vm.MeetingTitle);
+        Assert.Equal(
+            new[] { "Tolerance review", "Tolerance review 2" },
+            store.ListMeetings(workspace.Id).Meetings.Select(m => m.Title).Order());
+    }
+
+    [Fact]
+    public void RenamingTwoMeetingsToTheSameTitleIsRefused()
+    {
+        var (vm, store, workspace) = WithMeeting("Werkzeugübergabe", null);
+        store.CreateMeeting(workspace.Id, "New meeting");
+        vm.Sidebar.Refresh();
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single(m => m.Title == "New meeting");
+
+        vm.BeginRenameTitleCommand.Execute(null);
+        vm.TitleDraft = "Werkzeugübergabe";
+        vm.CommitRenameTitleCommand.Execute(null);
+
+        Assert.Equal("New meeting", vm.MeetingTitle);
+        Assert.Contains("Werkzeugübergabe", vm.Status);
+        Assert.Equal(
+            new[] { "New meeting", "Werkzeugübergabe" },
+            store.ListMeetings(workspace.Id).Meetings.Select(m => m.Title).Order());
+    }
+
+    [Fact]
     public void WithNoLocalModelTheNamingControlIsAbsentRatherThanDead()
     {
         var (without, _, _) = WithMeeting("New meeting", null);

@@ -209,7 +209,9 @@ public sealed class WorkspaceStore(string registryPath)
         if (problem is not null)
             return new MeetingResult(null, problem);
 
-        // The id decides where the bytes go, never the title: same title, same day is ordinary.
+        // The id decides where the bytes go, never the title. Creation stays exempt from the
+        // uniqueness rule the rename paths carry (ADR 0054, decision 11): every record starts as
+        // the same placeholder, and numbering that would survive into the default title.
         var meeting = new MeetingRecord(
             NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], null, null);
         return SaveMeeting(meeting);
@@ -254,10 +256,52 @@ public sealed class WorkspaceStore(string registryPath)
             return RefusedMeeting(meetingId, NeedsTitle);
 
         var (existing, problem) = ReadMeeting(workspaceId, meetingId);
-        return problem is not null
-            ? new MeetingResult(null, problem)
-            : SaveMeeting(existing! with { Title = title.Trim() });
+        if (problem is not null)
+            return new MeetingResult(null, problem);
+
+        var wanted = title.Trim();
+        return TitlesBesides(workspaceId, meetingId).Contains(wanted)
+            ? new MeetingResult(null, new StoreProblem(
+                StoreProblemKind.TitleTaken, wanted,
+                $"Another meeting in this workspace is already called \"{wanted}\"."))
+            : SaveMeeting(existing! with { Title = wanted });
     }
+
+    /// <summary>
+    /// The wanted title, or the next free number after it. A model-generated name arrives
+    /// mid-meeting and has nobody to ask, so it is numbered rather than refused.
+    /// </summary>
+    public string FreeTitle(string workspaceId, string title, string? exceptMeetingId)
+    {
+        var taken = TitlesBesides(workspaceId, exceptMeetingId);
+        var wanted = title.Trim();
+        var candidate = wanted;
+        for (var n = 2; taken.Contains(candidate); n++)
+            candidate = $"{wanted} {n}";
+
+        return candidate;
+    }
+
+    /// <summary>
+    /// The workspace the host records into, created on the first launch. A meeting with nowhere
+    /// to be written is the one thing the operator cannot recover from afterwards.
+    /// </summary>
+    public WorkspaceResult EnsureWorkspace(string name, string rootPath)
+    {
+        var listing = ListWorkspaces();
+        return listing.Workspaces.Count > 0
+            ? new WorkspaceResult(listing.Workspaces[0], null)
+            : CreateWorkspace(name, rootPath);
+    }
+
+    // Case- and accent-insensitive: "Tooling review" and "tooling review" are one title on the
+    // sidebar, and the refusal has to read the same way the list does.
+    private HashSet<string> TitlesBesides(string workspaceId, string? meetingId) =>
+        new(
+            ListMeetings(workspaceId).Meetings
+                .Where(m => m.Id != meetingId)
+                .Select(m => m.Title),
+            StringComparer.CurrentCultureIgnoreCase);
 
     public StoreProblem? DeleteMeeting(string workspaceId, string meetingId)
     {

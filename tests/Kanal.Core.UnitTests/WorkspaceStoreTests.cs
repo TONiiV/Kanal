@@ -104,6 +104,9 @@ public class WorkspaceStoreTests : IDisposable
     private static string[] Titles(WorkspaceStore store, string workspaceId) =>
         [.. store.ListMeetings(workspaceId).Meetings.Select(m => m.Title).Order()];
 
+    // Creation is exempt from the uniqueness rule the rename paths carry: two records made
+    // before either is recorded both read "New meeting", and numbering the placeholder would
+    // survive into the default title.
     [Fact]
     public void TwoMeetingsWithOneTitleGetSeparateHomes()
     {
@@ -841,6 +844,60 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Null(result.Workspace);
         Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
+    }
+
+    [Fact]
+    public void RenamingAMeetingOntoAnotherOnesTitleIsRefused()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var second = Created(store.CreateMeeting(workspace.Id, "Delivery dates"));
+
+        var result = store.RenameMeeting(workspace.Id, second.Id, " tooling review ");
+
+        Assert.Null(result.Meeting);
+        Assert.Equal(StoreProblemKind.TitleTaken, result.Problem!.Kind);
+        Assert.Equal(
+            new[] { "Delivery dates", "Tooling review" }, Titles(store, workspace.Id));
+    }
+
+    [Fact]
+    public void AMeetingKeepingItsOwnTitleIsNotACollision()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        Assert.Null(store.RenameMeeting(workspace.Id, meeting.Id, "Tooling review").Problem);
+    }
+
+    [Fact]
+    public void AGeneratedTitleTakesTheNextFreeNumberInsteadOfBeingRefused()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var mine = Created(store.CreateMeeting(workspace.Id, "New meeting"));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review 2"));
+
+        var free = store.FreeTitle(workspace.Id, "Tooling review", mine.Id);
+
+        Assert.Equal("Tooling review 3", free);
+        Assert.Null(store.RenameMeeting(workspace.Id, mine.Id, free).Problem);
+    }
+
+    [Fact]
+    public void TheFirstLaunchGetsAWorkspaceWithoutBeingAsked()
+    {
+        var folder = Path.Combine(_root, "Kanal");
+
+        var made = Created(Store().EnsureWorkspace("Kanal", folder));
+        var second = Created(Store().EnsureWorkspace("Kanal", folder));
+
+        Assert.Equal("Kanal", made.Name);
+        Assert.Equal(made.Id, second.Id);
+        Assert.Single(Store().ListWorkspaces().Workspaces);
     }
 
     [Fact]

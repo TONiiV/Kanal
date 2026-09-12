@@ -89,6 +89,15 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return true;
     }
 
+    /// <summary>
+    /// The wanted title, or the next free number after it — for titles that arrive without an
+    /// operator to ask, which is every generated one.
+    /// </summary>
+    public string FreeTitle(string title, string? exceptMeetingId) =>
+        SelectedWorkspace is { } workspace
+            ? _store.FreeTitle(workspace.Id, title, exceptMeetingId)
+            : title;
+
     /// <summary>The title of a record whether or not the search box is currently showing it.</summary>
     public string? TitleOf(string? meetingId) =>
         meetingId is null ? null : _held.FirstOrDefault(m => m.Id == meetingId)?.Title;
@@ -121,6 +130,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return null;
 
         var record = SelectedMeeting?.Record is { StartedAt: null } untouched ? untouched : null;
+        var placeholder = L["meeting.untitled"];
         if (record is null)
         {
             var (made, problem) = _store.CreateMeeting(workspace.Id, L["meeting.untitled"]);
@@ -138,6 +148,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
         return SaveRecord(record with
         {
+            // The default title names when the meeting was held, to the minute, in the operator's
+            // own zone — and only over the placeholder, so a record named before it was recorded
+            // keeps the name it was given.
+            Title = record.Title == placeholder
+                ? $"{workspace.Name} {startedAt.ToLocalTime():yyyy-MM-dd HH:mm}"
+                : record.Title,
             StartedAt = startedAt,
             EndedAt = null,
             Languages = [.. languages],
@@ -394,7 +410,9 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Detail;
+        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
+            ? L.Format("workspace.titletaken", problem.Subject)
+            : problem.Detail;
         Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
         return true;
     }

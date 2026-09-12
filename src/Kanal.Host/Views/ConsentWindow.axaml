@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:Kanal.Host.Localization"
+        x:Class="Kanal.Host.Views.ConsentWindow"
+        Title="{l:T consent.dialog.title}"
+        Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <StackPanel Margin="26,20,26,18" Spacing="0">
+        <TextBlock Text="{l:T consent.dialog.title}" Classes="label" />
+        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+
+        <TextBlock Margin="0,16,0,0" FontSize="15.5" LineHeight="23" TextWrapping="Wrap"
+                   Text="{l:T consent.body}" />
+        <TextBlock x:Name="RemoteReminder" Margin="0,10,0,0" FontSize="12.5" LineHeight="20"
+                   TextWrapping="Wrap" Foreground="{StaticResource Ink2}"
+                   Text="{l:T consent.remote.reminder}" />
+
+        <CheckBox x:Name="SaveAudio" Margin="0,18,0,0" Content="{l:T consent.saveaudio}" />
+        <CheckBox x:Name="Informed" Margin="0,6,0,0" Content="{l:T consent.confirm}"
+                  IsCheckedChanged="OnInformedChanged" />
+
+        <TextBlock Margin="0,14,0,0" FontSize="11" LineHeight="17" TextWrapping="Wrap"
+                   Foreground="{StaticResource Ink3}" Text="{l:T consent.note}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
+                    Margin="0,20,0,0">
+            <Button x:Name="Cancel" Content="{l:T consent.cancel}" IsCancel="True"
+                    Click="OnCancelClick" />
+            <Button x:Name="Start" Classes="accent" Content="{l:T consent.start}"
+                    IsEnabled="False" Click="OnStartClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

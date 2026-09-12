@@ -97,10 +97,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         _titler = titler;
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
-        Titling = new MeetingTitling(() => _titler);
-        Titling.Changed += OnTitlingChanged;
-        var store = (workspaces ?? (() => new WorkspaceStore(SettingsStore.WorkspaceRegistryPath)))();
+        var store = (workspaces ?? Bootstrapped)();
         Sidebar = new WorkspaceSidebarViewModel(store);
+        Titling = new MeetingTitling(
+            () => _titler,
+            free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
+        Titling.Changed += OnTitlingChanged;
         Files = new MeetingFilesViewModel(
             store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
         Sidebar.PropertyChanged += (_, e) =>
@@ -176,10 +178,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(StopTip));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
             OnPropertyChanged(nameof(CaptureTip));
-            OnPropertyChanged(nameof(ConsentReminder));
             OnPropertyChanged(nameof(CompactState));
             RefreshPipelineStatus();
         };
+    }
+
+    // Only the production path: a test that reached for Documents would create a workspace on
+    // the developer's own machine.
+    private static WorkspaceStore Bootstrapped()
+    {
+        var store = new WorkspaceStore(SettingsStore.WorkspaceRegistryPath);
+        store.EnsureWorkspace("Kanal", SettingsStore.DefaultOutputFolder);
+        return store;
     }
 
     private static Localizer L => Localizer.Instance;
@@ -280,7 +290,24 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void CommitRenameTitle()
     {
         IsRenamingTitle = false;
-        Titling.Rename(TitleDraft);
+        var wanted = TitleDraft.Trim();
+        if (wanted.Length == 0)
+            return;
+
+        // The record is asked first: a hand-typed title that collides is refused, and the heading
+        // must not show a name the workspace does not hold.
+        if ((_sessionRecordId ?? Sidebar.SelectedMeeting?.Id) is { } target)
+        {
+            if (!Sidebar.RenameMeeting(target, wanted))
+            {
+                Status = Sidebar.ProblemNote;
+                return;
+            }
+
+            _titleOnRecord = wanted;
+        }
+
+        Titling.Rename(wanted);
     }
 
     [RelayCommand]
@@ -549,11 +576,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private AudioDeviceInfo? _selectedComputerOutput;
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
-    private bool _consentConfirmed;
+    /// <summary>
+    /// Asks the room before anyone is captured: the pre-tick for "also save the audio file" goes
+    /// in, and what comes back is that answer, or null for a cancelled dialog. Set by the view;
+    /// unwired — headless, tests — reads as a refusal, never as consent.
+    /// </summary>
+    public Func<bool, Task<bool?>>? ConfirmConsent { get; set; }
 
     private DateTimeOffset? _pendingConsentConfirmedAt;
+
+    /// <summary>This meeting's answer to "also save the audio file", never written back.</summary>
+    private bool? _saveAudioThisMeeting;
 
     /// <summary>ISO codes typed into the edit dialog's add row, e.g. "tr, nl".</summary>
     [ObservableProperty]
@@ -579,7 +612,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(ShowConsentGate))]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureNote))]
     [NotifyPropertyChangedFor(nameof(ShowRecord))]
     [NotifyPropertyChangedFor(nameof(ShowPause))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
@@ -684,7 +717,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool NeedsComputerAudio => SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting;
 
-    public bool ShowConsentGate => NeedsMicrophone && !IsRunning;
+    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning;
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
@@ -693,30 +726,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The capture mark is an icon in both states, so which one it is has to be said.</summary>
     public string CaptureTip => $"{L["capture.tip"]} — {SelectedCaptureProfile.Name}";
 
-    public string ConsentReminder => NeedsComputerAudio
-        ? L["consent.remote.reminder"]
-        : L["consent.room.reminder"];
-
     partial void OnSelectedModeChanged(PipelineModeOption value)
     {
         OnPropertyChanged(nameof(NeedsMicrophone));
         OnPropertyChanged(nameof(ShowMicLevel));
-        OnPropertyChanged(nameof(ShowConsentGate));
-        OnPropertyChanged(nameof(ConsentReminder));
+        OnPropertyChanged(nameof(ShowCaptureNote));
         RefreshPipelineStatus();
     }
 
     partial void OnSelectedCaptureProfileChanged(CaptureProfileOption value)
     {
-        if (!IsRunning)
-            ConsentConfirmed = false;
-        OnPropertyChanged(nameof(ShowConsentGate));
-        OnPropertyChanged(nameof(ConsentReminder));
+        OnPropertyChanged(nameof(ShowCaptureNote));
         OnPropertyChanged(nameof(CaptureTip));
     }
-
-    partial void OnConsentConfirmedChanged(bool value) =>
-        _pendingConsentConfirmedAt = value ? _utcNow() : null;
 
     /// <summary>
     /// Re-resolves every mode against the current settings: the two stage labels for the selected
@@ -807,9 +829,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         },
     };
 
+    // Consent is not a precondition of the button: pressing record is how the operator gets the
+    // dialog that asks for it (ADR 0054, decision 26).
     private bool CanStart() =>
         !IsRunning && !IsStopping && !IsStarting &&
-        (!NeedsMicrophone || (SelectedCaptureProfile.IsAvailable && ConsentConfirmed));
+        (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
 
     // Stop is offered while a model is still loading: pressing it then aborts the load.
     private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
@@ -842,29 +866,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        if (_session is not null)
-        {
-            await _session.DisposeAsync();
-            _session = null;
-            StopTranscript();
-        }
-
-        Columns.Clear();
-        Speakers.Clear();
-        Ruler.Clear();
-        Assistant.Forget();
-        LoadedRoomId = "";
-        Titling.Reset();
-        _sessionRecordId = null;
-        Sidebar.RecordingMeetingId = null;
-        _speakerModels.Clear();
-        _tagToCanonical.Clear();
-        IsPaused = false; // a new room is never inheriting the last one's pause
-        // the selection is already capped at MaxLanguages; this reads the same constant so the
-        // two can never disagree about how many columns a room has
-        foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang));
-
         var mode = SelectedMode.Mode;
         if (mode.NeedsMicrophone && !SelectedCaptureProfile.IsAvailable)
         {
@@ -889,12 +890,46 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        if (mode.NeedsMicrophone && !ConsentConfirmed)
+        // Asked before anything is cleared or created, and after the refusals above: a cancelled
+        // dialog leaves the screen, the workspace and the last meeting exactly as they were, and
+        // nobody is asked to consent to a meeting that could not have run anyway.
+        if (mode.NeedsMicrophone)
         {
-            Status = L["status.consentrequired"];
-            Log.Warning(RoomLog, $"Start refused: consent was not confirmed for mode {mode.Id}.");
-            return;
+            var answer = ConfirmConsent is null
+                ? null
+                : await ConfirmConsent(SavesAudioByDefault(SelectedCaptureProfile.Id, settings));
+            if (answer is null)
+            {
+                Log.Info(RoomLog, "Start cancelled: the consent dialog was dismissed.");
+                return;
+            }
+
+            _saveAudioThisMeeting = answer;
+            _pendingConsentConfirmedAt = _utcNow();
         }
+
+        if (_session is not null)
+        {
+            await _session.DisposeAsync();
+            _session = null;
+            StopTranscript();
+        }
+
+        Columns.Clear();
+        Speakers.Clear();
+        Ruler.Clear();
+        Assistant.Forget();
+        LoadedRoomId = "";
+        Titling.Reset();
+        _sessionRecordId = null;
+        Sidebar.RecordingMeetingId = null;
+        _speakerModels.Clear();
+        _tagToCanonical.Clear();
+        IsPaused = false; // a new room is never inheriting the last one's pause
+        // the selection is already capped at MaxLanguages; this reads the same constant so the
+        // two can never disagree about how many columns a room has
+        foreach (var lang in languages.Take(MaxLanguages))
+            Columns.Add(new ColumnViewModel(lang));
 
         var asr = plan.Asr!;
         var mt = plan.Mt;
@@ -1061,7 +1096,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             session,
             RecordingPathFor(
                 mode, SelectedCaptureProfile.Id, settings,
-                record is null ? null : Sidebar.FolderOf(record)));
+                record is null ? null : Sidebar.FolderOf(record),
+                _saveAudioThisMeeting));
 
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
@@ -1122,7 +1158,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsTranscribing = false;
             Sidebar.RecordingMeetingId = null;
             IsPaused = false;
-            ConsentConfirmed = false;
+            _pendingConsentConfirmedAt = null;
+            _saveAudioThisMeeting = null;
             Status = _lastRecording.Length > 0
                 ? L.Format("status.stopped.audio", _lastRecording)
                 : L["status.stopped"];
@@ -1357,14 +1394,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         PipelineMode mode,
         CaptureProfileId captureProfile,
         AppSettings settings,
-        string? meetingFolder) =>
+        string? meetingFolder,
+        bool? consented = null) =>
         meetingFolder is not null &&
         mode.NeedsMicrophone &&
-        (captureProfile == CaptureProfileId.InRoom
-            ? settings.RecordAudio
-            : settings.RecordOnlineAudio)
+        (consented ?? SavesAudioByDefault(captureProfile, settings))
             ? Path.Combine(meetingFolder, WorkspaceStore.AudioFileName)
             : null;
+
+    /// <summary>What the consent dialog offers pre-ticked; the operator's answer overrides it
+    /// for this meeting only, and is never written back (ADR 0054, decision 25).</summary>
+    public static bool SavesAudioByDefault(CaptureProfileId captureProfile, AppSettings settings) =>
+        captureProfile == CaptureProfileId.InRoom
+            ? settings.RecordAudio
+            : settings.RecordOnlineAudio;
 
     /// <summary>
     /// Appended as the meeting runs, for the reason the recording already is. Only finals are
