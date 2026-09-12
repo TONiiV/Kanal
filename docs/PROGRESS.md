@@ -115,6 +115,49 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### The transcript grows a ruler down its right-hand edge
+
+A meeting that has run for an hour is a scroll with no landmarks. The middle column keeps no tabs
+— that was settled in [ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md), decision 15 —
+so the way back to "the bit where the delivery date came up" is a strip of hairline marks beside
+the body rather than a second view of the same text. One mark per speaker turn, laid down live, in
+that speaker's colour; hover shows a preview card with the name, the offset into the meeting and
+how the turn opened; a click scrolls every language column to that utterance. This is the
+structural half of decision 16. The semantic half — topic boundaries as a second class of mark —
+waits on [#34](https://github.com/TONiiV/Kanal/issues/34), so `RulerTickKind` exists with a
+`Topic` member nothing produces yet: the point is that adding it later reconciles into the same
+tick list instead of replacing it.
+
+Three judgements are worth writing down, because each had a more obvious alternative.
+
+**The gutter is always reserved; the marks are not.** Showing the strip only once there are two
+marks would spare the empty screen a column of nothing — but it would also reflow the transcript
+mid-meeting, at the second speaker turn, which is the worst possible moment to move the text
+someone is reading. Thirty pixels of white space is cheaper than that, and white space is not a
+foreign object in this layout.
+
+**The strip grows downward on a fixed pitch rather than distributing its marks over the full
+height.** Even distribution would slide every mark on every new turn — continuous motion in the
+corner of the operator's eye. Fixed pitch means a mark, once placed, stays put, and the length of
+the ruler is itself a reading of how far the meeting has got. The cost is that the strip has a
+capacity: 72 slots, calibrated against the shortest supported window. Past that, turns fold in
+powers of two — 145 turns re-densify to 37 marks of stride four — which is a visible compression
+about three times in a two-hour meeting, and the alternative was clipping, scrolling a navigation
+aid, or letting the marks get too close to hit.
+
+**A folded mark spends no speaker colour.** Once four turns share one mark it identifies nobody,
+so it goes chrome-grey and the preview card lists the names. In a meeting where speakers alternate
+every turn this means the ruler loses all colour past turn 72 and degrades into a density map of
+the meeting's rhythm. That is the honest reading of "the only colour on screen is people": a mark
+that means four people is not a person.
+
+The one thing that was genuinely surprising is a bug the screenshot harness surfaced and the unit
+tests had not: a fourteen-turn demo run produced thirty-three marks. `ApplyUtterance` fires for
+every upsert, and a translation upserts the utterance it was asked for — by which time the room has
+moved on two or three turns. Each late arrival looked like the same speaker starting again after
+someone else, and forked the ruler. Only a *first* sighting of an utterance id may open a turn now;
+later sightings may revise the turn's opening line and nothing else.
+
 ### The right column learns to hold a meeting's folder, and its tabs learn to slide
 
 The right column gained a third tab, **文件**, which lists whatever is sitting in

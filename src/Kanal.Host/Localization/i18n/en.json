@@ -72,6 +72,7 @@
   "lang.unknown": "UNKNOWN",
   "column.codeswitch.tip": "Mixed language",
   "column.drag.tip": "Drag to move this column — or Alt+← / Alt+→",
+  "ruler.name": "Transcript navigation",
   "status.idle": "Idle.",
   "status.pickalanguage": "Select at least one language.",
   "status.consentrequired": "Confirm that all participants consent before starting.",

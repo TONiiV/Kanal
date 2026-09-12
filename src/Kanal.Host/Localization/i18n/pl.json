@@ -72,6 +72,7 @@
   "lang.unknown": "NIEZNANY",
   "column.codeswitch.tip": "Mieszany język",
   "column.drag.tip": "Przeciągnij, aby przesunąć tę kolumnę — albo Alt+← / Alt+→",
+  "ruler.name": "Nawigacja transkrypcji",
   "status.idle": "Bezczynny.",
   "status.pickalanguage": "Wybierz co najmniej jeden język.",
   "status.consentrequired": "Przed rozpoczęciem potwierdź zgodę wszystkich uczestników.",

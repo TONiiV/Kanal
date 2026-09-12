@@ -72,6 +72,7 @@
   "lang.unknown": "未知语言",
   "column.codeswitch.tip": "混合语种",
   "column.drag.tip": "拖动可移动此列——或按 Alt+← / Alt+→",
+  "ruler.name": "转写导航",
   "status.idle": "空闲。",
   "status.pickalanguage": "请至少选择一种语言。",
   "status.consentrequired": "启动前请确认所有参与者均已同意。",
