@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Click any meeting in the left column and the transcript switches to it, read-only, even while a
+  meeting is being recorded. The one being recorded stays marked in the list, and a line across the
+  top of the transcript says which meeting that is and takes you back to it. Titles, speaker names
+  and exports always belong to the meeting being recorded — until now, a title Kanal generated
+  mid-meeting could be written onto whichever old meeting you happened to be reading.
+
 - A meeting record can be deleted from its three-dot menu. Kanal asks a second time before it
   does, and says in that question that the transcript and the recording go with the record, that
   they do not go to the trash and that they cannot be brought back. The meeting that is currently
