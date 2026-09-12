@@ -129,6 +129,15 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
+        <!-- Styled rather than set on the Path: a local value beats a style, so an inline fill
+             would keep a mode that cannot be picked at full ink while its row greys around it. -->
+        <Style Selector="ComboBoxItem Path.mode">
+            <Setter Property="Fill" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="ComboBoxItem:disabled Path.mode">
+            <Setter Property="Fill" Value="{StaticResource Ink3}" />
+        </Style>
+
         <Style Selector="Button Path.glyph">
             <Setter Property="Fill" Value="{StaticResource Ink}" />
         </Style>
@@ -180,6 +189,13 @@
             <Setter Property="CornerRadius" Value="17" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="{StaticResource RecordWash}" />
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform"
+                                                   Duration="0:0:0.14" Easing="CubicEaseOut" />
+                </Transitions>
+            </Setter>
         </Style>
 
         <Style Selector="Button.mark.hold">
@@ -198,15 +214,23 @@
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
-        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter,
-                         Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Record}" />
+        <!-- Restated for the same reason as :disabled: a pseudo-class rule that activates later
+             beats the plain one, so without these the base button's hover ink floods the disc. -->
+        <Style Selector="Button.mark:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
-        <Style Selector="Button.mark.hold:pointerover /template/ ContentPresenter#PART_ContentPresenter,
-                         Button.mark.hold:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Hold}" />
+        <Style Selector="Button.mark:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+
+        <!-- Reaching for a mark grows it; it does not recolour it. The transport owns the only two
+             non-speaker hues on screen, and swapping them on hover read as a different control.
+             Pressed repeats the hover scale so the theme's own press shrink cannot take over. -->
+        <Style Selector="Button.mark:pointerover, Button.mark:pressed">
+            <Setter Property="RenderTransform" Value="scale(1.1)" />
         </Style>
 
         <!-- Even, so the 34 px disc has the same slack on both sides of it. -->
@@ -216,11 +240,17 @@
             <Setter Property="Stretch" Value="Uniform" />
         </Style>
 
-        <!-- 28 is the even width nearest 85% of the 34 px disc: even so the mark still centres on
-             a whole pixel, and wide enough that the wash reads as a ring rather than a field. -->
+        <!-- The disc takes the button's whole box and is shrunk by a render transform instead of
+             being laid out 3 px inside it. Laid out, that inset is 4.5 device pixels at 1.5x
+             scaling, which layout rounding snaps to 4 and leaves the red circle half a pixel up
+             and left of the centre of the wash. Render transforms are not rounded, so the two
+             circles stay concentric at every scaling. 0.8235 is 28/34 — enough slack that the
+             wash reads as a ring rather than a field. -->
         <Style Selector="Button.mark Path.disc">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform" Value="scale(0.8235)" />
         </Style>
 
         <Style Selector="Button.mark Path.record">
@@ -229,10 +259,6 @@
 
         <Style Selector="Button.mark Path.hold">
             <Setter Property="Fill" Value="{StaticResource Hold}" />
-        </Style>
-
-        <Style Selector="Button.mark:pointerover Path, Button.mark:pressed Path">
-            <Setter Property="Fill" Value="{StaticResource Sheet}" />
         </Style>
 
         <Style Selector="Button.mark:disabled">

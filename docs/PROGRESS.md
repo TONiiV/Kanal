@@ -50,7 +50,11 @@ The list follows the box. Every row leads with the same mark the collapsed box w
 mark the operator learns while choosing still means something back in the bar. The availability
 square that used to lead the row went with it: two marks on one row is the thing being fixed, and
 a row that cannot be picked is already disabled and already names its blocker in the second line.
-The square stays in the help flyout, which is the reference list and has the room for it. Losing
+The square stays in the help flyout, which is the reference list and has the room for it. The mark
+carries the state instead: a row that cannot be picked draws it in `Ink3`, the same grey its second
+line already uses, through `ComboBoxItem:disabled Path.mode`. The fill had to move out of the XAML
+and into a style to do it — a local value on the element beats a style setter, so the inline fill
+would have kept the mark at full ink while the row greyed around it. Losing
 the second glyph also gave the label back its width — Polish now sets `Lokalnie · Lokalnie` in full
 instead of trimming.
 
@@ -68,6 +72,39 @@ the mode and the language change.
 inside an 18 px box inside a 34 px disc — a red dot in a pink field. The mark is 28 px now, the
 even width nearest 85 % of the disc, and `record.svg` is inscribed in its own view box so the box
 and the circle are the same thing. The wash reads as a ring.
+
+**Reaching for a mark grows it rather than recolouring it.** Hover and press used to flood the disc
+with its full colour and flip the glyph to paper. At 34 px that leaves a 3 px ring of red between
+two circles the renderer rasterises independently — high contrast, and thin enough that a half
+pixel of difference between them reads as an off-centre hole. The mark now scales to 1.1 over
+140 ms on `CubicEaseOut`, about `RenderTransformOrigin` 50 %/50 %, and nothing changes colour.
+Pressed repeats the hover scale so the theme's own press shrink cannot take over.
+
+Measured headless at 1:1, the wash disc and the red disc are concentric at rest — both centred on
+the same pixel, the ring exactly 3 px on every side — and the hovered disc is 30 px against the
+resting 28 px on that same centre. The two `:pointerover`/`:pressed` content-presenter rules stay, restated to
+carry the wash rather than the record colour: a pseudo-class rule that activates later beats the
+plain one, so dropping them would let the base button's hover ink flood the disc. They also had to
+be split into one style per selector — `{TemplateBinding}` in a comma-separated `/template/` style
+fails to compile with `AVLN3000: Unable to find the ControlTemplate scope`.
+
+**1:1 was the wrong place to measure it.** The disc still looked crooked on a real screen, and it
+was. Laying a 28 px circle inside a 34 px button leaves a 3 px inset, which is 4.5 device pixels at
+1.5x scaling; layout rounding snaps that to 4, so the red circle sits half a device pixel up and
+left of the wash it is supposed to be centred in. Against a ring only 3 px thick that is enough to
+read as a crooked hole, which is what it was mistaken for the first time round. The scalings that
+happen to be clean — 1, 1.25, 2 — are exactly the ones a headless test runs at by default, so
+nothing caught it.
+
+The disc now takes the button's whole 34 px box and is shrunk to 28 by a render transform about its
+own centre. Render transforms are not rounded, so the two circles share one layout rectangle and
+stay concentric at every scaling: measured on the rendered frame, the offset at 1.5x goes from
+0.40 device pixels to 0.00. `TheRecordDiscStaysCentredInItsWashAtFractionalScaling` guards it by
+calling `SetRenderScaling(1.5)` before measuring, because at 1:1 there is nothing to catch.
+
+Measuring it wants one piece of care: `Bounds` already carries the offset inside the parent and
+`TransformToVisual` adds it again, so the rectangle handed to the transform has to start at the
+origin or the answer comes back with the inset counted twice.
 
 That last part needed the circle redrawn. Written as two half arcs between antipodal points —
 `M0,8 A8,8 0 1 1 16,8 A8,8 0 1 1 0,8 Z`, the form every circle in the set used — Avalonia's parser

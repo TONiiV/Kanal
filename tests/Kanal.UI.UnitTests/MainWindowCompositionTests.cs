@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Shape = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -17,6 +18,11 @@ public class MainWindowCompositionTests
 {
     private static IconBarView Bar(Window window) =>
         window.GetLogicalDescendants().OfType<IconBarView>().Single();
+
+    // Bounds carries the offset inside the parent and TransformToVisual adds it again, so the
+    // rectangle handed to the transform has to start at the origin.
+    private static Rect Painted(Visual visual, Visual within) =>
+        new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(within)!.Value);
 
     private static Panel Cluster(Window window, string name) =>
         Assert.Single(
@@ -204,6 +210,42 @@ public class MainWindowCompositionTests
             .Select(item => item.Command).ToList();
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportJsonCommand));
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// Hover grows the mark, so it has to grow about the mark's own centre: an origin anywhere
+    /// else moves the disc across the bar on the way up.
+    /// </summary>
+    [AvaloniaFact]
+    public void HoveringATransportMarkGrowsItAboutItsOwnCentre()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var mark = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
+            button => button.Name == "RecordMark");
+        var bar = Bar(window);
+        var middle = new Point(mark.Bounds.Width / 2, mark.Bounds.Height / 2);
+        var atRest = mark.TranslatePoint(middle, bar)!.Value;
+
+        ((IPseudoClasses)mark.Classes).Set(":pointerover", true);
+        Dispatcher.UIThread.RunJobs();
+
+        var hovered = mark.TranslatePoint(middle, bar)!.Value;
+        Assert.Equal(atRest.X, hovered.X, precision: 2);
+        Assert.Equal(atRest.Y, hovered.Y, precision: 2);
+
+        var glyph = Assert.Single(mark.GetVisualDescendants().OfType<Shape>(), path => path.IsVisible);
+        var offset = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), mark)!.Value
+            - middle;
+        Assert.True(
+            Math.Abs(offset.X) < 0.01 && Math.Abs(offset.Y) < 0.01,
+            $"hovered, the glyph sits {offset} off the centre of its {mark.Bounds.Size} disc.");
 
         window.Close();
     }
@@ -429,9 +471,34 @@ public class MainWindowCompositionTests
         var button = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
             candidate => candidate.Name == "RecordMark");
         var disc = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
-        var ratio = disc.Bounds.Width / button.Bounds.Width;
+        var ratio = Painted(disc, button).Width / button.Bounds.Width;
 
         Assert.InRange(ratio, 0.80, 0.88);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// Only a fractional render scaling exposes this: an inset of 3 px is 4.5 device pixels at
+    /// 1.5x, layout rounding snaps it to 4, and the red disc slides half a device pixel off the
+    /// centre of the wash it sits in. Against a 3 px ring that reads as a crooked hole.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheRecordDiscStaysCentredInItsWashAtFractionalScaling()
+    {
+        var vm = TestViewModels.Hermetic();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 700 };
+        window.Show();
+        window.SetRenderScaling(1.5);
+        Dispatcher.UIThread.RunJobs();
+
+        var button = Assert.Single(Bar(window).GetLogicalDescendants().OfType<Button>(),
+            candidate => candidate.Name == "RecordMark");
+        var disc = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
+        var painted = Painted(disc, button);
+
+        Assert.Equal(button.Bounds.Width / 2, painted.Center.X, precision: 2);
+        Assert.Equal(button.Bounds.Height / 2, painted.Center.Y, precision: 2);
 
         window.Close();
     }
