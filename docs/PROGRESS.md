@@ -115,6 +115,26 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### The macOS Alpha rollout plan, out of a local folder and into the repo
+
+`docs/release/macos-alpha-rollout.md` was written on 2026-09-02 and had been sitting untracked on
+the laptop since. It is the operational half of shipping the host: the signing and notarization
+order, the pre-release checklist, what goes to the testers and what must never go with it, and a
+five-minute withdrawal procedure. PR #27 owns the scripts; this owns the procedure, and the two
+should be read together.
+
+It arrived in a folder called `docs/04-风控管理` — risk-control management — which describes neither
+the content nor anything else in `docs/`. It now sits under `docs/release/` beside the layout the
+repo already uses.
+
+Two things in it had gone stale and are corrected or flagged rather than left to be discovered on
+release day. The pipeline said "install the .NET 9 SDK" while every csproj targets `net10.0`; that
+is now right. And it proposes `0.1.0-alpha.1` while `Kanal.Host.csproj` carries `<Version>1.0.1</Version>`
+and `CHANGELOG.md`'s newest heading is `## 1.0.1` — which the application itself displays. That one
+is a decision, not a typo, so it carries a note in the document instead of a silent edit: the DMG
+filename and the version the application reports must not disagree, because the version a tester
+quotes in a bug report is the one they can see.
+
 ### The local ASR model was re-verified, and it changed the plan ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
 [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) records the whole check. Three things
