@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:Kanal.Host.Localization"
+        x:Class="Kanal.Host.Views.ExportBundleWindow"
+        Title="{l:T meeting.exportbundle.title}"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <StackPanel Margin="26,20,26,18" Spacing="0">
+        <TextBlock Text="{l:T meeting.exportbundle.title}" Classes="label" />
+        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+
+        <TextBlock x:Name="Heading" Margin="0,16,0,0" FontSize="15.5" LineHeight="23"
+                   TextWrapping="Wrap" />
+        <TextBlock Margin="0,10,0,0" FontSize="12.5" LineHeight="20" TextWrapping="Wrap"
+                   Foreground="{StaticResource Ink2}"
+                   Text="{l:T meeting.exportbundle.body}" />
+
+        <!-- Unticked by default: an hour of audio is about 115 MB, and the usual reason to make
+             a bundle is to send it to somebody (ADR 0054, decision 22). -->
+        <CheckBox x:Name="IncludeAudio" Margin="0,16,0,0" IsChecked="False"
+                  Content="{l:T meeting.exportbundle.audio}" />
+        <TextBlock Margin="27,1,0,0" FontSize="11.5" Foreground="{StaticResource Ink3}"
+                   Text="{l:T meeting.exportbundle.audio.note}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
+                    Margin="0,20,0,0">
+            <Button x:Name="Cancel" Content="{l:T meeting.exportbundle.cancel}"
+                    IsCancel="True" Click="OnCancelClick" />
+            <Button x:Name="Export" Classes="accent" Content="{l:T meeting.exportbundle.confirm}"
+                    IsDefault="True" Click="OnExportClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

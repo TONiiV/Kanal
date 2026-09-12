@@ -96,6 +96,12 @@
                                     <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <MenuItem Name="ImportBundle" Header="{l:T workspace.importbundle}"
+                                      Command="{Binding Sidebar.ImportBundleCommand}">
+                                <MenuItem.Icon>
+                                    <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="13" Height="13" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </MenuFlyout>
                     </Button.Flyout>
                     <Path Classes="glyph" Data="{c:Icon plus}" Width="14" Height="14" />
@@ -145,6 +151,12 @@
                                         </MenuItem>
                                         <MenuItem Name="ExportMeeting" Header="{l:T meeting.export}"
                                                   Command="{Binding ExportCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Name="ExportBundle" Header="{l:T meeting.exportbundle}"
+                                                  Command="{Binding ExportBundleCommand}">
                                             <MenuItem.Icon>
                                                 <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
                                             </MenuItem.Icon>

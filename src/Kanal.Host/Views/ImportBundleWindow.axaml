@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:Kanal.Host.Localization"
+        x:Class="Kanal.Host.Views.ImportBundleWindow"
+        Title="{l:T workspace.importbundle.title}"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <StackPanel Margin="26,20,26,18" Spacing="0">
+        <TextBlock Text="{l:T workspace.importbundle.title}" Classes="label" />
+        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+
+        <TextBlock x:Name="Heading" Margin="0,16,0,0" FontSize="15.5" LineHeight="23"
+                   TextWrapping="Wrap" />
+        <TextBlock Margin="0,10,0,0" FontSize="12.5" LineHeight="20" TextWrapping="Wrap"
+                   Foreground="{StaticResource Ink2}"
+                   Text="{l:T workspace.importbundle.body}" />
+
+        <!-- Two buttons, and no third: an overwrite would promise merge semantics nothing
+             implements, and one misclick would take an hour of recording with it (decision 23). -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
+                    Margin="0,20,0,0">
+            <Button x:Name="Skip" Content="{l:T workspace.importbundle.skip}"
+                    IsCancel="True" Click="OnSkipClick" />
+            <Button x:Name="SaveAsNew" Classes="accent" Content="{l:T workspace.importbundle.saveasnew}"
+                    IsDefault="True" Click="OnSaveAsNewClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

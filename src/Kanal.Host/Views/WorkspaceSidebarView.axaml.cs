@@ -22,6 +22,8 @@ public partial class WorkspaceSidebarView : UserControl
             vm.Sidebar.ChooseFileToImport = ChooseFileAsync;
             vm.Sidebar.ChooseExportPath = ChooseTargetAsync;
             vm.Sidebar.ConfirmDeleteMeeting = ConfirmDeleteAsync;
+            vm.Sidebar.ConfirmExportBundle = ConfirmExportBundleAsync;
+            vm.Sidebar.ChooseImportChoice = ChooseImportChoiceAsync;
         };
     }
 
@@ -40,6 +42,22 @@ public partial class WorkspaceSidebarView : UserControl
             return false;
 
         return await new DeleteMeetingWindow(meeting.Title).ShowDialog<bool>(owner);
+    }
+
+    private async Task<bool?> ConfirmExportBundleAsync(MeetingItemViewModel meeting)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+            return null;
+
+        return await new ExportBundleWindow(meeting.Title).ShowDialog<bool?>(owner);
+    }
+
+    private async Task<BundleImportChoice> ChooseImportChoiceAsync(string meetingTitle)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+            return BundleImportChoice.Skip;
+
+        return await new ImportBundleWindow(meetingTitle).ShowDialog<BundleImportChoice>(owner);
     }
 
     private async Task<string?> ChooseFolderAsync()

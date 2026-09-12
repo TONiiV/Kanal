@@ -259,7 +259,6 @@
                             <Button.Flyout>
                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
                                     <MenuItem Header="{l:T export.button}" Command="{Binding ExportMarkdownCommand}" />
-                                    <MenuItem Header="{l:T export.json.button}" Command="{Binding ExportJsonCommand}" />
                                 </MenuFlyout>
                             </Button.Flyout>
                         </Button>

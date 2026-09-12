@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting can now be packed into a single migration bundle from its three-dot menu and imported
+  into any other workspace — the transcript in both forms, the attachments, and the recording only
+  if the box in the export dialog is ticked, because an hour of audio is about 115 MB and most
+  bundles are sent by mail. Importing a bundle a workspace already holds offers to skip it or to
+  keep it as a second record; nothing is ever overwritten. The .json transcript export is gone —
+  the meeting's folder now holds that data, and Markdown export is unchanged.
 - Two controls that had nothing to do in this version are off the screen. The right panel is Points
   alone — the live transcription tags every sentence as one speaker, so there was never a second
   person to rename or merge. Online meeting is still listed in the capture picker but cannot be

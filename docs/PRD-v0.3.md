@@ -129,7 +129,7 @@ public record Speaker(string Tag, string? DisplayName,
 
 ## 05 — 范围
 
-**MVP 之内**：Avalonia 主机（Win+macOS）、麦克风采集+16kHz 重采样、Provider 抽象+Gladia 实现、多语言聊天室多发言人、一键改名与合并、主机 4 列、二维码+手机只读单列+语言下拉、snapshot 补历史、混说逐词降级、md/json 纪要导出。
+**MVP 之内**：Avalonia 主机（Win+macOS）、麦克风采集+16kHz 重采样、Provider 抽象+Gladia 实现、多语言聊天室多发言人、一键改名与合并、主机 4 列、二维码+手机只读单列+语言下拉、snapshot 补历史、混说逐词降级、md 纪要导出。
 
 **MVP 之外**：回环/AEC、远程参会者（M1 bot）、本地模型（M2）、MOSS 纪要重跑（M1）、声纹、E2E 加密、TTS、账号、术语表 UI、Teams 侧板。
 
