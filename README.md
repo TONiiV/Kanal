@@ -193,7 +193,7 @@ diarization tag, while clients resolve the canonical speaker at render time.
 | `tools/Kanal.Doctor` | Microphone and live-ASR diagnostics |
 
 The original product requirements and design trade-offs are documented in Chinese in
-[`docs/PRD-v0.3.md`](docs/PRD-v0.3.md). Implementation decisions and measured findings live in
+[`docs/PRD-v0.4.md`](docs/PRD-v0.4.md). Implementation decisions and measured findings live in
 [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development and testing
