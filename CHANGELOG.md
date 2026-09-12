@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting record can be deleted from its three-dot menu. Kanal asks a second time before it
+  does, and says in that question that the transcript and the recording go with the record, that
+  they do not go to the trash and that they cannot be brought back. The meeting that is currently
+  being recorded cannot be deleted.
+
 - A long transcript is now navigable. A strip of short marks runs down the right-hand edge of the
   transcript, one for each time the speaker changes, drawn in that speaker's colour and growing as
   the meeting runs. Rest the pointer on a mark to see who spoke, how far into the meeting it was

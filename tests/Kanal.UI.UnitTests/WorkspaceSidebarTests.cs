@@ -243,7 +243,7 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void EachMeetingCarriesItsOwnImportAndExport()
+    public void EachMeetingCarriesItsOwnImportExportAndDelete()
     {
         var (window, _) = Shown();
         var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
@@ -251,8 +251,107 @@ public class WorkspaceSidebarTests : IDisposable
         var ellipsis = sidebar.GetLogicalDescendants().OfType<Button>()
             .Where(button => button.Name == "MeetingMenu").Distinct().Single();
 
-        Assert.Equal(["ImportIntoMeeting", "ExportMeeting"], Reachable(Opened(ellipsis)));
+        Assert.Equal(
+            ["ImportIntoMeeting", "ExportMeeting", "DeleteMeeting"], Reachable(Opened(ellipsis)));
 
         window.Close();
+    }
+
+    [Fact]
+    public async Task DeletingAMeetingTakesTheTranscriptAndTheRecordingWithIt()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var folder = store.MeetingFolder(vm.SelectedWorkspace!.Id, meeting.Id)!;
+        var transcript = Path.Combine(folder, "transcript.jsonl");
+        var audio = Path.Combine(folder, "audio.wav");
+        File.WriteAllText(transcript, """{"text":"Guten Tag"}""");
+        File.WriteAllBytes(audio, [0x52, 0x49, 0x46, 0x46]);
+        store.SaveMeeting(meeting.Record with { TranscriptPath = transcript, AudioPath = audio });
+        vm.ConfirmDeleteMeeting = _ => Task.FromResult(true);
+
+        await meeting.DeleteCommand.ExecuteAsync(null);
+
+        Assert.False(File.Exists(transcript));
+        Assert.False(File.Exists(audio));
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(vm.Meetings);
+        Assert.Empty(store.ListMeetings(vm.SelectedWorkspace!.Id).Meetings);
+    }
+
+    [Fact]
+    public async Task AMeetingIsOnlyDeletedOnceTheOperatorHasSaidSoASecondTime()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var folder = store.MeetingFolder(vm.SelectedWorkspace!.Id, meeting.Id)!;
+
+        // No one to ask: an unwired confirmation must read as a refusal, never as consent.
+        await meeting.DeleteCommand.ExecuteAsync(null);
+        Assert.True(Directory.Exists(folder));
+
+        var asked = 0;
+        vm.ConfirmDeleteMeeting = _ =>
+        {
+            asked++;
+            return Task.FromResult(false);
+        };
+
+        await meeting.DeleteCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, asked);
+        Assert.True(Directory.Exists(folder));
+        Assert.Single(vm.Meetings);
+        Assert.Single(store.ListMeetings(vm.SelectedWorkspace!.Id).Meetings);
+    }
+
+    [Fact]
+    public async Task TheMeetingBeingRecordedIsTheOneThatCannotBeDeleted()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call", "Kickoff");
+        var live = vm.Meetings.Single(m => m.Title == "Delivery call");
+        var idle = vm.Meetings.Single(m => m.Title == "Kickoff");
+        vm.ConfirmDeleteMeeting = _ => Task.FromResult(true);
+
+        vm.RecordingMeetingId = live.Id;
+
+        Assert.False(live.DeleteCommand.CanExecute(null));
+        Assert.True(idle.DeleteCommand.CanExecute(null));
+
+        // Disabled in the menu is not the same as guarded: the command is reachable from a
+        // keyboard and from a test, and the meeting still being spoken into is not deletable.
+        await live.DeleteCommand.ExecuteAsync(null);
+        Assert.True(Directory.Exists(store.MeetingFolder(vm.SelectedWorkspace!.Id, live.Id)!));
+
+        // The list is rebuilt on every search keystroke, and the rebuilt rows must know too.
+        vm.Refresh();
+        Assert.False(vm.Meetings.Single(m => m.Title == "Delivery call").DeleteCommand.CanExecute(null));
+
+        vm.RecordingMeetingId = null;
+        Assert.True(vm.Meetings.Single(m => m.Title == "Delivery call").DeleteCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public async Task StartingAMeetingMarksTheRecordItIsBeingSpokenInto()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(workspace.Id, "Delivery call");
+        var vm = TestViewModels.Hermetic(workspaces: () => store);
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == Kanal.Host.Services.PipelineModeId.Demo);
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(vm.Sidebar.SelectedMeeting!.Id, vm.Sidebar.RecordingMeetingId);
+        Assert.False(vm.Sidebar.Meetings.Single().DeleteCommand.CanExecute(null));
+
+        await vm.StopCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.Sidebar.RecordingMeetingId);
+        Assert.True(vm.Sidebar.Meetings.Single().DeleteCommand.CanExecute(null));
     }
 }
