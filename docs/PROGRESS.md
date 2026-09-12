@@ -6,6 +6,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-12
 
+### 单场会议的迁移包，JSON 导出取消（ADR 0054 切片 4）
+
+**JSON 导出删除。** `MainViewModel.BuildJsonExport`、工具栏菜单里的那一项、`export.json.button`
+四语字符串、以及只服务于它的 `CaptureProfile.JsonValue` 一并去掉；Markdown 导出原样保留。结构化数据
+由记录文件夹里的 `transcript.jsonl` 承载，`docs/PRD-v0.3.md` 的「md/json 纪要导出」按 ADR 表格改成
+「md 纪要导出」。
+
+**扩展名选 `.kanal-meeting.zip`。** 两段扩展名：后半截让 Finder、资源管理器和任何解压工具照常打开它
+——收到包的人不一定装了 Kanal，能先看一眼里面是什么比一个自定义扩展名重要；前半截说明这是什么包。包内是 `manifest.json`（记录 id、标题、语言、`StartedAt` / `EndedAt`，带
+`schemaVersion`，版本不符直接拒绝而不半读）、`transcript.md`、`transcript.jsonl`、`attachments/`，
+以及勾选后才有的 `audio.wav`。用 `System.IO.Compression`，没有新依赖。
+
+**`transcript.md` 在打包时从 jsonl 现渲染**，不复用 `MainViewModel.BuildMarkdownExport`：后者要的是活动
+会话里的发言人显示名和知情确认凭证，一条躺在磁盘上的旧记录两样都没有。包里的 Markdown 因此写的是
+diarization 标签（`S01`），这是 jsonl 里实际存着的东西。
+
+**导入判重按记录 id，只给跳过／另存为新记录。** 没有覆盖按钮——那等于承诺一套没实现的合并语义，一次
+误点抹掉一小时录音。窗口右上角关掉、按 Esc、以及没有接线的问询一律读作跳过。另存时标题撞名加
+` (2)` 后缀：决定 11 说的后缀规则在 main 上还没有公共的取名助手（`MeetingTitling` 没有这个能力），
+所以先用与附件同名文件相同的写法；等那个助手落地，`MeetingBundle.FreeTitle` 换成调用它。
+
+**zip 条目名是另一台机器给的字符串**，所以解包走白名单：只接受那四个固定名和 `attachments/<单段文件名>`，
+`../` 与绝对路径都落不进工作空间。测试里专门往包里塞了一条 `../escaped.txt`。
+
+## 2026-09-12
 ### Two controls with no second state leave the screen
 
 PRD v0.4 §05 froze the rule for the first release: **a control that has no second state in 1.0.0

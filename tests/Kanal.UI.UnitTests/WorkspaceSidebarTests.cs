@@ -237,13 +237,13 @@ public class WorkspaceSidebarTests : IDisposable
 
         var flyout = Opened((Button)Named(sidebar, "WorkspaceAdd"));
 
-        Assert.Equal(["NewProject", "ImportRecord"], Reachable(flyout));
+        Assert.Equal(["NewProject", "ImportRecord", "ImportBundle"], Reachable(flyout));
 
         window.Close();
     }
 
     [AvaloniaFact]
-    public void EachMeetingCarriesItsOwnImportExportAndDelete()
+    public void EachMeetingCarriesItsOwnImportExportBundleAndDelete()
     {
         var (window, _) = Shown();
         var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
@@ -252,7 +252,8 @@ public class WorkspaceSidebarTests : IDisposable
             .Where(button => button.Name == "MeetingMenu").Distinct().Single();
 
         Assert.Equal(
-            ["ImportIntoMeeting", "ExportMeeting", "DeleteMeeting"], Reachable(Opened(ellipsis)));
+            ["ImportIntoMeeting", "ExportMeeting", "ExportBundle", "DeleteMeeting"],
+            Reachable(Opened(ellipsis)));
 
         window.Close();
     }
@@ -354,4 +355,156 @@ public class WorkspaceSidebarTests : IDisposable
         Assert.Null(vm.Sidebar.RecordingMeetingId);
         Assert.True(vm.Sidebar.Meetings.Single().DeleteCommand.CanExecute(null));
     }
+
+    private static void Bundled(WorkspaceSidebarViewModel vm, MeetingItemViewModel meeting, string at, bool audio)
+    {
+        var folder = vm.FolderOf(meeting.Record)!;
+        File.WriteAllText(Path.Combine(folder, "transcript.jsonl"),
+            """{"id":"u1","speakerTag":"S1","tStartMs":0,"srcLang":"de","srcText":"Guten Tag","revision":1,"state":"Final","codeSwitch":false,"speakerConfidence":1,"translations":{}}""");
+        var pcm = new byte[120_000];
+        new Random(4402).NextBytes(pcm);
+        File.WriteAllBytes(Path.Combine(folder, "audio.wav"), pcm);
+        vm.SaveRecord(meeting.Record with
+        {
+            Languages = ["de", "zh"],
+            TranscriptPath = Path.Combine(folder, "transcript.jsonl"),
+            AudioPath = Path.Combine(folder, "audio.wav"),
+        });
+
+        vm.ConfirmExportBundle = _ => Task.FromResult<bool?>(audio);
+        vm.ChooseExportPath = _ => Task.FromResult<string?>(at);
+    }
+
+    [Fact]
+    public async Task TheAudioCheckboxDecidesWhetherTheRecordingLeavesWithTheBundle()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var light = Path.Combine(Folder("outbox"), "light" + MeetingBundle.Extension);
+        Bundled(vm, meeting, light, audio: false);
+
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("audio.wav", Names(light));
+        Assert.Contains("transcript.md", Names(light));
+        Assert.Contains("manifest.json", Names(light));
+
+        var heavy = Path.Combine(Folder("outbox"), "heavy" + MeetingBundle.Extension);
+        Bundled(vm, meeting, heavy, audio: true);
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+        Assert.Contains("audio.wav", Names(heavy));
+    }
+
+    [Fact]
+    public async Task NothingIsWrittenUntilTheExportDialogIsAccepted()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var target = Path.Combine(Folder("outbox"), "cancelled" + MeetingBundle.Extension);
+        Bundled(vm, meeting, target, audio: false);
+        vm.ConfirmExportBundle = _ => Task.FromResult<bool?>(null);
+
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+
+        Assert.False(File.Exists(target));
+    }
+
+    [Fact]
+    public async Task ASecondImportOfTheSameBundleOffersOnlySkipOrSaveAsNew()
+    {
+        // No third member: an overwrite button would promise merge semantics nothing implements,
+        // and one misclick would take an hour of recording with it (decision 23).
+        Assert.Equal(
+            [BundleImportChoice.Skip, BundleImportChoice.SaveAsNew],
+            Enum.GetValues<BundleImportChoice>());
+
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var bundle = Path.Combine(Folder("outbox"), "delivery" + MeetingBundle.Extension);
+        Bundled(vm, meeting, bundle, audio: false);
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+        vm.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+
+        var asked = 0;
+        vm.ChooseImportChoice = _ =>
+        {
+            asked++;
+            return Task.FromResult(BundleImportChoice.Skip);
+        };
+        await vm.ImportBundleCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, asked);
+        Assert.Single(vm.Meetings);
+
+        vm.ChooseImportChoice = _ => Task.FromResult(BundleImportChoice.SaveAsNew);
+        await vm.ImportBundleCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vm.Meetings.Count);
+        Assert.Equal(["Delivery call", "Delivery call (2)"], vm.Meetings.Select(m => m.Title).Order());
+    }
+
+    [Fact]
+    public async Task ABundleFromAnotherWorkspaceArrivesAsItsOwnRecord()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var bundle = Path.Combine(Folder("outbox"), "delivery" + MeetingBundle.Extension);
+        Bundled(vm, meeting, bundle, audio: false);
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+
+        var elsewhere = new WorkspaceSidebarViewModel(store);
+        var other = store.CreateWorkspace("Supplier", Folder("supplier")).Workspace!;
+        elsewhere.Refresh();
+        elsewhere.SelectedWorkspace = elsewhere.Workspaces.Single(w => w.Id == other.Id);
+        elsewhere.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+
+        await elsewhere.ImportBundleCommand.ExecuteAsync(null);
+
+        var arrived = Assert.Single(elsewhere.Meetings);
+        Assert.Equal(meeting.Id, arrived.Id);
+        Assert.Equal("Delivery call", arrived.Title);
+        Assert.Equal(["de", "zh"], arrived.Record.Languages);
+        Assert.True(File.Exists(Path.Combine(elsewhere.FolderOf(arrived.Record)!, "transcript.md")));
+    }
+
+    private static IReadOnlyList<string> Names(string bundle)
+    {
+        using var zip = System.IO.Compression.ZipFile.OpenRead(bundle);
+        return [.. zip.Entries.Select(e => e.FullName)];
+    }
+
+    [AvaloniaFact]
+    public void TheExportDialogLeavesTheRecordingBehindUntilItIsTicked()
+    {
+        var window = new ExportBundleWindow("Delivery call");
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var audio = (CheckBox)Named(window, "IncludeAudio");
+        Assert.False(audio.IsChecked);
+        Assert.Equal(["Cancel", "Export"], Pressable(window));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheDuplicateImportDialogOffersNothingButSkipAndSaveAsNew()
+    {
+        var window = new ImportBundleWindow("Delivery call");
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(["SaveAsNew", "Skip"], Pressable(window));
+
+        window.Close();
+    }
+
+    // A CheckBox is a Button too, and it is not one of the ways out of the dialog.
+    private static IEnumerable<string?> Pressable(Window window) =>
+        window.GetLogicalDescendants().OfType<Button>()
+            .Where(b => b is not ToggleButton).Select(b => b.Name).Order();
 }

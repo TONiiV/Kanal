@@ -77,8 +77,6 @@ public class CaptureProfileTests
         Assert.True(vm.IsLiveTranscription);
         Assert.Contains("capture-profile: in-room", vm.BuildMarkdownExport(), StringComparison.Ordinal);
         Assert.Contains("consent-confirmed-at: 2026-09-04T12:30:00.0000000+00:00", vm.BuildMarkdownExport(), StringComparison.Ordinal);
-        Assert.Contains("\"captureProfile\": \"inRoom\"", vm.BuildJsonExport(), StringComparison.Ordinal);
-        Assert.Contains("\"consentConfirmedAt\": \"2026-09-04T12:30:00+00:00\"", vm.BuildJsonExport(), StringComparison.Ordinal);
 
         await vm.StopCommand.ExecuteAsync(null);
 

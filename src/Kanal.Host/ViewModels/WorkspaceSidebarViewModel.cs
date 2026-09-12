@@ -12,6 +12,14 @@ using Kanal.Host.Localization;
 
 namespace Kanal.Host.ViewModels;
 
+// Two members, and never a third: see WorkspaceSidebarViewModel.ImportBundleAsync.
+public enum BundleImportChoice
+{
+    Skip,
+
+    SaveAsNew,
+}
+
 public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 {
     private const string LogCategory = "workspace";
@@ -32,6 +40,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportMeetingRecordCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ImportBundleCommand))]
     private Workspace? _selectedWorkspace;
 
     [ObservableProperty]
@@ -50,6 +59,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public Func<string, Task<string?>>? ChooseExportPath { get; set; }
 
     public Func<MeetingItemViewModel, Task<bool>>? ConfirmDeleteMeeting { get; set; }
+
+    /// <summary>Whether the recording travels with the bundle; null when the operator cancelled.</summary>
+    public Func<MeetingItemViewModel, Task<bool?>>? ConfirmExportBundle { get; set; }
+
+    public Func<string, Task<BundleImportChoice>>? ChooseImportChoice { get; set; }
 
     [ObservableProperty]
     private string? _recordingMeetingId;
@@ -204,7 +218,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         var keep = SelectedMeeting?.Id;
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
-            Meetings.Add(new MeetingItemViewModel(record, ImportIntoAsync, ExportAsync, DeleteAsync)
+            Meetings.Add(new MeetingItemViewModel(
+                record, ImportIntoAsync, ExportAsync, ExportBundleAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
             });
@@ -287,6 +302,52 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
         LoadMeetings([]);
         return Task.CompletedTask;
+    }
+
+    [RelayCommand(CanExecute = nameof(HasWorkspace))]
+    private async Task ImportBundleAsync()
+    {
+        if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
+            return;
+
+        var (manifest, problem) = MeetingBundle.ReadManifest(source);
+        if (Refused(problem))
+            return;
+
+        var asNewRecord = false;
+        if (_held.Any(m => m.Id == manifest!.Id))
+        {
+            // Skip and save-as-new, never overwrite: an overwrite button would promise merge
+            // semantics nothing implements, and one misclick would take an hour of recording
+            // with it (ADR 0054, decision 23). An unwired question reads as skip.
+            if (ChooseImportChoice is null
+                || await ChooseImportChoice(manifest!.Title) == BundleImportChoice.Skip)
+                return;
+
+            asNewRecord = true;
+        }
+
+        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+            return;
+
+        ProblemNote = "";
+        Search = "";
+        LoadMeetings([]);
+    }
+
+    private async Task ExportBundleAsync(MeetingItemViewModel item)
+    {
+        if (ConfirmExportBundle is null || await ConfirmExportBundle(item) is not { } includeAudio)
+            return;
+
+        var suggested = MeetingBundle.SuggestedFileName(item.Title) + MeetingBundle.Extension;
+        if (ChooseExportPath is null || await ChooseExportPath(suggested) is not { } target)
+            return;
+
+        if (Refused(MeetingBundle.Write(_store, item.Record, includeAudio, target)))
+            return;
+
+        ProblemNote = "";
     }
 
     private async Task DeleteAsync(MeetingItemViewModel item)

@@ -209,7 +209,6 @@ public class MainWindowCompositionTests
         var commands = Opened<MenuFlyout>(more).Items.OfType<MenuItem>()
             .Select(item => item.Command).ToList();
         Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
-        Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportJsonCommand));
 
         window.Close();
     }

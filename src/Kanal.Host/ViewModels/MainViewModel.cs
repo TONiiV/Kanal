@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -125,14 +124,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             CaptureProfileId.InRoom,
             "capture.inroom.name",
             "capture.inroom.guidance",
-            "in-room",
-            "inRoom")));
+            "in-room")));
         CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
             CaptureProfileId.OnlineMeeting,
             "capture.online.name",
             "capture.online.guidance",
             "online-meeting",
-            "onlineMeeting",
             "capture.online.unavailable")));
         _selectedCaptureProfile = CaptureProfiles[0];
 
@@ -1492,10 +1489,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private async Task ExportMarkdownAsync()
         => await ExportAsync("md", BuildMarkdownExport);
 
-    [RelayCommand]
-    private async Task ExportJsonAsync()
-        => await ExportAsync("json", BuildJsonExport);
-
     private async Task ExportAsync(string extension, Func<string> build)
     {
         if (_session is null)
@@ -1505,7 +1498,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var folder = SettingsStore.ResolveTranscriptFolder(_loadSettings());
-        var name = $"{SuggestedFileName(ActiveMeetingTitle)}.{extension}";
+        var name = $"{MeetingBundle.SuggestedFileName(ActiveMeetingTitle)}.{extension}";
 
         var path = ChooseExportPath is null
             ? Path.Combine(folder, name)
@@ -1539,17 +1532,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    // The room id is a bearer capability bound for a public Realtime topic; it stopped being a
-    // file name here. Windows' invalid set is a superset of the others', so one list serves all.
-    private const string NotInAFileName = "/\\:*?\"<>|";
-
-    private static string SuggestedFileName(string title)
-    {
-        var cleaned = new string([.. title.Select(
-            c => NotInAFileName.Contains(c) || char.IsControl(c) ? '-' : c)]).Trim(' ', '.');
-        return cleaned.Length == 0 ? "meeting" : cleaned;
-    }
-
     public string BuildMarkdownExport()
     {
         if (_session is null)
@@ -1575,25 +1557,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         return sb.ToString();
     }
-
-    public string BuildJsonExport()
-    {
-        if (_session is null)
-            return "";
-
-        var snapshot = _session.Room.Snapshot();
-        return JsonSerializer.Serialize(new
-        {
-            snapshot.Config,
-            snapshot.Speakers,
-            Utterances = snapshot.Utterances.Where(u => u.State == UtteranceState.Final),
-            CaptureProfile = _lastAttestation is null
-                ? null
-                : _lastAttestation.CaptureProfile.JsonValue,
-            ConsentConfirmedAt = _lastAttestation?.ConsentConfirmedAt,
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
-    }
-
 
     internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
 
