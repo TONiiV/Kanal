@@ -445,6 +445,39 @@ something to bind to: an untouched record (`StartedAt` null) is written into, an
 new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
 and start" — not the rule.
 
+### The transcription catalog, and what a model turned out to be ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+`AsrModelCatalog` lists Nemotron 3.5 ASR Streaming 0.6B in sherpa-onnx transducer packaging at
+three of its five published chunk sizes — 560 ms as the default, 160 ms for latency, 1120 ms for
+accuracy. The entries differ only in the encoder; decoder, joiner and token table are byte-identical
+across all of them, which is a fact about the model rather than about this catalog, and is why
+chunk size is an entry rather than a separate setting on one entry.
+
+Sizes and hashes were read from the HF API on 2026-09-08, except `tokens.txt`, which is not stored
+as an LFS object and whose hash was therefore computed from the downloaded file.
+
+Two things fell out of the four-file shape:
+
+**Local names carry the model id.** All five chunk packages publish a file called
+`encoder.int8.onnx`, and one models directory holds them all. `AsrModelFile` therefore separates
+the local name from the remote one, and a test asserts the local names stay unique across the whole
+catalog — this is the kind of collision that shows up as a model that loads and transcribes badly
+rather than as an error.
+
+**Progress is weighted by bytes.** The encoder is 96% of a package. A progress bar that counted
+files would sit at 25% for six hundred megabytes and then jump to done. `ModelDownloadManager`
+gained the part-list overloads — `IsDownloaded`, `MissingParts`, `Delete`, `DownloadAsync` — and the
+aggregate uses a synchronous relay rather than `Progress<double>`, whose posted callbacks could
+otherwise land after the next part had already moved the baseline.
+
+`AppSettings.ActiveTranscriptionModelId` holds the choice; null keeps transcription on the cloud
+provider, exactly as `ActiveTranslationModelId` null keeps translation there. The HuggingFace
+resolve-URL template both catalogs build is now one function rather than two copies of a string.
+
+Nothing here is reachable by the operator yet, so there is no CHANGELOG entry. The Settings
+*Transcription* section, and the downloading/failed half of readiness that belongs to a view model
+rather than to the disk, are the next slice.
+
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
 The transcription-model catalog needs everything the translation catalog already has: a file

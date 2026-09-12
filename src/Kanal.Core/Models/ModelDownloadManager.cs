@@ -54,6 +54,49 @@ public sealed class ModelDownloadManager
         }
     }
 
+    /// <summary>A model of several files is downloaded when every one of them is.</summary>
+    public bool IsDownloaded(IEnumerable<IDownloadableFile> parts) => parts.All(IsDownloaded);
+
+    public IReadOnlyList<IDownloadableFile> MissingParts(IEnumerable<IDownloadableFile> parts) =>
+        parts.Where(p => !IsDownloaded(p)).ToList();
+
+    public void Delete(IEnumerable<IDownloadableFile> parts)
+    {
+        foreach (var part in parts)
+            Delete(part);
+    }
+
+    // Progress is weighted by declared size, not by file count: the encoder of a transcription
+    // model is 96% of its bytes.
+    public async Task DownloadAsync(
+        IReadOnlyList<IDownloadableFile> parts, IProgress<double>? progress, CancellationToken ct)
+    {
+        var grandTotal = Math.Max(1, parts.Sum(p => p.SizeBytes));
+        long doneBytes = 0;
+
+        foreach (var part in parts)
+        {
+            var before = doneBytes;
+            var share = part.SizeBytes;
+            var relay = progress is null
+                ? null
+                : new RelayProgress(fraction =>
+                    progress.Report(Math.Min(1.0, (before + fraction * share) / grandTotal)));
+
+            await DownloadAsync(part, relay, ct);
+            doneBytes += share;
+        }
+
+        progress?.Report(1.0);
+    }
+
+    // Progress<T> posts through the synchronization context, which would let a part's last
+    // report land after the next part has already moved the baseline.
+    private sealed class RelayProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
+    }
+
     /// <summary>Progress is 0..1 of the expected byte count.</summary>
     public async Task DownloadAsync(IDownloadableFile file, IProgress<double>? progress, CancellationToken ct)
     {
