@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Meetings now save themselves. The moment recording starts, the transcript is written into the
+  meeting's own record — line by line as people speak, not at the end — and the room recording goes
+  in beside it. Nothing has to be exported to keep it, and a host that dies mid-meeting leaves
+  everything said up to that moment readable. The audio folder in Settings is gone with it;
+  recordings made before this stay where they were.
+
 - Each pipeline mode now has a mark of its own — a cloud, a laptop, or one of the two with an
   arrow showing which way the work is handed over — in the mode box and against every row of the
   list, so the mode is readable at a glance instead of by reading its label. The help button now

@@ -32,13 +32,6 @@ public partial class SettingsWindow : Window
                 vm.TranscriptFolder = picked;
         });
 
-    private void OnBrowseAudioClick(object? sender, RoutedEventArgs e) =>
-        Guarded("Choosing an audio folder", async () =>
-        {
-            if (DataContext is SettingsViewModel vm && await PickFolderAsync(vm.AudioFolder) is { } picked)
-                vm.AudioFolder = picked;
-        });
-
     // Every async void handler goes through here: a throw out of one takes the host down.
     private static async void Guarded(string what, Func<Task> action)
     {

@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Providers.Testing;
 using Kanal.Core.Providers;
+using Kanal.Core.Workspaces;
 using Kanal.Host.Services;
 
 namespace Kanal.UI.UnitTests;
@@ -96,12 +97,16 @@ public class CaptureProfileTests
     [AvaloniaFact]
     public async Task HostKeepsTheStrongerRecordingNoticeWhenTheTranscriberEnds()
     {
-        var audioFolder = Path.Combine(
+        // A workspace has to be open: the recording goes into the meeting's own record now.
+        var root = Path.Combine(
             Path.GetTempPath(), "kanal-capture-notice-" + Guid.NewGuid().ToString("N"));
-        var settings = new AppSettings { AudioFolder = audioFolder };
+        Directory.CreateDirectory(Path.Combine(root, "acme"));
+        var store = new WorkspaceStore(Path.Combine(root, "workspaces.json"));
+        store.CreateWorkspace("ACME", Path.Combine(root, "acme"));
+        var settings = new AppSettings();
         settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
         settings.ActiveGladiaKeyName = "meeting-room";
-        var vm = TestViewModels.Hermetic(settings);
+        var vm = TestViewModels.Hermetic(settings, workspaces: () => store);
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
         vm.PlanFilter = plan => plan with
         {
@@ -131,7 +136,7 @@ public class CaptureProfileTests
         Assert.Equal(Kanal.Host.Localization.Localizer.Instance["state.recordingonly"], vm.CompactState);
         Assert.True(vm.IsRunning); // Stop remains available to close and export the ended room
         await vm.StopCommand.ExecuteAsync(null);
-        Directory.Delete(audioFolder, recursive: true);
+        Directory.Delete(root, recursive: true);
     }
 
     [AvaloniaFact]

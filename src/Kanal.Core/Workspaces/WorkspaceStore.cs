@@ -9,6 +9,7 @@ public sealed class WorkspaceStore(string registryPath)
     public const int SchemaVersion = 1;
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = "meeting.json";
+    public const string AudioFileName = "audio.wav";
     private const string MeetingsFolderName = "meetings";
     private const string LogCategory = "workspaces";
     private const string NeedsTitle = "A meeting needs a title.";

@@ -63,15 +63,17 @@ public class MeetingTitleRowTests : IDisposable
         Assert.Equal(Localizer.Instance["meeting.untitled"], vm.MeetingTitle);
     }
 
+    /// <summary>
+    /// The row used to fall back to the room id, which is a bearer capability — and which now
+    /// also becomes the heading of an exported transcript and the name a save dialog offers.
+    /// </summary>
     [Fact]
-    public void ALoadedRoomNamesTheRowUntilARecordIsChosenOverIt()
+    public void ALoadedRoomIdNeverNamesTheRow()
     {
         var vm = WithMeeting("Werkzeugübergabe");
 
-        // Cleared when the next room is opened, not when this one stops: the transcript stays on
-        // screen after Stop, and a row titled "New meeting" over it would name the wrong thing.
         vm.LoadedRoomId = "kanal-2026-09-07-a1";
-        Assert.Equal("kanal-2026-09-07-a1", vm.MeetingTitle);
+        Assert.Equal(Localizer.Instance["meeting.untitled"], vm.MeetingTitle);
 
         vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
         Assert.Equal("Werkzeugübergabe", vm.MeetingTitle);
