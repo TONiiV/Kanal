@@ -6,6 +6,42 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-12
 
+### Consent before a record exists (ADR 0054, slice 2)
+
+The permanent consent checkbox in the toolbar became the dialog record opens: two independent ticks
+(also save the audio file / I have informed all participants), Confirm and start disabled until the
+second one is ticked, Esc and Cancel leaving the workspace untouched. `MainViewModel.CanStart` no
+longer reads a consent flag — the dialog is the gate, and the button has to be pressable for the
+question to be asked at all. The audio tick is a one-off: `RecordingPathFor` takes the answer as an
+override and the setting is never written back, so cancelling audio for one sensitive meeting cannot
+silence the next. The remote-participant reminder is now one fixed line, emphasised under the online
+capture profile rather than replaced by it — the old two-way switch on the capture profile left a
+hybrid meeting (a few in the room, a few on the call) with no remote reminder at all.
+
+**The record is still opened after the session starts, not at confirmation.** Decision 2 words it as
+"created the moment Confirm and start is pressed"; slice 1 deliberately opens it after
+`session.StartAsync()` returned, because a start that fails afterwards — unreachable ASR, a model
+that will not load — would otherwise leave a record with `StartedAt` written, which the binding rule
+then refuses to reuse. One junk record per failed start is worse than the few hundred milliseconds
+between the two points. What the decision is actually protecting is preserved: everything the
+operator can cancel happens before anything is created or cleared, and `consent-confirmed-at` is
+stamped when the dialog returns, not when the room opens.
+
+**No workspace, no meeting** is served by creating one rather than by refusing: the first launch gets
+`Documents/Kanal` under the name `Kanal` through `WorkspaceStore.EnsureWorkspace`, called only from
+the production store factory so no headless test writes into the developer's Documents folder. A
+host that then finds no workspace has lost the folder, and a missing drive may not cancel a meeting
+— it still runs and still says plainly that nothing is being kept.
+
+Titles: the default is the workspace name plus `StartedAt` to the minute in the operator's own zone,
+written through the record rather than `Titling.Rename()`, so `NamedByHand` stays false and a
+generated title still replaces it. Only the placeholder is overwritten — a record named by hand
+before it was ever recorded keeps that name. Uniqueness lives in `WorkspaceStore`, where every
+rename already passes: `RenameMeeting` refuses a title another meeting in the workspace holds
+(`StoreProblemKind.TitleTaken`, localised on the way to the operator), and `FreeTitle` hands a
+generated title the next free number, which `MeetingTitling` applies before the suggestion lands so
+the heading and the sidebar row can never disagree. Creation stays exempt: every record starts as
+the same "New meeting" placeholder, and numbering that would survive into the default title.
 ### 单场会议的迁移包，JSON 导出取消（ADR 0054 切片 4）
 
 **JSON 导出删除。** `MainViewModel.BuildJsonExport`、工具栏菜单里的那一项、`export.json.button`

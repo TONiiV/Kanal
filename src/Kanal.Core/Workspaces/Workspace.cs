@@ -28,6 +28,8 @@ public enum StoreProblemKind
 
     Unreadable,
 
+    TitleTaken,
+
     Unwritable,
 
     UnsupportedVersion,

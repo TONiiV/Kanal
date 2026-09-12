@@ -6,7 +6,8 @@ using Kanal.Core.Diagnostics;
 
 namespace Kanal.Core.Meetings;
 
-public sealed class MeetingTitling(Func<IMeetingTitler?> titler, int minimumLines = 6)
+public sealed class MeetingTitling(
+    Func<IMeetingTitler?> titler, Func<string, string>? free = null, int minimumLines = 6)
 {
     private CancellationTokenSource? _running;
     private int _generation;
@@ -84,7 +85,9 @@ public sealed class MeetingTitling(Func<IMeetingTitler?> titler, int minimumLine
         var stale = mine != _generation;
         if (!stale && suggested?.Trim() is { Length: > 0 } title)
         {
-            Title = title;
+            // Numbered on a collision rather than refused: nothing generated mid-meeting may
+            // stop to ask the operator a question (ADR 0054, decision 11).
+            Title = free is null ? title : free(title);
             NamedByHand = false;
         }
         else if (!stale)

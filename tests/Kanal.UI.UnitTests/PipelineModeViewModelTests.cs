@@ -96,7 +96,6 @@ public class PipelineModeViewModelTests
         var vm = TestViewModels.Hermetic();
         var unavailable = vm.Modes.First(o => o.Mode.Id == PipelineModeId.LocalLocal);
         vm.SelectedMode = unavailable;
-        vm.ConsentConfirmed = true;
 
         await vm.StartCommand.ExecuteAsync(null);
 
