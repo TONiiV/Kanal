@@ -4,7 +4,7 @@
   "capture.inroom.guidance": "Das ausgewählte Mikrofon erfasst alle Personen an diesem Computer.",
   "capture.online.name": "Online-Besprechung",
   "capture.online.guidance": "Kopfhörer tragen und Nicht stören aktivieren. Kanal erfasst die gewählte Computerausgabe einschließlich Benachrichtigungstönen.",
-  "capture.online.unavailable": "Die Online-Aufnahme ist zur Einrichtung sichtbar, kann aber erst mit dem nativen Computer-Audio-Backend gestartet werden.",
+  "capture.online.unavailable": "Computer-Audio-Aufnahme ist in dieser Version nicht enthalten.",
   "output.label": "AUSGABE",
   "output.pending": "native Ausgabe folgt",
   "consent.confirm": "Alle Teilnehmenden stimmen zu",

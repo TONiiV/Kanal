@@ -1,9 +1,14 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Kanal.Core.Providers.Testing;
 using Kanal.Core.Providers;
+using Kanal.Host.Localization;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Services;
+using Kanal.Host.ViewModels;
+using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
 
@@ -137,6 +142,42 @@ public class CaptureProfileTests
         Assert.True(vm.IsRunning); // Stop remains available to close and export the ended room
         await vm.StopCommand.ExecuteAsync(null);
         Directory.Delete(root, recursive: true);
+    }
+
+    [AvaloniaFact]
+    public void TheOnlineRowCannotBePickedAndSaysWhyInEveryLanguage()
+    {
+        foreach (var language in Localizer.Available)
+            Assert.False(string.IsNullOrWhiteSpace(
+                Strings.Tables[language.Code]["capture.online.unavailable"]));
+
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var picker = Assert.Single(
+            window.GetLogicalDescendants().OfType<ComboBox>(),
+            box => ReferenceEquals(box.ItemsSource, vm.CaptureProfiles));
+        picker.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var option in vm.CaptureProfiles)
+        {
+            var row = Assert.IsType<ComboBoxItem>(
+                picker.ContainerFromIndex(vm.CaptureProfiles.IndexOf(option)));
+            Assert.Equal(option.IsAvailable, row.IsEffectivelyEnabled);
+            if (option.IsAvailable)
+                continue;
+            Assert.Contains(
+                row.GetLogicalDescendants().OfType<TextBlock>(),
+                text => text.IsVisible && text.Text == option.Unavailable);
+        }
+
+        window.Close();
     }
 
     [AvaloniaFact]

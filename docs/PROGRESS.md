@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-12
 
+### Two controls with no second state leave the screen
+
+PRD v0.4 §05 froze the rule for the first release: **a control that has no second state in 1.0.0
+does not appear.** A control on screen is a promise; one that only ever refuses is worse than one
+that was never drawn. Two controls fail the rule today.
+
+The **Speakers tab** is hidden. Gladia's realtime stream does not diarize, so every utterance
+arrives tagged `S01` (`GladiaWire`) — there is no second speaker to rename and nothing to merge into
+anything. The tab, its view model and the merge controls stay in the tree untouched, behind
+`IsVisible="False"`; speaker attribution is ADR 0055 and the tab comes back with it. Points is now
+the only tab on screen and stays the selected one.
+
+The **Online meeting capture profile** is disabled rather than hidden, because the operator who
+plugs in for a Teams call will look for it and needs to be told, not left searching. It keeps its
+row in the picker, the row is not selectable, and it carries its own unavailable reason in all four
+languages — the same "a row that cannot be picked still explains itself" pattern the pipeline-mode
+list already uses for Local→Cloud and Local→Local. The reason is one sentence: computer-audio
+capture is not in this version. Native system audio is ADR 0050 (Track D), and the row becomes
+selectable when that lands. Nothing persists the capture profile, so there is no older preference
+to migrate: the default is and stays In-room, and `CanStart()` keeps its `IsAvailable` check for the
+demo path that may still select an unavailable profile programmatically.
+
 ### PRD v0.4: the plan catches up with the repository
 
 v0.3's §06 stopped at M0 — two weeks, hard kill date — and M0 shipped. Since then every piece of

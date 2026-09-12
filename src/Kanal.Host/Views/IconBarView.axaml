@@ -149,6 +149,14 @@
                                     </Panel>
                                 </DataTemplate>
                             </ComboBox.SelectionBoxItemTemplate>
+                            <ComboBox.Styles>
+                                <Style Selector="ComboBoxItem" x:DataType="vm:CaptureProfileOption">
+                                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                                </Style>
+                                <Style Selector="ComboBoxItem:disabled TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+                                </Style>
+                            </ComboBox.Styles>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CaptureProfileOption">
                                     <Grid ColumnDefinitions="Auto,*" MaxWidth="300" Margin="0,3,0,4">
@@ -162,6 +170,10 @@
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
                                                        TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
+                                            <TextBlock Text="{Binding Unavailable}" FontSize="10.5" LineHeight="15"
+                                                       TextWrapping="Wrap" FontWeight="SemiBold"
+                                                       IsVisible="{Binding !IsAvailable}"
+                                                       Foreground="{StaticResource Ink2}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

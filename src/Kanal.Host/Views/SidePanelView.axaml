@@ -150,7 +150,10 @@
                     </Border>
                 </TabItem>
 
-                <TabItem x:Name="SpeakersTab" AutomationProperties.Name="{l:T assistant.tab.speakers}">
+                <!-- Hidden, not deleted: the live stream only ever tags S01, so there is no second
+                     speaker to rename or merge until diarization lands (ADR 0055). -->
+                <TabItem x:Name="SpeakersTab" IsVisible="False"
+                         AutomationProperties.Name="{l:T assistant.tab.speakers}">
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.speakers}" Margin="0,0,0,7" />
                     </TabItem.Header>

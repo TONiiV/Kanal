@@ -4,7 +4,7 @@
   "capture.inroom.guidance": "使用所选麦克风收取电脑周围所有人的声音。",
   "capture.online.name": "线上会议",
   "capture.online.guidance": "请佩戴耳机并开启勿扰模式。Kanal 会收取所选电脑输出，包括通知提示音。",
-  "capture.online.unavailable": "线上收音目前仅供配置；此版本尚未装入原生电脑音频后端，不能启动。",
+  "capture.online.unavailable": "本版本不含电脑音频采集。",
   "output.label": "电脑输出",
   "output.pending": "等待原生输出后端",
   "consent.confirm": "所有参与者均已同意",

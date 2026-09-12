@@ -4,7 +4,7 @@
   "capture.inroom.guidance": "Use the selected microphone for everyone around this computer.",
   "capture.online.name": "Online meeting",
   "capture.online.guidance": "Wear headphones and enable Do Not Disturb. Kanal captures the selected computer output, including notification sounds.",
-  "capture.online.unavailable": "Online capture is visible for setup but cannot start until the native computer-audio backend is installed in this build.",
+  "capture.online.unavailable": "Computer-audio capture is not in this version.",
   "output.label": "COMPUTER",
   "output.pending": "native output pending",
   "consent.confirm": "All participants consent",
