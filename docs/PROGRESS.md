@@ -4,6 +4,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-12
+
+### PRD v0.4: the plan catches up with the repository
+
+v0.3's §06 stopped at M0 — two weeks, hard kill date — and M0 shipped. Since then every piece of
+work has been planned as an ADR cut into PR-sized slices, so "what is next" meant reading five ADRs
+and twenty issue titles. [PRD v0.4](PRD-v0.4.md) puts them in one place as six tracks and five
+serial phases, and records the decisions that shape the first release:
+
+- **1.0.0, not 1.0.1.** No tag or release exists; the first one is 1.0.0. The version bump and the
+  CHANGELOG date land in the release PR, not here.
+- **The cut line.** Track A (meeting records) ships complete: the five green slices merge and the
+  two missing ones — consent before a record is created (#98) and the migration bundle (#100) — are
+  built first. #90, #118 and #94 wait for their tracks.
+- **Hide what has no second state.** The Speakers tab has one speaker to rename until Track B lands;
+  the online capture profile records the microphone only until Track D lands. Both are hidden or
+  disabled rather than shown and explained.
+- **Track D (native system audio) is the next sprint**, then C (local transcription), B (speaker
+  attribution), E (accounts and the mainland). Serial: a phase's acceptance gates the next.
+
+Two claims v0.3 left open are still open and are now written as such: M0's acceptance ("stop doing
+the human double translation") has not been run in a real meeting, and Chinese↔Polish terminology
+on real material is still the go/no-go gate. v0.3 stays in place as the dated original;
+`CLAUDE.md` and the README point at v0.4.
+
 ## 2026-09-09
 
 ### One mark per mode, and a record button that reads as one

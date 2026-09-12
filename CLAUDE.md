@@ -3,7 +3,7 @@
 Internal meeting-translation tool. Avalonia (.NET 10) desktop host captures room audio, streams it
 through a pluggable ASR/MT chain, and broadcasts **text only** to read-only mobile clients. Built for
 one real scenario: a zh/de/pl meeting with no shared language. See `README.md` for layout and
-`docs/PRD-v0.3.md` for requirements.
+`docs/PRD-v0.4.md` for requirements and the roadmap.
 
 ```bash
 dotnet build Kanal.slnx
@@ -40,7 +40,7 @@ dotnet test
   atmospheric description on enum members (`LevelMeter`'s "lost in the room"), divider banners,
   commented-out code. Kanal is an application, not a published library — XML doc is no API contract
   here, and no project sets `GenerateDocumentationFile`, so deleting it cannot break the build. A
-  rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.3.md`, where design
+  rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.4.md`, where design
   history is already kept and will actually be maintained — not in the source file.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
