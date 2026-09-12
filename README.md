@@ -26,9 +26,8 @@ the mobile client.
 
 - **One room, several readable views.** The host displays up to four language columns. Each
   participant chooses one language on their phone.
-- **Live corrections remain consistent.** Partial transcripts are replaced in place, a translation
-  of an older revision cannot overwrite newer source text, and speaker renames and merges update
-  the full history.
+- **Live corrections remain consistent.** Partial transcripts are replaced in place, and a
+  translation of an older revision cannot overwrite newer source text.
 - **Late joins and reconnects preserve context.** The host republishes authoritative room
   snapshots, while the mobile client restores its per-room cache immediately after a lock-screen
   reconnect.
@@ -52,7 +51,7 @@ offline.
 | Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes once a local ASR provider exists. |
 | Captions and room state | Sent through the authenticated Kanal gateway (a Cloudflare Worker) to the meeting's private room object, which fans them out to joined phones. Messages include transcript text, translations, speaker labels, language configuration, and pause/recording/lifecycle state. Nothing is stored server-side. |
 | Joined-phone cache | The mobile client stores the current room transcript and state in browser `localStorage` so it can render before a reconnect snapshot arrives. |
-| Local recording | Live microphone modes record a WAV file by default in the configured audio folder. Recording pauses with the room and can be disabled in Settings. Kanal never publishes the WAV file. |
+| Local recording | Live microphone modes record a WAV file by default into the meeting's own record folder in the workspace. Recording pauses with the room, and the consent dialog before each meeting decides whether the audio file is kept for that meeting. Kanal never publishes the WAV file. |
 | API keys and preferences | Gladia keys selected in the UI are stored as plain JSON in the platform application-data directory. The relay host token is supplied only through the operator machine's runtime environment. |
 | Local translation models | Downloaded from the model catalog to the platform application-data directory and loaded in-process with llama.cpp. Model files and generated translations stay on the host, apart from captions sent to the relay. |
 
@@ -255,7 +254,10 @@ question before starting a broad change.
   live microphone modes and must be disclosed to participants.
 - Chinese↔Polish terminology quality on real meeting material remains the primary go/no-go
   validation gate.
-- Packaged installers and signed releases are not available yet.
+- Real-time speaker separation is not wired: every sentence carries the same speaker tag, so the
+  Speakers tab is hidden until speaker attribution (ADR 0055) lands.
+- The *Online meeting* capture profile is listed but cannot be chosen: computer-audio capture
+  arrives with ADR 0050, and until then that profile would record the microphone only.
 
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.

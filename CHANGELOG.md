@@ -10,9 +10,13 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0 — 2026-09-12
 
 The first release. Everything below is what Kanal does on the day it ships.
+
+- Kanal installs by double-click: a notarised disk image on macOS and an MSI on Windows, each
+  carrying its own .NET runtime, so nothing else has to be installed first and no prompt for it
+  ever appears.
 
 - Pressing record now asks before anything is captured. A dialog says the meeting will be
   transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two

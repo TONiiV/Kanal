@@ -4,6 +4,29 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-12 (release)
+
+### 1.0.0 is cut
+
+The first release is 1.0.0, not 1.0.1: no tag or release existed, so the number the csproj had
+been carrying since the changelog was introduced named a successor to nothing. The heading takes
+its date on the day the release PR merges, which is what the changelog's own rule says.
+
+What went in, in the order it merged: the toolbar ink fix (#95), the four ADRs and the rollout plan
+(#87 #89 #91 #96 #105), the shared downloader (#88), track A complete — transcript into the record
+(#115), timeline (#113), files tab (#114), ruler (#116), delete (#112), active versus browsed
+(#122), the consent dialog and record lifecycle (#124), the migration bundle (#123) — and the two
+controls hidden for this version (#121). `main` runs 680 tests green.
+
+Left out on purpose, per PRD v0.4 §06: the transcription and diarization model catalogs (#90,
+#118 — no UI reaches them yet) and the native system-audio adapters (#94 — phase 2). GitHub
+auto-closed #90 and #118 when their base branch was squash-merged; their branches are intact and
+get rebased and reopened when their tracks start.
+
+The README's limitations list now says what a first-time reader would otherwise find out the hard
+way: one speaker tag per sentence with the Speakers tab hidden, and an Online-meeting row that
+cannot be picked.
+
 ## 2026-09-12
 
 ### Consent before a record exists (ADR 0054, slice 2)
