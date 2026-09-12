@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Two controls that had nothing to do in this version are off the screen. The right panel is Points
+  alone — the live transcription tags every sentence as one speaker, so there was never a second
+  person to rename or merge. Online meeting is still listed in the capture picker but cannot be
+  chosen, and the row says why: this version does not capture computer audio. Both come back when
+  the features behind them do.
 - Click any meeting in the left column and the transcript switches to it, read-only, even while a
   meeting is being recorded. The one being recorded stays marked in the list, and a line across the
   top of the transcript says which meeting that is and takes you back to it. Titles, speaker names

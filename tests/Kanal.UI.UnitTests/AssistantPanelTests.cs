@@ -122,7 +122,7 @@ public class AssistantPanelTests
             .Where(control => control.Name == name).Distinct().Single();
 
     [AvaloniaFact]
-    public void TheAssistantPanelIsPointsThenSpeakersThenFiles()
+    public void PointsIsTheOnlyTabOnScreenUntilDiarizationLands()
     {
         var panel = Panel(out var window, out _);
         var tabs = panel.GetLogicalDescendants().OfType<TabControl>().Single();
@@ -132,6 +132,13 @@ public class AssistantPanelTests
         foreach (var tab in tabs.Items.OfType<TabItem>())
             Assert.False(string.IsNullOrWhiteSpace(
                 Avalonia.Automation.AutomationProperties.GetName(tab)));
+
+        var points = tabs.Items.OfType<TabItem>().Single(tab => tab.Name == "PointsTab");
+        var speakers = tabs.Items.OfType<TabItem>().Single(tab => tab.Name == "SpeakersTab");
+
+        Assert.True(points.IsVisible);
+        Assert.True(points.IsSelected);
+        Assert.False(speakers.IsVisible);
 
         window.Close();
     }

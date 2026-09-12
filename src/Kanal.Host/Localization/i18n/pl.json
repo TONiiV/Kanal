@@ -4,7 +4,7 @@
   "capture.inroom.guidance": "Wybrany mikrofon zbiera głosy wszystkich osób przy tym komputerze.",
   "capture.online.name": "Spotkanie online",
   "capture.online.guidance": "Załóż słuchawki i włącz tryb Nie przeszkadzać. Kanal przechwytuje wybrane wyjście komputera wraz z dźwiękami powiadomień.",
-  "capture.online.unavailable": "Przechwytywanie online jest widoczne do konfiguracji, ale ruszy dopiero po dodaniu natywnego modułu dźwięku komputera.",
+  "capture.online.unavailable": "Przechwytywanie dźwięku komputera nie jest dostępne w tej wersji.",
   "output.label": "KOMPUTER",
   "output.pending": "natywne wyjście w przygotowaniu",
   "consent.confirm": "Wszyscy uczestnicy wyrazili zgodę",
