@@ -115,6 +115,44 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### A meeting record finally gets a life ([ADR 0054](adr/0054-meeting-record-lifecycle-and-storage.md))
+
+The workspace sidebar shipped in #68 and the meeting titler in #82, and between them sat a hole
+nobody had named: **a real meeting was never written into a meeting record at all.**
+`MeetingRecord.TranscriptPath` is only ever set by import and only ever read by export. A live
+meeting's transcript went to a global folder when the operator remembered to press Export, its
+audio went to a different global folder named after the room, and the workspace stayed empty
+however many meetings were held. `StartedAt` and `EndedAt` have been in the schema since #68 with
+no code on either side of them.
+
+Two things fell out of writing this down that were not obvious going in.
+
+**The record/session cardinality was already decided, in the relay layer, for a reason that has
+nothing to do with workspaces.** Every Start mints a fresh `RoomId` deliberately — ASR utterance
+ids restart at zero, so reusing a channel would let a new meeting overwrite the old one's records
+by id. "Resume recording into an existing record" would have carried that id collision into the
+file system. It is not a feature that was skipped; it is one the transport already rules out. What
+the operator actually wants from it — a break in the middle of a meeting — is the pause/resume
+that has existed since #62.
+
+**Making the workspace the only copy changes what deletion means.** `WorkspaceStore.DeleteMeeting`
+has existed, unwired, since #68, and today it destroys almost nothing: the transcript is not in
+that folder and neither is the audio. After this ADR the same `Directory.Delete` call destroys the
+only copy of an hour of speech — for a tool whose stated reason to record at all is that "the
+recording is the only artefact that can settle a disagreement about what was actually said". Hence
+the second confirmation and the explicit wording, decided as part of the same contract rather than
+discovered later.
+
+The design also removes something. A storyline panel was proposed for the right column, and then
+dropped: it and "Points and decisions" describe the same meeting from the same evidence, and the
+part of it that was genuinely different — the shape of the meeting over time — is better served by
+the transcript's navigation ruler, whose semantic ticks reuse the topic boundaries that panel
+already produces. One model pass, two renderings, no way for the two to disagree.
+
+Superseded by this: `docs/specs/meeting-workspace.md`'s open item "工作空间内活动会议与浏览记录关系",
+and the acceptance line in `docs/design/meeting-workspace.md` that asks for the two not to be
+confused now has a contract to be checked against.
+
 ### The macOS Alpha rollout plan, out of a local folder and into the repo
 
 `docs/release/macos-alpha-rollout.md` was written on 2026-09-02 and had been sitting untracked on
