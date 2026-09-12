@@ -115,6 +115,27 @@ change; the rest of the set is padded and never asks the parser for its ink.
 
 ## 2026-09-08
 
+### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+The transcription-model catalog needs everything the translation catalog already has: a file
+fetched to a models directory, streamed with progress, verified against a published SHA-256, and
+left absent rather than half-written when the operator closes the dialog mid-download. That code
+exists once, in `ModelDownloadManager`, and it was typed against `LocalModelInfo` — the GGUF record
+of the translation catalog.
+
+So the manager moved to `Kanal.Core.Models` and now takes an `IDownloadableFile`: file name,
+download URL, expected size, expected hash. Four members, which is all it ever read off the record.
+`LocalModelInfo` implements it and nothing about translation changed.
+
+The interface is named for **a file rather than a model**, which is not pedantry. A translation
+model is one GGUF; every runnable export of a streaming transcription model is an encoder, a
+decoder, a joiner and a token table — so the transcription catalog record will own a list of these,
+and the progress the operator sees will be the sum. An `IDownloadableModel` would have been the
+wrong shape for the caller that is about to arrive, and the name is what stops it being reintroduced.
+
+No behaviour changed and no CHANGELOG entry is owed. The download tests moved into their own file
+alongside the type they exercise.
+
 ### Who said it: a decision, at last ([ADR 0055](adr/0055-speaker-attribution.md))
 
 [#13](https://github.com/TONiiV/Kanal/issues/13) has been open since July with a "decision needed"
