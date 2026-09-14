@@ -125,7 +125,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
             CaptureProfileId.InRoom,
             "capture.inroom.name",
-            "capture.inroom.guidance",
+            null,
             "in-room")));
         CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
             CaptureProfileId.OnlineMeeting,
@@ -573,6 +573,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private CaptureProfileOption _selectedCaptureProfile;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureNote))]
+    private bool _captureNoteDismissed;
+
+    [RelayCommand]
+    private void DismissCaptureNote() => CaptureNoteDismissed = true;
+
+    [ObservableProperty]
     private AudioDeviceInfo? _selectedComputerOutput;
 
     /// <summary>
@@ -714,7 +721,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool NeedsComputerAudio => SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting;
 
-    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning;
+    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning && !CaptureNoteDismissed &&
+        (CaptureProfileGuidance.Length > 0 || SelectedCaptureProfile.Unavailable is not null);
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
@@ -733,6 +741,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     partial void OnSelectedCaptureProfileChanged(CaptureProfileOption value)
     {
+        CaptureNoteDismissed = false;
         OnPropertyChanged(nameof(ShowCaptureNote));
         OnPropertyChanged(nameof(CaptureTip));
     }

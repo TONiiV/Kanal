@@ -192,4 +192,43 @@ public class CaptureProfileTests
         Assert.False(vm.StartCommand.CanExecute(null));
         Assert.False(string.IsNullOrWhiteSpace(vm.SelectedCaptureProfile.Unavailable));
     }
+
+    [AvaloniaFact]
+    public void TheNoteBandStaysHiddenForInRoomWhichHasNothingToSay()
+    {
+        var vm = TestViewModels.Hermetic();
+
+        Assert.Equal(CaptureProfileId.InRoom, vm.SelectedCaptureProfile.Id);
+        Assert.False(vm.ShowCaptureNote);
+    }
+
+    [AvaloniaFact]
+    public void TheNoteBandShowsWhenTheSelectedProfileIsUnavailable()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
+
+        vm.SelectedCaptureProfile = vm.CaptureProfiles.Single(p => p.Id == CaptureProfileId.OnlineMeeting);
+
+        Assert.True(vm.ShowCaptureNote);
+    }
+
+    [AvaloniaFact]
+    public void DismissingTheNoteBandHidesItUntilTheProfileChangesAgain()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
+        var inRoom = vm.SelectedCaptureProfile;
+        var online = vm.CaptureProfiles.Single(p => p.Id == CaptureProfileId.OnlineMeeting);
+
+        vm.SelectedCaptureProfile = online;
+        Assert.True(vm.ShowCaptureNote);
+
+        vm.DismissCaptureNoteCommand.Execute(null);
+        Assert.False(vm.ShowCaptureNote);
+
+        vm.SelectedCaptureProfile = inRoom;
+        vm.SelectedCaptureProfile = online;
+        Assert.True(vm.ShowCaptureNote);
+    }
 }

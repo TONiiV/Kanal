@@ -14,7 +14,7 @@ public sealed class CaptureProfileOption(CaptureProfile profile) : ViewModelBase
 
     public string Name => Localizer.Instance[Profile.NameKey];
 
-    public string Guidance => Localizer.Instance[Profile.GuidanceKey];
+    public string Guidance => Profile.GuidanceKey is null ? "" : Localizer.Instance[Profile.GuidanceKey];
 
     public string? Unavailable => Profile.UnavailableKey is null
         ? null
