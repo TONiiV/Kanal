@@ -6,6 +6,15 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-14
 
+### Delete meeting menu item reads as destructive
+
+The three-dot menu's Delete item now carries a trash-glyph icon like its import/export siblings,
+and both glyph and header text render in the `Alarm` red instead of plain ink — an operator review
+item overruling the earlier decision to omit a wastebasket glyph. Scoped to this one `MenuItem` via
+a local `Path.glyph.danger` style rather than a new global rule.
+
+---
+
 ### A spinner while the local model loads
 
 Manual review flagged that a local translation model load — several gigabytes, off the UI thread —
