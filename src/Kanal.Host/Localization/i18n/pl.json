@@ -280,6 +280,7 @@
   "meeting.import": "Importuj do tego spotkania",
   "meeting.export": "Eksportuj to spotkanie",
   "meeting.exportbundle": "Eksport paczki migracyjnej",
+  "meeting.openfolder": "Otwórz folder",
   "meeting.exportbundle.title": "Paczka migracyjna",
   "meeting.exportbundle.heading": "Spakuj „{0}” do jednego pliku, do importu w dowolnym obszarze roboczym.",
   "meeting.exportbundle.body": "Zawsze w paczce: transkrypcja jako .md i .jsonl oraz załączniki.",
