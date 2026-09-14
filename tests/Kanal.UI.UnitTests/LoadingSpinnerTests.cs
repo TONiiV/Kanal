@@ -9,12 +9,6 @@ using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
 
-/// <summary>
-/// A local model load has nothing on screen saying it is happening — the masthead text is short
-/// and the record mark just turns into stop. The spinner beside the transport is the only thing
-/// that admits time is passing while the weights load, and the status line now names the model
-/// so the wait is not "loading the translation model" with no idea which one.
-/// </summary>
 public class LoadingSpinnerTests
 {
     private sealed class GatedWarmupMt(Task gate) : IMtProvider, IWarmupProvider
