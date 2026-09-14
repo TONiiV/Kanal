@@ -947,7 +947,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (mt is IWarmupProvider warmable)
         {
             IsStarting = true;
-            Status = L["status.loadingmodel"];
+            Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
             var warmupCts = new CancellationTokenSource();
             _warmupCts = warmupCts;
             try

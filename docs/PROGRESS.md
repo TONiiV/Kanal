@@ -6,6 +6,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-14
 
+### A spinner while the local model loads
+
+Manual review flagged that a local translation model load — several gigabytes, off the UI thread —
+gave the operator nothing but a short "loading" word in the toolbar and the record mark turning
+into stop; the room looked frozen. `IconBarView` now carries a hairline `ProgressBar` restyled
+indeterminate (`x:Name="StartingSpinner"`, ink foreground, no rounded corners) next to `CompactState`,
+inside a fixed-size `Panel` so its appearance never shifts the transport buttons. `status.loadingmodel`
+in all four locales gained a `{0}` for `plan.Status.TranslationLabel` — the label the planner already
+builds from `LocalModelInfo.DisplayName` — so the status line names the model rather than saying
+"the translation model" with no way to tell which one.
+
 ### Sidebar wordmark reads KANAL
 
 The wordmark next to the app mark in the sidebar header was lowercase "kanal"; it now reads

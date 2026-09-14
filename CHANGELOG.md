@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Loading a local translation model now shows a spinner next to the transport and names the
+  model in the status line, so the room does not look frozen while several gigabytes of weights
+  load.
 - The sidebar wordmark now reads KANAL, matching the app name everywhere else it appears.
 - Pressing record now asks before anything is captured. A dialog says the meeting will be
   transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two
