@@ -1,5 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Kanal.Core.Workspaces;
@@ -96,6 +98,38 @@ public class MeetingTitleRowTests : IDisposable
         var row = (Control)flags.Parent!;
         Assert.Contains(row, title.GetLogicalAncestors());
         Assert.Same(room.Content, row.Parent);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheEditorSelectionIsReadableAndSizedToItsContent()
+    {
+        var vm = WithMeeting("Werkzeugübergabe");
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var room = window.GetLogicalDescendants().OfType<MeetingRoomView>().Single();
+        var readField = (TextBlock)Named(room, "MeetingTitle");
+
+        vm.BeginRenameTitleCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var editor = (TextBox)Named(room, "MeetingTitleEditor");
+        var resources = Application.Current!.Resources;
+
+        Assert.Equal(VerticalAlignment.Center, editor.VerticalContentAlignment);
+        Assert.Same(resources["Ink"], editor.SelectionForegroundBrush);
+        Assert.Same(resources["SelectionTint"], editor.SelectionBrush);
+        Assert.Equal(HorizontalAlignment.Left, editor.HorizontalAlignment);
+        Assert.True(editor.MaxWidth < 900,
+            $"MaxWidth is {editor.MaxWidth}, so the editor still stretches to fill the column.");
+        Assert.True(editor.MinWidth <= editor.MaxWidth);
+        Assert.Equal(0, editor.MinHeight);
+        Assert.Equal(readField.FontSize, editor.FontSize);
+        Assert.Equal(new Thickness(0), editor.Padding);
 
         window.Close();
     }

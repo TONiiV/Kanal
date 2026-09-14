@@ -21,6 +21,7 @@
             <SolidColorBrush x:Key="Ink3" Color="#7C8A93" />
             <SolidColorBrush x:Key="Rule" Color="#D5DCE1" />
             <SolidColorBrush x:Key="RuleFaint" Color="#E7EBEE" />
+            <SolidColorBrush x:Key="SelectionTint" Color="#33111A21" />
             <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
             <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
             <SolidColorBrush x:Key="Record" Color="#C42B22" />
@@ -313,6 +314,12 @@
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <!-- SystemAccentColor is redirected to Ink above for checkboxes and radios; FluentTheme's
+                 TextBox selection highlight derives from the same opaque accent, which painted
+                 selected text as a solid black block instead of an inverted highlight. -->
+            <Setter Property="SelectionBrush" Value="{StaticResource SelectionTint}" />
+            <Setter Property="SelectionForegroundBrush" Value="{StaticResource Ink}" />
         </Style>
         <Style Selector="TextBox /template/ Border#PART_BorderElement">
             <Setter Property="CornerRadius" Value="0" />

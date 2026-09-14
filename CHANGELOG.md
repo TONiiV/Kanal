@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Renaming a meeting title now shows selected text clearly instead of a solid black block, keeps
+  the edit box the same height as the title it replaces, and no longer stretches across the column.
 - Loading a local translation model now shows a spinner next to the transport and names the
   model in the status line, so the room does not look frozen while several gigabytes of weights
   load.

@@ -6,6 +6,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-14
 
+### Title editor selection and sizing
+
+The rename `TextBox` (`MeetingTitleEditor`) painted selected text as a solid black block —
+FluentTheme derives `TextBox` selection from the same opaque accent this app redirects to Ink for
+checkboxes and radios. Fixed globally in `App.axaml`'s `TextBox` style (`SelectionBrush` a light
+ink tint, `SelectionForegroundBrush` Ink) so Settings text boxes get legible selection too. The
+editor also stretched to the full title column and sat off-centre vertically; it now measures
+`MinWidth="240"`/`MaxWidth="640"` against its content instead of the column, and
+`VerticalContentAlignment="Center"` with `MinHeight="0"` keeps it from jumping against the read
+view's height when entering edit mode.
+
 ### A spinner while the local model loads
 
 Manual review flagged that a local translation model load — several gigabytes, off the UI thread —

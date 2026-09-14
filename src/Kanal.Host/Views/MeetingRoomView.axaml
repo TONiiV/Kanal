@@ -106,6 +106,8 @@
 
             <TextBox Grid.Column="0" x:Name="MeetingTitleEditor" Text="{Binding TitleDraft}"
                      IsVisible="{Binding IsRenamingTitle}"
+                     HorizontalAlignment="Left" MinWidth="240" MaxWidth="640"
+                     MinHeight="0" VerticalContentAlignment="Center"
                      FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
                      Padding="0" BorderThickness="0,0,0,2"
                      BorderBrush="{StaticResource Ink}"
