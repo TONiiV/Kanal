@@ -6,6 +6,34 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-15
 
+### Title editor selection and sizing
+
+Operator review: renaming the meeting title showed select-all as a solid black block, the text sat
+off-centre, and the edit box ran the width of the column. FluentTheme selects `TextBox` text in
+`SystemAccentColor`, which `App.axaml` redirects to Ink for checkboxes and radios, and leaves the
+selected glyphs in the Ink foreground — ink on ink. `MeetingTitleEditor` now sets `SelectionBrush`
+Ink and `SelectionForegroundBrush` Paper, the true inverse the operator asked for. It is scoped to
+the editor on purpose so no other text box changes in this PR; the others still select ink on ink and
+are a candidate for the same two setters in the global `TextBox` style. A faint ink tint was tried
+first and rejected: at 20% it reads like a `Rule` hairline, not a selection.
+
+`MeetingTitleEditor` was stretched to the row height set by the language-avatar button, so its 2px
+underline sat below the text. It is now `VerticalAlignment="Center"`, `MinHeight="0"`, and matches
+the read view's own transparent 2px bottom border, so entering edit mode moves neither the text nor
+the rule. Fluent's `:focus` template style also swapped in a 2px Ink box on all four sides and a
+white fill; a local style keeps the underline only. The editor hugs its content (`HorizontalAlignment="Left"`,
+`MinWidth="120"` so an emptied title keeps a rule to type on) and a long title fills the
+column and scrolls rather than overflowing into the flags. The earlier global
+`VerticalContentAlignment="Center"` was dropped: it re-centred a dozen other text boxes,
+including the multi-line join URL. Opening the editor resets the caret to 0 before `SelectAll()` —
+Avalonia 12's `SelectAll` leaves the caret where the last edit put it, which scrolled a long title
+to its end on a second rename.
+
+Tests assert laid-out outcomes (height, top and text centre unchanged across the toggle; width under
+the column for short zh/en/pl titles and bounded for a long one; caret at the start after reopening)
+rather than echoing setters. The read-only title still overflows under the flags in a narrow window
+(900px); that predates this change and is left for a follow-up.
+
 ### The transport carries no text; the loading spinner is a ring on the stop mark
 
 Operator review of #129: the hairline indeterminate `ProgressBar` rendered straight across the stop

@@ -22,6 +22,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   right edge; it comes back if you switch capture profiles.
 - The Delete item in a meeting's three-dot menu now has a trash icon and shows in red, so it reads
   as the destructive action it is instead of blending in with import and export.
+- Renaming a meeting title now shows selected text in inverse instead of a solid black block, keeps
+  the text exactly where it was, and sizes the edit box to the title instead of the whole column.
 - While a local translation model loads, a thin ring turns around the stop button and the status
   line at the bottom names the model, so the room does not look frozen.
 - The sidebar wordmark now reads KANAL, matching the app name everywhere else it appears.
