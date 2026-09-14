@@ -242,9 +242,17 @@
                             </Button.Flyout>
                         </Button>
 
+                        <Panel Width="20" Height="16" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <ProgressBar x:Name="StartingSpinner" IsIndeterminate="True"
+                                         IsVisible="{Binding IsStarting}"
+                                         Width="20" Height="2" CornerRadius="0" BorderThickness="0"
+                                         Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
+                                         VerticalAlignment="Center" />
+                        </Panel>
+
                         <TextBlock x:Name="CompactState" Text="{Binding CompactState}" FontSize="11.5"
                                    LetterSpacing="0.6" Foreground="{StaticResource Ink2}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"
+                                   VerticalAlignment="Center" Margin="4,0,0,0"
                                    MaxWidth="300" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
