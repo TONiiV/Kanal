@@ -161,6 +161,12 @@
                                                 <Path Classes="glyph" Data="{c:Icon arrow-up}" Width="13" Height="13" />
                                             </MenuItem.Icon>
                                         </MenuItem>
+                                        <MenuItem Name="OpenMeetingFolder" Header="{l:T meeting.openfolder}"
+                                                  Command="{Binding OpenFolderCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon folder}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
                                         <Separator />
                                         <!-- No wastebasket glyph: nothing goes to a wastebasket,
                                              and the mark would promise a way back. -->

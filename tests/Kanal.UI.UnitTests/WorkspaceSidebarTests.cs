@@ -265,7 +265,7 @@ public class WorkspaceSidebarTests : IDisposable
             .Where(button => button.Name == "MeetingMenu").Distinct().Single();
 
         Assert.Equal(
-            ["ImportIntoMeeting", "ExportMeeting", "ExportBundle", "DeleteMeeting"],
+            ["ImportIntoMeeting", "ExportMeeting", "ExportBundle", "OpenMeetingFolder", "DeleteMeeting"],
             Reachable(Opened(ellipsis)));
 
         window.Close();
@@ -422,6 +422,22 @@ public class WorkspaceSidebarTests : IDisposable
         await meeting.ExportBundleCommand.ExecuteAsync(null);
 
         Assert.False(File.Exists(target));
+    }
+
+    [Fact]
+    public async Task TheOpenFolderItemHandsTheOpenerExactlyTheStoresMeetingFolder()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var (created, _) = store.CreateMeeting(workspace.Id, "Delivery call");
+        string? opened = null;
+        var vm = new WorkspaceSidebarViewModel(store, openFolder: path => opened = path);
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+        var item = vm.Meetings.Single();
+
+        await item.OpenFolderCommand.ExecuteAsync(null);
+
+        Assert.Equal(store.MeetingFolder(workspace.Id, created!.Id), opened);
     }
 
     [Fact]

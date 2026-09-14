@@ -280,6 +280,7 @@
   "meeting.import": "导入到本场会议",
   "meeting.export": "导出本场会议",
   "meeting.exportbundle": "导出迁移包",
+  "meeting.openfolder": "打开所在文件夹",
   "meeting.exportbundle.title": "迁移包",
   "meeting.exportbundle.heading": "把《{0}》打成一个文件，可导入任意工作空间。",
   "meeting.exportbundle.body": "必含：.md 与 .jsonl 两份转写，以及附件。",

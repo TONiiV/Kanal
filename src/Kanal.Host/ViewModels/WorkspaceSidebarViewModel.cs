@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
+using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
 
@@ -25,11 +26,13 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private const string LogCategory = "workspace";
 
     private readonly WorkspaceStore _store;
+    private readonly Action<string> _openFolder;
     private readonly List<MeetingRecord> _held = [];
 
-    public WorkspaceSidebarViewModel(WorkspaceStore store)
+    public WorkspaceSidebarViewModel(WorkspaceStore store, Action<string>? openFolder = null)
     {
         _store = store;
+        _openFolder = openFolder ?? SystemFolders.Open;
         Refresh();
     }
 
@@ -235,7 +238,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
             Meetings.Add(new MeetingItemViewModel(
-                record, ImportIntoAsync, ExportAsync, ExportBundleAsync, DeleteAsync)
+                record, ImportIntoAsync, ExportAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
             });
@@ -364,6 +367,13 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return;
 
         ProblemNote = "";
+    }
+
+    private Task OpenFolderAsync(MeetingItemViewModel item)
+    {
+        if (_store.MeetingFolder(item.Record.WorkspaceId, item.Record.Id) is { } folder)
+            _openFolder(folder);
+        return Task.CompletedTask;
     }
 
     private async Task DeleteAsync(MeetingItemViewModel item)

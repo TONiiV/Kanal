@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting's three-dot menu now has an Open folder item that reveals its record folder in Finder or Explorer.
 - The sidebar wordmark now reads KANAL, matching the app name everywhere else it appears.
 - Pressing record now asks before anything is captured. A dialog says the meeting will be
   transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two
