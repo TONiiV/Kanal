@@ -230,6 +230,19 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void TheWordmarkReadsFullyCapitalised()
+    {
+        var (window, _) = Shown();
+        var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
+
+        var wordmark = (TextBlock)Named(sidebar, "Wordmark");
+
+        Assert.Equal("KANAL", wordmark.Text);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheAddMenuOffersANewProjectAndAnImportedRecord()
     {
         var (window, _) = Shown();

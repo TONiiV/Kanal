@@ -4,6 +4,15 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-14
+
+### Sidebar wordmark reads KANAL
+
+The wordmark next to the app mark in the sidebar header was lowercase "kanal"; it now reads
+"KANAL", matching the app name elsewhere. The negative letter-spacing tuned for the lowercase
+glyphs read cramped in all caps, so it moved to a light positive tracking. The splash window still
+reads lowercase "kanal" — out of scope for this change, left as a follow-up.
+
 ## 2026-09-12
 
 ### Consent before a record exists (ADR 0054, slice 2)
