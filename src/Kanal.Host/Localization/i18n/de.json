@@ -274,6 +274,7 @@
   "meeting.import": "In diese Besprechung importieren",
   "meeting.export": "Diese Besprechung exportieren",
   "meeting.exportbundle": "Migrationspaket exportieren",
+  "meeting.openfolder": "Ordner öffnen",
   "meeting.exportbundle.title": "Migrationspaket",
   "meeting.exportbundle.heading": "„{0}“ in eine Datei packen, in jeden Arbeitsbereich importierbar.",
   "meeting.exportbundle.body": "Immer enthalten: das Transkript als .md und .jsonl sowie die Anhänge.",

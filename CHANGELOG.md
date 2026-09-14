@@ -26,6 +26,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   the text exactly where it was, and sizes the edit box to the title instead of the whole column.
 - While a local translation model loads, a thin ring turns around the stop button and the status
   line at the bottom names the model, so the room does not look frozen.
+- A meeting's three-dot menu now has an Open folder item that reveals its record folder in Finder
+  or Explorer. If the folder was moved or deleted outside Kanal, or cannot be opened, the sidebar
+  says so instead of silently recreating an empty folder or doing nothing.
 - The sidebar wordmark now reads KANAL, matching the app name everywhere else it appears.
 - Pressing record now asks before anything is captured. A dialog says the meeting will be
   transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two

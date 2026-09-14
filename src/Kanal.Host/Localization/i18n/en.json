@@ -274,6 +274,7 @@
   "meeting.import": "Import into this meeting",
   "meeting.export": "Export this meeting",
   "meeting.exportbundle": "Export migration bundle",
+  "meeting.openfolder": "Open folder",
   "meeting.exportbundle.title": "Migration bundle",
   "meeting.exportbundle.heading": "Pack “{0}” into one file, importable into any workspace.",
   "meeting.exportbundle.body": "Always packed: the transcript as .md and .jsonl, and the attachments.",

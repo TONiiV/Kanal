@@ -109,6 +109,23 @@ in all four locales gained a `{0}` for `plan.Status.TranslationLabel` — the la
 builds from `LocalModelInfo.DisplayName` — so the status line names the model rather than saying
 "the translation model" with no way to tell which one.
 
+---
+
+### Open folder from the meeting menu
+
+An operator who wants to hand a colleague the raw transcript file, or drop a drawing straight into
+a meeting's folder from Finder, had no way to find where Kanal keeps that meeting on disk. The
+three-dot menu now has an Open folder item, next to Export and before Delete, that reveals the
+meeting's own record folder in Finder or Explorer.
+
+Code review flagged that the first pass trusted the filesystem too much: reaching outside Kanal —
+Explorer's own `Process.Start`, or a folder someone dragged to the trash between meetings — can
+fail in ways a menu click should never surface as a crash. Opening the folder now fails soft: if
+the record can't be resolved, if its folder was moved or deleted outside Kanal, or if the OS
+refuses to open it, the sidebar's problem note says so in the operator's own language and nothing
+throws. A folder that no longer exists is reported rather than silently recreated empty, because a
+meeting's folder reappearing empty reads as "your recording is fine" when it is not.
+
 ### Sidebar wordmark reads KANAL
 
 The wordmark next to the app mark in the sidebar header was lowercase "kanal"; it now reads
