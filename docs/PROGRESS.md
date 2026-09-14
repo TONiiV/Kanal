@@ -6,6 +6,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-14
 
+### Open folder from the meeting menu
+
+Each meeting's three-dot menu gets an Open folder item, placed after Export migration bundle and
+before the separator that leads into Delete. It calls `Kanal.Host.Services.SystemFolders.Open`
+through an `Action<string>` injected on `WorkspaceSidebarViewModel` (default `SystemFolders.Open`,
+overridable in tests), resolving the path via the existing `WorkspaceStore.MeetingFolder`. New
+`meeting.openfolder` key across all four locales.
+
 ### Sidebar wordmark reads KANAL
 
 The wordmark next to the app mark in the sidebar header was lowercase "kanal"; it now reads
