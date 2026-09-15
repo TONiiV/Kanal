@@ -72,7 +72,6 @@ public partial class ColumnViewModel : ViewModelBase
 
     public void Clear()
     {
-        MarkJumpTarget(null);
         _byId.Clear();
         Bubbles.Clear();
         _live = null;
