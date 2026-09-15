@@ -22,6 +22,9 @@
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
+        <Style Selector="Path.glyph.danger">
+            <Setter Property="Fill" Value="{StaticResource Alarm}" />
+        </Style>
     </UserControl.Styles>
 
     <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
@@ -162,10 +165,13 @@
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator />
-                                        <!-- No wastebasket glyph: nothing goes to a wastebasket,
-                                             and the mark would promise a way back. -->
                                         <MenuItem Name="DeleteMeeting" Header="{l:T meeting.delete}"
-                                                  Command="{Binding DeleteCommand}" />
+                                                  Foreground="{StaticResource Alarm}"
+                                                  Command="{Binding DeleteCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph danger" Data="{c:Icon trash}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
                                     </MenuFlyout>
                                 </Button.Flyout>
                                 <Path Classes="glyph" Data="{c:Icon ellipsis}" Width="14" Height="14" />

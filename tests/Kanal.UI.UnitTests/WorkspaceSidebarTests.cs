@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Kanal.Core.Workspaces;
 using Kanal.Host.ViewModels;
@@ -267,6 +269,24 @@ public class WorkspaceSidebarTests : IDisposable
         Assert.Equal(
             ["ImportIntoMeeting", "ExportMeeting", "ExportBundle", "DeleteMeeting"],
             Reachable(Opened(ellipsis)));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheDeleteMenuItemCarriesAnIconAndReadsAsDestructive()
+    {
+        var (window, _) = Shown();
+        var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
+
+        var ellipsis = sidebar.GetLogicalDescendants().OfType<Button>()
+            .Where(button => button.Name == "MeetingMenu").Distinct().Single();
+        var delete = Opened(ellipsis).Items.OfType<MenuItem>().Single(item => item.Name == "DeleteMeeting");
+
+        Assert.NotNull(delete.Icon);
+        var alarm = (ISolidColorBrush)Application.Current!.Resources["Alarm"]!;
+        var foreground = Assert.IsAssignableFrom<ISolidColorBrush>(delete.Foreground);
+        Assert.Equal(alarm.Color, foreground.Color);
 
         window.Close();
     }

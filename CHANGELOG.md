@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The Delete item in a meeting's three-dot menu now has a trash icon and shows in red, so it reads
+  as the destructive action it is instead of blending in with import and export.
 - Loading a local translation model now shows a spinner next to the transport and names the
   model in the status line, so the room does not look frozen while several gigabytes of weights
   load.
