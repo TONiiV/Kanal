@@ -570,10 +570,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(NeedsComputerAudio))]
     [NotifyPropertyChangedFor(nameof(CaptureProfileGuidance))]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureGuidance))]
     private CaptureProfileOption _selectedCaptureProfile;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowCaptureNote))]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureGuidance))]
     private bool _captureNoteDismissed;
 
     [RelayCommand]
@@ -721,12 +723,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool NeedsComputerAudio => SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting;
 
-    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning && !CaptureNoteDismissed &&
-        (CaptureProfileGuidance.Length > 0 || SelectedCaptureProfile.Unavailable is not null);
+    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning &&
+        (ShowCaptureGuidance || SelectedCaptureProfile.Unavailable is not null);
+
+    // Dismissing this must never hide SelectedCaptureProfile.Unavailable — that reason is the
+    // only explanation the operator gets for why Start stays disabled.
+    public bool ShowCaptureGuidance => CaptureProfileGuidance is not null && !CaptureNoteDismissed;
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
-    public string CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
+    public string? CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
 
     /// <summary>The capture mark is an icon in both states, so which one it is has to be said.</summary>
     public string CaptureTip => $"{L["capture.tip"]} — {SelectedCaptureProfile.Name}";

@@ -213,8 +213,10 @@ public class CaptureProfileTests
         Assert.True(vm.ShowCaptureNote);
     }
 
+    // BLOCKER fix: the ✕ used to dismiss the whole band, which took the red "unavailable" reason
+    // with it — the only explanation left on screen for why Start stays disabled.
     [AvaloniaFact]
-    public void DismissingTheNoteBandHidesItUntilTheProfileChangesAgain()
+    public void DismissingTheGuidanceLeavesTheUnavailableReasonVisible()
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
@@ -223,12 +225,35 @@ public class CaptureProfileTests
 
         vm.SelectedCaptureProfile = online;
         Assert.True(vm.ShowCaptureNote);
+        Assert.True(vm.ShowCaptureGuidance);
 
         vm.DismissCaptureNoteCommand.Execute(null);
-        Assert.False(vm.ShowCaptureNote);
+
+        Assert.True(vm.ShowCaptureNote);
+        Assert.False(vm.ShowCaptureGuidance);
+        Assert.False(string.IsNullOrWhiteSpace(vm.SelectedCaptureProfile.Unavailable));
 
         vm.SelectedCaptureProfile = inRoom;
         vm.SelectedCaptureProfile = online;
+        Assert.True(vm.ShowCaptureGuidance);
+    }
+
+    // Online is the only unavailable profile and it also carries guidance, so it can't tell apart
+    // "band shows because of guidance" from "band shows because of the unavailable reason" — a
+    // profile built with only one of the two isolates the branch that gates ShowCaptureNote.
+    [AvaloniaFact]
+    public void TheNoteBandShowsForAnUnavailableProfileWithNoGuidanceToDismiss()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
+        var unavailableWithoutGuidance = new CaptureProfileOption(new CaptureProfile(
+            CaptureProfileId.OnlineMeeting, "capture.online.name", null, "online-meeting",
+            "capture.online.unavailable"));
+
+        vm.SelectedCaptureProfile = unavailableWithoutGuidance;
+
+        Assert.Null(unavailableWithoutGuidance.Guidance);
+        Assert.False(vm.ShowCaptureGuidance);
         Assert.True(vm.ShowCaptureNote);
     }
 }

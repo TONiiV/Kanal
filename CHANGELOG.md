@@ -15,7 +15,7 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - The note under the toolbar no longer states the obvious when in-room capture is selected. It
-  still appears when there is something worth saying, and can be closed with the × button at its
+  still appears when there is something worth saying, and can be closed with a close button at its
   right edge; it comes back if you switch capture profiles.
 - The Delete item in a meeting's three-dot menu now has a trash icon and shows in red, so it reads
   as the destructive action it is instead of blending in with import and export.

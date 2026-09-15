@@ -25,9 +25,12 @@ The note band under the toolbar always told the operator the obvious ("use the s
 for everyone around this computer") whenever in-room capture was picked — manual review verdict:
 unnecessary. `capture.inroom.guidance` and its four locale strings are gone; `CaptureProfile.GuidanceKey`
 is now nullable, so a profile can carry no note at all. `ShowCaptureNote` now also requires actual
-text (guidance or an unavailable reason) and adds a per-profile dismiss flag with a ✕ button at the
-band's right edge, resetting whenever the selected capture profile changes — a genuinely useful future
-note is not lost, only the one nobody needed.
+text (guidance or an unavailable reason) and adds a single dismiss flag with a ✕ button — the `close`
+SVG glyph, matching every other icon in the bar — at the band's right edge, resetting whenever the
+selected capture profile changes. The ✕ dismisses only the guidance line: the red unavailable reason
+(e.g. Online's "Computer-audio capture is not in this version.") stays on screen and cannot be
+dismissed, since it is the only explanation for why Start is disabled; the ✕ itself only shows when
+there is guidance left to dismiss.
 
 ## 2026-09-14
 
