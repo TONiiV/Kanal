@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Clicking a mark on the timeline beside the transcript now tints the sentence it takes you to, in
+  every language column at once, so you can see what you landed on. The next click moves the tint;
+  closing the room clears it.
 - The Delete item in a meeting's three-dot menu now has a trash icon and shows in red, so it reads
   as the destructive action it is instead of blending in with import and export.
 - While a local translation model loads, a thin ring turns around the stop button and the status

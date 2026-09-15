@@ -10,6 +10,13 @@
             <Setter Property="Padding" Value="0,9,0,0" />
             <Setter Property="Margin" Value="0,0,0,20" />
         </Style>
+        <!-- Same total height as Border.rec: a taller mark changes the scroll extent, which the
+             follow-the-live-line handler reads as new content and answers with ScrollToEnd. -->
+        <Style Selector="Border.rec.jump">
+            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="Padding" Value="12,9,12,8" />
+            <Setter Property="Margin" Value="-12,0,-12,12" />
+        </Style>
         <Style Selector="Border.rec.live">
             <Setter Property="BorderThickness" Value="0,3,0,0" />
             <Setter Property="Padding" Value="0,12,0,0" />
@@ -199,6 +206,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BubbleViewModel">
                                             <Border Classes="rec" Classes.live="{Binding IsLive}"
+                                                    Classes.jump="{Binding IsJumpTarget}"
                                                     BorderBrush="{Binding RuleColor}">
                                                 <StackPanel Spacing="5">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
