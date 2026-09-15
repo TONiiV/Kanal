@@ -97,6 +97,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         _titler = titler;
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
+        Ruler.JumpRequested += id =>
+        {
+            foreach (var column in Columns)
+                column.MarkJumpTarget(id);
+        };
         var store = (workspaces ?? Bootstrapped)();
         Sidebar = new WorkspaceSidebarViewModel(store);
         Titling = new MeetingTitling(

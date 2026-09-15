@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Clicking a mark on the timeline beside the transcript now tints the sentence it takes you to, in
+  every language column at once, so you can see what you landed on. The next click moves the tint;
+  closing the room clears it.
 - The note under the toolbar no longer states the obvious when in-room capture is selected. It
   still appears when there is something worth saying, and can be closed with a close button at its
   right edge; it comes back if you switch capture profiles.

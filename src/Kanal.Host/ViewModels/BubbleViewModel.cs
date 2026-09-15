@@ -54,6 +54,9 @@ public partial class BubbleViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(RuleColor))]
     private bool _isLive;
 
+    [ObservableProperty]
+    private bool _isJumpTarget;
+
     public bool HasSource => SourceText.Length > 0;
 
     /// <summary>Gray while partial (still changing) or awaiting translation, ink once final.</summary>
