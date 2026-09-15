@@ -36,8 +36,8 @@ public class LoadingSpinnerTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static ProgressBar Spinner(Window window) =>
-        window.GetLogicalDescendants().OfType<ProgressBar>().Single(p => p.Name == "StartingSpinner");
+    private static Control Spinner(Window window) =>
+        window.GetLogicalDescendants().OfType<Control>().Single(c => c.Name == "StartingSpinner");
 
     [AvaloniaFact]
     public async Task TheSpinnerShowsWhileTheModelLoadsAndHidesOnceItIsReady()
@@ -56,6 +56,7 @@ public class LoadingSpinnerTests
         await PumpAsync(100);
 
         Assert.True(spinner.IsVisible, "nothing shows the model load is in progress.");
+        Assert.Equal("StopMark", spinner.FindLogicalAncestorOfType<Button>()?.Name);
 
         gate.SetResult();
         await starting;

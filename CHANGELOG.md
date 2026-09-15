@@ -16,9 +16,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - The Delete item in a meeting's three-dot menu now has a trash icon and shows in red, so it reads
   as the destructive action it is instead of blending in with import and export.
-- Loading a local translation model now shows a spinner next to the transport and names the
-  model in the status line, so the room does not look frozen while several gigabytes of weights
-  load.
+- While a local translation model loads, a thin ring turns around the stop button and the status
+  line at the bottom names the model, so the room does not look frozen.
 - The sidebar wordmark now reads KANAL, matching the app name everywhere else it appears.
 - Pressing record now asks before anything is captured. A dialog says the meeting will be
   transcribed and translated, reminds you that remote participants cannot see Kanal, and offers two
@@ -120,10 +119,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   microphone mark has been redrawn.
 - The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
   stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
-  window gets; the processing and capture pickers hold the left edge and the join QR the right. A
-  short line beside the transport says what is happening, replacing the two full-width bands that
-  used to push the transcript down. Settings moved to the foot of the workspace sidebar, export to
-  the bar's ellipsis menu, and the room's language flags to the top of the transcript.
+  window gets; the processing and capture pickers hold the left edge and the join QR the right. What
+  the room is doing is spelled out in the status line at the bottom, and the two full-width bands
+  that used to push the transcript down are gone. Settings moved to the foot of the workspace
+  sidebar, export to the bar's ellipsis menu, and the room's language flags to the top of the
+  transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
   audio file is recorded, and Markdown/JSON exports retain the attestation.

@@ -178,7 +178,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(StopTip));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
             OnPropertyChanged(nameof(CaptureTip));
-            OnPropertyChanged(nameof(CompactState));
             RefreshPipelineStatus();
         };
     }
@@ -616,13 +615,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowRecord))]
     [NotifyPropertyChangedFor(nameof(ShowPause))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
-    [NotifyPropertyChangedFor(nameof(CompactState))]
     [NotifyPropertyChangedFor(nameof(ShowRecordingBanner))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
-    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isTranscribing;
 
     /// <summary>Input peak 0–100, updated ~4×/s while live capture runs.</summary>
@@ -783,7 +780,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowRecord))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
     [NotifyPropertyChangedFor(nameof(StopTip))]
-    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isStarting;
 
     /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
@@ -796,7 +792,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
     [NotifyPropertyChangedFor(nameof(PauseTip))]
-    [NotifyPropertyChangedFor(nameof(CompactState))]
     private bool _isPaused;
 
     public string PauseLabel => L[IsPaused ? "transport.resume" : "transport.pause"];
@@ -812,22 +807,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     // Stop stands in for the record mark while a model loads, because aborting the load is the
     // only thing there is to do in that phase.
     public bool ShowStop => IsRunning || IsStarting;
-
-    // Every branch is spelled out rather than collapsed: a line reading "saving audio" while
-    // nothing is being written is the one failure this replacement for the bands has to rule out.
-    public string CompactState => (IsStarting, IsRunning) switch
-    {
-        (true, _) => L["state.loading"],
-        (_, false) => "",
-        _ when IsPaused => L["state.paused"],
-        _ => (IsRecording, IsTranscribing) switch
-        {
-            (true, true) => L["state.recording"],
-            (true, false) => L["state.recordingonly"],
-            (false, true) => L["state.live"],
-            _ => L["state.open"],
-        },
-    };
 
     // Consent is not a precondition of the button: pressing record is how the operator gets the
     // dialog that asks for it (ADR 0054, decision 26).
@@ -1510,7 +1489,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The file the meeting is being written to; empty when nothing is being recorded.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRecording))]
-    [NotifyPropertyChangedFor(nameof(CompactState))]
     private string _recordingPath = "";
 
     public bool IsRecording => RecordingPath.Length > 0;

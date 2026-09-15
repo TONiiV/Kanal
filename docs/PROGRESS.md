@@ -4,6 +4,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-15
+
+### The transport carries no text; the loading spinner is a ring on the stop mark
+
+Operator review of #129: the hairline indeterminate `ProgressBar` rendered straight across the stop
+mark. FluentTheme gives a horizontal `ProgressBar` a 200 px minimum width, so the `Width="20"` in the
+markup never applied and the bar spilled out of its 20 px `Panel`. The spinner is now an `Arc`
+inside `StopMark` itself, 34 px like the disc it circles and rotated by a style animation, so it
+cannot reach a neighbour; a test holds its bounds inside the mark.
+
+The operator also wants no words beside the transport at all. `CompactState` and its six `state.*`
+strings are removed; the bottom status bar already said the same thing at greater length. A test
+walks idle, loading, running, recording-only, recording and paused and fails if any visible text appears inside
+`Transport`.
+
 ## 2026-09-14
 
 ### Delete meeting menu item reads as destructive

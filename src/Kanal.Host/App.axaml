@@ -261,6 +261,26 @@
             <Setter Property="Fill" Value="{StaticResource Hold}" />
         </Style>
 
+        <Style Selector="Button.mark Arc.spinner">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="SweepAngle" Value="100" />
+            <Setter Property="Stroke" Value="{StaticResource Record}" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform" Value="rotate(0deg)" />
+        </Style>
+
+        <Style Selector="Button.mark Arc.spinner[IsVisible=True]">
+            <Style.Animations>
+                <Animation Duration="0:0:0.9" IterationCount="Infinite">
+                    <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
         <Style Selector="Button.mark:disabled">
             <Setter Property="Opacity" Value="0.45" />
         </Style>
