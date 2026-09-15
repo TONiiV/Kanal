@@ -241,6 +241,70 @@ public class ModelDownloadManagerTests : IDisposable
         long SizeBytes,
         string Sha256) : IDownloadableFile;
 
+    /// <summary>Three of four on disk must read as not downloaded, or the operator starts a
+    /// meeting against a model that cannot load.</summary>
+    [Fact]
+    public async Task AModelOfSeveralPartsIsReadyOnlyWhenEveryPartIsPresent()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = ThreeParts();
+
+        Assert.False(manager.IsDownloaded(parts));
+
+        await manager.DownloadAsync(parts[0], null, CancellationToken.None);
+        await manager.DownloadAsync(parts[1], null, CancellationToken.None);
+        Assert.False(manager.IsDownloaded(parts));
+        Assert.Equal([parts[2]], manager.MissingParts(parts));
+
+        await manager.DownloadAsync(parts[2], null, CancellationToken.None);
+        Assert.True(manager.IsDownloaded(parts));
+        Assert.Empty(manager.MissingParts(parts));
+    }
+
+    [Fact]
+    public async Task ProgressAcrossPartsIsWeightedByBytesNotByFileCount()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = new[]
+        {
+            Part("small.onnx", Payload.Length),
+            Part("big.onnx", Payload.Length * 9),
+        };
+        var progress = new List<double>();
+
+        await manager.DownloadAsync(parts, new Progress<double>(progress.Add), CancellationToken.None);
+
+        Assert.True(manager.IsDownloaded(parts));
+        await Task.Delay(50);
+        // one of two files done, but a tenth of the bytes — counting files would say 0.5
+        Assert.Contains(progress, p => Math.Abs(p - 0.1) < 0.001);
+        Assert.DoesNotContain(progress, p => Math.Abs(p - 0.5) < 0.001);
+        Assert.Contains(progress, p => p >= 1.0);
+    }
+
+    [Fact]
+    public async Task DeleteRemovesEveryPart()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = ThreeParts();
+        await manager.DownloadAsync(parts, null, CancellationToken.None);
+        Assert.True(manager.IsDownloaded(parts));
+
+        manager.Delete(parts);
+
+        Assert.False(manager.IsDownloaded(parts));
+        Assert.All(parts, p => Assert.False(manager.IsDownloaded(p)));
+    }
+
+    private static IDownloadableFile[] ThreeParts() =>
+        [Part("encoder.onnx"), Part("decoder.onnx"), Part("tokens.txt")];
+
+    private static IDownloadableFile Part(string name, long? size = null) => new TestPart(
+        FileName: name,
+        DownloadUrl: $"https://example.invalid/{name}",
+        SizeBytes: size ?? Payload.Length,
+        Sha256: Convert.ToHexStringLower(SHA256.HashData(Payload)));
+
     [Fact]
     public async Task DeleteRemovesDownloadedModel()
     {
