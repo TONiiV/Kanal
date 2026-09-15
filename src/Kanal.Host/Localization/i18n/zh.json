@@ -259,6 +259,8 @@
   "workspace.importfailed": "该文件无法导入：{0}",
   "workspace.exportfailed": "该记录无法导出：{0}",
   "workspace.nothingtoexport": "这场会议还没有转写内容。",
+  "workspace.openfolderfailed": "该文件夹无法打开：{0}",
+  "workspace.folderunavailable": "找不到这场会议的文件夹。",
   "workspace.search": "搜索会议",
   "workspace.newmeeting.tip": "新建会议",
   "workspace.add.tip": "添加项目或记录",

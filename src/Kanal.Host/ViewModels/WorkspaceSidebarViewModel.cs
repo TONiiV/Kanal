@@ -371,8 +371,24 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private Task OpenFolderAsync(MeetingItemViewModel item)
     {
-        if (_store.MeetingFolder(item.Record.WorkspaceId, item.Record.Id) is { } folder)
+        if (_store.MeetingFolder(item.Record.WorkspaceId, item.Record.Id) is not { } folder
+            || !Directory.Exists(folder))
+        {
+            ProblemNote = L["workspace.folderunavailable"];
+            return Task.CompletedTask;
+        }
+
+        try
+        {
             _openFolder(folder);
+            ProblemNote = "";
+        }
+        catch (Exception ex)
+        {
+            ProblemNote = L.Format("workspace.openfolderfailed", ex.Message);
+            Log.Warning(LogCategory, $"{folder} could not be opened.", ex);
+        }
+
         return Task.CompletedTask;
     }
 

@@ -259,6 +259,8 @@
   "workspace.importfailed": "That file could not be brought in: {0}",
   "workspace.exportfailed": "That record could not be written out: {0}",
   "workspace.nothingtoexport": "That meeting holds no transcript yet.",
+  "workspace.openfolderfailed": "That folder could not be opened: {0}",
+  "workspace.folderunavailable": "That meeting's folder could not be found.",
   "workspace.search": "Search meetings",
   "workspace.newmeeting.tip": "New meeting",
   "workspace.add.tip": "Add a project or a record",
