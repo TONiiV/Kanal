@@ -1,10 +1,10 @@
 {
   "input.label": "INPUT",
   "capture.inroom.name": "In the room",
-  "capture.inroom.guidance": "Use the selected microphone for everyone around this computer.",
   "capture.online.name": "Online meeting",
   "capture.online.guidance": "Wear headphones and enable Do Not Disturb. Kanal captures the selected computer output, including notification sounds.",
   "capture.online.unavailable": "Computer-audio capture is not in this version.",
+  "capture.note.dismiss.tip": "Dismiss — reappears if you change the capture profile.",
   "output.label": "COMPUTER",
   "output.pending": "native output pending",
   "consent.dialog.title": "Before you start · Participant consent",

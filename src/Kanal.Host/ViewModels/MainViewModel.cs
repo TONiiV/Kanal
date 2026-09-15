@@ -125,7 +125,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
             CaptureProfileId.InRoom,
             "capture.inroom.name",
-            "capture.inroom.guidance",
+            null,
             "in-room")));
         CaptureProfiles.Add(new CaptureProfileOption(new CaptureProfile(
             CaptureProfileId.OnlineMeeting,
@@ -570,7 +570,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(NeedsComputerAudio))]
     [NotifyPropertyChangedFor(nameof(CaptureProfileGuidance))]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureGuidance))]
     private CaptureProfileOption _selectedCaptureProfile;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureNote))]
+    [NotifyPropertyChangedFor(nameof(ShowCaptureGuidance))]
+    private bool _captureNoteDismissed;
+
+    [RelayCommand]
+    private void DismissCaptureNote() => CaptureNoteDismissed = true;
 
     [ObservableProperty]
     private AudioDeviceInfo? _selectedComputerOutput;
@@ -714,11 +723,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool NeedsComputerAudio => SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting;
 
-    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning;
+    public bool ShowCaptureNote => NeedsMicrophone && !IsRunning &&
+        (ShowCaptureGuidance || SelectedCaptureProfile.Unavailable is not null);
+
+    // Dismiss must never hide Unavailable: it is the only reason shown for a disabled Start.
+    public bool ShowCaptureGuidance => CaptureProfileGuidance is not null && !CaptureNoteDismissed;
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
 
-    public string CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
+    public string? CaptureProfileGuidance => SelectedCaptureProfile.Guidance;
 
     /// <summary>The capture mark is an icon in both states, so which one it is has to be said.</summary>
     public string CaptureTip => $"{L["capture.tip"]} — {SelectedCaptureProfile.Name}";
@@ -733,6 +746,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     partial void OnSelectedCaptureProfileChanged(CaptureProfileOption value)
     {
+        CaptureNoteDismissed = false;
         OnPropertyChanged(nameof(ShowCaptureNote));
         OnPropertyChanged(nameof(CaptureTip));
     }

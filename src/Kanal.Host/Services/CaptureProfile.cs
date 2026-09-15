@@ -13,6 +13,6 @@ public enum CaptureProfileId
 public sealed record CaptureProfile(
     CaptureProfileId Id,
     string NameKey,
-    string GuidanceKey,
+    string? GuidanceKey,
     string MarkdownValue,
     string? UnavailableKey = null);
