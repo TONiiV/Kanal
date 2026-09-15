@@ -119,9 +119,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   microphone mark has been redrawn.
 - The control bar is now marks rather than labels, and it never scrolls sideways. Record, pause and
   stop sit in the middle of the bar with the microphone beside them and stay put however narrow the
-  window gets; the processing and capture pickers hold the left edge and the join QR the right. The
-  two full-width bands that used to push the transcript down are gone. Settings moved to the foot of the workspace sidebar, export to
-  the bar's ellipsis menu, and the room's language flags to the top of the transcript.
+  window gets; the processing and capture pickers hold the left edge and the join QR the right. What
+  the room is doing is spelled out in the status line at the bottom, and the two full-width bands
+  that used to push the transcript down are gone. Settings moved to the foot of the workspace
+  sidebar, export to the bar's ellipsis menu, and the room's language flags to the top of the
+  transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
   audio file is recorded, and Markdown/JSON exports retain the attestation.

@@ -264,7 +264,6 @@
         <Style Selector="Button.mark Arc.spinner">
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
-            <Setter Property="StartAngle" Value="0" />
             <Setter Property="SweepAngle" Value="100" />
             <Setter Property="Stroke" Value="{StaticResource Record}" />
             <Setter Property="StrokeThickness" Value="2" />

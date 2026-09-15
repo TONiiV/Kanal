@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Kanal.Host.Views;
 using Kanal.Host.ViewModels;
 
@@ -73,29 +75,59 @@ public class TransportBarTests
         var vm = Idle();
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 760 };
         window.Show();
-        var transport = window.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Name == "Transport");
+        try
+        {
+            var transport = window.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Name == "Transport");
 
-        void AssertSilent(string state)
+            void AssertSilent()
+            {
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(transport.GetLogicalDescendants().OfType<TextBlock>()
+                    .Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text))
+                    .Select(t => t.Text));
+            }
+
+            AssertSilent();
+            vm.IsStarting = true;
+            AssertSilent();
+            vm.IsStarting = false;
+            vm.IsRunning = true;
+            vm.RecordingPath = "/tmp/room.wav";
+            AssertSilent();
+            vm.IsTranscribing = true;
+            AssertSilent();
+            vm.IsPaused = true;
+            AssertSilent();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheLoadingRingStaysInsideTheStopMark()
+    {
+        var vm = Idle();
+        vm.IsStarting = true;
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 760 };
+        window.Show();
+        try
         {
             Dispatcher.UIThread.RunJobs();
-            var words = transport.GetLogicalDescendants().OfType<TextBlock>()
-                .Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text))
-                .Select(t => t.Text);
-            Assert.True(!words.Any(), $"{state}: the transport reads \"{string.Join(" / ", words)}\".");
+            var controls = window.GetLogicalDescendants().OfType<Control>().ToList();
+            var stop = controls.Single(c => c.Name == "StopMark");
+            var ring = controls.Single(c => c.Name == "StartingSpinner");
+
+            var footprint = ring.Bounds;
+            for (var parent = ring.GetVisualParent(); parent != stop; parent = parent!.GetVisualParent())
+                footprint = footprint.Translate(parent!.Bounds.Position);
+            Assert.True(new Rect(stop.Bounds.Size).Contains(footprint),
+                $"the ring {footprint} spills out of the stop mark {stop.Bounds.Size}.");
         }
-
-        AssertSilent("idle");
-        vm.IsStarting = true;
-        AssertSilent("loading");
-        vm.IsStarting = false;
-        vm.IsRunning = true;
-        vm.IsTranscribing = true;
-        AssertSilent("running");
-        vm.RecordingPath = "/tmp/room.wav";
-        AssertSilent("recording");
-        vm.IsPaused = true;
-        AssertSilent("paused");
-
-        window.Close();
+        finally
+        {
+            window.Close();
+        }
     }
 }
