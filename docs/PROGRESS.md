@@ -21,6 +21,33 @@ walks idle, loading, running, recording-only, recording and paused and fails if 
 
 ## 2026-09-14
 
+### The ruler marks where it landed
+
+Clicking a tick scrolled the columns to the anchor utterance and then left the operator to guess
+which of the visible sentences was the one they asked for. `BubbleViewModel.IsJumpTarget` now
+carries that answer: `ColumnViewModel.MarkJumpTarget` moves a single mark within a column,
+`MainViewModel` drives every column from `Ruler.JumpRequested`, and the next room starts on fresh
+columns with nothing marked. The mark is a `Paper` tint bled 12px past the measure on both sides —
+no colour on the text, no rule added, no animation; the live line keeps its own weight, and
+`Border.rec.live.jump` gives the newest row the same bleed at its own height.
+
+**The bleed needs somewhere to land.** The bubble `ItemsControl` clips to its bounds, the scroll
+presenter clips to the viewport, and the column strip clips too, so a negative margin alone was cut
+flush to the text on the left. Each column's `ScrollViewer` now reaches 12px past the column on
+both sides, the bubble list is inset by the same 12px (right gutter 26 instead of 14, so the
+measure is unchanged and the overlay scrollbar clears the tint), its clip is off, and the strip's
+left margin moved into padding so the first column's bleed stays inside the strip's clip.
+
+**The tint may not change the item's height.** The first draft gave the marked border extra bottom
+padding. That grows the scroll extent, `OnColumnScrollChanged` reads a non-zero `ExtentDelta.Y` as
+new content arriving, and — still following the live line at the time of the click — answers with
+`ScrollToEnd`, undoing the jump it was meant to reveal. The second click on the same tick worked,
+because by then the height no longer changed. Padding and margin are now chosen to sum to the
+unmarked height, and `ScrollTo` releases follow for every column before it calls `BringIntoView`,
+so a jump is a jump whatever else moves.
+
+---
+
 ### Delete meeting menu item reads as destructive
 
 The three-dot menu's Delete item now carries a trash-glyph icon like its import/export siblings,

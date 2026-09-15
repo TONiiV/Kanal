@@ -285,6 +285,72 @@ public class TranscriptRulerTests
         await vm.StopCommand.ExecuteAsync(null);
     }
 
+    [AvaloniaFact]
+    public async Task AJumpMarksTheSentenceItLandsOnInEveryColumnAndTheNextJumpMovesTheMark()
+    {
+        var vm = TestViewModels.Demo();
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await WaitForAsync(() => vm.Ruler.Ticks.Count >= 2);
+        var first = vm.Ruler.Ticks[0].AnchorUtteranceId;
+        var second = vm.Ruler.Ticks[1].AnchorUtteranceId;
+        await WaitForAsync(() => vm.Columns.All(c =>
+            c.Bubbles.Any(b => b.UtteranceId == second)));
+
+        Assert.All(vm.Columns, c => Assert.DoesNotContain(c.Bubbles, b => b.IsJumpTarget));
+
+        vm.Ruler.Jump(vm.Ruler.Ticks[0]);
+        AssertMarked(vm, first);
+
+        vm.Ruler.Jump(vm.Ruler.Ticks[1]);
+        AssertMarked(vm, second);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task TheNextRoomStartsWithNothingMarked()
+    {
+        var vm = TestViewModels.Demo();
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await WaitForAsync(() => vm.Ruler.Ticks.Count >= 1);
+        var anchor = vm.Ruler.Ticks[0].AnchorUtteranceId;
+        await WaitForAsync(() => vm.Columns.All(c => c.Bubbles.Any(b => b.UtteranceId == anchor)));
+        vm.Ruler.Jump(vm.Ruler.Ticks[0]);
+        AssertMarked(vm, anchor);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await WaitForAsync(() => vm.Columns.Count > 0 && vm.Columns.All(c => c.Bubbles.Count > 0));
+
+        Assert.All(vm.Columns, c => Assert.DoesNotContain(c.Bubbles, b => b.IsJumpTarget));
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public void AJumpToASentenceAColumnDoesNotHoldClearsThatColumnsMark()
+    {
+        var column = new ColumnViewModel("de");
+        var marked = column.GetOrAdd("u1");
+        column.GetOrAdd("u2");
+        column.MarkJumpTarget("u1");
+
+        column.MarkJumpTarget("not-in-this-column");
+
+        Assert.False(marked.IsJumpTarget);
+        Assert.DoesNotContain(column.Bubbles, b => b.IsJumpTarget);
+    }
+
+    private static void AssertMarked(MainViewModel vm, string utteranceId)
+    {
+        Assert.NotEmpty(vm.Columns);
+        foreach (var column in vm.Columns)
+            Assert.Equal(
+                [utteranceId],
+                column.Bubbles.Where(b => b.IsJumpTarget).Select(b => b.UtteranceId));
+    }
+
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 15_000)
     {
         var deadline = Environment.TickCount64 + timeoutMs;
