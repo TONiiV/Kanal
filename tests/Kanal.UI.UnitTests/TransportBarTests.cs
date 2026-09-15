@@ -1,4 +1,8 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using Kanal.Host.Views;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -64,38 +68,34 @@ public class TransportBarTests
     }
 
     [AvaloniaFact]
-    public void TheCompactStateSpeaksForEveryStateThatUsedToHaveItsOwnBand()
+    public void TheTransportCarriesNoTextInAnyState()
     {
         var vm = Idle();
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 760 };
+        window.Show();
+        var transport = window.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Name == "Transport");
 
-        Assert.Empty(vm.CompactState);
+        void AssertSilent(string state)
+        {
+            Dispatcher.UIThread.RunJobs();
+            var words = transport.GetLogicalDescendants().OfType<TextBlock>()
+                .Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text))
+                .Select(t => t.Text);
+            Assert.True(!words.Any(), $"{state}: the transport reads \"{string.Join(" / ", words)}\".");
+        }
 
+        AssertSilent("idle");
         vm.IsStarting = true;
-        var loading = vm.CompactState;
-        Assert.NotEmpty(loading);
-
+        AssertSilent("loading");
         vm.IsStarting = false;
         vm.IsRunning = true;
         vm.IsTranscribing = true;
-        var running = vm.CompactState;
-        Assert.NotEmpty(running);
-
+        AssertSilent("running");
+        vm.RecordingPath = "/tmp/room.wav";
+        AssertSilent("recording");
         vm.IsPaused = true;
-        var paused = vm.CompactState;
-        Assert.NotEmpty(paused);
-        Assert.NotEqual(running, paused);
-    }
+        AssertSilent("paused");
 
-    [AvaloniaFact]
-    public void TheCompactStateFallsSilentOnceTheMeetingEnds()
-    {
-        var vm = Idle();
-        vm.IsRunning = true;
-        vm.IsTranscribing = true;
-
-        vm.IsRunning = false;
-        vm.IsTranscribing = false;
-
-        Assert.Empty(vm.CompactState);
+        window.Close();
     }
 }
