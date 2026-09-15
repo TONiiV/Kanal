@@ -726,8 +726,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool ShowCaptureNote => NeedsMicrophone && !IsRunning &&
         (ShowCaptureGuidance || SelectedCaptureProfile.Unavailable is not null);
 
-    // Dismissing this must never hide SelectedCaptureProfile.Unavailable — that reason is the
-    // only explanation the operator gets for why Start stays disabled.
+    // Dismiss must never hide Unavailable: it is the only reason shown for a disabled Start.
     public bool ShowCaptureGuidance => CaptureProfileGuidance is not null && !CaptureNoteDismissed;
 
     public bool IsLiveTranscription => IsRunning && IsTranscribing && NeedsMicrophone;
