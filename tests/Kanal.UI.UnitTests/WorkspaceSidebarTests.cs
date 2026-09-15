@@ -461,6 +461,87 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [Fact]
+    public async Task AnOpenerThatThrowsIsCaughtAndReportedRatherThanCrashingTheMenu()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(workspace.Id, "Delivery call");
+        var vm = new WorkspaceSidebarViewModel(
+            store, openFolder: _ => throw new InvalidOperationException("no shell"));
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+        var item = vm.Meetings.Single();
+
+        await item.OpenFolderCommand.ExecuteAsync(null);
+
+        Assert.NotEqual("", vm.ProblemNote);
+    }
+
+    [Fact]
+    public async Task AFolderDeletedOutsideKanalIsReportedRatherThanSilentlyRecreatedEmpty()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(workspace.Id, "Delivery call");
+        string? opened = null;
+        var vm = new WorkspaceSidebarViewModel(store, openFolder: path => opened = path);
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+        var item = vm.Meetings.Single();
+        Directory.Delete(vm.FolderOf(item.Record)!, recursive: true);
+
+        await item.OpenFolderCommand.ExecuteAsync(null);
+
+        Assert.Null(opened);
+        Assert.NotEqual("", vm.ProblemNote);
+        Assert.False(Directory.Exists(vm.FolderOf(item.Record)));
+    }
+
+    [Fact]
+    public async Task AMeetingWhoseWorkspaceCannotBeResolvedIsReportedRatherThanIgnored()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(workspace.Id, "Delivery call");
+        string? opened = null;
+        var vm = new WorkspaceSidebarViewModel(store, openFolder: path => opened = path);
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+        var item = vm.Meetings.Single();
+        Directory.Delete(workspace.RootPath, recursive: true);
+
+        await item.OpenFolderCommand.ExecuteAsync(null);
+
+        Assert.Null(opened);
+        Assert.NotEqual("", vm.ProblemNote);
+    }
+
+    [Fact]
+    public async Task OpeningTheFolderClearsAnyEarlierProblemNoteOnSuccess()
+    {
+        var store = Store();
+        var workspace = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(workspace.Id, "Delivery call");
+        var vm = new WorkspaceSidebarViewModel(store, openFolder: _ => { });
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+        var item = vm.Meetings.Single();
+        vm.ProblemNote = "left over from an earlier failure";
+
+        await item.OpenFolderCommand.ExecuteAsync(null);
+
+        Assert.Equal("", vm.ProblemNote);
+    }
+
+    [Fact]
+    public void OpenFolderIsExecutableForTheMeetingCurrentlyBeingRecorded()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var item = vm.Meetings.Single();
+
+        vm.RecordingMeetingId = item.Id;
+
+        Assert.True(item.OpenFolderCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task ASecondImportOfTheSameBundleOffersOnlySkipOrSaveAsNew()
     {
         // No third member: an overwrite button would promise merge semantics nothing implements,
