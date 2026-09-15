@@ -10,8 +10,7 @@
             <Setter Property="Padding" Value="0,9,0,0" />
             <Setter Property="Margin" Value="0,0,0,20" />
         </Style>
-        <!-- Same total height as Border.rec: a taller mark changes the scroll extent, which the
-             follow-the-live-line handler reads as new content and answers with ScrollToEnd. -->
+        <!-- A mark must not change the row's height: extent growth reads as new content and triggers ScrollToEnd. -->
         <Style Selector="Border.rec.jump">
             <Setter Property="Background" Value="{StaticResource Paper}" />
             <Setter Property="Padding" Value="12,9,12,8" />
@@ -21,6 +20,10 @@
             <Setter Property="BorderThickness" Value="0,3,0,0" />
             <Setter Property="Padding" Value="0,12,0,0" />
             <Setter Property="Margin" Value="0,28,0,20" />
+        </Style>
+        <Style Selector="Border.rec.live.jump">
+            <Setter Property="Padding" Value="12,12,12,8" />
+            <Setter Property="Margin" Value="-12,28,-12,12" />
         </Style>
         <Style Selector="Border.rec TextBlock.body">
             <Setter Property="FontSize" Value="14.5" />
@@ -174,7 +177,7 @@
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto">
-        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="24,22,0,10">
+        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="12,22,0,10" Padding="12,0,0,0">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
@@ -200,9 +203,9 @@
                                             Margin="0,7,0,0" />
                                 </StackPanel>
                             </Border>
-                            <ScrollViewer Loaded="OnColumnScrollLoaded"
+                            <ScrollViewer Loaded="OnColumnScrollLoaded" Margin="-12,0,-12,0"
                                           DetachedFromVisualTree="OnColumnScrollDetached">
-                                <ItemsControl ItemsSource="{Binding Bubbles}" Margin="0,0,14,40">
+                                <ItemsControl ItemsSource="{Binding Bubbles}" Margin="12,0,26,40" ClipToBounds="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BubbleViewModel">
                                             <Border Classes="rec" Classes.live="{Binding IsLive}"
