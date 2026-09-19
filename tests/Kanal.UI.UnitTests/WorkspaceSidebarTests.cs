@@ -267,7 +267,8 @@ public class WorkspaceSidebarTests : IDisposable
             .Where(button => button.Name == "MeetingMenu").Distinct().Single();
 
         Assert.Equal(
-            ["ImportIntoMeeting", "ExportMeeting", "ExportBundle", "OpenMeetingFolder", "DeleteMeeting"],
+            ["RenameMeeting", "GenerateMeetingTitle", "ImportIntoMeeting", "ExportMeeting",
+             "ExportBundle", "OpenMeetingFolder", "DeleteMeeting"],
             Reachable(Opened(ellipsis)));
 
         window.Close();

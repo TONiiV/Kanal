@@ -34,6 +34,15 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         _store = store;
         _openFolder = openFolder ?? SystemFolders.Open;
         Refresh();
+        Localizer.Instance.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != Localizer.IndexerName)
+                return;
+
+            OnPropertyChanged(nameof(EmptyNote));
+            foreach (var meeting in Meetings)
+                meeting.OnLanguageChanged();
+        };
     }
 
     public ObservableCollection<Workspace> Workspaces { get; } = new();
@@ -71,6 +80,20 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     [ObservableProperty]
     private string? _recordingMeetingId;
 
+    [ObservableProperty]
+    private bool _titleModelReady;
+
+    [ObservableProperty]
+    private bool _roomBusy;
+
+    // One naming at a time, no queue: each one outside a session loads its own copy of the weights.
+    [ObservableProperty]
+    private string? _namingMeetingId;
+
+    public Func<MeetingItemViewModel, Task>? GenerateTitleFor { get; set; }
+
+    public event Action<string, string>? MeetingRenamed;
+
     public bool HasWorkspace => SelectedWorkspace is not null;
 
     public string EmptyNote =>
@@ -89,6 +112,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         var held = _held.FindIndex(m => m.Id == renamed.Id);
         if (held >= 0)
             _held[held] = renamed;
+        ProblemNote = "";
+        MeetingRenamed?.Invoke(renamed.Id, renamed.Title);
         return true;
     }
 
@@ -216,6 +241,28 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             meeting.IsRecording = meeting.Id == value;
     }
 
+    partial void OnTitleModelReadyChanged(bool value) => ShowNamingState();
+
+    partial void OnRoomBusyChanged(bool value) => ShowNamingState();
+
+    partial void OnNamingMeetingIdChanged(string? value) => ShowNamingState();
+
+    private void ShowNamingState()
+    {
+        foreach (var meeting in Meetings)
+            ShowNamingState(meeting);
+    }
+
+    private MeetingItemViewModel ShowNamingState(MeetingItemViewModel meeting)
+    {
+        meeting.IsNaming = meeting.Id == NamingMeetingId;
+        meeting.NamingBlockedBy = !TitleModelReady ? "meeting.generatetitle.nomodel"
+            : RoomBusy ? "meeting.generatetitle.running"
+            : null;
+        meeting.CanGenerateTitle = meeting.NamingBlockedBy is null && NamingMeetingId is null;
+        return meeting;
+    }
+
     private void LoadMeetings(IReadOnlyList<StoreProblem> carried)
     {
         _held.Clear();
@@ -237,11 +284,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         var keep = SelectedMeeting?.Id;
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
-            Meetings.Add(new MeetingItemViewModel(
-                record, ImportIntoAsync, ExportAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
+            Meetings.Add(ShowNamingState(new MeetingItemViewModel(
+                record, RenameFromRow, GenerateTitleAsync,
+                ImportIntoAsync, ExportAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
-            });
+            }));
 
         SelectedMeeting = Meetings.FirstOrDefault(m => m.Id == keep);
     }
@@ -290,6 +338,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
         await CopyIntoAsync(meeting!, source);
     }
+
+    private bool RenameFromRow(MeetingItemViewModel item, string title) =>
+        title.Trim().Length > 0 && RenameMeeting(item.Id, title);
+
+    private Task GenerateTitleAsync(MeetingItemViewModel item) =>
+        GenerateTitleFor?.Invoke(item) ?? Task.CompletedTask;
 
     private async Task ImportIntoAsync(MeetingItemViewModel item)
     {
