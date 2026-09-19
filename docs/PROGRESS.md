@@ -6,6 +6,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-15
 
+### Rename and generate a title from the sidebar menu
+
+Operator report: every ended meeting's title was read-only. The heading gated renaming on
+`IsViewingAnotherRecord`, and `_sessionRecordId` deliberately survives Stop, so after one recording
+every other record counted as "another record" for the rest of the run. The gate is now
+`IsTitleReadOnly` — read-only only while a meeting is being recorded and a different one is on
+screen.
+
+Each meeting row's three-dot menu gains Rename (inline editor in the row; Enter or losing focus
+commits, Esc abandons; a taken name is refused with the same note as the heading) and Generate
+title. Generate is enabled when the active translation model is downloaded and otherwise stays in
+the menu disabled, its header carrying the reason, since a disabled `MenuItem` never shows a
+tooltip. It uses the downloaded local translation model even in Cloud or Demo mode, loading it only
+for the naming and disposing it afterwards. It is disabled, with the reason in its header, while a
+room is running or starting, and Start is disabled while a naming is in flight: sharing the live
+translator's generator would stall translation and race Stop's disposal, and a second load would
+double the weights in memory. A meeting with no final lines on disk (no transcript, a missing file,
+nothing said) is not named at all — a model asked to name nothing invents a title — and says so.
+One naming runs at a time. A generated name that collides is numbered, as mid-meeting naming
+already was; that step is `MeetingTitling`'s, reused rather than repeated.
+
+A rename or naming that lands on the record being recorded also moves `Titling`, so the heading
+and the auto-namer never hold a stale name. `_titler` is cleared when providers are disposed:
+it shared the translator's generator and would otherwise be called after its weights were freed.
+
 ### Title editor selection and sizing
 
 Operator review: renaming the meeting title showed select-all as a solid black block, the text sat

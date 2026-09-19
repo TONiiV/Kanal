@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the
+  list, and Generate title, which names the meeting from its transcript with the local model. It
+  works on meetings that have ended, not only the one being recorded; the heading of an ended
+  meeting can be renamed again too. Generate title stays visible but greyed out, saying why, when no
+  local model is set up or while a meeting is running; a meeting with nothing said keeps its name.
 - Clicking a mark on the timeline beside the transcript now tints the sentence it takes you to, in
   every language column at once, so you can see what you landed on. The next click moves the tint;
   closing the room clears it.
