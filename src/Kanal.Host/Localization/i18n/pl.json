@@ -1,10 +1,10 @@
 {
   "input.label": "WEJŚCIE",
   "capture.inroom.name": "W pomieszczeniu",
-  "capture.inroom.guidance": "Wybrany mikrofon zbiera głosy wszystkich osób przy tym komputerze.",
   "capture.online.name": "Spotkanie online",
   "capture.online.guidance": "Załóż słuchawki i włącz tryb Nie przeszkadzać. Kanal przechwytuje wybrane wyjście komputera wraz z dźwiękami powiadomień.",
   "capture.online.unavailable": "Przechwytywanie dźwięku komputera nie jest dostępne w tej wersji.",
+  "capture.note.dismiss.tip": "Zamknij — pojawi się ponownie po zmianie profilu przechwytywania.",
   "output.label": "KOMPUTER",
   "output.pending": "natywne wyjście w przygotowaniu",
   "consent.dialog.title": "Przed rozpoczęciem · Zgoda uczestników",

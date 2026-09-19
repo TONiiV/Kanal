@@ -293,18 +293,27 @@
             </DockPanel>
         </Border>
 
-        <!-- Consent moved into the dialog record opens; what is left here is what the operator
-             has to read before pressing it. -->
         <Border IsVisible="{Binding ShowCaptureNote}"
                 BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                 Background="{StaticResource Paper}" Padding="24,9">
-            <StackPanel Spacing="2">
-                <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="11.5"
-                           Foreground="{StaticResource Ink2}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding SelectedCaptureProfile.Unavailable}" FontSize="10.5"
-                           FontWeight="SemiBold" Foreground="{StaticResource Alarm}"
-                           TextWrapping="Wrap" />
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="11.5"
+                               Foreground="{StaticResource Ink2}" TextWrapping="Wrap"
+                               IsVisible="{Binding ShowCaptureGuidance}" />
+                    <TextBlock Text="{Binding SelectedCaptureProfile.Unavailable}" FontSize="10.5"
+                               FontWeight="SemiBold" Foreground="{StaticResource Alarm}"
+                               TextWrapping="Wrap" IsVisible="{Binding !SelectedCaptureProfile.IsAvailable}" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="ghost" Padding="9,4"
+                        VerticalAlignment="Center" Margin="10,0,0,0"
+                        Command="{Binding DismissCaptureNoteCommand}"
+                        IsVisible="{Binding ShowCaptureGuidance}"
+                        ToolTip.Tip="{l:T capture.note.dismiss.tip}"
+                        AutomationProperties.Name="{l:T capture.note.dismiss.tip}">
+                    <Path Classes="glyph" Data="{c:Icon close}" Width="12" Height="12" />
+                </Button>
+            </Grid>
         </Border>
     </StackPanel>
 </UserControl>

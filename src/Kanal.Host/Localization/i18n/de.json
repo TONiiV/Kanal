@@ -1,10 +1,10 @@
 {
   "input.label": "EINGANG",
   "capture.inroom.name": "Im Raum",
-  "capture.inroom.guidance": "Das ausgewählte Mikrofon erfasst alle Personen an diesem Computer.",
   "capture.online.name": "Online-Besprechung",
   "capture.online.guidance": "Kopfhörer tragen und Nicht stören aktivieren. Kanal erfasst die gewählte Computerausgabe einschließlich Benachrichtigungstönen.",
   "capture.online.unavailable": "Computer-Audio-Aufnahme ist in dieser Version nicht enthalten.",
+  "capture.note.dismiss.tip": "Schließen — erscheint erneut, wenn Sie das Erfassungsprofil wechseln.",
   "output.label": "AUSGABE",
   "output.pending": "native Ausgabe folgt",
   "consent.dialog.title": "Vor dem Start · Zustimmung der Teilnehmenden",

@@ -1,10 +1,10 @@
 {
   "input.label": "输入",
   "capture.inroom.name": "同一房间",
-  "capture.inroom.guidance": "使用所选麦克风收取电脑周围所有人的声音。",
   "capture.online.name": "线上会议",
   "capture.online.guidance": "请佩戴耳机并开启勿扰模式。Kanal 会收取所选电脑输出，包括通知提示音。",
   "capture.online.unavailable": "本版本不含电脑音频采集。",
+  "capture.note.dismiss.tip": "关闭 —— 更换采集方案后会再次出现。",
   "output.label": "电脑输出",
   "output.pending": "等待原生输出后端",
   "consent.dialog.title": "开始前 · 参与者知情确认",
