@@ -11,6 +11,7 @@ public sealed partial class MeetingItemViewModel(
     Func<MeetingItemViewModel, Task> import,
     Func<MeetingItemViewModel, Task> export,
     Func<MeetingItemViewModel, Task> exportBundle,
+    Func<MeetingItemViewModel, Task> openFolder,
     Func<MeetingItemViewModel, Task> delete) : ViewModelBase
 {
     public MeetingRecord Record { get; private set; } = record;
@@ -38,6 +39,9 @@ public sealed partial class MeetingItemViewModel(
 
     [RelayCommand]
     private Task ExportBundle() => exportBundle(this);
+
+    [RelayCommand]
+    private Task OpenFolder() => openFolder(this);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
