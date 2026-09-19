@@ -219,6 +219,7 @@ public partial class MeetingRoomView : UserControl
         Dispatcher.UIThread.Post(() =>
         {
             MeetingTitleEditor.Focus();
+            MeetingTitleEditor.CaretIndex = 0;
             MeetingTitleEditor.SelectAll();
         });
     }
