@@ -165,7 +165,7 @@ public class ChangelogTests
     {
         foreach (var release in Changelog.Releases)
         foreach (var change in release.Changes)
-            Assert.True(change.EndsWith('.'), $"{release.Version}: \"{change}\" stops mid-sentence.");
+            Assert.True(change.EndsWith('.') || change.EndsWith('。'), $"{release.Version}: \"{change}\" stops mid-sentence.");
     }
 
     [Fact]
