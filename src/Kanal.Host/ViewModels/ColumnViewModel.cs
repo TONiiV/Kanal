@@ -9,6 +9,7 @@ public partial class ColumnViewModel : ViewModelBase
 {
     private readonly Dictionary<string, BubbleViewModel> _byId = new();
     private BubbleViewModel? _live;
+    private BubbleViewModel? _jumpTarget;
 
     public ColumnViewModel(string language)
     {
@@ -54,6 +55,19 @@ public partial class ColumnViewModel : ViewModelBase
         bubble.IsLive = true;
 
         return bubble;
+    }
+
+    public void MarkJumpTarget(string? utteranceId)
+    {
+        if (_jumpTarget is not null)
+            _jumpTarget.IsJumpTarget = false;
+
+        _jumpTarget = utteranceId is not null && _byId.TryGetValue(utteranceId, out var bubble)
+            ? bubble
+            : null;
+
+        if (_jumpTarget is not null)
+            _jumpTarget.IsJumpTarget = true;
     }
 
     public void Clear()

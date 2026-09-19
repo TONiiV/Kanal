@@ -61,6 +61,7 @@ public partial class MeetingRoomView : UserControl
             if (scroller.Content is not ItemsControl items)
                 continue;
 
+            _following[scroller] = false;
             var bubble = items.ItemsSource?.OfType<BubbleViewModel>()
                 .FirstOrDefault(b => b.UtteranceId == utteranceId);
             if (bubble is not null && items.ContainerFromItem(bubble) is Control container)
