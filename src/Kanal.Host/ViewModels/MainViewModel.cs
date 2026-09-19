@@ -67,6 +67,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
     private int _dragSource = -1;
     private IMeetingTitler? _titler;
+    private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
     private string? _titleOnRecord;
 
     public MainViewModel()
@@ -93,9 +94,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
         Func<DateTimeOffset>? utcNow = null,
         Func<WorkspaceStore>? workspaces = null,
-        IMeetingTitler? titler = null)
+        IMeetingTitler? titler = null,
+        Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null)
     {
         _titler = titler;
+        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
+            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         Ruler.JumpRequested += id =>
         {
@@ -110,8 +114,31 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Titling.Changed += OnTitlingChanged;
         Files = new MeetingFilesViewModel(
             store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
+        Sidebar.GenerateTitleFor = GenerateTitleForAsync;
+        Sidebar.MeetingRenamed += (id, title) =>
+        {
+            if (id == _sessionRecordId && title != Titling.Title)
+            {
+                _titleOnRecord = title;
+                Titling.Rename(title);
+            }
+
+            OnPropertyChanged(nameof(MeetingTitle));
+        };
         Sidebar.PropertyChanged += (_, e) =>
         {
+            if (e.PropertyName == nameof(WorkspaceSidebarViewModel.RecordingMeetingId))
+            {
+                NotifyBody();
+                return;
+            }
+
+            if (e.PropertyName == nameof(WorkspaceSidebarViewModel.NamingMeetingId))
+            {
+                StartCommand.NotifyCanExecuteChanged();
+                return;
+            }
+
             if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
                 return;
             Files.Show(Sidebar.SelectedMeeting?.Record);
@@ -284,7 +311,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void BeginRenameTitle()
     {
-        if (IsViewingAnotherRecord)
+        if (IsTitleReadOnly)
             return;
         TitleDraft = MeetingTitle;
         IsRenamingTitle = true;
@@ -300,18 +327,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         // The record is asked first: a hand-typed title that collides is refused, and the heading
         // must not show a name the workspace does not hold.
-        if ((_sessionRecordId ?? Sidebar.SelectedMeeting?.Id) is { } target)
+        if ((Sidebar.SelectedMeeting?.Id ?? _sessionRecordId) is { } target
+            && !Sidebar.RenameMeeting(target, wanted))
         {
-            if (!Sidebar.RenameMeeting(target, wanted))
-            {
-                Status = Sidebar.ProblemNote;
-                return;
-            }
-
-            _titleOnRecord = wanted;
+            Status = Sidebar.ProblemNote;
+            return;
         }
 
-        Titling.Rename(wanted);
+        if (!IsViewingAnotherRecord && Titling.Title != wanted)
+        {
+            _titleOnRecord = wanted;
+            Titling.Rename(wanted);
+        }
     }
 
     [RelayCommand]
@@ -322,6 +349,52 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanRegenerateTitle))]
     private Task RegenerateTitle() => Titling.RegenerateAsync(FinalLines());
+
+    private LocalModelInfo? NamingModel() =>
+        _loadSettings().ActiveTranslationModelId is { } id
+        && LocalModelCatalog.Find(id) is { } model
+        && _downloads().IsDownloaded(model)
+            ? model
+            : null;
+
+    private async Task GenerateTitleForAsync(MeetingItemViewModel item)
+    {
+        if (IsRunning || IsStarting || NamingModel() is not { } model)
+            return;
+
+        // A model asked to name nothing invents a title, and it would overwrite the operator's.
+        var lines = StoredFinalLines(item.Record);
+        if (lines.Count == 0)
+        {
+            Status = L["meeting.generatetitle.empty"];
+            return;
+        }
+
+        Sidebar.NamingMeetingId = item.Id;
+        var titler = _makeTitler(model);
+        try
+        {
+            var naming = new MeetingTitling(() => titler, title => Sidebar.FreeTitle(title, item.Id));
+            await naming.RegenerateAsync(lines);
+            if (naming.Title is { } named && Sidebar.RenameMeeting(item.Id, named))
+                Status = "";
+            else
+                Status = L["title.failed"];
+        }
+        finally
+        {
+            if (titler is IAsyncDisposable spent)
+                await spent.DisposeAsync();
+            Sidebar.NamingMeetingId = null;
+        }
+    }
+
+    private static IReadOnlyList<string> StoredFinalLines(MeetingRecord record) =>
+        record.TranscriptPath is { } path
+            ? [.. TranscriptLog.Read(path)
+                .Where(u => u.State == UtteranceState.Final)
+                .Select(u => u.SrcText)]
+            : [];
 
     private IReadOnlyList<string> FinalLines() =>
         _session is null
@@ -684,6 +757,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>The body is a viewer: this session has a record of its own and it is not on screen.</summary>
     public bool IsViewingAnotherRecord => _sessionRecordId is not null && IsBrowsingRecord;
 
+    // Not IsViewingAnotherRecord: _sessionRecordId outlives Stop, which froze every ended title.
+    public bool IsTitleReadOnly => Sidebar.RecordingMeetingId is not null && IsBrowsingRecord;
+
     public bool ShowRecordingBanner =>
         IsRunning && Sidebar.RecordingMeetingId is { } active && Sidebar.SelectedMeeting?.Id != active;
 
@@ -713,6 +789,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasColumns));
         OnPropertyChanged(nameof(IsBrowsingRecord));
         OnPropertyChanged(nameof(IsViewingAnotherRecord));
+        OnPropertyChanged(nameof(IsTitleReadOnly));
         OnPropertyChanged(nameof(ShowStartHint));
         OnPropertyChanged(nameof(ShowNoStoredTranscript));
         OnPropertyChanged(nameof(ShowRecordingBanner));
@@ -773,6 +850,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey);
         TranscriptionStatus = status.TranscriptionLabel;
         TranslationStatus = status.TranslationLabel;
+        Sidebar.TitleModelReady = NamingModel() is not null;
     }
 
     /// <summary>
@@ -830,10 +908,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     // Consent is not a precondition of the button: pressing record is how the operator gets the
     // dialog that asks for it (ADR 0054, decision 26).
     private bool CanStart() =>
-        !IsRunning && !IsStopping && !IsStarting &&
+        !IsRunning && !IsStopping && !IsStarting && Sidebar.NamingMeetingId is null &&
         (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
 
     // Stop is offered while a model is still loading: pressing it then aborts the load.
+    partial void OnIsRunningChanged(bool value) => Sidebar.RoomBusy = IsRunning || IsStarting;
+
+    partial void OnIsStartingChanged(bool value) => Sidebar.RoomBusy = IsRunning || IsStarting;
+
     private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
 
     private bool CanPause() => IsRunning && !IsStopping && !IsStarting;
@@ -1183,6 +1265,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var mt = _mt;
         _asr = null;
         _mt = null;
+        // The titler shares the translator's generator, which is freed just below.
+        _titler = null;
         await DisposeAnyAsync(mt);
         await DisposeAnyAsync(asr);
     }

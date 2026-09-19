@@ -1,8 +1,12 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Kanal.Host.Localization;
 using Kanal.Host.ViewModels;
 
@@ -26,6 +30,46 @@ public partial class WorkspaceSidebarView : UserControl
             vm.Sidebar.ChooseImportChoice = ChooseImportChoiceAsync;
         };
     }
+
+    private void OnRenameClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { DataContext: MeetingItemViewModel meeting })
+            return;
+
+        // Posted: the editor is not visible yet while the flyout closes, and cannot take focus.
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (MeetingList.ContainerFromItem(meeting) is not Control row)
+                    return;
+
+                if (row.GetLogicalDescendants().OfType<TextBox>()
+                        .FirstOrDefault(box => box.Name == "MeetingRowEditor") is not { } editor)
+                    return;
+
+                editor.Focus();
+                editor.SelectAll();
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void OnRowEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not MeetingItemViewModel meeting)
+            return;
+
+        if (e.Key == Key.Enter)
+            meeting.CommitRenameCommand.Execute(null);
+        else if (e.Key == Key.Escape)
+            meeting.CancelRenameCommand.Execute(null);
+        else
+            return;
+
+        e.Handled = true;
+    }
+
+    private void OnRowEditorLostFocus(object? sender, RoutedEventArgs e) =>
+        ((sender as Control)?.DataContext as MeetingItemViewModel)?.CommitRenameCommand.Execute(null);
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {

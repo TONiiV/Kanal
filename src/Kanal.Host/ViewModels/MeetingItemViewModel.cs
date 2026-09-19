@@ -3,11 +3,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Workspaces;
+using Kanal.Host.Localization;
 
 namespace Kanal.Host.ViewModels;
 
 public sealed partial class MeetingItemViewModel(
     MeetingRecord record,
+    Func<MeetingItemViewModel, string, bool> rename,
+    Func<MeetingItemViewModel, Task> generateTitle,
     Func<MeetingItemViewModel, Task> import,
     Func<MeetingItemViewModel, Task> export,
     Func<MeetingItemViewModel, Task> exportBundle,
@@ -30,6 +33,51 @@ public sealed partial class MeetingItemViewModel(
     public string Title => Record.Title;
 
     public string When => Record.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    [ObservableProperty]
+    private bool _isRenaming;
+
+    [ObservableProperty]
+    private string _draft = "";
+
+    [RelayCommand]
+    private void BeginRename()
+    {
+        Draft = Title;
+        IsRenaming = true;
+    }
+
+    [RelayCommand]
+    private void CommitRename()
+    {
+        if (!IsRenaming)
+            return;
+
+        IsRenaming = false;
+        rename(this, Draft);
+    }
+
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateTitleCommand))]
+    private bool _canGenerateTitle;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GenerateTitleHeader))]
+    private string? _namingBlockedBy;
+
+    [ObservableProperty]
+    private bool _isNaming;
+
+    // A disabled MenuItem never opens its tooltip, so the header itself says why.
+    public string GenerateTitleHeader => Localizer.Instance[NamingBlockedBy ?? "meeting.generatetitle"];
+
+    [RelayCommand(CanExecute = nameof(CanGenerateTitle))]
+    private Task GenerateTitle() => generateTitle(this);
+
+    public void OnLanguageChanged() => OnPropertyChanged(nameof(GenerateTitleHeader));
 
     [RelayCommand]
     private Task Import() => import(this);

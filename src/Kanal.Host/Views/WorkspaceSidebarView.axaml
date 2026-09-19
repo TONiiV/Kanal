@@ -22,6 +22,11 @@
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
+        <Style Selector="TextBox#MeetingRowEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingRowEditor:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
         <Style Selector="Path.glyph.danger">
             <Setter Property="Fill" Value="{StaticResource Alarm}" />
         </Style>
@@ -125,11 +130,27 @@
                     <DataTemplate x:DataType="vm:MeetingItemViewModel">
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Spacing="2">
-                                <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis"
+                                <TextBlock x:Name="MeetingRowTitle" Text="{Binding Title}" FontSize="13"
+                                           TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding !IsRenaming}"
                                            Foreground="{StaticResource Ink}" />
+                                <TextBox x:Name="MeetingRowEditor" Text="{Binding Draft}"
+                                         IsVisible="{Binding IsRenaming}"
+                                         FontSize="13" Padding="0" MinHeight="0" Margin="0,0,6,0"
+                                         VerticalContentAlignment="Center"
+                                         SelectionBrush="{StaticResource Ink}"
+                                         SelectionForegroundBrush="{StaticResource Paper}"
+                                         BorderThickness="0,0,0,1"
+                                         BorderBrush="{StaticResource Ink}"
+                                         Background="Transparent" Foreground="{StaticResource Ink}"
+                                         KeyDown="OnRowEditorKeyDown" LostFocus="OnRowEditorLostFocus"
+                                         AutomationProperties.Name="{l:T meeting.rename}" />
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBlock Text="{Binding When}" FontSize="10.5"
                                                Foreground="{StaticResource Ink3}" />
+                                    <TextBlock x:Name="MeetingRowNaming" Text="{l:T title.naming}"
+                                               FontSize="10.5" IsVisible="{Binding IsNaming}"
+                                               Foreground="{StaticResource Ink2}" />
                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                                 IsVisible="{Binding IsRecording}">
                                         <Ellipse Width="5" Height="5" VerticalAlignment="Center"
@@ -146,6 +167,21 @@
                                     AutomationProperties.Name="{l:T meeting.menu.tip}">
                                 <Button.Flyout>
                                     <MenuFlyout>
+                                        <MenuItem Name="RenameMeeting" Header="{l:T meeting.rename}"
+                                                  Click="OnRenameClick"
+                                                  Command="{Binding BeginRenameCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon pencil}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Name="GenerateMeetingTitle"
+                                                  Header="{Binding GenerateTitleHeader}"
+                                                  Command="{Binding GenerateTitleCommand}">
+                                            <MenuItem.Icon>
+                                                <Path Classes="glyph" Data="{c:Icon regenerate}" Width="13" Height="13" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator />
                                         <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"
                                                   Command="{Binding ImportCommand}">
                                             <MenuItem.Icon>

@@ -99,7 +99,7 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border x:Name="MeetingTitleField" Classes="rename" Background="Transparent"
                         Focusable="True" Cursor="Ibeam"
-                        IsEnabled="{Binding !IsViewingAnotherRecord}"
+                        IsEnabled="{Binding !IsTitleReadOnly}"
                         IsVisible="{Binding !IsRenamingTitle}"
                         PointerPressed="OnTitlePressed" KeyDown="OnTitleKeyDown"
                         ToolTip.Tip="{l:T title.rename.tip}"
@@ -116,7 +116,7 @@
                            Foreground="{StaticResource Ink3}" />
 
                 <TextBlock x:Name="ReadOnlyNote" Classes="label" Text="{l:T browse.readonly}"
-                           IsVisible="{Binding IsViewingAnotherRecord}" />
+                           IsVisible="{Binding IsTitleReadOnly}" />
             </StackPanel>
 
             <!-- Fluent selects in SystemAccentColor (redirected to Ink) and keeps the Ink foreground: without Paper the selection is ink on ink. -->

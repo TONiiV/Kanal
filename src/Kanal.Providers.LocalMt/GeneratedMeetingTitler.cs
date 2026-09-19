@@ -3,7 +3,8 @@ using Kanal.Core.Meetings;
 
 namespace Kanal.Providers.LocalMt;
 
-public sealed partial class GeneratedMeetingTitler(ITextGenerator generator) : IMeetingTitler
+public sealed partial class GeneratedMeetingTitler(ITextGenerator generator)
+    : IMeetingTitler, IAsyncDisposable
 {
     private const int MaxLines = 40;
     private const int MaxWords = 8;
@@ -29,6 +30,9 @@ public sealed partial class GeneratedMeetingTitler(ITextGenerator generator) : I
             ? first
             : null;
     }
+
+    public ValueTask DisposeAsync() =>
+        generator is IAsyncDisposable spent ? spent.DisposeAsync() : ValueTask.CompletedTask;
 
     private static string Prompt(string transcript) =>
         "Give this meeting a short title of at most six words, in the language it is spoken in. " +
