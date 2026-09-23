@@ -179,6 +179,38 @@ public class MeetingFilesTests : IDisposable
         Assert.False(Directory.Exists(folder));
     }
 
+    [Fact]
+    public void AMissingFolderNoteDoesNotFollowTheOperatorToTheNextMeeting()
+    {
+        var (store, workspace) = Opened("Delivery call", "Tooling review");
+        var gone = Meeting(store, workspace, "Delivery call");
+        var files = new MeetingFilesViewModel(
+            store, () => Task.FromResult<string?>(null), openFolder: _ => { });
+        files.Show(gone);
+        Directory.Delete(store.MeetingFolder(workspace.Id, gone.Id)!, recursive: true);
+        files.OpenFolderCommand.Execute(null);
+        Assert.NotEqual("", files.ProblemNote);
+
+        files.Show(Meeting(store, workspace, "Tooling review"));
+
+        Assert.Equal("", files.ProblemNote);
+    }
+
+    [Fact]
+    public async Task AFailedImportNoteDoesNotFollowTheOperatorToTheNextMeeting()
+    {
+        var (store, workspace) = Opened("Delivery call", "Tooling review");
+        var missing = Path.Combine(_root, "never-written.pdf");
+        var files = new MeetingFilesViewModel(store, () => Task.FromResult<string?>(missing));
+        files.Show(Meeting(store, workspace, "Delivery call"));
+        await files.ImportCommand.ExecuteAsync(null);
+        Assert.NotEqual("", files.ProblemNote);
+
+        files.Show(Meeting(store, workspace, "Tooling review"));
+
+        Assert.Equal("", files.ProblemNote);
+    }
+
     [AvaloniaFact]
     public void SwitchingMeetingSwitchesWhatTheFileTabShows()
     {
