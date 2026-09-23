@@ -12,6 +12,10 @@ _Avoid_: Project scope
 **Meeting record**:
 The record of one meeting, including its transcript and associated summary.
 
+**Run**:
+One Start-to-Stop recording inside a meeting record. Each run has its own transcript file and audio file.
+_Avoid_: Segment, part, session
+
 **Meeting title**:
 The human-readable name of a meeting record, distinct from its workspace name. It may originate from model generation or manual naming.
 

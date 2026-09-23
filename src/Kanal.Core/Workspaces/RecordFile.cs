@@ -8,6 +8,9 @@ internal static class RecordFile
 {
     public const int SchemaVersion = 1;
 
+    // A meeting record and a bundle manifest went to 2 when a record gained runs; a 1 still reads.
+    public const int MeetingSchemaVersion = 2;
+
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
@@ -33,7 +36,8 @@ internal static class RecordFile
         }
     }
 
-    public static (T? Value, StoreProblem? Problem) Parse<T>(string text, string path) where T : class, IStoredRecord
+    public static (T? Value, StoreProblem? Problem) Parse<T>(string text, string path, int newest = SchemaVersion)
+        where T : class, IStoredRecord
     {
         T? value;
         try
@@ -50,7 +54,7 @@ internal static class RecordFile
             return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
 
         // Refused, not half-read: the next save would write the dropped fields back as loss.
-        if (value.SchemaVersion != SchemaVersion)
+        if (value.SchemaVersion < SchemaVersion || value.SchemaVersion > newest)
             return (null, new StoreProblem(
                 StoreProblemKind.UnsupportedVersion, path,
                 $"Unsupported workspace schema {value.SchemaVersion}."));

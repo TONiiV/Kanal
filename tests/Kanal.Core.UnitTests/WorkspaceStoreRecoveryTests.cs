@@ -134,8 +134,9 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         Assert.Equal(new DateTimeOffset(ended), record.EndedAt);
         Assert.Equal(new DateTimeOffset(ended.AddSeconds(-65)), record.StartedAt);
         Assert.Equal(record.StartedAt, record.CreatedAt);
-        Assert.Equal(transcript, record.TranscriptPath);
-        Assert.Equal(Path.Combine(folder, WorkspaceStore.AudioFileName), record.AudioPath);
+        var run = Assert.Single(record.Runs);
+        Assert.Equal(transcript, run.TranscriptPath);
+        Assert.Equal(Path.Combine(folder, WorkspaceStore.AudioFileName), run.AudioPath);
 
         var listing = Store().ListMeetings(workspace.Id);
         Assert.Empty(listing.Problems);
@@ -152,7 +153,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
 
         var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
 
-        Assert.Null(record.AudioPath);
+        Assert.Null(Assert.Single(record.Runs).AudioPath);
     }
 
     [Fact]

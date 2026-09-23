@@ -12,12 +12,13 @@ internal static class StorePaths
     public static bool IsFolderName(string? id) =>
         !string.IsNullOrEmpty(id) && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
-    // A name, never a path: these are resolved against the meeting's own folder.
+    // A name, never a path. Windows resolves "C:x" off another folder and drops a trailing dot or space.
     public static bool IsFileName(string? name) =>
         name is null
         || (!string.IsNullOrWhiteSpace(name)
             && !name.Contains('/') && !name.Contains('\\')
-            && name is not ("." or ".."));
+            && !Path.IsPathRooted(name)
+            && !name.EndsWith('.') && !name.EndsWith(' '));
 
     public static bool IsArtifactPath(string? path, string meetingFolder)
     {

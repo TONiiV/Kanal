@@ -150,4 +150,33 @@ public class TranscriptLogTests
     {
         Assert.Empty(TranscriptLog.Read(TempFile()));
     }
+
+    [Fact]
+    public void AContinuedMeetingReadsEveryRunInOrderWithoutOneRunOverwritingAnother()
+    {
+        var first = TempFile();
+        var second = Path.Combine(Path.GetDirectoryName(first)!, MeetingRun.TranscriptFileName(2));
+        using (var writer = new TranscriptLogWriter(first, _ => { }))
+        {
+            writer.Append(Said("u1", "vor der Pause"));
+            writer.Append(Said("u2", "KX-4402 geprüft"));
+        }
+
+        using (var writer = new TranscriptLogWriter(second, _ => { }))
+        {
+            writer.Append(Said("u1", "nach der Pause"));
+            writer.Append(Said("u2", "Liefertermin bestätigt"));
+        }
+
+        var meeting = new MeetingRecord(
+            "m1", "w1", "Tooling review", DateTimeOffset.UtcNow, null, null, ["zh"],
+            [new(first, null, null, null), new(second, null, null, null)]);
+
+        var read = TranscriptLog.Read(meeting);
+
+        Assert.Equal(
+            ["vor der Pause", "KX-4402 geprüft", "nach der Pause", "Liefertermin bestätigt"],
+            read.Select(u => u.SrcText));
+        Assert.Equal(4, read.Select(u => u.Id).Distinct().Count());
+    }
 }

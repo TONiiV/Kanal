@@ -69,21 +69,30 @@ public class WorkspaceStoreTests : IDisposable
         var made = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
         var meetingFolder = store.MeetingFolder(workspace.Id, made.Id)!;
 
+        var started = new DateTimeOffset(2026, 9, 7, 9, 30, 0, TimeSpan.FromHours(2));
+        var ended = new DateTimeOffset(2026, 9, 7, 10, 15, 0, TimeSpan.FromHours(2));
         var saved = made with
         {
-            StartedAt = new DateTimeOffset(2026, 9, 7, 9, 30, 0, TimeSpan.FromHours(2)),
-            EndedAt = new DateTimeOffset(2026, 9, 7, 10, 15, 0, TimeSpan.FromHours(2)),
+            StartedAt = started,
+            EndedAt = ended,
             Languages = ["zh", "de", "pl"],
-            TranscriptPath = Path.Combine(meetingFolder, "transcript.md"),
-            AudioPath = Path.Combine(meetingFolder, "room.wav"),
+            Runs =
+            [
+                new(Path.Combine(meetingFolder, "transcript.md"), Path.Combine(meetingFolder, "room.wav"),
+                    started, ended),
+            ],
         };
         Assert.Null(store.SaveMeeting(saved).Problem);
 
         var read = Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
         Assert.Equal(saved.Languages, read.Languages);
-        // A record compares its list field by reference, so hold it constant and compare the rest.
+        Assert.Equal(saved.Runs, read.Runs);
+        // A record compares its list fields by reference, so hold them constant and compare the rest.
         IReadOnlyList<string> same = [];
-        Assert.Equal(saved with { Languages = same }, read with { Languages = same });
+        IReadOnlyList<MeetingRun> none = [];
+        Assert.Equal(
+            saved with { Languages = same, Runs = none },
+            read with { Languages = same, Runs = none });
     }
 
     [Fact]
@@ -220,7 +229,7 @@ public class WorkspaceStoreTests : IDisposable
         var path = Path.Combine(
             store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
         var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
-        document["schemaVersion"] = JsonSerializer.SerializeToElement(WorkspaceStore.SchemaVersion + 1);
+        document["schemaVersion"] = JsonSerializer.SerializeToElement(WorkspaceStore.MeetingSchemaVersion + 1);
         File.WriteAllText(path, JsonSerializer.Serialize(document));
 
         var listing = Store().ListMeetings(workspace.Id);
@@ -292,16 +301,16 @@ public class WorkspaceStoreTests : IDisposable
         var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
 
-        foreach (var path in new[]
+        foreach (var (path, version) in new[]
                  {
-                     Path.Combine(workspace.RootPath, WorkspaceStore.WorkspaceFileName),
-                     Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+                     (Path.Combine(workspace.RootPath, WorkspaceStore.WorkspaceFileName),
+                         WorkspaceStore.SchemaVersion),
+                     (Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+                         WorkspaceStore.MeetingSchemaVersion),
                  })
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path));
-            Assert.Equal(
-                WorkspaceStore.SchemaVersion,
-                document.RootElement.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal(version, document.RootElement.GetProperty("schemaVersion").GetInt32());
             Assert.False(document.RootElement.TryGetProperty("complete", out _));
         }
     }
@@ -388,7 +397,7 @@ public class WorkspaceStoreTests : IDisposable
         var audio = Path.Combine(folder, "audio.wav");
         File.WriteAllText(transcript, """{"text":"Guten Tag"}""");
         File.WriteAllBytes(audio, [0x52, 0x49, 0x46, 0x46]);
-        Created(store.SaveMeeting(meeting with { TranscriptPath = transcript, AudioPath = audio }));
+        Created(store.SaveMeeting(meeting with { Runs = [new(transcript, audio, null, null)] }));
 
         Assert.Null(store.DeleteMeeting(workspace.Id, meeting.Id));
 
@@ -651,11 +660,11 @@ public class WorkspaceStoreTests : IDisposable
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
 
         var result = store.SaveMeeting(
-            meeting with { TranscriptPath = Path.Combine("..", "..", "elsewhere.md") });
+            meeting with { Runs = [new(Path.Combine("..", "..", "elsewhere.md"), null, null, null)] });
 
         Assert.Null(result.Meeting);
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
-        Assert.Null(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).TranscriptPath);
+        Assert.Empty(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Runs);
     }
 
     [Fact]
@@ -797,9 +806,164 @@ public class WorkspaceStoreTests : IDisposable
         var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
         var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
 
-        var result = store.SaveMeeting(meeting with { TranscriptPath = name });
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
 
-        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        var transcript = store.SaveMeeting(meeting with { Runs = [new(name, null, null, null)] });
+        var audio = store.SaveMeeting(meeting with
+        {
+            Runs = [new(Path.Combine(folder, TranscriptLog.FileName), name, null, null)],
+        });
+
+        Assert.Equal(StoreProblemKind.Invalid, transcript.Problem!.Kind);
+        Assert.Equal(StoreProblemKind.Invalid, audio.Problem!.Kind);
+    }
+
+    [Fact]
+    public void EveryRunOfAContinuedMeetingKeepsItsOwnFilesInOrder()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        var morning = new DateTimeOffset(2026, 9, 23, 9, 0, 0, TimeSpan.Zero);
+        MeetingRun[] runs =
+        [
+            new(Path.Combine(folder, "transcript.jsonl"), Path.Combine(folder, "audio.wav"),
+                morning, morning.AddMinutes(50)),
+            new(Path.Combine(folder, "transcript-2.jsonl"), null,
+                morning.AddMinutes(65), morning.AddMinutes(90)),
+        ];
+
+        Created(store.SaveMeeting(meeting with { Runs = runs }));
+
+        Assert.Equal(runs, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Runs);
+    }
+
+    [Fact]
+    public void ARunIsNamedAfterItsPlaceInTheMeeting()
+    {
+        Assert.Equal(TranscriptLog.FileName, MeetingRun.TranscriptFileName(1));
+        Assert.Equal(WorkspaceStore.AudioFileName, MeetingRun.AudioFileName(1));
+        Assert.Equal("transcript-2.jsonl", MeetingRun.TranscriptFileName(2));
+        Assert.Equal("audio-3.wav", MeetingRun.AudioFileName(3));
+    }
+
+    [Fact]
+    public void ANewRunSkipsEveryNameAPartHoldsOrTheDiskAlreadyHas()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        Assert.Equal(1, meeting.NextRun(folder));
+
+        File.WriteAllText(Path.Combine(folder, "audio-3.wav"), "stray");
+        var held = meeting with { Runs = [new(Path.Combine(folder, "TRANSCRIPT-2.JSONL"), null, null, null)] };
+
+        Assert.Equal(4, held.NextRun(folder));
+    }
+
+    [Fact]
+    public void TwoRunsNamingOneFileInDifferentCaseAreReportedRatherThanFollowed()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
+        document["runs"] = JsonSerializer.SerializeToElement(new[]
+        {
+            new Dictionary<string, string?> { ["transcript"] = "transcript.jsonl", ["audio"] = null },
+            new Dictionary<string, string?> { ["transcript"] = "Transcript.jsonl", ["audio"] = null },
+        });
+        File.WriteAllText(path, JsonSerializer.Serialize(document));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
+    }
+
+    [Fact]
+    public void AMeetingWrittenBeforeRunsExistedReadsAsOneRun()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        File.WriteAllText(
+            Path.Combine(folder, WorkspaceStore.MeetingFileName),
+            $$"""
+            {"schemaVersion":1,"id":"{{meeting.Id}}","title":"Tooling review",
+             "createdAt":"2026-09-08T14:00:00+00:00","startedAt":"2026-09-08T14:30:00+00:00",
+             "endedAt":"2026-09-08T15:12:00+00:00","languages":["de","zh"],
+             "transcriptFileName":"transcript.jsonl","audioFileName":"audio.wav"}
+            """);
+
+        var read = Assert.Single(Store().ListMeetings(workspace.Id).Meetings);
+
+        var run = Assert.Single(read.Runs);
+        Assert.Equal(Path.Combine(folder, "transcript.jsonl"), run.TranscriptPath);
+        Assert.Equal(Path.Combine(folder, "audio.wav"), run.AudioPath);
+        Assert.Equal(read.StartedAt, run.StartedAt);
+        Assert.Equal(read.EndedAt, run.EndedAt);
+    }
+
+    [Fact]
+    public void ABlankMeetingWrittenBeforeRunsExistedHasNone()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        File.WriteAllText(
+            Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+            $$"""
+            {"schemaVersion":1,"id":"{{meeting.Id}}","title":"Tooling review",
+             "createdAt":"2026-09-08T14:00:00+00:00","languages":[]}
+            """);
+
+        Assert.Empty(Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Runs);
+    }
+
+    [Theory]
+    [InlineData("transcript", "../escaped.jsonl")]
+    [InlineData("transcript", "..\\..\\escaped.jsonl")]
+    [InlineData("transcript", "sub/escaped.jsonl")]
+    [InlineData("transcript", "..")]
+    [InlineData("transcript", "<absolute>")]
+    [InlineData("transcript", "<drive-relative>")]
+    [InlineData("transcript", "transcript.jsonl.")]
+    [InlineData("transcript", null)]
+    [InlineData("audio", "../escaped.wav")]
+    [InlineData("audio", "<absolute>")]
+    [InlineData("audio", "audio.wav ")]
+    public void ARunNamingAnythingButAFileBesideItIsReportedRatherThanFollowed(string field, string? name)
+    {
+        Assert.SkipUnless(
+            name != "<drive-relative>" || OperatingSystem.IsWindows(),
+            "\"C:escaped\" is an ordinary file name everywhere but Windows.");
+
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var path = Path.Combine(
+            store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        var run = new Dictionary<string, string?> { ["transcript"] = "transcript.jsonl", ["audio"] = null };
+        run[field] = name switch
+        {
+            "<absolute>" => Path.Combine(_root, "escaped.bin"),
+            "<drive-relative>" => "C:escaped.bin",
+            _ => name,
+        };
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(path))!;
+        document["runs"] = JsonSerializer.SerializeToElement(new[] { run });
+        File.WriteAllText(path, JsonSerializer.Serialize(document));
+
+        var listing = Store().ListMeetings(workspace.Id);
+
+        Assert.Empty(listing.Meetings);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]

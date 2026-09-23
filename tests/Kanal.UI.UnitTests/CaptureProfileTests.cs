@@ -55,13 +55,13 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         await vm.StopCommand.ExecuteAsync(null);
 
         var record = Assert.Single(store.ListMeetings(workspace.Id).Meetings);
-        using var first = System.Text.Json.JsonDocument.Parse(File.ReadLines(record.TranscriptPath!).First());
+        using var first = System.Text.Json.JsonDocument.Parse(File.ReadLines(record.Runs[0].TranscriptPath).First());
         Assert.Equal("in-room", first.RootElement.GetProperty("captureProfile").GetString());
         Assert.Equal(confirmed, first.RootElement.GetProperty("consentConfirmedAt").GetDateTimeOffset());
     }
@@ -76,7 +76,7 @@ public class CaptureProfileTests
         settings.ActiveGladiaKeyName = "meeting-room";
         var vm = TestViewModels.Hermetic(settings);
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
-        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _, _) => Task.FromResult<bool?>(null);
 
         Assert.True(vm.StartCommand.CanExecute(null));
 
@@ -106,7 +106,7 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         now = now.AddMinutes(7); // a later export must not rewrite when consent was actually given
@@ -119,7 +119,7 @@ public class CaptureProfileTests
         await vm.StopCommand.ExecuteAsync(null);
 
         // Every start asks again: the next meeting is a different room full of people.
-        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _, _) => Task.FromResult<bool?>(null);
         await vm.StartCommand.ExecuteAsync(null);
         Assert.False(vm.IsRunning);
     }
@@ -163,7 +163,7 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         var deadline = Environment.TickCount64 + 2_000;

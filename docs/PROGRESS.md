@@ -6,6 +6,44 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Recording again continues the meeting, one run per Start
+
+Operator request: Stop, then Record in the same meeting, continues that meeting. It does not open a
+new record. [ADR 0059](adr/0059-continue-a-meeting-as-runs.md) replaces ADR 0054 decisions 1 and 3.
+
+- **Files.** Run 1 writes `transcript.jsonl` and `audio.wav`. Run n writes `transcript-{n}.jsonl`
+  and `audio-{n}.wav`. Two runs never share a file, because each ASR session restarts its ids at
+  `u1`.
+- **Run number.** `MeetingRecord.NextRun` is the only place that gives a run number. It starts at
+  the run count plus 1. It skips a number when a run of the record holds that name, or when that
+  file is on disk. The comparison ignores case. Without this check, an imported run 1 named
+  `transcript-2.jsonl` was truncated by the next run.
+- **Model.** `MeetingRecord.Runs` replaces `TranscriptPath` and `AudioPath`.
+  `TranscriptLog.Read(MeetingRecord)` reads the runs in order. In memory, it puts the run position
+  in front of each id (`2/u1`). The files keep their own ids.
+- **Schema.** `meeting.json` and the bundle manifest go to schema 2 (`RecordFile.MeetingSchemaVersion`).
+  `RecordFile.Parse` does the version check for both. Schema 1 reads as one run.
+  `StoredRun.Legacy` builds that run for the store and for the import. The workspace file and the
+  registry stay at schema 1. An older Kanal refuses a schema 2 file.
+- **Trust boundary.** Each name in `runs` must be a plain file name. `StorePaths.IsFileName` now
+  also refuses a rooted name such as `C:x` and a name that ends in a dot or a space. Windows reads
+  those as another file. Two runs that name one file, in any case, make the record damaged. The
+  import extracts only the files that the manifest names.
+- **Binding.** The record that is selected before consent is the record that continues. A
+  cancelled or failed continuation saves the record back without the new run. The run files do not
+  exist yet at that point.
+- **Screen.** The columns and the ruler load the lines of the earlier runs first. The titler does
+  not replace the stored title, because the record does not say if a person typed it.
+- **Readers.** Browse, the Markdown export, the ruler, the Files tab, the bundle export and import,
+  and the recovery of a damaged record read every run. The Files tab sorts by file stem, so
+  `audio.wav` comes before `audio-2.wav`. Run 10 sorts before run 2. Add a natural sort if a meeting
+  ever has ten runs.
+
+Out of scope: a phone receives only the current run, because the relay channel changes at each
+Start. Speaker tags restart at each run, so renames and merges change only the current run. The
+Markdown export shows only the consent time of the latest run. The record languages are the
+languages of the latest run.
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).

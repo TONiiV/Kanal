@@ -21,8 +21,40 @@ public sealed record MeetingRecord(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     IReadOnlyList<string> Languages,
-    string? TranscriptPath,
-    string? AudioPath);
+    IReadOnlyList<MeetingRun> Runs)
+{
+    public MeetingRecord WithLastRun(Func<MeetingRun, MeetingRun> change) =>
+        Runs.Count == 0 ? this : this with { Runs = [.. Runs.SkipLast(1), change(Runs[^1])] };
+
+    // The transcript log truncates the file it opens, and an imported record may hold any plain file name.
+    public int NextRun(string folder)
+    {
+        var held = Runs.SelectMany(r => new[] { r.TranscriptPath, r.AudioPath })
+            .OfType<string>()
+            .Select(p => Path.GetFileName(p))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool Taken(string name) => held.Contains(name) || File.Exists(Path.Combine(folder, name));
+
+        var run = Runs.Count + 1;
+        while (Taken(MeetingRun.TranscriptFileName(run)) || Taken(MeetingRun.AudioFileName(run)))
+            run++;
+        return run;
+    }
+}
+
+// One Start…Stop run. Each run keeps its own files because the ASR restarts its utterance ids at zero.
+public sealed record MeetingRun(
+    string TranscriptPath,
+    string? AudioPath,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? EndedAt)
+{
+    public static string TranscriptFileName(int run) =>
+        run == 1 ? TranscriptLog.FileName : $"transcript-{run}.jsonl";
+
+    public static string AudioFileName(int run) =>
+        run == 1 ? WorkspaceStore.AudioFileName : $"audio-{run}.wav";
+}
 
 public enum StoreProblemKind
 {

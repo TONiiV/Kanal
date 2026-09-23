@@ -105,7 +105,10 @@ public sealed partial class MeetingFilesViewModel(
         try
         {
             folders = [.. Directory.EnumerateDirectories(folder).OrderBy(Path.GetFileName, Alphabetical)];
-            files = [.. Directory.EnumerateFiles(folder).OrderBy(Path.GetFileName, Alphabetical)];
+            // By stem first, so audio.wav sorts before audio-2.wav.
+            files = [.. Directory.EnumerateFiles(folder)
+                .OrderBy(Path.GetFileNameWithoutExtension, Alphabetical)
+                .ThenBy(Path.GetFileName, Alphabetical)];
         }
         catch (Exception ex)
         {

@@ -422,7 +422,7 @@ public class OnlineCaptureTests
         rig.Choose("mic-a");
         bool? emphasised = null;
         bool? choosable = null;
-        rig.Vm.ConfirmConsent = (save, remote) =>
+        rig.Vm.ConfirmConsent = (save, remote, _) =>
         {
             emphasised = remote;
             choosable = rig.Vm.CanChooseAudio;
@@ -452,7 +452,7 @@ public class OnlineCaptureTests
         rig.Online();
         rig.Choose("mic-b");
         bool? emphasised = null;
-        rig.Vm.ConfirmConsent = (save, remote) =>
+        rig.Vm.ConfirmConsent = (save, remote, _) =>
         {
             emphasised = remote;
             rig.Vm.SelectedCaptureProfile = rig.Profile(CaptureProfileId.InRoom);
@@ -656,7 +656,7 @@ public class OnlineCaptureTests
             };
             Vm.SelectedMode = Vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
             Vm.PlanFilter = plan => plan with { Asr = Asr, Mt = null, CloudTranslation = true };
-            Vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+            Vm.ConfirmConsent = (save, _, _) => Task.FromResult<bool?>(save);
         }
 
         public CaptureProfileOption Profile(CaptureProfileId id) => Vm.CaptureProfiles.Single(p => p.Id == id);

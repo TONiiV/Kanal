@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- When you stop and then press record with the meeting still selected, Kanal continues that
+  meeting. Each start to stop is one run of the meeting. The consent dialog names the meeting that
+  you continue. The lines of the earlier runs stay on screen above the new lines. The `.kl` file
+  carries every run in order. Each run keeps its own files, for example `transcript-2.jsonl` and
+  `audio-2.wav`. To record a separate meeting, click New meeting first. An older Kanal version
+  cannot open a meeting or a `.kl` file that this version saved.
 - Each settings tab shows an icon next to its name.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the

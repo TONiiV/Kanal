@@ -66,7 +66,7 @@ public class LanguageFocusTests : IDisposable
         {
             StartedAt = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
             EndedAt = new DateTimeOffset(2026, 9, 1, 9, 40, 0, TimeSpan.Zero),
-            TranscriptPath = path,
+            Runs = [new(path, null, null, null)],
             Languages = ["zh", "de"],
         }).Meeting!;
 
