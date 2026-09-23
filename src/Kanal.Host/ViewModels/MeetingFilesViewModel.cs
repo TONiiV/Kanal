@@ -42,6 +42,7 @@ public sealed partial class MeetingFilesViewModel(
         OnPropertyChanged(nameof(HasMeeting));
         ImportCommand.NotifyCanExecuteChanged();
         OpenFolderCommand.NotifyCanExecuteChanged();
+        ProblemNote = "";
         Refresh();
     }
 

@@ -12,8 +12,10 @@ The Files tab gains an Open folder button beside Import file, for the meeting th
 (the sidebar selection) and disabled with none, like Import. The check-then-open body of the
 sidebar's Open folder item (#132) moved into `SystemFolders.OpenMeetingFolder`, so both entry points
 refuse a missing folder rather than letting `SystemFolders.Open` recreate it empty. A failure lands
-in `Files.ProblemNote`, under the list the operator is looking at, not in the sidebar's note. The
-two buttons sit in a `WrapPanel`: German labels do not fit side by side at the default panel width.
+in `Files.ProblemNote`, under the list the operator is looking at, not in the sidebar's note.
+`Show` now clears that note, so an open or import failure on one meeting no longer reads as the
+next meeting's problem. The two buttons sit in a `WrapPanel`: German labels do not fit side by
+side at the default panel width.
 
 ## 2026-09-15
 
