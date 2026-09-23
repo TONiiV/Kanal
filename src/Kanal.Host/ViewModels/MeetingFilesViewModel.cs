@@ -9,16 +9,19 @@ using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
+using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
 
 public sealed partial class MeetingFilesViewModel(
-    WorkspaceStore store, Func<Task<string?>> chooseFile) : ViewModelBase
+    WorkspaceStore store, Func<Task<string?>> chooseFile, Action<string>? openFolder = null) : ViewModelBase
 {
     private const string AttachmentsFolderName = "attachments";
     private const string LogCategory = "workspace";
 
     private static readonly StringComparer Alphabetical = StringComparer.OrdinalIgnoreCase;
+
+    private readonly Action<string> _openFolder = openFolder ?? SystemFolders.Open;
 
     private MeetingRecord? _meeting;
 
@@ -38,6 +41,8 @@ public sealed partial class MeetingFilesViewModel(
         _meeting = meeting;
         OnPropertyChanged(nameof(HasMeeting));
         ImportCommand.NotifyCanExecuteChanged();
+        OpenFolderCommand.NotifyCanExecuteChanged();
+        ProblemNote = "";
         Refresh();
     }
 
@@ -76,6 +81,9 @@ public sealed partial class MeetingFilesViewModel(
 
         Refresh();
     }
+
+    [RelayCommand(CanExecute = nameof(HasMeeting))]
+    private void OpenFolder() => ProblemNote = SystemFolders.OpenMeetingFolder(Folder(), _openFolder);
 
     private string? Folder() =>
         _meeting is { } meeting ? store.MeetingFolder(meeting.WorkspaceId, meeting.Id) : null;

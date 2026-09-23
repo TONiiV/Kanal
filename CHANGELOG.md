@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The Files tab on the right now has an Open folder button beside Import file. It opens the folder
+  of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
+  and says so under the list if that folder was moved or deleted outside Kanal.
 - A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the
   list, and Generate title, which names the meeting from its transcript with the local model. It
   works on meetings that have ended, not only the one being recorded; the heading of an ended
