@@ -26,6 +26,14 @@ real install numbers.
   `v1.0.0` tag on #125; the Worker slice can land after 1.0.0 but deploys before the host's first
   real call. Silent install (Velopack/Sparkle, MSI signing) gets its own ADR later.
 
+### Chinese meeting names take quotation marks, not book-title marks
+
+Operator report: 删除《支架料号 KX-4402》. 书名号 are for published works; a meeting name is a name,
+and zh.json already quoted every other name — a key, a model, a taken title — with “{0}”. The four
+strings added with the delete, bundle and browse slices now match. Dropping the marks entirely was
+rejected: a title running straight into the sentence (把支架料号 KX-4402打成一个文件) leaves no
+visible edge. `LocalizationTests` fails on any 《 or 》 in the Chinese table.
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu
