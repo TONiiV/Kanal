@@ -4,6 +4,57 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-23
+
+### Start says it is connecting, connects in parallel, and names the meeting first
+
+Operator report (Cloud/Cloud): after the consent dialog the app sat for about five seconds with
+nothing on screen; was it loading a local model or naming the meeting? Neither. Cloud/Cloud plans no
+local model, so there was no warm-up and no titler. The room id is stamped right after consent
+(`RoomIds.New`, one-second resolution) and "Room … open" landed 4.2–5.7 s later in Cloud/Cloud and
+1.9–3.3 s later in Demo (log of 2026-09-23). In that window Start awaited, one after the other: the
+gateway room creation (`GatewayRelayPublisher.CreateRoomAsync`), on a restart the `room.moved`
+publish on the previous channel, the Gladia session (HTTP init + WebSocket), then the `room.config`
+and `room.transcribing` publishes. `IsStarting` was only set around model warm-up, and the record,
+and with it the name, was opened only after all of that.
+
+- **Starting phase.** `IsStarting` is true from consent until the room opens or the start is
+  abandoned, so the stop mark's spinner shows, and the status line reads "Connecting…" (the
+  model-loading line while a model warms up). One cancellation token reaches warm-up, relay
+  creation (`CreateRoomAsync`'s HttpClient) and the transcriber's connect. Stop during this phase
+  only cancels it; the start tears itself down once it sees the cancellation, rather than Stop
+  disposing providers under a connect still in flight.
+- **Parallel.** Relay room creation starts right after consent, before warm-up, as a task. The
+  session is handed a `PendingRelay`, an `IRelayPublisher` whose publishes wait for that task, so
+  `MeetingSession.StartAsync` connects the transcriber while the relay room is still being created
+  and its first publish (`room.config`) waits for the relay. Chosen over letting `MeetingSession`
+  accept its relay later: its contract (one relay from construction; config, then transcribing,
+  then the pump) is unchanged, and the ordering guarantee stays inside it. The room now opens after
+  the slower of relay and transcriber instead of their sum. A relay failure still resolves to the
+  null publisher with a warning, so the QR goes and transcription does not. `room.moved` on the
+  previous channel is now sent once the new session has started, so a failed restart no longer
+  redirects phones to a room that never opened.
+- **Name first: the record opens at consent (option a).** This is what ADR 0054 decision 2
+  words, and it supersedes the 2026-09-12 note that kept the record at room open. The default name
+  is on screen in the heading and the sidebar at once and is the same string the record holds: one
+  `_utcNow()`, one write. A start that fails or is abandoned hands the record back through
+  `WorkspaceSidebarViewModel.DiscardRecord`. A record created for the start is deleted; a reused
+  blank record is saved back as it was (`StartedAt` null, its old title), so the binding rule
+  still reuses it; the selection returns to where it was. "Cancel or failure leaves nothing behind"
+  holds. Option (b), a heading-only preview with the record written at room open, was rejected.
+  While an ended record is selected, the heading and body show that record, so a preview would need
+  its own override of `MeetingTitle` and would still leave the sidebar without a row. The row carries
+  its Recording mark from consent, which also keeps it from being deleted mid-start.
+- **Log.** `relay`: "Relay room created in N ms." (or the failure, with its elapsed time). `room`:
+  "Transcriber <id> connected in N ms." (from `MeetingSession.StartAsync`). The "Room … open" line
+  now ends with "N ms after Start", counted from consent.
+- The `RelayPublisherFactory` test seam now returns a `Task`, so a test can hold relay creation
+  open.
+
+Open: a gateway that hangs still holds the room for up to its 15 s HttpClient timeout, because
+`room.config` waits for the relay. The fix would be to open the room on the transcriber alone and
+let publishes queue behind the relay. Not done here.
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu

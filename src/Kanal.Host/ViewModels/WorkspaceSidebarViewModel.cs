@@ -189,6 +189,21 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         });
     }
 
+    public void DiscardRecord(MeetingRecord opened, MeetingRecord? selectedBefore)
+    {
+        if (opened.Id == selectedBefore?.Id)
+        {
+            SaveRecord(selectedBefore);
+            return;
+        }
+
+        if (SelectedWorkspace is not { } workspace || Refused(_store.DeleteMeeting(workspace.Id, opened.Id)))
+            return;
+
+        LoadMeetings([]);
+        Select(selectedBefore?.Id);
+    }
+
     public string? FolderOf(MeetingRecord record) =>
         _store.MeetingFolder(record.WorkspaceId, record.Id);
 
