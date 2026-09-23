@@ -17,6 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
   now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
   《》 used for books and films.
+- The Files tab on the right now has an Open folder button beside Import file. It opens the folder
+  of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
+  and says so under the list if that folder was moved or deleted outside Kanal.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

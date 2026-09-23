@@ -155,6 +155,19 @@ public class AssistantPanelTests
     }
 
     [AvaloniaFact]
+    public void TheFilesTabOpensTheShownMeetingsFolderAndIsIdleWithoutOne()
+    {
+        var panel = Panel(out var window, out var vm);
+
+        Named(panel, "ImportFile");
+        var open = Assert.IsType<Button>(Named(panel, "OpenFolder"));
+        Assert.Same(vm.Files.OpenFolderCommand, open.Command);
+        Assert.False(open.IsEffectivelyEnabled);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void WithNoModelConnectedThePanelSaysSoWhereTheItemsWouldGo()
     {
         var panel = Panel(out var window, out var vm);
