@@ -20,6 +20,28 @@ public class PipelineModeViewModelTests
         Assert.Equal(PipelineMode.All.Select(m => m.Name), vm.Modes.Select(o => o.Name));
     }
 
+    [AvaloniaFact]
+    public void OutsideDevelopmentDemoIsNotOfferedAndCloudIsPreselected()
+    {
+        var vm = TestViewModels.Hermetic(development: false);
+
+        Assert.DoesNotContain(vm.Modes, o => o.Mode.Id == PipelineModeId.Demo);
+        Assert.Equal(PipelineMode.All.Count - 1, vm.Modes.Count);
+        Assert.Equal(PipelineModeId.CloudCloud, vm.SelectedMode.Mode.Id);
+    }
+
+    [AvaloniaFact]
+    public void OutsideDevelopmentThePreselectedModeRunsOnceAKeyIsStored()
+    {
+        var settings = new AppSettings();
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
+
+        var vm = TestViewModels.Hermetic(settings, development: false);
+
+        Assert.Equal(PipelineModeId.CloudCloud, vm.SelectedMode.Mode.Id);
+        Assert.Equal(vm.Modes.First(o => o.IsAvailable), vm.SelectedMode);
+    }
+
     /// <summary>Hiding them hides the roadmap; offering them and failing at Start is worse.</summary>
     [AvaloniaFact]
     public void UnavailableModesStayVisibleAndCarryTheirReason()

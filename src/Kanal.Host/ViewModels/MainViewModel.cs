@@ -86,7 +86,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
-            offUiThread: work => Task.Run(work))
+            offUiThread: work => Task.Run(work),
+            development: string.Equals(
+                SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
     }
 
@@ -110,7 +112,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<WorkspaceStore>? workspaces = null,
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
-        Func<Action, Task>? offUiThread = null)
+        Func<Action, Task>? offUiThread = null,
+        bool development = false)
     {
         _titler = titler;
         _offUiThread = offUiThread ?? (work =>
@@ -176,7 +179,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
 
-        foreach (var mode in PipelineMode.All)
+        foreach (var mode in PipelineMode.All.Where(m => development || m.Id != PipelineModeId.Demo))
             Modes.Add(new PipelineModeOption(mode, unavailable: null));
         _selectedMode = Modes[0];
 
@@ -927,7 +930,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Re-resolves every mode against the current settings: the two stage labels for the selected
-    /// one, and the availability reason on all five. Called at construction, when the mode
+    /// one, and the availability reason on every row. Called at construction, when the mode
     /// changes, and after the Settings dialog closes.
     /// </summary>
     public void RefreshPipelineStatus()
