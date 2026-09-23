@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
+  now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
+  《》 used for books and films.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.
