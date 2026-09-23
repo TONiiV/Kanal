@@ -73,8 +73,8 @@ public class MeetingRecordStorageTests : IDisposable
 
         // Read while the room is still open: a crash at this moment must not cost the hour.
         var running = Only(store, workspace.Id);
-        Assert.EndsWith(TranscriptLog.FileName, running.TranscriptPath);
-        Assert.NotEmpty(TranscriptLog.Read(running.TranscriptPath!));
+        Assert.EndsWith(TranscriptLog.FileName, Assert.Single(running.Segments).TranscriptPath);
+        Assert.NotEmpty(TranscriptLog.Read(running));
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -125,7 +125,7 @@ public class MeetingRecordStorageTests : IDisposable
         Assert.NotEmpty(roomId);
         Assert.DoesNotContain(roomId, offered);
         var record = Only(store, workspace.Id);
-        Assert.DoesNotContain(roomId, record.TranscriptPath);
+        Assert.DoesNotContain(roomId, record.Segments[0].TranscriptPath);
         Assert.All(
             Directory.GetFileSystemEntries(workspace.RootPath, "*", SearchOption.AllDirectories),
             entry => Assert.DoesNotContain(roomId, entry));
@@ -154,11 +154,11 @@ public class MeetingRecordStorageTests : IDisposable
     }
 
     /// <summary>
-    /// One record, one meeting: the second Start gets its own, because writing into a record that
-    /// already holds an hour of speech would overwrite it.
+    /// Stop, then Record again, is the same meeting carrying on after a break (ADR 0056): the
+    /// same record, a second run with files of its own, and the first run's files untouched.
     /// </summary>
     [AvaloniaFact]
-    public async Task ASecondMeetingNeverWritesOverTheFirst()
+    public async Task RecordingAgainContinuesTheMeetingWithoutTouchingTheFirstRun()
     {
         var store = Store();
         var workspace = Opened(store);
@@ -168,15 +168,74 @@ public class MeetingRecordStorageTests : IDisposable
         await PumpAsync(1500);
         await vm.StopCommand.ExecuteAsync(null);
         var first = Only(store, workspace.Id);
+        var firstRun = File.ReadAllBytes(first.Segments[0].TranscriptPath);
+        var earlier = TranscriptLog.Read(first);
+        Assert.NotEmpty(earlier);
 
         await vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(1500);
+
+        Assert.Equal(first.Title, vm.MeetingTitle);
+        Assert.All(vm.Columns, column =>
+        {
+            Assert.Equal(earlier.Select(u => u.Id), column.Bubbles.Take(earlier.Count).Select(b => b.UtteranceId));
+            Assert.True(column.Bubbles.Count > earlier.Count, "the new run added nothing below the first.");
+        });
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var continued = Only(store, workspace.Id);
+        Assert.Equal(first.Id, continued.Id);
+        Assert.Equal(first.Title, continued.Title);
+        Assert.Equal(first.StartedAt, continued.StartedAt);
+        Assert.NotNull(continued.EndedAt);
+        Assert.Equal(
+            [TranscriptLog.FileName, "transcript-2.jsonl"],
+            continued.Segments.Select(s => Path.GetFileName(s.TranscriptPath)));
+        Assert.All(continued.Segments, s => Assert.NotNull(s.EndedAt));
+        Assert.Equal(firstRun, File.ReadAllBytes(continued.Segments[0].TranscriptPath));
+        Assert.NotEmpty(TranscriptLog.Read(continued.Segments[1].TranscriptPath));
+    }
+
+    [AvaloniaFact]
+    public async Task WithNothingChosenRecordingStartsANewMeeting()
+    {
+        var store = Store();
+        var workspace = Opened(store);
+        var vm = Demo(store);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(300);
+        await vm.StopCommand.ExecuteAsync(null);
+        vm.Sidebar.SelectedMeeting = null;
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(300);
         await vm.StopCommand.ExecuteAsync(null);
 
         var meetings = store.ListMeetings(workspace.Id).Meetings;
         Assert.Equal(2, meetings.Count);
-        Assert.NotEmpty(TranscriptLog.Read(first.TranscriptPath!));
-        Assert.Equal(2, meetings.Select(m => Path.GetDirectoryName(m.TranscriptPath)).Distinct().Count());
+        Assert.All(meetings, m => Assert.Single(m.Segments));
+    }
+
+    [AvaloniaFact]
+    public async Task NewMeetingIsStillHowAFreshMeetingIsStarted()
+    {
+        var store = Store();
+        var workspace = Opened(store);
+        var vm = Demo(store);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(300);
+        await vm.StopCommand.ExecuteAsync(null);
+        var first = Only(store, workspace.Id);
+        vm.Sidebar.NewMeetingCommand.Execute(null);
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(300);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var meetings = store.ListMeetings(workspace.Id).Meetings;
+        Assert.Equal(2, meetings.Count);
+        Assert.Single(meetings.Single(m => m.Id == first.Id).Segments);
+        Assert.Single(meetings.Single(m => m.Id != first.Id).Segments);
     }
 
     /// <summary>
@@ -220,6 +279,17 @@ public class MeetingFolderTests
 
         Assert.Equal(Path.Combine(folder, WorkspaceStore.AudioFileName), audio);
         Assert.Equal(folder, Path.GetDirectoryName(Path.Combine(folder, TranscriptLog.FileName)));
+    }
+
+    [Fact]
+    public void ALaterRunRecordsBesideTheFirstRatherThanOverIt()
+    {
+        var folder = Path.Combine("workspace", "meetings", "a1b2c3");
+
+        var audio = MainViewModel.RecordingPathFor(
+            Live, CaptureProfileId.InRoom, new AppSettings(), folder, run: 2);
+
+        Assert.Equal(Path.Combine(folder, "audio-2.wav"), audio);
     }
 
     [Fact]

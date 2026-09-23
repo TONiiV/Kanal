@@ -75,7 +75,7 @@ public class ConsentDialogTests : IDisposable
     public async Task CancellingLeavesTheWorkspaceExactlyAsItWas()
     {
         var (vm, store, workspace) = Live();
-        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -100,7 +100,7 @@ public class ConsentDialogTests : IDisposable
     {
         var now = new DateTimeOffset(2026, 9, 8, 12, 30, 0, TimeSpan.Zero);
         var (vm, store, workspace) = Live(utcNow: () => now);
-        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -120,7 +120,7 @@ public class ConsentDialogTests : IDisposable
         var settings = new AppSettings { RecordAudio = true };
         var (vm, _, _) = Live(settings);
         bool? offered = null;
-        vm.ConfirmConsent = save =>
+        vm.ConfirmConsent = (save, _) =>
         {
             offered = save;
             return Task.FromResult<bool?>(false);
@@ -134,6 +134,88 @@ public class ConsentDialogTests : IDisposable
         Assert.True(settings.RecordAudio);
 
         await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task RecordingAgainIsAskedAsContinuingTheMeetingByName()
+    {
+        var (vm, store, workspace) = Live();
+        var offered = new List<string?>();
+        vm.ConfirmConsent = (_, continuing) =>
+        {
+            offered.Add(continuing);
+            return Task.FromResult<bool?>(false);
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+        var record = Assert.Single(store.ListMeetings(workspace.Id).Meetings);
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        Assert.Equal([null, record.Title], offered);
+        Assert.Equal(2, Assert.Single(store.ListMeetings(workspace.Id).Meetings).Segments.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task CancellingAContinuationLeavesTheMeetingExactlyAsItWas()
+    {
+        var (vm, store, workspace) = Live();
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(true);
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+        var folder = store.MeetingFolder(workspace.Id, vm.Sidebar.SelectedMeeting!.Id)!;
+        var meta = File.ReadAllBytes(Path.Combine(folder, WorkspaceStore.MeetingFileName));
+        var files = Directory.GetFiles(folder);
+
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsRunning);
+        Assert.Equal(meta, File.ReadAllBytes(Path.Combine(folder, WorkspaceStore.MeetingFileName)));
+        Assert.Equal(files, Directory.GetFiles(folder));
+    }
+
+    [AvaloniaFact]
+    public async Task EachRunKeepsARecordingOfItsOwnAndTheFirstIsNotTouched()
+    {
+        var (vm, store, workspace) = Live();
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(true);
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+        var first = Assert.Single(store.ListMeetings(workspace.Id).Meetings).Segments[0];
+        var audio = File.ReadAllBytes(first.AudioPath!);
+        var transcript = File.ReadAllBytes(first.TranscriptPath);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var runs = Assert.Single(store.ListMeetings(workspace.Id).Meetings).Segments;
+        Assert.Equal(
+            [WorkspaceStore.AudioFileName, "audio-2.wav"], runs.Select(r => Path.GetFileName(r.AudioPath!)));
+        Assert.True(File.Exists(runs[1].AudioPath));
+        Assert.Equal(audio, File.ReadAllBytes(runs[0].AudioPath!));
+        Assert.Equal(transcript, File.ReadAllBytes(runs[0].TranscriptPath));
+    }
+
+    [AvaloniaFact]
+    public void TheDialogSaysWhichMeetingItContinues()
+    {
+        var fresh = new ConsentWindow(saveAudio: false, emphasiseRemote: false);
+        fresh.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(Named<TextBlock>(fresh, "Continuing").IsVisible);
+        fresh.Close();
+
+        var again = new ConsentWindow(saveAudio: false, emphasiseRemote: false, continuing: "Werkzeugübergabe");
+        again.Show();
+        Dispatcher.UIThread.RunJobs();
+        var note = Named<TextBlock>(again, "Continuing");
+
+        Assert.True(note.IsVisible);
+        Assert.Equal(Localizer.Instance.Format("consent.continue", "Werkzeugübergabe"), note.Text);
+        Assert.Contains("Werkzeugübergabe", note.Text);
+        again.Close();
     }
 
     [AvaloniaFact]

@@ -15,6 +15,7 @@
   "consent.start": "确认并开始",
   "consent.cancel": "取消",
   "consent.remote.reminder": "远程参与者看不到 Kanal，请口头或在会议聊天中告知处理情况。",
+  "consent.continue": "将继续录制“{0}”。如需另开一场会议，请取消后点击“新建会议”。",
   "transport.start": "开始",
   "transport.pause": "暂停",
   "transport.resume": "继续",

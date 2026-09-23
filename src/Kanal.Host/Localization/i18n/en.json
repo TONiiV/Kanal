@@ -15,6 +15,7 @@
   "consent.start": "Confirm and start",
   "consent.cancel": "Cancel",
   "consent.remote.reminder": "Remote participants cannot see Kanal. Announce the processing verbally or in the meeting chat.",
+  "consent.continue": "This continues “{0}”. To record a separate meeting, cancel and choose New meeting.",
   "transport.start": "Start",
   "transport.pause": "Pause",
   "transport.resume": "Resume",

@@ -37,19 +37,20 @@ public static class MeetingBundle
         if (store.MeetingFolder(meeting.WorkspaceId, meeting.Id) is not { } folder)
             return new StoreProblem(StoreProblemKind.NotFound, meeting.Id, "No such meeting.");
 
-        var transcript = Path.Combine(folder, TranscriptLog.FileName);
-        var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
         try
         {
             using var file = new FileStream(target, FileMode.Create, FileAccess.Write);
             using var zip = new ZipArchive(file, ZipArchiveMode.Create);
             Put(zip, ManifestFileName, JsonSerializer.Serialize(
-                StoredManifest.From(meeting), Options));
-            Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(transcript)));
-            if (File.Exists(transcript))
-                zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
-            if (includeAudio && File.Exists(audio))
-                zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
+                StoredManifest.From(meeting, folder, includeAudio), Options));
+            Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(meeting)));
+            foreach (var run in meeting.Segments)
+            {
+                if (File.Exists(run.TranscriptPath))
+                    zip.CreateEntryFromFile(run.TranscriptPath, Path.GetFileName(run.TranscriptPath));
+                if (includeAudio && File.Exists(run.AudioPath))
+                    zip.CreateEntryFromFile(run.AudioPath, Path.GetFileName(run.AudioPath));
+            }
 
             var attachments = Path.Combine(folder, "attachments");
             if (Directory.Exists(attachments))
@@ -67,6 +68,12 @@ public static class MeetingBundle
 
     public static (MeetingManifest? Manifest, StoreProblem? Problem) ReadManifest(string bundlePath)
     {
+        var (stored, problem) = ReadStoredManifest(bundlePath);
+        return (stored?.ToManifest(), problem);
+    }
+
+    private static (StoredManifest? Manifest, StoreProblem? Problem) ReadStoredManifest(string bundlePath)
+    {
         try
         {
             using var zip = ZipFile.OpenRead(bundlePath);
@@ -79,10 +86,10 @@ public static class MeetingBundle
                 return (null, Unreadable(bundlePath, "The bundle's manifest is missing fields."));
 
             // Refused rather than half-read, as everywhere else a stored record is opened.
-            return stored.SchemaVersion != WorkspaceStore.SchemaVersion
+            return stored.SchemaVersion is < WorkspaceStore.SchemaVersion or > WorkspaceStore.MeetingSchemaVersion
                 ? (null, new StoreProblem(StoreProblemKind.UnsupportedVersion, bundlePath,
                     $"Unsupported bundle schema {stored.SchemaVersion}."))
-                : (stored.ToManifest(), null);
+                : (stored, null);
         }
         catch (Exception ex)
         {
@@ -99,15 +106,18 @@ public static class MeetingBundle
     public static MeetingResult Import(
         WorkspaceStore store, string workspaceId, string bundlePath, bool asNewRecord)
     {
-        var (manifest, problem) = ReadManifest(bundlePath);
+        var (manifest, problem) = ReadStoredManifest(bundlePath);
         if (problem is not null)
             return new MeetingResult(null, problem);
+
+        var runs = manifest!.Runs();
+        var names = runs.SelectMany(r => new[] { r.Transcript, r.Audio }).OfType<string>().ToHashSet();
 
         MeetingRecord record;
         if (asNewRecord)
         {
             var (made, trouble) = store.CreateMeeting(
-                workspaceId, FreeTitle(store, workspaceId, manifest!.Title));
+                workspaceId, FreeTitle(store, workspaceId, manifest.Title!));
             if (trouble is not null)
                 return new MeetingResult(null, trouble);
 
@@ -115,15 +125,15 @@ public static class MeetingBundle
             {
                 StartedAt = manifest.StartedAt,
                 EndedAt = manifest.EndedAt,
-                Languages = manifest.Languages,
+                Languages = manifest.Languages!,
             };
         }
         else
         {
             record = new MeetingRecord(
-                manifest!.Id, workspaceId, manifest.Title,
+                manifest.Id!, workspaceId, manifest.Title!,
                 manifest.StartedAt ?? DateTimeOffset.UtcNow,
-                manifest.StartedAt, manifest.EndedAt, manifest.Languages, null, null);
+                manifest.StartedAt, manifest.EndedAt, manifest.Languages!, []);
         }
 
         if (store.MeetingFolder(workspaceId, record.Id) is not { } folder)
@@ -134,7 +144,7 @@ public static class MeetingBundle
         {
             using var zip = ZipFile.OpenRead(bundlePath);
             Directory.CreateDirectory(folder);
-            foreach (var entry in zip.Entries.Where(e => Wanted(e.FullName)))
+            foreach (var entry in zip.Entries.Where(e => names.Contains(e.FullName) || Wanted(e.FullName)))
             {
                 var target = Path.Combine(folder, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -148,10 +158,11 @@ public static class MeetingBundle
                 StoreProblemKind.Unwritable, folder, ex.Message));
         }
 
+        // Every run is kept, even one whose transcript did not travel: the next run is numbered
+        // from the count, and a gap would name it after a file already there.
         return store.SaveMeeting(record with
         {
-            TranscriptPath = Kept(folder, TranscriptLog.FileName),
-            AudioPath = Kept(folder, WorkspaceStore.AudioFileName),
+            Segments = [.. runs.Select(r => r.In(folder) with { AudioPath = Kept(folder, r.Audio) })],
         });
     }
 
@@ -169,7 +180,7 @@ public static class MeetingBundle
     // A zip entry is a string from another machine: "../" in one would land a file in the
     // workspace above the meeting, and an absolute one anywhere on the disk.
     private static bool Wanted(string name) =>
-        name is TranscriptFileName or TranscriptLog.FileName or WorkspaceStore.AudioFileName
+        name is TranscriptFileName
         || (name.StartsWith(AttachmentsPrefix, StringComparison.Ordinal)
             && PlainName(name[AttachmentsPrefix.Length..]));
 
@@ -178,8 +189,8 @@ public static class MeetingBundle
         && !name.Contains('/') && !name.Contains('\\')
         && name is not ("." or "..");
 
-    private static string? Kept(string folder, string name) =>
-        File.Exists(Path.Combine(folder, name)) ? Path.Combine(folder, name) : null;
+    private static string? Kept(string folder, string? name) =>
+        name is not null && File.Exists(Path.Combine(folder, name)) ? Path.Combine(folder, name) : null;
 
     private static string FreeTitle(WorkspaceStore store, string workspaceId, string title)
     {
@@ -228,7 +239,8 @@ public static class MeetingBundle
         string? Title,
         List<string>? Languages,
         DateTimeOffset? StartedAt,
-        DateTimeOffset? EndedAt)
+        DateTimeOffset? EndedAt,
+        List<WorkspaceStore.StoredSegment>? Segments = null)
     {
         [JsonIgnore]
         internal bool Complete =>
@@ -236,10 +248,17 @@ public static class MeetingBundle
             && Id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
             && !string.IsNullOrWhiteSpace(Title)
             && Languages is not null
-            && Languages.All(language => !string.IsNullOrWhiteSpace(language));
+            && Languages.All(language => !string.IsNullOrWhiteSpace(language))
+            && (Segments is null || Segments.All(s => s is not null && s.Complete));
 
-        internal static StoredManifest From(MeetingRecord m) =>
-            new(WorkspaceStore.SchemaVersion, m.Id, m.Title, [.. m.Languages], m.StartedAt, m.EndedAt);
+        internal static StoredManifest From(MeetingRecord m, string folder, bool includeAudio) =>
+            new(WorkspaceStore.MeetingSchemaVersion, m.Id, m.Title, [.. m.Languages], m.StartedAt, m.EndedAt,
+                [.. m.Segments.Select(s => WorkspaceStore.StoredSegment.From(
+                    includeAudio ? s : s with { AudioPath = null }, folder))]);
+
+        // A bundle written before runs existed carries its one run under the fixed names.
+        internal IReadOnlyList<WorkspaceStore.StoredSegment> Runs() =>
+            Segments ?? [new(TranscriptLog.FileName, WorkspaceStore.AudioFileName, StartedAt, EndedAt)];
 
         internal MeetingManifest ToManifest() =>
             new(Id!, Title!, Languages!, StartedAt, EndedAt);

@@ -6,6 +6,41 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-09-23
 
+### Recording again continues the meeting, one run per Start
+
+Operator request: within one meeting, Stop then Record must continue that meeting, not open a new
+record. [ADR 0056](adr/0056-continue-a-meeting-as-segments.md) overturns ADR 0054 decisions 1 and 3
+and its "one record, many sessions" exclusion. The id clash that made 0054 exclude it is solved by
+never sharing a file: run 1 writes `transcript.jsonl` / `audio.wav`, run n writes
+`transcript-{n}.jsonl` / `audio-{n}.wav`, and `meeting.json` lists the runs in order.
+
+- **Model.** `MeetingRecord.TranscriptPath` / `AudioPath` are gone; `Segments` is the only source.
+  `TranscriptLog.Read(MeetingRecord)` concatenates the runs and prefixes ids with the run number in
+  memory (`2/u1`); the files keep their raw ids.
+- **Schema.** `meeting.json` and the bundle manifest go to 2 (`WorkspaceStore.MeetingSchemaVersion`);
+  1 still reads, as one run. The workspace and registry files stay at 1. An older build refuses a
+  version 2 record, which is the store's own rule.
+- **Trust boundary.** Every name in `segments` must be a plain file name, as the legacy fields were.
+  `IsFileName` now also rejects rooted names: `C:x` has no separator, but Windows resolves it
+  relative to the current directory on drive C. Import only extracts the files the manifest names,
+  and it keeps every run even when that run's transcript is missing from the bundle, because the
+  next run is numbered from the count.
+- **Binding.** The record selected before consent is the one continued, and the same record is
+  handed to `DiscardRecord`. A cancelled or failed continuation saves it back without the new run.
+  No run file exists yet at that point, since both files are opened only after the session starts.
+- **Screen.** The earlier runs' lines are loaded into the columns and the ruler before the live
+  ones. The stored title is held as named by hand, so auto-naming does not replace it.
+  Regenerating the title reads every run. No separator between runs: that needs a bubble property
+  and a template change.
+- **Readers.** Browse (`StoredTranscript.Of`), Markdown export, the ruler, the title lines, the
+  Files tab (sorted by stem, so `audio.wav` comes before `audio-2.wav`), bundle export and import,
+  and the row's "Export this meeting" all cover every run. The export copies a single run verbatim
+  and writes several runs as one combined jsonl. Delete removes the folder, so it needed no change.
+
+Out of scope: phones only receive the current run, because the relay channel still changes on every
+Start. Speaker tags restart each run, so earlier runs show their raw tags and renames and merges
+touch only the current run. The Markdown attestation shows only the latest run's consent.
+
 ### Start says it is connecting, connects in parallel, and names the meeting first
 
 Operator report (Cloud/Cloud): after the consent dialog the app sat for about five seconds with

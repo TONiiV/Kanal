@@ -15,6 +15,7 @@
   "consent.start": "Bestätigen und starten",
   "consent.cancel": "Abbrechen",
   "consent.remote.reminder": "Remote-Teilnehmende sehen Kanal nicht. Die Verarbeitung mündlich oder im Besprechungschat ankündigen.",
+  "consent.continue": "Setzt „{0}“ fort. Für eine eigene Besprechung abbrechen und „Neue Besprechung“ wählen.",
   "transport.start": "Start",
   "transport.pause": "Pause",
   "transport.resume": "Weiter",

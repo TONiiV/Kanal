@@ -76,6 +76,23 @@ public class MeetingFilesTests : IDisposable
     }
 
     [Fact]
+    public void TheRunsOfAContinuedMeetingAreListedInTheOrderTheyWereRecorded()
+    {
+        var (store, workspace) = Opened("Delivery call");
+        var meeting = Meeting(store, workspace, "Delivery call");
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        foreach (var name in new[] { "transcript-2.jsonl", "audio-2.wav", "transcript.jsonl", "audio.wav" })
+            File.WriteAllText(Path.Combine(folder, name), "x");
+
+        var files = new MeetingFilesViewModel(store, () => Task.FromResult<string?>(null));
+        files.Show(meeting);
+
+        Assert.Equal(
+            ["audio.wav", "audio-2.wav", "meeting.json", "transcript.jsonl", "transcript-2.jsonl"],
+            Names(files));
+    }
+
+    [Fact]
     public void WithNoMeetingChosenThereIsNothingToShowAndNothingToImport()
     {
         var (store, _) = Opened();

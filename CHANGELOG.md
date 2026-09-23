@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Stopping and pressing record again with the meeting still selected now continues that meeting
+  instead of starting a new one. The consent dialog names the meeting it continues, the earlier
+  lines stay on screen above the new ones, and the Markdown export, the migration bundle and
+  "Export this meeting" carry every part in order. Each part keeps its own recording (`audio-2.wav`, …)
+  beside the first. To record a separate meeting, choose New meeting first.
 - Pressing record no longer leaves the screen silent while the room opens. Once you confirm the
   consent dialog, the stop button shows a spinner, the status line says "Connecting…", and the
   meeting's name is already in the heading and the sidebar. The mobile relay and the transcription

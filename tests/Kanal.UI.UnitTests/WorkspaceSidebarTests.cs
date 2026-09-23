@@ -116,7 +116,7 @@ public class WorkspaceSidebarTests : IDisposable
         var meeting = vm.Meetings.Single();
         var folder = store.MeetingFolder(vm.SelectedWorkspace!.Id, meeting.Id)!;
         File.WriteAllText(Path.Combine(folder, "transcript.md"), "**S01** (de): Guten Tag");
-        store.SaveMeeting(meeting.Record with { TranscriptPath = Path.Combine(folder, "transcript.md") });
+        store.SaveMeeting(meeting.Record with { Segments = [new(Path.Combine(folder, "transcript.md"), null, null, null)] });
         vm.Refresh();
 
         var target = Path.Combine(Folder("out"), "delivery.md");
@@ -125,6 +125,31 @@ public class WorkspaceSidebarTests : IDisposable
         await vm.Meetings.Single().ExportCommand.ExecuteAsync(null);
 
         Assert.Equal("**S01** (de): Guten Tag", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public async Task ExportingAContinuedMeetingWritesEveryRunInOrder()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var folder = store.MeetingFolder(vm.SelectedWorkspace!.Id, meeting.Id)!;
+        var runs = new[] { ("transcript.jsonl", "vor der Pause"), ("transcript-2.jsonl", "nach der Pause") };
+        foreach (var (name, text) in runs)
+            File.WriteAllText(Path.Combine(folder, name),
+                $$$"""{"id":"u1","speakerTag":"S1","tStartMs":0,"tEndMs":900,"srcLang":"de","srcText":"{{{text}}}","revision":1,"state":"Final","codeSwitch":false,"speakerConfidence":1,"translations":{}}""");
+        store.SaveMeeting(meeting.Record with
+        {
+            Segments = [.. runs.Select(r => new MeetingSegment(Path.Combine(folder, r.Item1), null, null, null))],
+        });
+        vm.Refresh();
+
+        var target = Path.Combine(Folder("out"), "delivery.jsonl");
+        vm.ChooseExportPath = _ => Task.FromResult<string?>(target);
+
+        await vm.Meetings.Single().ExportCommand.ExecuteAsync(null);
+
+        Assert.Equal(["vor der Pause", "nach der Pause"], TranscriptLog.Read(target).Select(u => u.SrcText));
     }
 
     [Fact]
@@ -139,10 +164,9 @@ public class WorkspaceSidebarTests : IDisposable
         await vm.Meetings.Single().ImportCommand.ExecuteAsync(null);
 
         var stored = store.ListMeetings(vm.SelectedWorkspace!.Id).Meetings.Single();
-        Assert.NotNull(stored.TranscriptPath);
-        Assert.Equal("**S01** (pl): Dzień dobry", File.ReadAllText(stored.TranscriptPath!));
-        Assert.StartsWith(
-            store.MeetingFolder(stored.WorkspaceId, stored.Id)!, stored.TranscriptPath!);
+        var transcript = Assert.Single(stored.Segments).TranscriptPath;
+        Assert.Equal("**S01** (pl): Dzień dobry", File.ReadAllText(transcript));
+        Assert.StartsWith(store.MeetingFolder(stored.WorkspaceId, stored.Id)!, transcript);
     }
 
     [Fact]
@@ -158,7 +182,7 @@ public class WorkspaceSidebarTests : IDisposable
 
         var imported = Assert.Single(vm.Meetings);
         Assert.Equal("Kickoff", imported.Title);
-        Assert.Equal("**S01** (zh): 你好", File.ReadAllText(imported.Record.TranscriptPath!));
+        Assert.Equal("**S01** (zh): 你好", File.ReadAllText(imported.Record.Segments[0].TranscriptPath));
     }
 
     [Fact]
@@ -303,7 +327,7 @@ public class WorkspaceSidebarTests : IDisposable
         var audio = Path.Combine(folder, "audio.wav");
         File.WriteAllText(transcript, """{"text":"Guten Tag"}""");
         File.WriteAllBytes(audio, [0x52, 0x49, 0x46, 0x46]);
-        store.SaveMeeting(meeting.Record with { TranscriptPath = transcript, AudioPath = audio });
+        store.SaveMeeting(meeting.Record with { Segments = [new(transcript, audio, null, null)] });
         vm.ConfirmDeleteMeeting = _ => Task.FromResult(true);
 
         await meeting.DeleteCommand.ExecuteAsync(null);
@@ -401,8 +425,7 @@ public class WorkspaceSidebarTests : IDisposable
         vm.SaveRecord(meeting.Record with
         {
             Languages = ["de", "zh"],
-            TranscriptPath = Path.Combine(folder, "transcript.jsonl"),
-            AudioPath = Path.Combine(folder, "audio.wav"),
+            Segments = [new(Path.Combine(folder, "transcript.jsonl"), Path.Combine(folder, "audio.wav"), null, null)],
         });
 
         vm.ConfirmExportBundle = _ => Task.FromResult<bool?>(audio);
