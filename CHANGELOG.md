@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
+  transcription · Cloud translation instead; without an API key, that row says one is needed. To
+  test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
 - A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the
   list, and Generate title, which names the meeting from its transcript with the local model. It
   works on meetings that have ended, not only the one being recorded; the heading of an ended

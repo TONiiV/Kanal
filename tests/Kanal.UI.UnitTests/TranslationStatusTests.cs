@@ -25,7 +25,8 @@ internal static class TestViewModels
         Func<DateTimeOffset>? utcNow = null,
         Func<WorkspaceStore>? workspaces = null,
         IMeetingTitler? titler = null,
-        Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null)
+        Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
+        bool development = true)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -41,7 +42,8 @@ internal static class TestViewModels
             workspaces: workspaces
                 ?? (() => new WorkspaceStore(Path.Combine(EmptyModelsDir(), "workspaces.json"))),
             titler: titler,
-            titlerFactory: titlerFactory)
+            titlerFactory: titlerFactory,
+            development: development)
         {
             RelayEnabled = false,
         };

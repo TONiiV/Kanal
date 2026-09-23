@@ -4,6 +4,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-23
+
+### Demo mode only in development
+
+The operator asked that Demo — scripted not be offered on a normal install. The mode list now
+contains Demo only when `KANAL_ENV` is `development`, compared case-insensitively after trimming,
+and read the way the other `KANAL_*` variables are (`SettingsStore.ReadEnvAllScopes`: process, then
+user, then machine scope). Any other value, or none, hides it. The Demo pipeline itself is untouched.
+
+The decision is a `development` constructor parameter on `MainViewModel`, passed only by the
+production constructor; the seam defaults to `false`. `TestViewModels.Hermetic` passes `true`, so
+the headless suite keeps running Demo without touching the network, and no test mutates the process
+environment.
+
+Fallback: the mode is not persisted, so there is no saved Demo to migrate — the only question is
+what the app opens on. It still opens on the first row, which outside development is Cloud
+transcription · Cloud translation. That is the first mode that can run whenever any can: Cloud ·
+Local needs the same key plus a downloaded model, and both local-transcription modes cannot run yet.
+Without a key the row states the missing key, which is the operator's next step. The empty-state
+line "Demo needs no key." is dropped in all four languages, and `.vscode/launch.json`'s demo target
+sets `KANAL_ENV=development`.
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu
