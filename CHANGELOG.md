@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Pressing record no longer leaves the screen silent while the room opens. Once you confirm the
+  consent dialog, the stop button shows a spinner, the status line says "Connecting…", and the
+  meeting's name is already in the heading and the sidebar. The mobile relay and the transcription
+  service now connect at the same time instead of one after the other, so the room opens sooner.
+  Pressing stop during that wait cancels the start and leaves no meeting behind.
 - A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the
   list, and Generate title, which names the meeting from its transcript with the local model. It
   works on meetings that have ended, not only the one being recorded; the heading of an ended

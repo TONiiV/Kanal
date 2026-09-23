@@ -56,7 +56,7 @@ public class StopFeedbackTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ => new GatedRelayPublisher(gate.Task);
+        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new GatedRelayPublisher(gate.Task));
 
         await vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(150);

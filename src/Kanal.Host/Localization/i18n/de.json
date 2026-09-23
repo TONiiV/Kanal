@@ -83,6 +83,7 @@
   "status.live": "Läuft — {0}.",
   "status.paused": "Pausiert — es wird nichts transkribiert, übersetzt oder gesendet. Der Raum bleibt offen.",
   "status.stopping": "Wird beendet…",
+  "status.connecting": "Verbindung wird hergestellt…",
   "status.loadingmodel": "Übersetzungsmodell wird geladen — {0} — die Transkription beginnt, sobald es bereit ist…",
   "status.modelloadfailed": "Übersetzungsmodell konnte nicht geladen werden: {0}",
   "status.stopped": "Beendet. Umbenennen, Zusammenführen und Export funktionieren weiterhin für den letzten Raum.",
