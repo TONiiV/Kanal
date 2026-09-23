@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Diagnostics;
@@ -140,13 +141,32 @@ public class RoomLoggingTests
         using var _ = Listening(out var sink);
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ => new NullRelayPublisher();
+        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
 
         await vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(100);
         await vm.StopCommand.ExecuteAsync(null);
 
         Assert.NotEmpty(sink.Lines.Where(l => l.Level == LogLevel.Debug));
+    }
+
+    [AvaloniaFact]
+    public async Task StartSaysHowLongTheRelayAndTheTranscriberTook()
+    {
+        using var _ = Listening(out var sink);
+        var vm = TestViewModels.Demo();
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        Assert.Contains(sink.Lines, l =>
+            l.Level == LogLevel.Info && l.Category == "relay" &&
+            Regex.IsMatch(l.Message, @"created in \d+ ms"));
+        Assert.Contains(sink.Lines, l =>
+            l.Level == LogLevel.Info && l.Category == "room" &&
+            Regex.IsMatch(l.Message, @"connected in \d+ ms"));
     }
 
     [AvaloniaFact]

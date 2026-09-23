@@ -23,6 +23,11 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
   transcription · Cloud translation instead; without an API key, that row says one is needed. To
   test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
+- Pressing record no longer leaves the screen silent while the room opens. Once you confirm the
+  consent dialog, the stop button shows a spinner, the status line says "Connecting…", and the
+  meeting's name is already in the heading and the sidebar. The mobile relay and the transcription
+  service now connect at the same time instead of one after the other, so the room opens sooner.
+  Pressing stop during that wait cancels the start and leaves no meeting behind.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

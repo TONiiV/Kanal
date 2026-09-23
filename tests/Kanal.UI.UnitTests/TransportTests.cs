@@ -101,7 +101,7 @@ public class TransportTests
         vm.RelayEnabled = true;
         // without a factory, an enabled relay falls back to the real Supabase publisher —
         // a unit test must never put packets on the production channel
-        vm.RelayPublisherFactory = _ => new NullRelayPublisher();
+        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
         await vm.StartCommand.ExecuteAsync(null);
         await WaitForAsync(() => vm.Columns.Count > 0 && vm.Columns[0].Bubbles.Count > 0);
 

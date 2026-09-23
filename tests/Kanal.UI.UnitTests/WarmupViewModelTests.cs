@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Core.Relay;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -98,6 +99,30 @@ public class WarmupViewModelTests
 
         Assert.True(vm.IsRunning);
         Assert.Equal(1, asr()!.Starts);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task TheRelayRoomIsCreatedWhileTheModelLoads()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (vm, _, _) = DemoWithGatedModel(gate.Task);
+        var relayRequested = false;
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = _ =>
+        {
+            relayRequested = true;
+            return Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
+        };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+
+        Assert.True(relayRequested, "the relay waited for the model to finish loading.");
+
+        gate.SetResult();
+        await starting;
+        Assert.True(vm.IsRunning);
         await vm.StopCommand.ExecuteAsync(null);
     }
 
