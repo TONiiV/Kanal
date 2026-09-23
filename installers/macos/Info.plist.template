@@ -42,6 +42,12 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kanal captures room audio to transcribe and translate what is said in the meeting.</string>
 
+	<!-- The online-meeting source. macOS gates the Core Audio process tap and the ScreenCaptureKit
+	     stream behind this string exactly as it gates the microphone - absent, both are refused with
+	     no prompt and no error, and the meeting is recorded with the remote half missing. -->
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Kanal captures the audio playing through the selected output so remote participants are transcribed and translated too.</string>
+
 	<!-- The prompt above is the English fallback. macOS reads the operator's own language from
 	     Resources/<lang>.lproj/InfoPlist.strings, staged from installers/macos/lproj - and a room
 	     whose whole point is that nobody shares a language should not ask for the microphone in a
