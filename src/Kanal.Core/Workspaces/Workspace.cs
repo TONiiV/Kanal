@@ -15,8 +15,25 @@ public sealed record MeetingRecord(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     IReadOnlyList<string> Languages,
-    string? TranscriptPath,
-    string? AudioPath);
+    IReadOnlyList<MeetingSegment> Segments)
+{
+    public MeetingRecord WithLastSegment(Func<MeetingSegment, MeetingSegment> change) =>
+        Segments.Count == 0 ? this : this with { Segments = [.. Segments.SkipLast(1), change(Segments[^1])] };
+}
+
+// One Start…Stop run. Each run keeps its own files because the ASR restarts its utterance ids at zero.
+public sealed record MeetingSegment(
+    string TranscriptPath,
+    string? AudioPath,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? EndedAt)
+{
+    public static string TranscriptFileName(int run) =>
+        run == 1 ? TranscriptLog.FileName : $"transcript-{run}.jsonl";
+
+    public static string AudioFileName(int run) =>
+        run == 1 ? WorkspaceStore.AudioFileName : $"audio-{run}.wav";
+}
 
 public enum StoreProblemKind
 {

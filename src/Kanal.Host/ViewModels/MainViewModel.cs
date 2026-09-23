@@ -35,6 +35,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;
     private MeetingSession? _session;
+    private IReadOnlyList<Utterance> _earlier = [];
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
@@ -390,16 +391,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     private static IReadOnlyList<string> StoredFinalLines(MeetingRecord record) =>
-        record.TranscriptPath is { } path
-            ? [.. TranscriptLog.Read(path)
-                .Where(u => u.State == UtteranceState.Final)
-                .Select(u => u.SrcText)]
-            : [];
+        [.. TranscriptLog.Read(record)
+            .Where(u => u.State == UtteranceState.Final)
+            .Select(u => u.SrcText)];
 
     private IReadOnlyList<string> FinalLines() =>
         _session is null
             ? []
-            : [.. _session.Room.Snapshot().Utterances
+            : [.. _earlier.Concat(_session.Room.Snapshot().Utterances)
                 .Where(u => u.State == UtteranceState.Final)
                 .Select(u => u.SrcText)];
 
@@ -667,7 +666,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// in, and what comes back is that answer, or null for a cancelled dialog. Set by the view;
     /// unwired — headless, tests — reads as a refusal, never as consent.
     /// </summary>
-    public Func<bool, Task<bool?>>? ConfirmConsent { get; set; }
+    public Func<bool, string?, Task<bool?>>? ConfirmConsent { get; set; }
 
     private DateTimeOffset? _pendingConsentConfirmedAt;
 
@@ -968,6 +967,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var selectedBefore = Sidebar.SelectedMeeting?.Record;
+        var continuing = selectedBefore is { StartedAt: not null } ? selectedBefore : null;
+
         // Asked before anything is cleared or created, and after the refusals above: a cancelled
         // dialog leaves the screen, the workspace and the last meeting exactly as they were, and
         // nobody is asked to consent to a meeting that could not have run anyway.
@@ -975,7 +977,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             var answer = ConfirmConsent is null
                 ? null
-                : await ConfirmConsent(SavesAudioByDefault(SelectedCaptureProfile.Id, settings));
+                : await ConfirmConsent(
+                    SavesAudioByDefault(SelectedCaptureProfile.Id, settings), continuing?.Title);
             if (answer is null)
             {
                 Log.Info(RoomLog, "Start cancelled: the consent dialog was dismissed.");
@@ -1012,8 +1015,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IsPaused = false; // a new room is never inheriting the last one's pause
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
-        foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang));
+        var columns = languages.Take(MaxLanguages).ToList();
+        _earlier = continuing is null ? [] : TranscriptLog.Read(continuing);
+        var carried = StoredTranscript.Columns(_earlier, columns);
+        foreach (var column in carried.Count > 0 ? carried : columns.Select(lang => new ColumnViewModel(lang)))
+            Columns.Add(column);
+        foreach (var u in _earlier)
+            Ruler.Observe(u);
+        if (continuing is not null)
+        {
+            // Held as named by hand: nothing records whether a stored title was typed or generated.
+            _titleOnRecord = continuing.Title;
+            Titling.Rename(continuing.Title);
+        }
 
         var asr = plan.Asr!;
         var mt = plan.Mt;
@@ -1023,8 +1037,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnTitlingChanged();
 
         // Before the network, so the name is on screen at once; AbandonStartAsync takes it back.
-        var selectedBefore = Sidebar.SelectedMeeting?.Record;
-        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
+        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages, selectedBefore);
         _sessionRecordId = record?.Id;
         Sidebar.RecordingMeetingId = record?.Id;
         RefreshBody();
@@ -1167,12 +1180,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             RecordingPathFor(
                 mode, SelectedCaptureProfile.Id, settings,
                 record is null ? null : Sidebar.FolderOf(record),
-                _saveAudioThisMeeting));
+                _saveAudioThisMeeting,
+                record?.Segments.Count ?? 1));
 
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
         if (record is not null && RecordingPath.Length > 0)
-            Sidebar.SaveRecord(record with { AudioPath = RecordingPath });
+            Sidebar.SaveRecord(record.WithLastSegment(s => s with { AudioPath = RecordingPath }));
         if (record is null)
             Status = $"{Status} {L["status.notsaved"]}";
 
@@ -1542,11 +1556,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         CaptureProfileId captureProfile,
         AppSettings settings,
         string? meetingFolder,
-        bool? consented = null) =>
+        bool? consented = null,
+        int run = 1) =>
         meetingFolder is not null &&
         mode.NeedsMicrophone &&
         (consented ?? SavesAudioByDefault(captureProfile, settings))
-            ? Path.Combine(meetingFolder, WorkspaceStore.AudioFileName)
+            ? Path.Combine(meetingFolder, MeetingSegment.AudioFileName(run))
             : null;
 
     /// <summary>What the consent dialog offers pre-ticked; the operator's answer overrides it
@@ -1562,7 +1577,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void StartTranscript(MeetingSession session, MeetingRecord? record)
     {
-        if (record?.TranscriptPath is not { } path)
+        if (record?.Segments.LastOrDefault()?.TranscriptPath is not { } path)
             return;
 
         try
@@ -1736,9 +1751,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();
-        foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
+        var lines = _earlier.Select(u => (u, speaker: u.SpeakerTag))
+            .Concat(snapshot.Utterances.Select(u => (u, speaker: ResolveSpeaker(u.SpeakerTag).Name)));
+        foreach (var (u, speaker) in lines.Where(l => l.u.State == UtteranceState.Final))
         {
-            var (_, speaker, _) = ResolveSpeaker(u.SpeakerTag);
             sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");
@@ -1811,7 +1827,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : "";
 
         // re-resolve every history bubble — renames and merges rewrite the past
-        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+        // Earlier runs are skipped: their tags were handed out by another ASR session.
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles.Skip(_earlier.Count)))
         {
             var (_, name, color) = ResolveSpeaker(bubble.SpeakerTag);
             bubble.SpeakerName = name;

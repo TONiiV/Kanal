@@ -45,6 +45,14 @@ public static class TranscriptLog
         return [.. order.Select(id => latest[id])];
     }
 
+    // Ids are prefixed with the run: every run's ids restart at u1, and the latest line per id wins.
+    public static IReadOnlyList<Utterance> Read(MeetingRecord meeting) =>
+        [.. meeting.Segments.SelectMany((run, i) =>
+            Read(run.TranscriptPath).Select(u => u with { Id = $"{i + 1}/{u.Id}" }))];
+
+    public static void Write(string path, IEnumerable<Utterance> utterances) =>
+        File.WriteAllLines(path, utterances.Select(u => JsonSerializer.Serialize(u, Options)));
+
     // Null, never a throw: a host killed mid-append leaves its last line stopped in the middle
     // of itself, and every completed line above it is still a sentence somebody said.
     private static Utterance? Parse(string line)

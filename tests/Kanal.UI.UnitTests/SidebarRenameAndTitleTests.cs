@@ -92,8 +92,8 @@ public class SidebarRenameAndTitleTests : IDisposable
         {
             StartedAt = held,
             EndedAt = held.AddMinutes(40),
-            TranscriptPath = path,
             Languages = ["de", "zh"],
+            Segments = [new(path, null, held, held.AddMinutes(40))],
         }).Meeting!;
     }
 
@@ -471,7 +471,7 @@ public class SidebarRenameAndTitleTests : IDisposable
         vm.BeginRenameTitleCommand.Execute(null);
         vm.TitleDraft = "Werkzeugübergabe";
         vm.CommitRenameTitleCommand.Execute(null);
-        var transcript = Row(vm, recording).Record.TranscriptPath!;
+        var transcript = Row(vm, recording).Record.Segments[0].TranscriptPath;
         for (var waited = 0; waited < 100 && !TranscriptLog.Read(transcript).Any(u => u.State == UtteranceState.Final); waited++)
             await PumpAsync(100);
         await vm.StopCommand.ExecuteAsync(null);
@@ -560,7 +560,7 @@ public class SidebarRenameAndTitleTests : IDisposable
         var store = Store();
         var workspace = Opened(store);
         var gone = Stored(store, workspace, "Vorbesprechung");
-        File.Delete(gone.TranscriptPath!);
+        File.Delete(gone.Segments[0].TranscriptPath);
         var loads = 0;
         var settings = new AppSettings();
         var vm = TestViewModels.Hermetic(

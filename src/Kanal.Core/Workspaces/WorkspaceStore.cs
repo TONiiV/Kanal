@@ -7,6 +7,9 @@ namespace Kanal.Core.Workspaces;
 public sealed class WorkspaceStore(string registryPath)
 {
     public const int SchemaVersion = 1;
+
+    // meeting.json alone went to 2 when a record gained runs; a 1 still reads, as one run.
+    public const int MeetingSchemaVersion = 2;
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = "meeting.json";
     public const string AudioFileName = "audio.wav";
@@ -186,7 +189,7 @@ public sealed class WorkspaceStore(string registryPath)
                 continue;
             }
 
-            var (stored, trouble) = Read<StoredMeeting>(file);
+            var (stored, trouble) = Read<StoredMeeting>(file, MeetingSchemaVersion);
             if (trouble is not null)
                 problems.Add(trouble);
             else if (Misfiled(stored!.Id, Path.GetFileName(path)))
@@ -213,7 +216,7 @@ public sealed class WorkspaceStore(string registryPath)
         // uniqueness rule the rename paths carry (ADR 0054, decision 11): every record starts as
         // the same placeholder, and numbering that would survive into the default title.
         var meeting = new MeetingRecord(
-            NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], null, null);
+            NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], []);
         return SaveMeeting(meeting);
     }
 
@@ -232,7 +235,7 @@ public sealed class WorkspaceStore(string registryPath)
             return new MeetingResult(null, problem);
 
         var folder = FolderFor(workspace!, meeting.Id);
-        if (!IsArtifactPath(meeting.TranscriptPath, folder) || !IsArtifactPath(meeting.AudioPath, folder))
+        if (meeting.Segments.Any(s => !IsArtifactPath(s.TranscriptPath, folder) || !IsArtifactPath(s.AudioPath, folder)))
             return RefusedMeeting(meeting.Id, "An artefact path must name a file inside its meeting folder.");
 
         try
@@ -345,7 +348,7 @@ public sealed class WorkspaceStore(string registryPath)
         if (!File.Exists(file))
             return (null, NoSuchMeeting(meetingId));
 
-        var (stored, trouble) = Read<StoredMeeting>(file);
+        var (stored, trouble) = Read<StoredMeeting>(file, MeetingSchemaVersion);
         if (trouble is not null)
             return (null, trouble);
 
@@ -443,7 +446,8 @@ public sealed class WorkspaceStore(string registryPath)
         return new WorkspaceResult(workspace, null);
     }
 
-    private static (T? Value, StoreProblem? Problem) Read<T>(string path) where T : class, IStoredRecord
+    private static (T? Value, StoreProblem? Problem) Read<T>(string path, int newest = SchemaVersion)
+        where T : class, IStoredRecord
     {
         T? value;
         try
@@ -460,7 +464,7 @@ public sealed class WorkspaceStore(string registryPath)
             return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
 
         // Refused, not half-read: the next save would write the dropped fields back as loss.
-        if (value.SchemaVersion != SchemaVersion)
+        if (value.SchemaVersion < SchemaVersion || value.SchemaVersion > newest)
             return (null, new StoreProblem(
                 StoreProblemKind.UnsupportedVersion, path,
                 $"Unsupported workspace schema {value.SchemaVersion}."));
@@ -481,6 +485,7 @@ public sealed class WorkspaceStore(string registryPath)
         name is null
         || (!string.IsNullOrWhiteSpace(name)
             && !name.Contains('/') && !name.Contains('\\')
+            && !Path.IsPathRooted(name) // "C:x" has no separator, yet Windows resolves it off the folder
             && name is not ("." or ".."));
 
     private static bool IsArtifactPath(string? path, string meetingFolder)
@@ -652,8 +657,10 @@ public sealed class WorkspaceStore(string registryPath)
         DateTimeOffset? StartedAt,
         DateTimeOffset? EndedAt,
         List<string>? Languages,
-        string? TranscriptFileName,
-        string? AudioFileName) : IStoredRecord
+        List<StoredSegment>? Segments,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TranscriptFileName,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AudioFileName)
+        : IStoredRecord
     {
         [JsonIgnore]
         public bool Complete =>
@@ -663,20 +670,32 @@ public sealed class WorkspaceStore(string registryPath)
             && Languages is not null
             && Languages.All(language => !string.IsNullOrWhiteSpace(language))
             && IsFileName(TranscriptFileName)
-            && IsFileName(AudioFileName);
+            && IsFileName(AudioFileName)
+            && (Segments is null || Segments.All(s => s is not null && s.Complete));
 
         internal static StoredMeeting From(MeetingRecord m, string folder) =>
-            new(WorkspaceStore.SchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
-                [.. m.Languages], FileName(m.TranscriptPath, folder), FileName(m.AudioPath, folder));
+            new(MeetingSchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
+                [.. m.Languages], [.. m.Segments.Select(s => StoredSegment.From(s, folder))], null, null);
 
         internal MeetingRecord ToRecord(string workspaceId, string folder) =>
-            new(Id!, workspaceId, Title!, CreatedAt, StartedAt, EndedAt,
-                Languages!, ArtifactPath(folder, TranscriptFileName), ArtifactPath(folder, AudioFileName));
+            new(Id!, workspaceId, Title!, CreatedAt, StartedAt, EndedAt, Languages!,
+                Segments is not null ? [.. Segments.Select(s => s.In(folder))]
+                : TranscriptFileName is null && AudioFileName is null ? []
+                : [new StoredSegment(
+                    TranscriptFileName ?? TranscriptLog.FileName, AudioFileName, StartedAt, EndedAt).In(folder)]);
+    }
 
-        private static string? FileName(string? path, string folder) =>
-            path is null ? null : Path.GetRelativePath(folder, path);
+    internal sealed record StoredSegment(
+        string? Transcript, string? Audio, DateTimeOffset? StartedAt, DateTimeOffset? EndedAt)
+    {
+        internal bool Complete => Transcript is not null && IsFileName(Transcript) && IsFileName(Audio);
 
-        private static string? ArtifactPath(string folder, string? fileName) =>
-            fileName is null ? null : Path.Combine(folder, fileName);
+        internal static StoredSegment From(MeetingSegment s, string folder) =>
+            new(Path.GetRelativePath(folder, s.TranscriptPath),
+                s.AudioPath is null ? null : Path.GetRelativePath(folder, s.AudioPath), s.StartedAt, s.EndedAt);
+
+        internal MeetingSegment In(string folder) =>
+            new(Path.Combine(folder, Transcript!), Audio is null ? null : Path.Combine(folder, Audio),
+                StartedAt, EndedAt);
     }
 }

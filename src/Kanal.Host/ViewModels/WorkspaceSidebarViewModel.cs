@@ -148,16 +148,18 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The record this meeting is written into: the selected one while it has never been
-    /// recorded, otherwise a new one beside it. Null when no workspace is open — the meeting
-    /// still runs, and the host says plainly that nothing is being kept.
+    /// The record this run is written into: the chosen one — as its first run while it has never
+    /// been recorded, as its next run once it has (ADR 0056) — or a new one when nothing is
+    /// chosen. Null when no workspace is open — the meeting still runs, and the host says plainly
+    /// that nothing is being kept.
     /// </summary>
-    public MeetingRecord? OpenRecordForMeeting(DateTimeOffset startedAt, IReadOnlyList<string> languages)
+    public MeetingRecord? OpenRecordForMeeting(
+        DateTimeOffset startedAt, IReadOnlyList<string> languages, MeetingRecord? chosen)
     {
         if (SelectedWorkspace is not { } workspace)
             return null;
 
-        var record = SelectedMeeting?.Record is { StartedAt: null } untouched ? untouched : null;
+        var record = chosen;
         var placeholder = L["meeting.untitled"];
         if (record is null)
         {
@@ -174,18 +176,25 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (FolderOf(record) is not { } folder)
             return null;
 
+        var earlier = record.StartedAt is null ? [] : record.Segments;
+        var heldFrom = record.StartedAt ?? startedAt;
         return SaveRecord(record with
         {
             // The default title names when the meeting was held, to the minute, in the operator's
             // own zone — and only over the placeholder, so a record named before it was recorded
             // keeps the name it was given.
             Title = record.Title == placeholder
-                ? $"{workspace.Name} {startedAt.ToLocalTime():yyyy-MM-dd HH:mm}"
+                ? $"{workspace.Name} {heldFrom.ToLocalTime():yyyy-MM-dd HH:mm}"
                 : record.Title,
-            StartedAt = startedAt,
+            StartedAt = heldFrom,
             EndedAt = null,
             Languages = [.. languages],
-            TranscriptPath = Path.Combine(folder, TranscriptLog.FileName),
+            Segments =
+            [
+                .. earlier,
+                new MeetingSegment(
+                    Path.Combine(folder, MeetingSegment.TranscriptFileName(earlier.Count + 1)), null, startedAt, null),
+            ],
         });
     }
 
@@ -212,7 +221,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public void CloseRecord(string meetingId, DateTimeOffset endedAt)
     {
         if (_held.FirstOrDefault(m => m.Id == meetingId) is { } current)
-            SaveRecord(current with { EndedAt = endedAt });
+            SaveRecord(current.WithLastSegment(s => s with { EndedAt = endedAt }) with { EndedAt = endedAt });
     }
 
     // Adopted in place rather than reloaded: rebuilding the list mid-meeting reads as the
@@ -387,7 +396,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
+        IReadOnlyList<MeetingSegment> runs = meeting.Segments.Count > 0
+            ? [meeting.Segments[0] with { TranscriptPath = target }, .. meeting.Segments.Skip(1)]
+            : [new MeetingSegment(target, null, meeting.StartedAt, meeting.EndedAt)];
+        Refused(_store.SaveMeeting(meeting with { Segments = runs }).Problem);
         LoadMeetings([]);
         return Task.CompletedTask;
     }
@@ -479,18 +491,23 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private async Task ExportAsync(MeetingItemViewModel item)
     {
-        if (item.Record.TranscriptPath is not { } transcript || !File.Exists(transcript))
+        if (item.Record.Segments is not [var first, ..] || !File.Exists(first.TranscriptPath))
         {
             ProblemNote = L["workspace.nothingtoexport"];
             return;
         }
 
+        var transcript = first.TranscriptPath;
         if (ChooseExportPath is null || await ChooseExportPath(Path.GetFileName(transcript)) is not { } target)
             return;
 
         try
         {
-            File.Copy(transcript, target, overwrite: true);
+            // One run is copied as it is: it may be an imported file rather than a transcript log.
+            if (item.Record.Segments.Count == 1)
+                File.Copy(transcript, target, overwrite: true);
+            else
+                TranscriptLog.Write(target, TranscriptLog.Read(item.Record));
             ProblemNote = "";
         }
         catch (Exception ex)

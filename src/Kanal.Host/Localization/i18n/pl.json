@@ -15,6 +15,7 @@
   "consent.start": "Potwierdź i rozpocznij",
   "consent.cancel": "Anuluj",
   "consent.remote.reminder": "Uczestnicy zdalni nie widzą Kanal. Poinformuj o przetwarzaniu ustnie lub na czacie spotkania.",
+  "consent.continue": "Kontynuuje „{0}”. Aby nagrać osobne spotkanie, anuluj i wybierz „Nowe spotkanie”.",
   "transport.start": "Start",
   "transport.pause": "Pauza",
   "transport.resume": "Wznów",
