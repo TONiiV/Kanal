@@ -18,7 +18,8 @@ The desktop host is built with Avalonia on .NET 10. Speech recognition and trans
 provider interfaces, so cloud and local stages can be combined without changing the room model or
 the mobile client.
 
-> Kanal is under active development. The scripted demo needs no API key and is ready to explore.
+> Kanal is under active development. The scripted demo needs no API key and is ready to explore
+> once `KANAL_ENV=development` is set.
 > Live meetings currently require cloud transcription. Read [Current limitations and
 > roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
 
@@ -78,13 +79,14 @@ Packaged desktop releases are not available yet, so run Kanal from source:
 ```bash
 git clone https://github.com/TONiiV/Kanal.git
 cd Kanal
-dotnet run --project src/Kanal.Host
+KANAL_ENV=development dotnet run --project src/Kanal.Host
 ```
 
 The first screen selects Chinese, German, and Polish by default. Leave **Demo — scripted** selected
 and press **Start**. A repeatable trilingual script runs through the real room orchestrator without
 an API key or microphone. Scan the displayed QR code to try the mobile view; mobile delivery still
-uses the configured caption relay.
+uses the configured caption relay. Demo is offered only when `KANAL_ENV` is `development` (any
+letter case); in Windows PowerShell, run `$env:KANAL_ENV = "development"` first.
 
 For a live room:
 
@@ -101,7 +103,7 @@ and explain what is missing.
 
 | Mode | Transcription | Translation | Speech-pipeline data sent off the host | Current availability |
 |---|---|---|---|---|
-| Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Available without keys |
+| Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Offered only with `KANAL_ENV=development`; no keys needed |
 | Cloud transcription · cloud translation | Gladia live | Gladia live | Audio | Available with a Gladia key |
 | Cloud transcription · local translation | Gladia live | Selected local GGUF model | Audio | Available with a Gladia key and downloaded model |
 | Local transcription · cloud translation | Not implemented | Standalone cloud MT not implemented | Text only | Unavailable |
@@ -140,6 +142,7 @@ Environment variables override connection defaults:
 | `KANAL_RELAY_URL` | Public HTTPS endpoint of the deployed `kanal-relay` Worker |
 | `KANAL_RELAY_HOST_TOKEN` | This desktop's device credential, obtained once with an activation code; runtime only, never part of a build or QR |
 | `KANAL_WEB_URL` | Base URL of the static mobile client placed in the join QR code |
+| `KANAL_ENV` | `development` adds **Demo — scripted** to the mode list; any other value, or none, leaves it out |
 
 The relay remains disabled rather than silently using a public fallback when either relay variable
 is absent.
