@@ -4,6 +4,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-09-23
+
+### Update check and minimum supported version ([ADR 0056](adr/0056-update-check-and-minimum-supported-version.md))
+
+A release without an update check can never be told about the next one, and a desktop installer
+cannot be recalled. So `v1.0.0` waits for an update check; everything past checking waits for
+real install numbers.
+
+- **Decided in an eleven-question interview:** desktop host only, one channel. The manifest comes
+  from the relay Worker (`?action=update`, values in `wrangler.toml` `[vars]`), the URL is compiled
+  in and `KANAL_UPDATE_URL` overrides it for tests. No download link while testers get private
+  links; the notice says to contact the maintainer.
+- **Minimum supported version, enforced twice:** the host disables Start with an inline reason, the
+  relay refuses `create` from an older `X-Kanal-Version` (missing header = pre-1.0.0). Unreachable
+  manifest = carry on. Checks at launch and every 24 h, never during a meeting; a running meeting is
+  never interrupted. No off switch.
+- **Placement:** the notice sits right-aligned on the settings row at the foot of the left sidebar;
+  Settings → General → Version shows it too, with a check button. No dialog.
+- **Plan:** host slice (Core policy with TDD, UI, i18n, version header) must merge before the
+  `v1.0.0` tag on #125; the Worker slice can land after 1.0.0 but deploys before the host's first
+  real call. Silent install (Velopack/Sparkle, MSI signing) gets its own ADR later.
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu
