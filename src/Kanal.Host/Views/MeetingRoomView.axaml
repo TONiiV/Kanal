@@ -6,6 +6,7 @@
              x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
         <Style Selector="Border.rec">
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
             <Setter Property="BorderThickness" Value="0,1,0,0" />
             <Setter Property="Padding" Value="0,9,0,0" />
             <Setter Property="Margin" Value="0,0,0,20" />
@@ -16,7 +17,8 @@
             <Setter Property="Padding" Value="12,9,12,8" />
             <Setter Property="Margin" Value="-12,0,-12,12" />
         </Style>
-        <Style Selector="Border.rec.live">
+        <Style Selector="Border.rec.live" x:DataType="vm:BubbleViewModel">
+            <Setter Property="BorderBrush" Value="{Binding SpeakerColor}" />
             <Setter Property="BorderThickness" Value="0,3,0,0" />
             <Setter Property="Padding" Value="0,12,0,0" />
             <Setter Property="Margin" Value="0,28,0,20" />
@@ -26,8 +28,12 @@
             <Setter Property="Margin" Value="-12,28,-12,12" />
         </Style>
         <Style Selector="Border.rec TextBlock.body">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="FontSize" Value="14.5" />
             <Setter Property="LineHeight" Value="24" />
+        </Style>
+        <Style Selector="TextBlock.body.partial, TextBlock.body.pending">
+            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
         </Style>
         <Style Selector="Border.rec.live TextBlock.body">
             <Setter Property="FontSize" Value="19" />
@@ -119,7 +125,7 @@
                            IsVisible="{Binding IsTitleReadOnly}" />
             </StackPanel>
 
-            <!-- Fluent selects in SystemAccentColor (redirected to Ink) and keeps the Ink foreground: without Paper the selection is ink on ink. -->
+            <!-- Selection foreground is explicit so the title stays readable inside the brand fill. -->
             <TextBox Grid.Column="0" x:Name="MeetingTitleEditor" Text="{Binding TitleDraft}"
                      IsVisible="{Binding IsRenamingTitle}"
                      HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -127,7 +133,7 @@
                      FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
                      Padding="0" BorderThickness="0,0,0,2"
                      BorderBrush="{StaticResource Ink}"
-                     SelectionBrush="{StaticResource Ink}" SelectionForegroundBrush="{StaticResource Paper}"
+                     SelectionBrush="{StaticResource Brand}" SelectionForegroundBrush="{StaticResource OnBrand}"
                      Background="Transparent" Foreground="{StaticResource Ink}"
                      KeyDown="OnTitleEditorKeyDown" LostFocus="OnTitleEditorLostFocus"
                      AutomationProperties.Name="{l:T title.rename.tip}" />
@@ -170,15 +176,17 @@
         <StackPanel x:Name="NoStoredTranscript" IsVisible="{Binding ShowNoStoredTranscript}"
                     Margin="24,30,24,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
-            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" />
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
                        Foreground="{StaticResource Ink2}" Text="{l:T browse.notranscript}" />
         </StackPanel>
 
         <StackPanel IsVisible="{Binding ShowStartHint}" Margin="24,30,24,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
+            <Image Source="/Assets/kanal-splash-mark.png" Width="92" Height="92"
+                   HorizontalAlignment="Left" Margin="-18,0,0,0" AutomationProperties.Name="Kanal" />
             <TextBlock Text="{l:T empty.heading}" Classes="label" />
-            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" />
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
                        Foreground="{StaticResource Ink2}" Text="{l:T empty.body1}" />
             <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="21"
@@ -208,7 +216,7 @@
                                         <TextBlock Text="{Binding NativeName}" FontSize="12.5" Margin="0,0,0,3"
                                                    Foreground="{StaticResource Ink3}" VerticalAlignment="Bottom" />
                                     </StackPanel>
-                                    <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                                             Margin="0,7,0,0" />
                                 </StackPanel>
                             </Border>
@@ -218,8 +226,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BubbleViewModel">
                                             <Border Classes="rec" Classes.live="{Binding IsLive}"
-                                                    Classes.jump="{Binding IsJumpTarget}"
-                                                    BorderBrush="{Binding RuleColor}">
+                                                    Classes.jump="{Binding IsJumpTarget}">
                                                 <StackPanel Spacing="5">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <TextBlock Classes="who" Text="{Binding SpeakerName}"
@@ -237,7 +244,8 @@
                                                                    Foreground="{StaticResource Ink3}" />
                                                     </StackPanel>
                                                     <TextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
-                                                               Foreground="{Binding TextColor}" />
+                                                               Classes.partial="{Binding IsPartial}"
+                                                               Classes.pending="{Binding AwaitingTranslation}" />
                                                     <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
                                                             BorderBrush="{StaticResource RuleFaint}"
                                                             BorderThickness="1,0,0,0" Padding="11,0,0,0">
@@ -285,7 +293,7 @@
                             Content="{Binding Ruler.HoveredTick}">
                 <ContentControl.ContentTemplate>
                     <DataTemplate x:DataType="vm:RulerTickViewModel">
-                        <Border Width="308" Height="96"
+                        <Border Width="308" Height="96" CornerRadius="{StaticResource OverlayRadius}"
                                 Background="{StaticResource Sheet}"
                                 BorderBrush="{StaticResource Rule}" BorderThickness="1">
                             <Panel>

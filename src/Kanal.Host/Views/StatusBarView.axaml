@@ -10,8 +10,8 @@
                         IsVisible="{Binding ShowMicLevel}" VerticalAlignment="Center">
                 <TextBlock Text="{l:T input.label}" Classes="label" />
                 <ProgressBar Value="{Binding MicLevel}" Maximum="100" Width="120" Height="6"
-                             Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
-                             CornerRadius="0" />
+                             Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
+                             CornerRadius="3" />
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="7"
                         Margin="0,0,22,0" VerticalAlignment="Center"

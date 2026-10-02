@@ -11,7 +11,7 @@
 
     <StackPanel Margin="26,20,26,18" Spacing="0">
         <TextBlock Text="{l:T workspace.importbundle.title}" Classes="label" />
-        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2" Margin="0,7,0,0" />
+        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,0" />
 
         <TextBlock x:Name="Heading" Margin="0,16,0,0" FontSize="15.5" LineHeight="23"
                    TextWrapping="Wrap" />

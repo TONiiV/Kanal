@@ -157,7 +157,7 @@ public class WorkspaceShellCompositionTests
         var region = Region<T>(window);
         Assert.Equal(0, region.Bounds.Y);
         var headers = region.GetVisualDescendants().OfType<Border>()
-            .Where(border => border.BorderThickness.Bottom >= 2 && border.BorderThickness.Top == 0)
+            .Where(border => border.Classes.Contains("sidebar-header") || border.Name == "Bar")
             .ToList();
         Assert.NotEmpty(headers);
         return headers[0].Bounds.Height;

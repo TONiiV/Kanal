@@ -12,6 +12,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 ## 1.0.1
 
+- Kanal now uses the conversation-K logo, warm paper surfaces, rounded controls and a coordinated
+  indigo/apricot palette across the desktop host, dialogs, startup screen and mobile reader.
+
 The first release. Everything below is what Kanal does on the day it ships.
 
 - A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the

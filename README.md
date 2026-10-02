@@ -1,9 +1,11 @@
 # Kanal
 
-<img src="design/kanal-icon.png" width="420" alt="Kanal icon">
+<img src="design/kanal-icon.png" width="200" alt="Kanal icon">
 
 **One room. Every language.**\
 同一场会议，每个人的语言。
+
+Visual design: [Conversation K](docs/design/conversation-k.md).
 
 [![CI](https://github.com/TONiiV/Kanal/actions/workflows/ci.yml/badge.svg)](https://github.com/TONiiV/Kanal/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-222222.svg)](LICENSE)

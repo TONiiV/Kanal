@@ -5,7 +5,7 @@
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.IconBarView" x:DataType="vm:MainViewModel">
     <StackPanel>
-        <Border x:Name="Bar" BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+        <Border x:Name="Bar" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                 MinHeight="{x:Static vm:WorkspaceShellViewModel.DefaultHeaderHeight}" Padding="16,9">
             <!-- Outside the columns: a collapsed sidebar is reachable only through these. -->
             <DockPanel>
@@ -90,7 +90,7 @@
                                                   HorizontalScrollBarVisibility="Disabled">
                                         <StackPanel Margin="20,17,20,8" Width="424">
                                             <TextBlock Text="{l:T modes.heading}" Classes="label" />
-                                            <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                                                     Margin="0,6,0,12" />
                                             <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"
                                                        Margin="0,0,0,15" Foreground="{StaticResource Ink2}"
@@ -271,7 +271,7 @@
                                 <Flyout Placement="BottomEdgeAlignedRight">
                                     <StackPanel Margin="20,17,20,17" Width="236">
                                         <TextBlock Text="{l:T join.label}" Classes="label" />
-                                        <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+                                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                                                 Margin="0,6,0,12" />
                                         <StackPanel IsVisible="{Binding HasJoinInfo}">
                                             <Image Source="{Binding QrImage}" Width="196" Height="196"

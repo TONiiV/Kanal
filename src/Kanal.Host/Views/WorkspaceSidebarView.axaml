@@ -9,17 +9,17 @@
         <Style Selector="ListBoxItem">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="7,8" />
-            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
         <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource Paper}" />
         </Style>
-        <!-- Fluent selects in the system accent; a meeting is chrome, and only people carry colour. -->
+
         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Paper}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="Background" Value="{StaticResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
         <Style Selector="TextBox#MeetingRowEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingRowEditor:focus /template/ Border#PART_BorderElement">
@@ -32,17 +32,17 @@
         </Style>
     </UserControl.Styles>
 
-    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
+    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" Classes="sidebar-header"
                     MinHeight="{Binding Shell.HeaderHeight}">
                 <DockPanel LastChildFill="False">
                     <StackPanel DockPanel.Dock="Left" x:Name="WorkspaceTitle"
                                 Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Image Source="/Assets/kanal.ico" Width="20" Height="20" Stretch="Uniform"
+                        <Image Source="/Assets/kanal-splash-mark.png" Width="38" Height="38" Stretch="Uniform"
                                AutomationProperties.Name="Kanal" />
                         <TextBlock x:Name="Wordmark" Text="KANAL" FontSize="15.5" FontWeight="Bold"
-                                   LetterSpacing="1" VerticalAlignment="Center" />
+                                   LetterSpacing="0.5" VerticalAlignment="Center" />
                     </StackPanel>
                     <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="CollapseWorkspace"
                             Command="{Binding Shell.Left.ToggleCommand}"
@@ -138,8 +138,8 @@
                                          IsVisible="{Binding IsRenaming}"
                                          FontSize="13" Padding="0" MinHeight="0" Margin="0,0,6,0"
                                          VerticalContentAlignment="Center"
-                                         SelectionBrush="{StaticResource Ink}"
-                                         SelectionForegroundBrush="{StaticResource Paper}"
+                                         SelectionBrush="{StaticResource Brand}"
+                                         SelectionForegroundBrush="{StaticResource OnBrand}"
                                          BorderThickness="0,0,0,1"
                                          BorderBrush="{StaticResource Ink}"
                                          Background="Transparent" Foreground="{StaticResource Ink}"

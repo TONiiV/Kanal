@@ -63,56 +63,13 @@ dotnet test
 
 ## Design Context
 
-For the next host UI, follow [the approved meeting-workspace design](docs/design/meeting-workspace.md).
-It supersedes the historical host layout, chrome-colour and tooltip guidance below where they conflict.
-The [title/listening-agent discussion](docs/design/meeting-intelligence.md) separates confirmed goals
-from open decisions; do not implement its recommendations as if the user had accepted them.
+For any UI or brand work, read [Conversation K](docs/design/conversation-k.md) for current
+colours, shape, typography, asset generation and verification. It supersedes the previous
+monochrome-only and square-corner rules. Read [meeting workspace](docs/design/meeting-workspace.md)
+for layout and interaction requirements. The historical prototype illustrates those interactions;
+the application and Conversation K document define current visual styling.
 
-Full context lives in [`.impeccable.md`](.impeccable.md) — read it before any UI work. Summary:
-
-### Users
-
-One **operator** driving the host laptop mid-meeting (a few controls, readable from a metre away), and
-3–8 **participants** who scan a QR and glance at a read-only phone page one-handed between sentences.
-Content is technical and unforgiving — part numbers (`KX-4402`), tolerances, delivery dates. Misreading
-one character costs more than reading three fewer lines. Nobody is a designer; nobody will be trained.
-
-### Brand Personality
-
-**Precise. Calm. Unbranded.** An instrument, not a product — it should feel like equipment that was
-already in the room. Terse, factual voice. The only emotional goal is confidence that what is on screen
-is exactly what was said. A joke in a translation bubble is a bug.
-
-### Aesthetic Direction
-
-**Swiss editorial typography.** Strict grid, strong type-size hierarchy, generous white space, hairline
-rules as structure. Character comes from typesetting and rhythm — never texture, gradients, or effects.
-Left-aligned, ragged right, never centred.
-
-Mobile follows `prefers-color-scheme`; the host stays light but on **explicit brushes** — inheriting
-FluentTheme's dark variant previously made control foregrounds invisible.
-
-Anti-references: SaaS card grids, glassmorphism, purple→blue gradients, cyan-on-dark, chat bubbles with
-fat rounded corners and drop shadows, monospace as shorthand for "technical", centred hero layouts.
-
-### Design Principles
-
-1. **The live utterance is the design.** The newest line carries the most visual weight — through space
-   and rule weight, not through re-colouring. Finalised history recedes in contrast, never in legibility.
-2. **Typography is the only ornament.** Hierarchy from size, weight, and measure. No cards in cards, no
-   shadows faking depth, no rules that aren't structural.
-3. **The only colour on screen is people.** Rust / ochre / pine identify a *person* across rename and
-   merge. Chrome is ink and paper only. Never rely on colour alone — the tag or name is always rendered.
-4. **Set for three scripts at once.** Latin, Polish diacritics, and CJK share every surface. Latin font
-   must come *first* in every stack or `ą/ę/ł/ś/ż` fall back badly. Line-height is chosen for the worst
-   case — a Chinese sentence stacked against "wsporników".
-5. **Nothing the PRD froze may move.** Host ≤ 4 language columns; mobile single column + language
-   dropdown; translation on top, source below; partial = muted, final = full ink; no TTS.
-
-### Hard constraints
-
-- **No external fonts or CSS on the mobile page.** Google Fonts is blocked in mainland China and the
-  Chinese supplier is a primary participant — a webfont means a hanging request and a fallback for the
-  people who most need the page. System stacks only. The Supabase SDK is the sole runtime import.
-- The host is Avalonia XAML: no CSS, no `clamp()`, no media queries. Fluid type is faked with fixed steps.
-- Mobile must render from `localStorage` cache after a lock-screen reconnect, before any snapshot lands.
+Keep transcription content readable in Chinese, German and Polish. Brand controls, speaker
+identity and recording state use distinct semantic resources. Desktop uses explicit light brushes;
+mobile follows system light/dark preferences and loads without external fonts or stylesheets.
+Preserve all existing consent, capture, language-limit and meeting-record behaviour.

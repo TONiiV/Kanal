@@ -35,9 +35,9 @@
         </Style>
         <Style Selector="TabItem">
             <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="LetterSpacing" Value="0.2" />
             <Setter Property="Foreground" Value="{StaticResource Ink3}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0,0,0,10" />
@@ -48,18 +48,18 @@
             <Setter Property="Foreground" Value="{StaticResource Ink2}" />
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Foreground" Value="{StaticResource Brand}" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
-        <!-- Fluent draws the marker in the system accent; the host is ink and paper. It sits flush
+        <!-- The selection marker sits flush
              under the header content, which is why each header carries its own bottom margin -
              without it the rule strikes through the descenders of "Points". -->
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="Background" Value="{StaticResource Brand}" />
         </Style>
     </UserControl.Styles>
 
-    <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
+    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" Classes="sidebar-header"
                     MinHeight="{Binding Shell.HeaderHeight}">
@@ -98,7 +98,7 @@
                                         <DataTemplate x:DataType="vm:InsightTopicViewModel">
                                             <StackPanel Margin="0,0,0,22">
                                                 <TextBlock Text="{Binding Topic}" Classes="label" />
-                                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1"
+                                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                                                         Margin="0,6,0,12" />
                                                 <ItemsControl ItemsSource="{Binding Items}">
                                                     <ItemsControl.ItemTemplate>
@@ -162,7 +162,7 @@
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
                                 <TextBlock Text="{l:T merge.label}" Classes="label" />
-                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
+                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBox x:Name="MergeFrom" Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
                                     <TextBlock Text="→" VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />

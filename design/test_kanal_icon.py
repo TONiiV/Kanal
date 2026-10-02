@@ -34,7 +34,8 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             for page in (root / "web" / "index.html", root / "docs" / "index.html"):
                 page.parent.mkdir()
                 page.write_text(
-                    '<!doctype html><link rel="icon" href="data:image/svg+xml,old">',
+                    '<!doctype html><link rel="icon" href="data:image/svg+xml,old">'
+                    '<img class="brand-logo" src="data:image/png;base64,old" alt="">',
                     encoding="utf-8",
                 )
             (root / "design" / "kanal-icon.png").write_bytes(
@@ -48,7 +49,9 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             source_data = source.read_bytes()
             self.assertEqual(b"\x89PNG\r\n\x1a\n", source_data[:8])
             width, height, bit_depth, colour_type = struct.unpack(">IIBB", source_data[16:26])
-            self.assertEqual((1536, 1024, 8, 6), (width, height, bit_depth, colour_type))
+            self.assertEqual((8, 6), (bit_depth, colour_type))
+            self.assertGreaterEqual(min(width, height), 1024)
+            self.assertEqual(SCRIPT.with_name("kanal-icon.png").read_bytes(), source_data)
             self.assertFalse(list((root / "design").glob("*.svg")))
 
             splash = root / "src" / "Kanal.Host" / "Assets" / "kanal-splash-mark.png"
@@ -101,6 +104,9 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             self.assertTrue(app_icon.is_file())
             favicon = (root / "design" / "favicon-datauri.txt").read_text()
             self.assertTrue(favicon.startswith("data:image/png;base64,"))
+            page_text = (root / "web" / "index.html").read_text()
+            self.assertNotIn('src="data:image/png;base64,old"', page_text)
+            self.assertIn('<img class="brand-logo" src="data:image/png;base64,', page_text)
             icns = (root / "design" / "kanal.icns").read_bytes()
             self.assertEqual(b"icns", icns[:4])
             self.assertEqual(len(icns), struct.unpack(">I", icns[4:8])[0])

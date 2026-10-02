@@ -10,21 +10,20 @@
         WindowStartupLocation="CenterScreen"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        Background="{StaticResource Paper}">
 
     <StackPanel Margin="56,42,56,44" HorizontalAlignment="Center"
                 VerticalAlignment="Center" Spacing="10">
-        <Image Source="/Assets/kanal.ico" Width="250" Height="170"
+        <Image Source="/Assets/kanal-splash-mark.png" Width="200" Height="200"
                Stretch="Uniform" HorizontalAlignment="Center"
                AutomationProperties.Name="Kanal mark" />
 
-        <TextBlock Text="kanal" FontSize="68" FontWeight="Bold"
-                   LetterSpacing="-1.5" HorizontalAlignment="Center" />
+        <TextBlock Text="kanal" FontSize="48" FontWeight="Bold"
+                   LetterSpacing="-0.8" HorizontalAlignment="Center" />
 
-        <Border Width="360" BorderBrush="{StaticResource Ink}"
-                BorderThickness="0,2,0,0" Margin="0,2,0,2" />
+        <Border Width="48" Height="4" CornerRadius="2" Background="{StaticResource BrandAccent}" Margin="0,6" />
 
-        <TextBlock Text="One room. Every language." FontSize="18"
+        <TextBlock Text="One room. Every language." FontSize="16"
                    FontWeight="SemiBold" LetterSpacing="0.35"
                    Foreground="{StaticResource Ink2}"
                    HorizontalAlignment="Center" />
