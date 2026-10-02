@@ -18,6 +18,7 @@ gateway/.wrangler/
 
 # git worktrees (CLAUDE.md workflow)
 .worktrees/
+.worktree/
 
 # .icns build intermediate; regenerate with design/kanal-icon.py
 design/Kanal.iconset/
