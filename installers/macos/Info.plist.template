@@ -42,9 +42,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kanal captures room audio to transcribe and translate what is said in the meeting.</string>
 
-	<!-- The online-meeting source. macOS gates the Core Audio process tap and the ScreenCaptureKit
-	     stream behind this string exactly as it gates the microphone - absent, both are refused with
-	     no prompt and no error, and the meeting is recorded with the remote half missing. -->
+	<!-- Without this key macOS refuses the process tap and ScreenCaptureKit audio silently, with no prompt. -->
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Kanal captures the audio playing through the selected output so remote participants are transcribed and translated too.</string>
 

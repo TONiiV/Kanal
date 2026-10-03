@@ -6,6 +6,41 @@ namespace Kanal.Core.UnitTests;
 public class AudioConversionTests
 {
     [Fact]
+    public async Task ExtensibleIntegerPcmIsNotDecodedAsFloat()
+    {
+        var format = new WaveFormatExtensible(16000, 32, 2);
+        var memory = System.Runtime.InteropServices.Marshal.AllocHGlobal(64);
+        try
+        {
+            System.Runtime.InteropServices.Marshal.StructureToPtr(format, memory, false);
+            System.Runtime.InteropServices.Marshal.Copy(new Guid("00000001-0000-0010-8000-00aa00389b71").ToByteArray(), 0, memory + 24, 16);
+            var integer = WaveFormat.MarshalFromPtr(memory);
+            var capture = new FakeWaveIn(integer, new byte[64]);
+            await using var frames = WasapiPcmCapture.RunAsync(capture, TestContext.Current.CancellationToken)
+                .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+            await Assert.ThrowsAsync<NotSupportedException>(async () => await frames.MoveNextAsync());
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(memory); }
+    }
+
+    [Fact]
+    public async Task ExtensibleFloatMixFormatIsDecodedAsFloat()
+    {
+        var format = new WaveFormatExtensible(AudioCaptureFormat.SampleRateHz, 32, 2);
+        float[] samples = [1f, 1f, -1f, -1f, 0.5f, 0.5f];
+        var bytes = new byte[samples.Length * sizeof(float)];
+        Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+        var capture = new FakeWaveIn(format, bytes);
+
+        await using var frames = WasapiPcmCapture.RunAsync(capture, TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaveFormatEncoding.Extensible, format.Encoding);
+        Assert.True(await frames.MoveNextAsync());
+        Assert.Equal<short[]>([short.MaxValue, -short.MaxValue, 16384], PcmConvert.BytesToShorts(frames.Current.Span));
+    }
+
+    [Fact]
     public void StereoPcm16AveragesToMono()
     {
         short[] interleaved = [100, 300, -1000, 2000, short.MaxValue, short.MaxValue];
@@ -41,8 +76,6 @@ public class AudioConversionTests
     [Fact]
     public void Float32BeyondUnityClampsInsteadOfWrapping()
     {
-        // Averaging two channels that both peak leaves the sum above 1.0 for one frame. Without the
-        // clamp the cast wraps, and the loudest moment in the meeting comes out as the opposite sign.
         var floats = new[] { 4f, -4f };
         var bytes = new byte[floats.Length * sizeof(float)];
         Buffer.BlockCopy(floats, 0, bytes, 0, bytes.Length);
@@ -80,10 +113,6 @@ public class AudioConversionTests
     [Fact]
     public async Task SharedCaptureRefusesThirtyTwoBitIntegerRatherThanReadingItAsFloat()
     {
-        // Shared mode hands over the mix format, which is float32 on every Windows Kanal targets. A
-        // device reporting 32-bit integer PCM has the same sample width and none of the same
-        // meaning: read as float it becomes noise around silence, which sounds like a room nobody
-        // is speaking in rather than a format the host declined.
         var capture = new FakeWaveIn(
             new WaveFormat(AudioCaptureFormat.SampleRateHz, 32, 2), new byte[64]);
 
@@ -93,8 +122,7 @@ public class AudioConversionTests
         await Assert.ThrowsAsync<NotSupportedException>(async () => await frames.MoveNextAsync());
     }
 
-    // Delivers from StartRecording, which the iterator calls once it has subscribed: handing the
-    // buffer over any earlier drops it, and the enumerator then waits on a channel nobody writes to.
+    // Delivers from StartRecording: the iterator subscribes first, so an earlier payload is lost.
     private sealed class FakeWaveIn(WaveFormat format, byte[] payload) : IWaveIn
     {
         public static FakeWaveIn Float32(int channels, float[] samples)

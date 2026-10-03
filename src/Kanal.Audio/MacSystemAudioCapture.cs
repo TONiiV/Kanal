@@ -8,9 +8,7 @@ namespace Kanal.Audio;
 [SupportedOSPlatform("macos13.0")]
 public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
 {
-    // A leaked native session keeps the function pointers it was handed, and a marshalled delegate's
-    // thunk dies with the delegate. So a session that outlives its stop leaks its callbacks too:
-    // two objects against a call into freed memory from the audio thread.
+    // A session that outlives its stop keeps calling these thunks; leaking them beats a call into freed memory.
     private static readonly List<object> Leaked = [];
 
     private readonly IMacSystemAudioNative _native;
@@ -53,8 +51,8 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         [EnumeratorCancellation] CancellationToken ct)
     {
         if (deviceId is not null && !GetDevices().Any(device => device.Id == deviceId))
-            throw new InvalidOperationException(
-                $"Computer output '{deviceId}' is no longer available; choose an active output before starting.");
+            throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
+                $"Computer output {AudioDeviceIds.Hash(deviceId)} is no longer available; choose an active output before starting.");
 
         var frames = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
         {
@@ -97,16 +95,19 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         MacSystemAudioErrorCallback onError = (message, _) =>
         {
             var detail = Marshal.PtrToStringUTF8(message) ?? "unknown native error";
-            var permissionAdvice = IsPermissionFailure(detail)
+            var denied = IsPermissionFailure(detail);
+            var advice = denied
                 ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
                 : " Re-select an active computer output and try again.";
-            frames.Writer.TryComplete(new InvalidOperationException(
-                $"Computer audio capture stopped: {detail}.{permissionAdvice}"));
+            frames.Writer.TryComplete(new AudioCaptureException(
+                denied ? AudioCaptureFault.PermissionDenied : AudioCaptureFault.SourceFailed,
+                $"Computer audio capture stopped: {detail}.{advice}"));
         };
 
         var handle = _native.Start(Backend, deviceId, onFrame, onError);
         if (handle == IntPtr.Zero)
-            throw new InvalidOperationException("Computer audio capture could not allocate its native session.");
+            throw new AudioCaptureException(AudioCaptureFault.SourceFailed,
+                "Computer audio capture could not allocate its native session.");
 
         try
         {
@@ -115,8 +116,6 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         }
         finally
         {
-            // A native session that never calls its stop completion would otherwise hang the
-            // operator's Stop; the leak is preferable to a frozen host.
             try
             {
                 await _native.StopAsync(handle).AsTask().WaitAsync(_stopTimeout);
@@ -176,13 +175,38 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
         MacSystemAudioErrorCallback onError) =>
         NativeStart((int)backend, outputDeviceUid, onFrame, onError, IntPtr.Zero);
 
-    public async ValueTask StopAsync(IntPtr handle)
+    public ValueTask StopAsync(IntPtr handle) =>
+        WaitForStopAsync(callback => NativeStop(handle, callback, IntPtr.Zero));
+
+    // The handle is the delegate's only root: native code may complete after the caller timed out.
+    internal static async ValueTask WaitForStopAsync(Action<MacSystemAudioStopCallback> stop)
     {
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        MacSystemAudioStopCallback callback = _ => stopped.TrySetResult();
-        NativeStop(handle, callback, IntPtr.Zero);
+        var root = IntPtr.Zero;
+        MacSystemAudioStopCallback callback = _ =>
+        {
+            stopped.TrySetResult();
+            Release(ref root);
+        };
+        root = GCHandle.ToIntPtr(GCHandle.Alloc(callback));
+        try
+        {
+            stop(callback);
+        }
+        catch
+        {
+            Release(ref root);
+            throw;
+        }
+
         await stopped.Task.ConfigureAwait(false);
-        GC.KeepAlive(callback);
+    }
+
+    private static void Release(ref IntPtr root)
+    {
+        var handle = Interlocked.Exchange(ref root, IntPtr.Zero);
+        if (handle != IntPtr.Zero)
+            GCHandle.FromIntPtr(handle).Free();
     }
 
     [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_start", CallingConvention = CallingConvention.Cdecl)]

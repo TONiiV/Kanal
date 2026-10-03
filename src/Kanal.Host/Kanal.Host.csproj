@@ -42,10 +42,7 @@
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
 
-  <!-- macOS reads privacy purpose strings from Contents/Info.plist, never from one beside a raw
-       Mach-O, so system-audio permission is unobtainable without a bundle. The declarations come
-       from the installer's template rather than a copy: a second plist here would drift from the
-       shipped one, and a permission the developer sees granted would be denied for the operator. -->
+  <!-- macOS reads purpose strings only from a bundle's Info.plist; reuse the installer template so they cannot drift. -->
   <Target Name="CreateMacAppBundle"
           AfterTargets="Build"
           Condition="$([MSBuild]::IsOSPlatform('OSX'))">

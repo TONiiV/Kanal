@@ -26,9 +26,7 @@ public sealed class WasapiLoopbackAudioCapture : ISystemAudioCaptureService
         [EnumeratorCancellation] CancellationToken ct)
     {
         using var enumerator = new MMDeviceEnumerator();
-        using var device = deviceId is null
-            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
-            : enumerator.GetDevice(deviceId);
+        using var device = WasapiPcmCapture.Open(enumerator, deviceId, DataFlow.Render, Role.Multimedia);
         using var capture = new WasapiLoopbackCapture(device);
 
         await foreach (var frame in WasapiPcmCapture.RunAsync(capture, ct))

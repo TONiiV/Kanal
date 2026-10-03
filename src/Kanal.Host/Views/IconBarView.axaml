@@ -137,7 +137,7 @@
 
                         <ComboBox Grid.Column="2" ItemsSource="{Binding CaptureProfiles}"
                                   SelectedItem="{Binding SelectedCaptureProfile}"
-                                  Width="68" IsEnabled="{Binding !IsRunning}" VerticalAlignment="Center"
+                                  Width="68" IsEnabled="{Binding CanChooseAudio}" VerticalAlignment="Center"
                                   IsVisible="{Binding NeedsMicrophone}"
                                   ToolTip.Tip="{Binding CaptureTip}"
                                   AutomationProperties.Name="{Binding CaptureTip}">
@@ -237,22 +237,36 @@
                                         <StackPanel Spacing="6">
                                             <TextBlock Text="{l:T input.label}" Classes="label" />
                                             <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
-                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding !IsRunning}">
+                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding CanChooseAudio}">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
+                                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding MicLevel}" Height="5"
+                                                         Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
+                                                         CornerRadius="0" AutomationProperties.Name="{l:T input.label}" />
                                         </StackPanel>
                                         <StackPanel Spacing="6" IsVisible="{Binding NeedsComputerAudio}">
                                             <TextBlock Text="{l:T output.label}" Classes="label" />
                                             <ComboBox ItemsSource="{Binding ComputerOutputs}"
                                                       SelectedItem="{Binding SelectedComputerOutput}"
-                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding !IsRunning}">
+                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding CanChooseAudio}">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
+                                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding ComputerLevel}" Height="5"
+                                                         Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
+                                                         CornerRadius="0" AutomationProperties.Name="{l:T output.label}" />
                                         </StackPanel>
+                                        <Button Classes="ghost" Content="{l:T capture.preview}"
+                                                Command="{Binding PreviewAudioCommand}"
+                                                IsVisible="{Binding CanChooseAudio}" />
+                                        <Button Classes="ghost" Content="{l:T capture.preview.stop}"
+                                                Command="{Binding CancelPreviewCommand}"
+                                                IsVisible="{Binding IsPreviewing}" />
+                                        <TextBlock Text="{Binding AudioSourceStatus}" TextWrapping="Wrap" FontSize="11.5"
+                                                   Foreground="{StaticResource Ink2}" IsVisible="{Binding HasAudioSourceStatus}" />
                                     </StackPanel>
                                 </Flyout>
                             </Button.Flyout>

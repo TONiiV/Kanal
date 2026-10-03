@@ -155,6 +155,70 @@ its preservation rules are specified as implementation work after design approva
 
 ---
 
+## 2026-10-02
+
+### Online meeting audio: mixer, host wiring and diagnostics ([ADR 0050](adr/0050-native-online-meeting-audio.md) slice 3)
+
+`OnlineMeetingCapture` mixes microphone and computer output onto one 16 kHz timeline; the host
+starts it for the Online meeting profile, and `docs/online-meeting-audio.md` is the diagnosis and
+manual-acceptance guide. Real two-party calls, unplug/replug, Bluetooth switching and the macOS
+signed-bundle permission paths are listed there as not yet verified.
+
+- **Thresholds, and why they are separate.** A transient stall must lose nothing; a sustained one
+  must fail loudly rather than emit seconds of invented silence.
+  - `PlayoutDelay` 100 ms: absorbs callback jitter. NAudio's `WasapiCapture`/`WasapiLoopbackCapture`
+    run with their defaults (polling, 100 ms buffer), so chunks arrive about every 50 ms; the IOProc
+    and loopback are burstier. Negligible next to transcription latency.
+  - Write cursor: a source's chunks continue its previous chunk only while that position is still
+    unread; otherwise the chunk re-anchors to its arrival time, never behind what the mixer already
+    read. Device crystals drift tens of ppm against the host clock; a fixed snap window let a slow
+    clock push whole chunks behind the read position (13–41 % of samples lost in simulation).
+  - `MaxSourceLead` 500 ms: a fast source clock may run ahead at most this far; the newest excess
+    is dropped and counted, unread audio is never overwritten.
+  - `ClockStallLimit` 2 s: the 20 ms mix timer can oversleep under GC, UI or CPU load; on waking
+    the mixer emits every due frame back-to-back, so a stall up to 2 s is caught up with continuous
+    samples. Beyond that the machine slept or is saturated → `clock_stalled`.
+  - `SourceBuffer` 4 s per source: larger than the stall limit plus the playout delay, so a
+    caught-up stall reads intact samples instead of overwritten ones.
+  - `ConsumerStallLimit` 60 s (3 000 frames, about 2 MB): the consumer awaits the transcription
+    push, and Gladia's receive loop holds its send lock across a reconnect's TCP/TLS connect, which
+    only the OS times out (about 21 s per attempt on Windows) on top of 1/2/4 s back-off. A shorter
+    limit stopped meetings on ordinary network trouble; past 60 s the provider has failed by its own
+    rules → `consumer_stalled`. Not dropping instead is deliberate: a sustained stall must fail
+    loudly, never silently shorten the recording.
+  - Mix: each source at −3 dB, then saturation. Halving each source cost a lone talker 6 dB, the
+    common case; two loud sources overlapping clip briefly instead of wrapping.
+  - Silence (`SignalWatch`, shared by host and Doctor): `SoundPeak` 0.003 of full scale (about
+    −50 dBFS, above a loopback's noise floor), `StartupGrace` 8 s (nobody speaks in the first
+    seconds of a call; the 10 s test still concludes), `RemoteStartupGrace` 30 s for the computer
+    output, judged only after the room has spoken (the far end is silent until then, and a loopback
+    delivers nothing while nothing plays), `QuietLimit` 120 s (a 90 s pause in a meeting is
+    ordinary; two minutes of nothing from one side is worth a non-imperative hint).
+- **Transcription push failures** are logged under `asr` as `transcription_push_failed` /
+  `transcription_push_recovered`, never as a device fault; the room stays live in both profiles and
+  frames are dropped until a push succeeds, as Gladia does itself while reconnecting.
+- **Closed fault codes** (`AudioCaptureException.Code`): `permission_denied`, `device_unavailable`,
+  `source_ended`, `source_failed`, `clock_stalled`, `consumer_stalled`, each with its source
+  (`microphone`, `system`, `mixer`). The same code reaches the diagnostic event, the host log line,
+  the localized status text and Doctor's exit code.
+- **Host lifecycle.** Pause now releases the capture devices for both profiles and Resume reopens
+  them, instead of holding the microphone open and discarding its audio; one teardown path serves
+  Pause, Stop, device loss and faults, and a Pause/Resume that lands after Stop or in the next
+  meeting does nothing. Device loss is judged on the ids the meeting started with, never on the
+  dropdown selection, and a failed output enumeration is not a loss. An online fault stops the
+  meeting with a localized reason; an in-room fault keeps the room live as before, now with the
+  localized reason too.
+- **Doctor** `system`/`online` print a per-source summary and exit 0 (sound), 2 (fault, bad
+  arguments, unlisted device) or 3 (silent, naming the source); they write no file and make no
+  network call.
+- **Consent.** Profile, microphone and output are captured before the consent dialog and used for
+  the attestation and the capture; selectors and the audio test are locked from Start until the room
+  is live.
+- **Follow-ups (macOS, untested on hardware):** the Core Audio tap session reports no error after
+  start, so a dead tapped output pads silence instead of stopping; the private aggregate lists the
+  output device as a sub-device, so a headset's own microphone may be mixed into the computer-audio
+  source. Both are listed under known risks in `docs/online-meeting-audio.md`.
+
 ## 2026-09-23
 
 ### Update check and minimum supported version ([ADR 0056](adr/0056-update-check-and-minimum-supported-version.md))

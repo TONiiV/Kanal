@@ -43,10 +43,26 @@ internal static class TestViewModels
                 ?? (() => new WorkspaceStore(Path.Combine(EmptyModelsDir(), "workspaces.json"))),
             titler: titler,
             titlerFactory: titlerFactory,
-            offUiThread: offUiThread)
+            offUiThread: offUiThread,
+            captureFactory: () => new SilentCapture(),
+            systemCaptureFactory: () => null)
         {
             RelayEnabled = false,
         };
+    }
+
+    private sealed class SilentCapture : Kanal.Audio.IAudioCaptureService
+    {
+        public IReadOnlyList<Kanal.Audio.AudioDeviceInfo> GetDevices() => [new("test-mic", "Test microphone")];
+        public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(string? deviceId,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            while (true)
+            {
+                await Task.Delay(20, ct);
+                yield return new byte[640];
+            }
+        }
     }
 
     internal static MainViewModel Demo(AppSettings? settings = null, string? modelsDir = null)

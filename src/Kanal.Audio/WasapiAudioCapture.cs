@@ -22,9 +22,7 @@ public sealed class WasapiAudioCapture : IAudioCaptureService
         string? deviceId, [EnumeratorCancellation] CancellationToken ct)
     {
         using var enumerator = new MMDeviceEnumerator();
-        using var device = deviceId is null
-            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications)
-            : enumerator.GetDevice(deviceId);
+        using var device = WasapiPcmCapture.Open(enumerator, deviceId, DataFlow.Capture, Role.Communications);
         using var capture = new WasapiCapture(device);
 
         await foreach (var frame in WasapiPcmCapture.RunAsync(capture, ct))

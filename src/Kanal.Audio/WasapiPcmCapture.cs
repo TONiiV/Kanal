@@ -1,11 +1,27 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.Versioning;
 using System.Threading.Channels;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace Kanal.Audio;
 
 internal static class WasapiPcmCapture
 {
+    [SupportedOSPlatform("windows")]
+    internal static MMDevice Open(MMDeviceEnumerator enumerator, string? deviceId, DataFlow flow, Role role)
+    {
+        var device = deviceId is null
+            ? enumerator.GetDefaultAudioEndpoint(flow, role)
+            : enumerator.GetDevice(deviceId);
+        if (device.State == DeviceState.Active)
+            return device;
+        var state = device.State;
+        device.Dispose();
+        throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
+            $"The selected {(flow == DataFlow.Render ? "output" : "input")} device is {state}; choose an active device.");
+    }
+
     internal static async IAsyncEnumerable<ReadOnlyMemory<byte>> RunAsync(
         IWaveIn capture,
         [EnumeratorCancellation] CancellationToken ct)
@@ -23,12 +39,12 @@ internal static class WasapiPcmCapture
         {
             try
             {
-                // 32-bit integer PCM has float32's sample width and none of its meaning, so the
-                // encoding has to be read as well as the width: reinterpreted, it is noise around
-                // silence, which reads as a room nobody is speaking in rather than a refusal.
+                // 32-bit integer PCM has float's width; decide on encoding, not width.
                 var mono = (format.BitsPerSample, format.Encoding) switch
                 {
-                    (32, not WaveFormatEncoding.Pcm) =>
+                    (32, _) when format.Encoding == WaveFormatEncoding.IeeeFloat ||
+                        format is WaveFormatExtensible { SubFormat: var subtype } &&
+                        subtype == new Guid("00000003-0000-0010-8000-00aa00389b71") =>
                         PcmConvert.Float32ToMonoPcm16(e.Buffer.AsSpan(0, e.BytesRecorded), format.Channels),
                     (16, _) => PcmConvert.DownmixToMono(
                         PcmConvert.BytesToShorts(e.Buffer.AsSpan(0, e.BytesRecorded)), format.Channels),

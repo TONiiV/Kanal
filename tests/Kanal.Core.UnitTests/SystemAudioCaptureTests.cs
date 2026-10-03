@@ -1,4 +1,5 @@
 using Kanal.Audio;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -6,6 +7,87 @@ namespace Kanal.Core.UnitTests;
 
 public class SystemAudioCaptureTests
 {
+    [Fact]
+    public void LateNativeStopCompletionRemainsRootedAfterTheCallerTimesOut()
+    {
+        var (callback, wait) = AbandonStopWait();
+        Collect();
+
+        Assert.True(callback.IsAlive, "the stop completion was collected while native code still held it");
+        Assert.True(InvokeAndWait(callback, wait, times: 1));
+
+        Collect();
+        Assert.False(callback.IsAlive, "a completed stop left its completion rooted");
+    }
+
+    [Fact]
+    public void ARepeatedNativeStopCompletionDoesNotFreeTheRootTwice()
+    {
+        var (callback, wait) = AbandonStopWait();
+        Collect();
+
+        Assert.True(InvokeAndWait(callback, wait, times: 2));
+        Collect();
+        Assert.False(callback.IsAlive);
+    }
+
+    [Fact]
+    public async Task AThrowingNativeStopReleasesItsCompletion()
+    {
+        var handed = await ThrowingStop(invokeFirst: false);
+        Collect();
+        Assert.False(handed.IsAlive, "a stop that threw left its completion rooted");
+    }
+
+    [Fact]
+    public async Task ANativeStopThatCompletesThenThrowsDoesNotFreeTheRootTwice()
+    {
+        var handed = await ThrowingStop(invokeFirst: true);
+        Collect();
+        Assert.False(handed.IsAlive);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static (WeakReference Callback, WeakReference Wait) AbandonStopWait()
+    {
+        MacSystemAudioStopCallback? handed = null;
+        var wait = MacSystemAudioNative.WaitForStopAsync(callback => handed = callback).AsTask();
+        Assert.False(wait.IsCompleted);
+        return (new WeakReference(handed), new WeakReference(wait));
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool InvokeAndWait(WeakReference callback, WeakReference wait, int times)
+    {
+        var completion = Assert.IsType<MacSystemAudioStopCallback>(callback.Target);
+        var pending = Assert.IsAssignableFrom<Task>(wait.Target);
+        for (var i = 0; i < times; i++)
+            completion(IntPtr.Zero);
+        return pending.Wait(TimeSpan.FromSeconds(2));
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task<WeakReference> ThrowingStop(bool invokeFirst)
+    {
+        WeakReference? handed = null;
+        var error = await Assert.ThrowsAsync<IOException>(() => MacSystemAudioNative.WaitForStopAsync(callback =>
+        {
+            handed = new WeakReference(callback);
+            if (invokeFirst)
+                callback(IntPtr.Zero);
+            throw new IOException("native stop refused");
+        }).AsTask());
+        Assert.Equal("native stop refused", error.Message);
+        return handed!;
+    }
+
+    private static void Collect()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+    }
+
     [Theory]
     [InlineData(SystemAudioPlatform.Windows, 10, 0, SystemAudioBackend.WasapiLoopback)]
     [InlineData(SystemAudioPlatform.MacOS, 14, 2, SystemAudioBackend.CoreAudioProcessTap)]
@@ -78,7 +160,7 @@ public class SystemAudioCaptureTests
             () => [new("stable-output-uid", "Speakers")]);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-        await using (var frames = capture.CaptureAsync("stable-output-uid", cts.Token).GetAsyncEnumerator())
+        await using (var frames = capture.CaptureAsync("stable-output-uid", cts.Token).GetAsyncEnumerator(cts.Token))
         {
             Assert.True(await frames.MoveNextAsync());
             Assert.Equal(0, frames.Current.Length % 2);
@@ -96,15 +178,33 @@ public class SystemAudioCaptureTests
         var native = new FakeMacNative("permission denied");
         var capture = new MacSystemAudioCapture(SystemAudioBackend.ScreenCaptureKit, native);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
         {
             await foreach (var _ in capture.CaptureAsync(null, TestContext.Current.CancellationToken))
                 break;
         });
 
+        Assert.Equal(AudioCaptureFault.PermissionDenied, error.Fault);
         Assert.Contains("permission denied", error.Message, StringComparison.Ordinal);
         Assert.Contains("Privacy & Security", error.Message, StringComparison.Ordinal);
         Assert.True(native.Stopped);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeReportsAnyOtherNativeFailureAsASourceFailure()
+    {
+        var native = new FakeMacNative("tap creation failed (OSStatus 560947818)");
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            await foreach (var _ in capture.CaptureAsync(null, TestContext.Current.CancellationToken))
+                break;
+        });
+
+        Assert.Equal(AudioCaptureFault.SourceFailed, error.Fault);
+        Assert.Contains("Re-select an active computer output", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,13 +217,16 @@ public class SystemAudioCaptureTests
             native,
             () => [new("current", "Current speakers")]);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
         {
             await foreach (var _ in capture.CaptureAsync("unplugged", TestContext.Current.CancellationToken))
                 break;
         });
 
+        Assert.Equal(AudioCaptureFault.DeviceUnavailable, error.Fault);
         Assert.Contains("no longer available", error.Message, StringComparison.Ordinal);
+        Assert.Contains(AudioDeviceIds.Hash("unplugged"), error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("unplugged", error.Message, StringComparison.Ordinal);
         Assert.Equal(0, native.StartCount);
     }
 
@@ -147,7 +250,6 @@ public class SystemAudioCaptureTests
         Assert.InRange(samples[1], 62, 70); // the same 100 samples at 24 kHz
     }
 
-    /// <summary>A native session that never reports teardown must not freeze the operator's Stop.</summary>
     [Fact]
     [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeGivesUpOnANativeSessionThatNeverReportsTeardown()
@@ -158,10 +260,11 @@ public class SystemAudioCaptureTests
             native,
             stopTimeout: TimeSpan.FromMilliseconds(50));
 
-        var frames = capture.CaptureAsync(null, TestContext.Current.CancellationToken).GetAsyncEnumerator();
+        var frames = capture.CaptureAsync(null, TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
         Assert.True(await frames.MoveNextAsync());
 
-        await frames.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        await frames.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -186,10 +289,7 @@ public class SystemAudioCaptureTests
     [Fact]
     public void BuiltMacAppCarriesBothAudioPermissionPurposes()
     {
-        // What the release bundle declares is asserted by InstallerLayoutTests against the template
-        // both bundles are written from. What is asserted here is that a plain `dotnet build`
-        // produced a bundle at all: without one the purpose strings are never read, and the
-        // developer testing the permission flow gets a denial the operator will not see.
+        // Plist contents are covered by InstallerLayoutTests; this asserts a dev build produced a bundle.
         if (!OperatingSystem.IsMacOS())
             return;
 
@@ -221,9 +321,6 @@ public class SystemAudioCaptureTests
     [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeKeepsTheCallbacksOfALeakedSessionReachable()
     {
-        // A session that never reports teardown is deliberately leaked rather than allowed to hang
-        // the operator's Stop. It keeps the function pointers it was handed, so collecting the
-        // delegates behind them frees the thunks under a callback that can still fire.
         var native = new FakeMacNative(stopHangs: true);
         var capture = new MacSystemAudioCapture(
             SystemAudioBackend.CoreAudioProcessTap,

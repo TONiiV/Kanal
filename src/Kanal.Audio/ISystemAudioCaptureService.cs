@@ -20,7 +20,6 @@ public sealed record SystemAudioSupport(
     SystemAudioBackend Backend,
     string? Reason = null);
 
-/// <summary>Rejects a stale endpoint instead of quietly capturing a different one.</summary>
 public interface ISystemAudioCaptureService : IAudioCaptureService
 {
     SystemAudioBackend Backend { get; }

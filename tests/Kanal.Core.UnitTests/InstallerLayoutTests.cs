@@ -163,9 +163,6 @@ public class InstallerLayoutTests
     [Fact]
     public void SystemAudioUsageDescriptionIsPresentAndNotEmpty()
     {
-        // The counterpart for the online-meeting source. Without it macOS refuses the process tap
-        // and the ScreenCaptureKit stream the same way it refuses the microphone: no prompt, no
-        // error, and a meeting recorded with half the room missing.
         var plist = ReadPlist(Staged.Value.InfoPlist);
 
         Assert.True(

@@ -133,10 +133,7 @@ internal static class MacCoreAudio
     [DllImport(AudioToolbox)]
     private static extern int AudioQueueSetProperty(IntPtr queue, uint propertyId, ref IntPtr data, uint size);
 
-    /// <summary>
-    /// Registers <paramref name="listener"/> for hot-plug ('dev#'), default input ('dIn '), and
-    /// default output ('dOut') changes. The caller keeps the delegate rooted until removal.
-    /// </summary>
+    // The caller keeps the delegate rooted until removal.
     internal static void AddDeviceTopologyListener(AudioObjectPropertyListener listener)
     {
         var registered = new List<uint>(2);
@@ -281,7 +278,8 @@ internal static class MacCoreAudio
 
             AudioQueueDispose(queue, true);
             // Falling back to the default device would silently capture the wrong room.
-            throw new InvalidOperationException($"Capture device '{deviceUid}' could not be selected: {Describe(status)}");
+            throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
+                $"Capture device {AudioDeviceIds.Hash(deviceUid)} could not be selected: {Describe(status)}");
         }
         finally
         {

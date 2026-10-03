@@ -14,6 +14,15 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The Online meeting capture profile now works: Kanal hears your microphone and the computer output
+  the meeting app plays to, together, with a separate meter for each. Test audio for 10 seconds
+  checks both before a meeting without transcribing or recording anything. A source that stays
+  silent says so; an unplugged device, a refused permission or a stalled machine stops the meeting
+  with a reason in your language instead of carrying on without audio. Wear headphones and turn on
+  Do Not Disturb: the whole output mix is captured, notifications included; muting yourself in the
+  meeting app does not mute Kanal. In both profiles Pause now closes the devices, the meters drop to
+  zero while paused, and a silent microphone is pointed out. `docs/online-meeting-audio.md` covers
+  diagnosis.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

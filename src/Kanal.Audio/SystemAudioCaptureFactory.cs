@@ -32,8 +32,7 @@ public static class SystemAudioCaptureFactory
                 "Native computer-audio capture is available on Windows and macOS."),
         };
 
-    // The version cascade lives in DescribeSupport alone; the guards below only satisfy the
-    // platform analyzer, which cannot see through Support.
+    // The guards only satisfy the platform analyzer; DescribeSupport owns the version cascade.
     public static ISystemAudioCaptureService? TryCreate()
     {
         var backend = Support.Backend;
