@@ -38,7 +38,7 @@ public sealed class WasapiDeviceWatcher : IAudioDeviceWatcher, IMMNotificationCl
 
     void IMMNotificationClient.OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
     {
-        if (flow is DataFlow.Capture or DataFlow.Render)
+        if (flow == DataFlow.Capture)
             DevicesChanged?.Invoke();
     }
 

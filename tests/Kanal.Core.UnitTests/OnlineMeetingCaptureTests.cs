@@ -253,6 +253,18 @@ public class OnlineMeetingCaptureTests
     }
 
     [Fact]
+    public async Task OnlyTheMicrophoneDiagnosticsNameADevice()
+    {
+        await using var run = await Run.StartAsync();
+        await run.Clock.StepAsync(300);
+
+        Assert.All(run.Diagnostics.Where(d => d.Source == OnlineMeetingCapture.MicrophoneSource),
+            d => Assert.Equal(AudioDeviceIds.Hash("mic"), d.Device));
+        Assert.All(run.Diagnostics.Where(d => d.Source == OnlineMeetingCapture.SystemSource),
+            d => Assert.Equal("", d.Device));
+    }
+
+    [Fact]
     public async Task ConsumerCancellationDisposesBothSources()
     {
         using var cancel = new CancellationTokenSource();
@@ -411,7 +423,7 @@ public class OnlineMeetingCaptureTests
                 if (d.Event == "fault")
                     _faulted.TrySetResult();
             };
-            _stream = capture.CaptureAsync("mic", "output", ct).GetAsyncEnumerator(ct);
+            _stream = capture.CaptureAsync("mic", ct).GetAsyncEnumerator(ct);
             _next = _stream.MoveNextAsync().AsTask();
         }
 
@@ -514,7 +526,7 @@ public class OnlineMeetingCaptureTests
         }
     }
 
-    internal sealed class Input : IAudioCaptureService
+    internal sealed class Input : IAudioCaptureService, ISystemAudioCaptureService
     {
         private readonly Channel<(byte[] Data, TaskCompletionSource Ack)> _frames =
             Channel.CreateUnbounded<(byte[], TaskCompletionSource)>();
@@ -524,7 +536,11 @@ public class OnlineMeetingCaptureTests
         public bool Stopped { get; private set; }
         public bool Cancelled { get; private set; }
 
-        public IReadOnlyList<AudioDeviceInfo> GetDevices() => [new("mic", "Microphone"), new("output", "Output")];
+        public IReadOnlyList<AudioDeviceInfo> GetDevices() => [new("mic", "Microphone")];
+
+        public SystemAudioBackend Backend => SystemAudioBackend.CoreAudioProcessTap;
+
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(CancellationToken ct) => CaptureAsync(null, ct);
 
         public Task Send(short[] samples)
         {

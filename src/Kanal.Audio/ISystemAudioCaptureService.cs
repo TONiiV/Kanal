@@ -20,7 +20,9 @@ public sealed record SystemAudioSupport(
     SystemAudioBackend Backend,
     string? Reason = null);
 
-public interface ISystemAudioCaptureService : IAudioCaptureService
+public interface ISystemAudioCaptureService
 {
     SystemAudioBackend Backend { get; }
+
+    IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(CancellationToken ct);
 }

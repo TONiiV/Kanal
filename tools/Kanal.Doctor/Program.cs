@@ -20,11 +20,11 @@ static int Help()
 {
     Console.WriteLine("""
         Kanal.Doctor
-          devices                           list microphone and output indices and IDs
-          system <seconds> [output]         computer output only; local, writes no file, no network
-          online <seconds> [output] [mic]   microphone + computer output mixed; local, writes no file, no network
-          mic [seconds] [deviceIndex]       WRITES mic-check.wav to the current folder, reports levels
-          gladia <wav> [--fast]             SENDS the WAV to Gladia over the network and dumps messages
+          devices                       list microphone indices and IDs, and computer-audio support
+          system <seconds>              all computer audio only; local, writes no file, no network
+          online <seconds> [mic]        microphone + all computer audio mixed; local, writes no file, no network
+          mic [seconds] [deviceIndex]   WRITES mic-check.wav to the current folder, reports levels
+          gladia <wav> [--fast]         SENDS the WAV to Gladia over the network and dumps messages
 
         Exit codes for system/online: 0 every source carried sound, 2 fault or bad arguments,
         3 a source was silent (named on the SILENT line).

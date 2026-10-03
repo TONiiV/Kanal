@@ -155,6 +155,40 @@ its preservation rules are specified as implementation work after design approva
 
 ---
 
+## 2026-10-03
+
+### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
+
+An end-to-end test on macOS heard the remote side only when the meeting app played to the device Kanal
+tapped; with headphones or any other output Kanal captured silence. Computer audio was captured per
+output device: a device-bound `CATapDescription(excludingProcesses:deviceUID:stream:)` on macOS and
+endpoint loopback on one render endpoint on Windows. Kanal plays no audio, so the output selector only
+ever chose which device to miss.
+
+- **macOS 14.2+:** the tap is `CATapDescription(stereoGlobalTapButExcludeProcesses: [])` — every
+  process on every device. The private aggregate still lists the default output at Start as its clock
+  sub-device: an aggregate with the tap alone ran its IOProc at the same rate on a development
+  machine, but without the capture permission every sample was zero, so dropping the sub-device (and
+  with it the headset-microphone leak) is not adopted unproven. The C ABI lost its device-UID
+  argument. ScreenCaptureKit (macOS 13–14.1) was already device-independent.
+- **Windows:** WASAPI process loopback (`VAD\Process_Loopback`, `EXCLUDE_TARGET_PROCESS_TREE` on
+  Kanal's own pid) through `ActivateAudioInterfaceAsync`, initialized at 44.1 kHz 16-bit stereo
+  because process loopback has no mix format, then the shared downmix/resample path. NAudio exposes
+  `AudioClient` and the activation interfaces but keeps the activation function and enums internal,
+  so the P/Invoke, the `PROPVARIANT` blob and an agile completion handler are hand-written. Requires
+  Windows 10 2004 (build 19041); older builds report Online meeting as unavailable with that reason.
+  Compiles on macOS; **not run on Windows**.
+- **Seam:** `ISystemAudioCaptureService` no longer derives from `IAudioCaptureService`; it is
+  `Backend` plus `CaptureAsync(ct)`, so there is no device id to plumb or enumerate.
+  `OnlineMeetingCapture.CaptureAsync(microphoneId, ct)`; `system` diagnostics carry an empty
+  `Device`.
+- **Host:** the output ComboBox with its view-model list and selection, and the output half of
+  the device-loss check are gone; a device-list change can now only stop an online meeting for its
+  microphone, and computer-audio loss arrives as a capture fault. The meter keeps its label under a
+  new key, `computer.label` (zh 电脑声音). Output-default listeners added for the selector (Core
+  Audio `dOut`, WASAPI render default) are removed with it.
+- **Doctor:** `devices` lists microphones only; `system <seconds>`, `online <seconds> [mic]`.
+
 ## 2026-10-02
 
 ### Online meeting audio: mixer, host wiring and diagnostics ([ADR 0050](adr/0050-native-online-meeting-audio.md) slice 3)

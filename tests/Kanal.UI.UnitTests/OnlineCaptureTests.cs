@@ -24,28 +24,17 @@ public class OnlineCaptureTests
     private static Localizer L => Localizer.Instance;
 
     [AvaloniaFact]
-    public void OnlineProfileOffersSelectedOutputWhenNativeCaptureIsAvailable()
-    {
-        using var rig = new Rig();
-        rig.Online();
-
-        Assert.True(rig.Vm.SelectedCaptureProfile.IsAvailable);
-        Assert.Equal("out-a", rig.Vm.SelectedComputerOutput?.Id);
-        Assert.Equal(["out-a", "out-b"], rig.Vm.ComputerOutputs.Select(d => d.Id));
-    }
-
-    [AvaloniaFact]
     public async Task OnlineStartOpensBothChosenSourcesAndTheirMixReachesTheTranscriber()
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
 
         await rig.StartAsync();
         await Until(() => rig.Asr.Heard((short)Math.Round((1000 + 3000) * Math.Sqrt(0.5))));
 
         Assert.Equal(["mic-b"], rig.Microphone.Opened);
-        Assert.Equal(["out-b"], rig.Computer.Opened);
+        Assert.Single(rig.Computer.Opened);
         Assert.True(rig.Vm.ShowMicLevel);
         Assert.True(rig.Vm.ShowComputerLevel);
         Assert.Contains(rig.Lines, l => l.Category == "room" && l.Message.Contains("capture online"));
@@ -61,7 +50,7 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
@@ -79,7 +68,7 @@ public class OnlineCaptureTests
 
         Assert.False(rig.Vm.IsPaused);
         Assert.Equal(["mic-b", "mic-b"], rig.Microphone.Opened);
-        Assert.Equal(["out-b", "out-b"], rig.Computer.Opened);
+        Assert.Equal(2, rig.Computer.Opened.Count);
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }
 
@@ -183,28 +172,23 @@ public class OnlineCaptureTests
         Assert.Equal(1, rig.Computer.Closes);
     }
 
-    [AvaloniaTheory]
-    [InlineData("microphone")]
-    [InlineData("system")]
-    public async Task LosingAnActiveDeviceStopsTheOnlineMeetingVisibly(string source)
+    [AvaloniaFact]
+    public async Task LosingTheActiveMicrophoneStopsTheOnlineMeetingVisibly()
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
-        if (source == "microphone")
-            rig.Microphone.DeviceIds.Remove("mic-b");
-        else
-            rig.Computer.DeviceIds.Remove("out-b");
+        rig.Microphone.DeviceIds.Remove("mic-b");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Until(() => !rig.Vm.IsRunning && !rig.Vm.IsStopping);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(L.Format("status.audiofailed", L["capture.device.lost"]), rig.Vm.Status);
         Assert.Contains(rig.Lines, l => l.Category == "audio" &&
-            l.Message.Contains($"capture_fault code=device_unavailable source={source}"));
+            l.Message.Contains("capture_fault code=device_unavailable source=microphone"));
         Assert.Equal(1, rig.Microphone.Closes);
         Assert.Equal(1, rig.Computer.Closes);
     }
@@ -214,19 +198,17 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
         rig.Microphone.DeviceIds.Remove("mic-a");
         rig.Microphone.DeviceIds.Add("usb-1");
-        rig.Computer.DeviceIds.Remove("out-a");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Pump(150);
 
         Assert.True(rig.Vm.IsRunning);
         Assert.Equal("mic-b", rig.Vm.SelectedDevice?.Id);
-        Assert.Equal("out-b", rig.Vm.SelectedComputerOutput?.Id);
         Assert.Equal(0, rig.Microphone.Closes);
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }
@@ -234,39 +216,19 @@ public class OnlineCaptureTests
     [AvaloniaFact]
     public async Task AMeetingOnTheDefaultDevicesIsNotStoppedByAListChange()
     {
-        using var rig = new Rig(microphones: [], outputs: []);
+        using var rig = new Rig(microphones: []);
         rig.Online();
         Assert.Null(rig.Vm.SelectedDevice);
-        Assert.Null(rig.Vm.SelectedComputerOutput);
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
         rig.Microphone.DeviceIds.Add("usb-1");
-        rig.Computer.DeviceIds.Add("out-1");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Pump(150);
 
         Assert.True(rig.Vm.IsRunning);
         Assert.Equal(new string?[] { null }, rig.Microphone.Opened);
-        Assert.Equal(new string?[] { null }, rig.Computer.Opened);
-        await rig.Vm.StopCommand.ExecuteAsync(null);
-    }
-
-    [AvaloniaFact]
-    public async Task AFailingOutputEnumerationIsNotMistakenForALostOutput()
-    {
-        using var rig = new Rig();
-        rig.Online();
-        rig.Choose("mic-b", "out-b");
-        await rig.StartAsync();
-        await Until(() => rig.Asr.Pushes > 0);
-
-        rig.Computer.FailEnumeration = true;
-        rig.Watcher.Raise();
-        await Pump(150);
-
-        Assert.True(rig.Vm.IsRunning);
-        Assert.Equal("out-b", rig.Vm.SelectedComputerOutput?.Id);
+        Assert.Single(rig.Computer.Opened);
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }
 
@@ -336,7 +298,7 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Microphone.Burst = 50;
-        rig.Choose("mic-b", null);
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Lines.Any(l => l.Message == "500 frames captured."));
 
@@ -387,7 +349,7 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task OnlineMetersAreSeparateAndOnlyTheSilentComputerOutputIsFlagged()
+    public async Task OnlineMetersAreSeparateAndOnlyTheSilentComputerAudioIsFlagged()
     {
         using var rig = new Rig();
         rig.Online();
@@ -418,7 +380,7 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
 
         var preview = rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
         await Until(() => rig.Microphone.Opened.Count == 1 && rig.Computer.Opened.Count == 1);
@@ -429,7 +391,7 @@ public class OnlineCaptureTests
         Assert.False(rig.Vm.CanChooseAudio);
         Assert.Equal(L["capture.preview.running"], rig.Vm.AudioSourceStatus);
         Assert.Equal(["mic-b"], rig.Microphone.Opened);
-        Assert.Equal(["out-b"], rig.Computer.Opened);
+        Assert.Single(rig.Computer.Opened);
         Assert.Equal(0, rig.Asr.Sessions);
 
         rig.Clock.Advance(TimeSpan.FromSeconds(10));
@@ -500,7 +462,7 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task TheComputerOutputIsNotFlaggedWhileNobodyHasSpokenYet()
+    public async Task TheComputerAudioIsNotFlaggedWhileNobodyHasSpokenYet()
     {
         using var rig = new Rig();
         rig.Online();
@@ -520,7 +482,7 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task ALongQuietSpellOnTheComputerOutputIsDescribedNotCommanded()
+    public async Task ALongQuietSpellOnTheComputerAudioIsDescribedNotCommanded()
     {
         using var rig = new Rig();
         rig.Online();
@@ -543,7 +505,7 @@ public class OnlineCaptureTests
     public async Task ConsentCoversTheProfileAndDevicesChosenWhenRecordWasPressed()
     {
         using var rig = new Rig();
-        rig.Choose("mic-a", "out-a");
+        rig.Choose("mic-a");
         bool? emphasised = null;
         bool? choosable = null;
         rig.Vm.ConfirmConsent = (save, remote) =>
@@ -551,7 +513,7 @@ public class OnlineCaptureTests
             emphasised = remote;
             choosable = rig.Vm.CanChooseAudio;
             rig.Online();
-            rig.Choose("mic-b", "out-b");
+            rig.Choose("mic-b");
             return Task.FromResult<bool?>(save);
         };
 
@@ -574,13 +536,13 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         bool? emphasised = null;
         rig.Vm.ConfirmConsent = (save, remote) =>
         {
             emphasised = remote;
             rig.Vm.SelectedCaptureProfile = rig.Profile(CaptureProfileId.InRoom);
-            rig.Choose("mic-a", "out-a");
+            rig.Choose("mic-a");
             return Task.FromResult<bool?>(save);
         };
 
@@ -589,7 +551,7 @@ public class OnlineCaptureTests
 
         Assert.True(emphasised);
         Assert.Equal(["mic-b"], rig.Microphone.Opened);
-        Assert.Equal(["out-b"], rig.Computer.Opened);
+        Assert.Single(rig.Computer.Opened);
         Assert.Contains(
             $"capture-profile: {rig.Profile(CaptureProfileId.OnlineMeeting).Profile.MarkdownValue}",
             rig.Vm.BuildMarkdownExport());
@@ -600,7 +562,7 @@ public class OnlineCaptureTests
     public async Task AudioChoicesAndThePreviewAreLockedUntilTheRoomIsLive()
     {
         using var rig = new Rig();
-        rig.Choose("mic-a", "out-a");
+        rig.Choose("mic-a");
         rig.Asr.Hold();
 
         var start = rig.Vm.StartCommand.ExecuteAsync(null);
@@ -610,7 +572,7 @@ public class OnlineCaptureTests
         Assert.False(rig.Vm.PreviewAudioCommand.CanExecute(null));
         Assert.False(rig.Vm.StartCommand.CanExecute(null));
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
         Assert.False(rig.Vm.IsPreviewing);
         Assert.Empty(rig.Microphone.Opened);
@@ -635,7 +597,7 @@ public class OnlineCaptureTests
         using var rig = new Rig();
         if (online)
             rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
         var live = rig.Vm.Status;
@@ -654,7 +616,7 @@ public class OnlineCaptureTests
         Assert.Contains($"mode={(online ? "online" : "in-room")}", failed.Message);
         Assert.NotNull(failed.Error);
         Assert.Contains(rig.Lines, l => l.Category == "asr" && l.Message == "transcription_push_recovered dropped_frames=3");
-        Assert.DoesNotContain(rig.Lines, l => l.Message.Contains("mic-b") || l.Message.Contains("out-b"));
+        Assert.DoesNotContain(rig.Lines, l => l.Message.Contains("mic-b"));
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }
 
@@ -663,24 +625,23 @@ public class OnlineCaptureTests
     {
         using var rig = new Rig();
         rig.Online();
-        rig.Choose("mic-b", "out-b");
+        rig.Choose("mic-b");
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
-        rig.Vm.SelectedDevice = null;
-        rig.Vm.SelectedComputerOutput = rig.Vm.ComputerOutputs.Single(d => d.Id == "out-a");
-        rig.Computer.DeviceIds.Remove("out-a");
+        rig.Vm.SelectedDevice = rig.Vm.Devices.Single(d => d.Id == "mic-a");
+        rig.Microphone.DeviceIds.Remove("mic-a");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Pump(150);
         Assert.True(rig.Vm.IsRunning);
 
-        rig.Computer.DeviceIds.Remove("out-b");
+        rig.Microphone.DeviceIds.Remove("mic-b");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Until(() => !rig.Vm.IsRunning && !rig.Vm.IsStopping);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(L.Format("status.audiofailed", L["capture.device.lost"]), rig.Vm.Status);
-        Assert.Contains(rig.Lines, l => l.Message.Contains("capture_fault code=device_unavailable source=system"));
+        Assert.Contains(rig.Lines, l => l.Message.Contains("capture_fault code=device_unavailable source=microphone"));
     }
 
     [Fact]
@@ -753,10 +714,10 @@ public class OnlineCaptureTests
         private readonly ILogSink? _previousSink = Log.Sink;
         private readonly RecordingSink _sink = new();
 
-        public Rig(string[]? microphones = null, string[]? outputs = null)
+        public Rig(string[]? microphones = null)
         {
             Microphone = new FakeSource(microphones ?? ["mic-a", "mic-b"]) { Level = 1000 };
-            Computer = new FakeSource(outputs ?? ["out-a", "out-b"]) { Level = 3000 };
+            Computer = new FakeSource([]) { Level = 3000 };
             Log.Install(_sink);
             var settings = new AppSettings { RecordAudio = false };
             settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", ApiKey));
@@ -794,12 +755,7 @@ public class OnlineCaptureTests
         public void Online() =>
             Vm.SelectedCaptureProfile = Vm.CaptureProfiles.Single(p => p.Id == CaptureProfileId.OnlineMeeting);
 
-        public void Choose(string microphone, string? output)
-        {
-            Vm.SelectedDevice = Vm.Devices.Single(d => d.Id == microphone);
-            if (output is not null)
-                Vm.SelectedComputerOutput = Vm.ComputerOutputs.Single(d => d.Id == output);
-        }
+        public void Choose(string microphone) => Vm.SelectedDevice = Vm.Devices.Single(d => d.Id == microphone);
 
         public async Task StartAsync()
         {
@@ -842,7 +798,7 @@ public class OnlineCaptureTests
         }
     }
 
-    private sealed class FakeSource(string[] devices) : IAudioCaptureService
+    private sealed class FakeSource(string[] devices) : IAudioCaptureService, ISystemAudioCaptureService
     {
         private readonly object _gate = new();
         private readonly ConcurrentQueue<string?> _opened = new();
@@ -851,7 +807,6 @@ public class OnlineCaptureTests
         private int _closes;
 
         public List<string> DeviceIds { get; } = [.. devices];
-        public volatile bool FailEnumeration;
         public volatile short Level;
         public volatile bool Hang;
         public int Burst = 1;
@@ -860,10 +815,12 @@ public class OnlineCaptureTests
         public IReadOnlyList<string?> Opened => _opened.ToArray();
         public int Closes => Volatile.Read(ref _closes);
 
+        public SystemAudioBackend Backend => SystemAudioBackend.CoreAudioProcessTap;
+
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(CancellationToken ct) => CaptureAsync(null, ct);
+
         public IReadOnlyList<AudioDeviceInfo> GetDevices()
         {
-            if (FailEnumeration)
-                throw new IOException("enumeration failed mid-unplug");
             lock (_gate)
                 return DeviceIds.Select(id => new AudioDeviceInfo(id, $"Device {id}")).ToList();
         }

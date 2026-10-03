@@ -9,17 +9,17 @@ namespace Kanal.Audio;
 internal static class WasapiPcmCapture
 {
     [SupportedOSPlatform("windows")]
-    internal static MMDevice Open(MMDeviceEnumerator enumerator, string? deviceId, DataFlow flow, Role role)
+    internal static MMDevice OpenMicrophone(MMDeviceEnumerator enumerator, string? deviceId)
     {
         var device = deviceId is null
-            ? enumerator.GetDefaultAudioEndpoint(flow, role)
+            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications)
             : enumerator.GetDevice(deviceId);
         if (device.State == DeviceState.Active)
             return device;
         var state = device.State;
         device.Dispose();
         throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
-            $"The selected {(flow == DataFlow.Render ? "output" : "input")} device is {state}; choose an active device.");
+            $"The selected microphone is {state}; choose an active device.");
     }
 
     internal static async IAsyncEnumerable<ReadOnlyMemory<byte>> RunAsync(

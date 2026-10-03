@@ -89,19 +89,20 @@ public class SystemAudioCaptureTests
     }
 
     [Theory]
-    [InlineData(SystemAudioPlatform.Windows, 10, 0, SystemAudioBackend.WasapiLoopback)]
-    [InlineData(SystemAudioPlatform.MacOS, 14, 2, SystemAudioBackend.CoreAudioProcessTap)]
-    [InlineData(SystemAudioPlatform.MacOS, 14, 1, SystemAudioBackend.ScreenCaptureKit)]
-    [InlineData(SystemAudioPlatform.MacOS, 13, 0, SystemAudioBackend.ScreenCaptureKit)]
-    [InlineData(SystemAudioPlatform.MacOS, 12, 6, SystemAudioBackend.Unavailable)]
-    [InlineData(SystemAudioPlatform.Other, 0, 0, SystemAudioBackend.Unavailable)]
+    [InlineData(SystemAudioPlatform.Windows, "10.0.19041", SystemAudioBackend.WasapiLoopback)]
+    [InlineData(SystemAudioPlatform.Windows, "10.0.26100", SystemAudioBackend.WasapiLoopback)]
+    [InlineData(SystemAudioPlatform.Windows, "10.0.18363", SystemAudioBackend.Unavailable)]
+    [InlineData(SystemAudioPlatform.MacOS, "14.2", SystemAudioBackend.CoreAudioProcessTap)]
+    [InlineData(SystemAudioPlatform.MacOS, "14.1", SystemAudioBackend.ScreenCaptureKit)]
+    [InlineData(SystemAudioPlatform.MacOS, "13.0", SystemAudioBackend.ScreenCaptureKit)]
+    [InlineData(SystemAudioPlatform.MacOS, "12.6", SystemAudioBackend.Unavailable)]
+    [InlineData(SystemAudioPlatform.Other, "0.0", SystemAudioBackend.Unavailable)]
     public void SelectsTheDocumentedNativeBackend(
         SystemAudioPlatform platform,
-        int major,
-        int minor,
+        string version,
         SystemAudioBackend expected)
     {
-        var support = SystemAudioCaptureFactory.DescribeSupport(platform, new Version(major, minor));
+        var support = SystemAudioCaptureFactory.DescribeSupport(platform, Version.Parse(version));
 
         Assert.Equal(expected, support.Backend);
         Assert.Equal(expected != SystemAudioBackend.Unavailable, support.IsAvailable);
@@ -115,7 +116,7 @@ public class SystemAudioCaptureTests
         var support = SystemAudioCaptureFactory.Support;
 
         Assert.Equal(support.IsAvailable, capture is not null);
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             Assert.IsType<WasapiLoopbackAudioCapture>(capture);
         else if (OperatingSystem.IsMacOSVersionAtLeast(14, 2))
             Assert.Equal(SystemAudioBackend.CoreAudioProcessTap, capture?.Backend);
@@ -123,20 +124,6 @@ public class SystemAudioCaptureTests
             Assert.Equal(SystemAudioBackend.ScreenCaptureKit, capture?.Backend);
         else
             Assert.Null(capture);
-    }
-
-    [Fact]
-    public void EnumeratesOnlyStableNamedOutputEndpoints()
-    {
-        var capture = SystemAudioCaptureFactory.TryCreate();
-        if (capture is null)
-            return;
-
-        foreach (var output in capture.GetDevices())
-        {
-            Assert.False(string.IsNullOrWhiteSpace(output.Id));
-            Assert.False(string.IsNullOrWhiteSpace(output.Name));
-        }
     }
 
     [Fact]
@@ -150,24 +137,31 @@ public class SystemAudioCaptureTests
     }
 
     [Fact]
+    public void UnsupportedWindowsExplainsTheMinimumBuild()
+    {
+        var support = SystemAudioCaptureFactory.DescribeSupport(
+            SystemAudioPlatform.Windows,
+            new Version(10, 0, 18363));
+
+        Assert.Contains("Windows 10 version 2004", support.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeNormalizesFramesAndAlwaysStopsTheNativeSession()
     {
         var native = new FakeMacNative();
-        var capture = new MacSystemAudioCapture(
-            SystemAudioBackend.CoreAudioProcessTap,
-            native,
-            () => [new("stable-output-uid", "Speakers")]);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-        await using (var frames = capture.CaptureAsync("stable-output-uid", cts.Token).GetAsyncEnumerator(cts.Token))
+        await using (var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token))
         {
             Assert.True(await frames.MoveNextAsync());
             Assert.Equal(0, frames.Current.Length % 2);
             Assert.InRange(frames.Current.Length, 50, 90); // 100 samples at 48 kHz -> about 33 at 16 kHz.
         }
 
-        Assert.Equal("stable-output-uid", native.DeviceUid);
+        Assert.Equal(SystemAudioBackend.CoreAudioProcessTap, native.Backend);
         Assert.True(native.Stopped);
     }
 
@@ -180,7 +174,7 @@ public class SystemAudioCaptureTests
 
         var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
         {
-            await foreach (var _ in capture.CaptureAsync(null, TestContext.Current.CancellationToken))
+            await foreach (var _ in capture.CaptureAsync(TestContext.Current.CancellationToken))
                 break;
         });
 
@@ -199,35 +193,13 @@ public class SystemAudioCaptureTests
 
         var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
         {
-            await foreach (var _ in capture.CaptureAsync(null, TestContext.Current.CancellationToken))
+            await foreach (var _ in capture.CaptureAsync(TestContext.Current.CancellationToken))
                 break;
         });
 
         Assert.Equal(AudioCaptureFault.SourceFailed, error.Fault);
-        Assert.Contains("Re-select an active computer output", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [SupportedOSPlatform("macos13.0")]
-    public async Task MacBridgeRejectsAStaleOutputBeforeOpeningNativeCapture()
-    {
-        var native = new FakeMacNative();
-        var capture = new MacSystemAudioCapture(
-            SystemAudioBackend.CoreAudioProcessTap,
-            native,
-            () => [new("current", "Current speakers")]);
-
-        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
-        {
-            await foreach (var _ in capture.CaptureAsync("unplugged", TestContext.Current.CancellationToken))
-                break;
-        });
-
-        Assert.Equal(AudioCaptureFault.DeviceUnavailable, error.Fault);
-        Assert.Contains("no longer available", error.Message, StringComparison.Ordinal);
-        Assert.Contains(AudioDeviceIds.Hash("unplugged"), error.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("unplugged", error.Message, StringComparison.Ordinal);
-        Assert.Equal(0, native.StartCount);
+        Assert.Contains("tap creation failed", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("output", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -239,7 +211,7 @@ public class SystemAudioCaptureTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var samples = new List<int>();
-        await foreach (var frame in capture.CaptureAsync(null, cts.Token))
+        await foreach (var frame in capture.CaptureAsync(cts.Token))
         {
             samples.Add(frame.Length / sizeof(short));
             if (samples.Count == 2)
@@ -260,7 +232,7 @@ public class SystemAudioCaptureTests
             native,
             stopTimeout: TimeSpan.FromMilliseconds(50));
 
-        var frames = capture.CaptureAsync(null, TestContext.Current.CancellationToken)
+        var frames = capture.CaptureAsync(TestContext.Current.CancellationToken)
             .GetAsyncEnumerator(TestContext.Current.CancellationToken);
         Assert.True(await frames.MoveNextAsync());
 
@@ -325,11 +297,10 @@ public class SystemAudioCaptureTests
         var capture = new MacSystemAudioCapture(
             SystemAudioBackend.CoreAudioProcessTap,
             native,
-            () => [new AudioDeviceInfo("out", "Output")],
             TimeSpan.FromMilliseconds(50));
 
         await using (var frames = capture
-            .CaptureAsync(null, TestContext.Current.CancellationToken)
+            .CaptureAsync(TestContext.Current.CancellationToken)
             .GetAsyncEnumerator(TestContext.Current.CancellationToken))
         {
             Assert.True(await frames.MoveNextAsync());
@@ -351,13 +322,12 @@ public class SystemAudioCaptureTests
         var capture = new MacSystemAudioCapture(
             SystemAudioBackend.CoreAudioProcessTap,
             native,
-            () => [new AudioDeviceInfo("out", "Output")],
             TimeSpan.FromSeconds(5));
 
         var before = MacSystemAudioCapture.LeakedCallbackCount;
 
         await using (var frames = capture
-            .CaptureAsync(null, TestContext.Current.CancellationToken)
+            .CaptureAsync(TestContext.Current.CancellationToken)
             .GetAsyncEnumerator(TestContext.Current.CancellationToken))
         {
             Assert.True(await frames.MoveNextAsync());
@@ -372,9 +342,8 @@ public class SystemAudioCaptureTests
         int[]? sampleRates = null,
         bool stopHangs = false) : IMacSystemAudioNative
     {
-        public string? DeviceUid { get; private set; }
+        public SystemAudioBackend? Backend { get; private set; }
         public bool Stopped { get; private set; }
-        public int StartCount { get; private set; }
 
         // Weak, so the test observes whether the bridge roots them rather than rooting them itself.
         public WeakReference? FrameCallback { get; private set; }
@@ -382,12 +351,10 @@ public class SystemAudioCaptureTests
 
         public IntPtr Start(
             SystemAudioBackend backend,
-            string? outputDeviceUid,
             MacSystemAudioFrameCallback onFrame,
             MacSystemAudioErrorCallback onError)
         {
-            StartCount++;
-            DeviceUid = outputDeviceUid;
+            Backend = backend;
             FrameCallback = new WeakReference(onFrame);
             ErrorCallback = new WeakReference(onError);
             if (failure is not null)

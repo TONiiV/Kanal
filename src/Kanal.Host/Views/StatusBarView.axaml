@@ -15,10 +15,10 @@
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="0,0,22,0"
                         IsVisible="{Binding ShowComputerLevel}" VerticalAlignment="Center">
-                <TextBlock Text="{l:T output.label}" Classes="label" />
+                <TextBlock Text="{l:T computer.label}" Classes="label" />
                 <ProgressBar Value="{Binding ComputerLevel}" Maximum="100" Width="64" Height="3"
                              Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
-                             CornerRadius="0" AutomationProperties.Name="{l:T output.label}" />
+                             CornerRadius="0" AutomationProperties.Name="{l:T computer.label}" />
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="7"
                         Margin="0,0,22,0" VerticalAlignment="Center"

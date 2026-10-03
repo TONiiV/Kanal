@@ -2,4 +2,4 @@
    Kanal.app/Contents/Resources/pl.lproj/InfoPlist.strings by the
    StageMacAppLayout target in installers/Kanal.Installers.csproj. */
 "NSMicrophoneUsageDescription" = "Kanal nagrywa dźwięk spotkania z tego mikrofonu, aby tworzyć transkrypcje i tłumaczenia na żywo.";
-"NSAudioCaptureUsageDescription" = "Kanal nagrywa dźwięk odtwarzany przez to wyjście, aby transkrybować i tłumaczyć także uczestników zdalnych.";
+"NSAudioCaptureUsageDescription" = "Kanal nagrywa dźwięk odtwarzany przez ten komputer, aby transkrybować i tłumaczyć także uczestników zdalnych.";

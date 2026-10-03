@@ -12,48 +12,29 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     private static readonly List<object> Leaked = [];
 
     private readonly IMacSystemAudioNative _native;
-    private readonly Func<IReadOnlyList<AudioDeviceInfo>> _devices;
     private readonly TimeSpan _stopTimeout;
 
     public MacSystemAudioCapture(SystemAudioBackend backend)
-        : this(backend, MacSystemAudioNative.Instance, MacCoreAudio.GetOutputDevices)
+        : this(backend, MacSystemAudioNative.Instance)
     {
     }
 
     internal MacSystemAudioCapture(
         SystemAudioBackend backend,
         IMacSystemAudioNative native,
-        Func<IReadOnlyList<AudioDeviceInfo>>? devices = null,
         TimeSpan? stopTimeout = null)
     {
         if (backend is not (SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit))
             throw new ArgumentOutOfRangeException(nameof(backend));
         Backend = backend;
         _native = native;
-        _devices = devices ?? MacCoreAudio.GetOutputDevices;
         _stopTimeout = stopTimeout ?? TimeSpan.FromSeconds(5);
     }
 
     public SystemAudioBackend Backend { get; }
 
-    public IReadOnlyList<AudioDeviceInfo> GetDevices()
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync([EnumeratorCancellation] CancellationToken ct)
     {
-        var devices = _devices();
-        if (Backend == SystemAudioBackend.CoreAudioProcessTap)
-            return devices;
-
-        // ScreenCaptureKit captures the current system mix, not an arbitrary HAL endpoint.
-        return devices.Count == 0 ? devices : [devices[0]];
-    }
-
-    public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(
-        string? deviceId,
-        [EnumeratorCancellation] CancellationToken ct)
-    {
-        if (deviceId is not null && !GetDevices().Any(device => device.Id == deviceId))
-            throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
-                $"Computer output {AudioDeviceIds.Hash(deviceId)} is no longer available; choose an active output before starting.");
-
         var frames = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
@@ -98,13 +79,13 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
             var denied = IsPermissionFailure(detail);
             var advice = denied
                 ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
-                : " Re-select an active computer output and try again.";
+                : " Start again; if it keeps failing, restart Kanal.";
             frames.Writer.TryComplete(new AudioCaptureException(
                 denied ? AudioCaptureFault.PermissionDenied : AudioCaptureFault.SourceFailed,
                 $"Computer audio capture stopped: {detail}.{advice}"));
         };
 
-        var handle = _native.Start(Backend, deviceId, onFrame, onError);
+        var handle = _native.Start(Backend, onFrame, onError);
         if (handle == IntPtr.Zero)
             throw new AudioCaptureException(AudioCaptureFault.SourceFailed,
                 "Computer audio capture could not allocate its native session.");
@@ -157,7 +138,6 @@ internal interface IMacSystemAudioNative
 {
     IntPtr Start(
         SystemAudioBackend backend,
-        string? outputDeviceUid,
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError);
 
@@ -170,10 +150,9 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
 
     public IntPtr Start(
         SystemAudioBackend backend,
-        string? outputDeviceUid,
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError) =>
-        NativeStart((int)backend, outputDeviceUid, onFrame, onError, IntPtr.Zero);
+        NativeStart((int)backend, onFrame, onError, IntPtr.Zero);
 
     public ValueTask StopAsync(IntPtr handle) =>
         WaitForStopAsync(callback => NativeStop(handle, callback, IntPtr.Zero));
@@ -212,7 +191,6 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
     [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_start", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr NativeStart(
         int backend,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? outputDeviceUid,
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError,
         IntPtr context);

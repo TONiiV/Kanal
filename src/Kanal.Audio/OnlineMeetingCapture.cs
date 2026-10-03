@@ -11,7 +11,7 @@ public sealed record CaptureDiagnostic(
 
 public sealed class OnlineMeetingCapture(
     IAudioCaptureService microphone,
-    IAudioCaptureService systemAudio,
+    ISystemAudioCaptureService systemAudio,
     TimeProvider? timeProvider = null)
 {
     public const string MicrophoneSource = "microphone";
@@ -29,7 +29,7 @@ public sealed class OnlineMeetingCapture(
     public event Action<CaptureDiagnostic>? Diagnostic;
 
     public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(
-        string? microphoneId, string? outputId, [EnumeratorCancellation] CancellationToken ct)
+        string? microphoneId, [EnumeratorCancellation] CancellationToken ct)
     {
         var clock = timeProvider ?? TimeProvider.System;
         var origin = clock.GetTimestamp();
@@ -48,8 +48,8 @@ public sealed class OnlineMeetingCapture(
         });
         var pumps = new[]
         {
-            Task.Run(() => Pump(microphone, microphoneId, MicrophoneSource, mic)),
-            Task.Run(() => Pump(systemAudio, outputId, SystemSource, system)),
+            Task.Run(() => Pump(token => microphone.CaptureAsync(microphoneId, token), microphoneId, MicrophoneSource, mic)),
+            Task.Run(() => Pump(systemAudio.CaptureAsync, null, SystemSource, system)),
             Mix(),
         };
         try
@@ -69,7 +69,7 @@ public sealed class OnlineMeetingCapture(
             await lifetime.CancelAsync();
             await Task.WhenAll(pumps).ConfigureAwait(false);
             Report("stopped", MicrophoneSource, microphoneId, mic);
-            Report("stopped", SystemSource, outputId, system);
+            Report("stopped", SystemSource, null, system);
         }
 
         async Task Mix()
@@ -105,7 +105,7 @@ public sealed class OnlineMeetingCapture(
                     if (clock.GetElapsedTime(lastReport) >= LevelInterval)
                     {
                         Report("levels", MicrophoneSource, microphoneId, mic);
-                        Report("levels", SystemSource, outputId, system);
+                        Report("levels", SystemSource, null, system);
                         lastReport = clock.GetTimestamp();
                     }
                 }
@@ -117,13 +117,14 @@ public sealed class OnlineMeetingCapture(
             }
         }
 
-        async Task Pump(IAudioCaptureService source, string? id, string name, SampleBuffer buffer)
+        async Task Pump(
+            Func<CancellationToken, IAsyncEnumerable<ReadOnlyMemory<byte>>> source, string? id, string name, SampleBuffer buffer)
         {
             Report("starting", name, id, buffer);
             try
             {
                 var first = true;
-                await foreach (var frame in source.CaptureAsync(id, lifetime.Token).ConfigureAwait(false))
+                await foreach (var frame in source(lifetime.Token).ConfigureAwait(false))
                 {
                     buffer.Write(frame.Span);
                     if (first && frame.Length > 0)
@@ -155,7 +156,7 @@ public sealed class OnlineMeetingCapture(
         void Report(string kind, string source, string? id, SampleBuffer? buffer, string? error = null)
         {
             var levels = buffer?.Snapshot(resetWindow: kind == "levels") ?? default;
-            var device = source == MixerSource ? "" : AudioDeviceIds.Hash(id);
+            var device = source == MicrophoneSource ? AudioDeviceIds.Hash(id) : "";
             lock (diagnosticGate)
             {
                 try

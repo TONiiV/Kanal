@@ -35,7 +35,6 @@ private final class CaptureHandle: @unchecked Sendable {
 
     init(
         backend: NativeBackend,
-        outputDeviceUID: String?,
         frame: @escaping FrameCallback,
         error: @escaping ErrorCallback,
         context: UnsafeMutableRawPointer?
@@ -46,10 +45,7 @@ private final class CaptureHandle: @unchecked Sendable {
         switch backend {
         case .coreAudioProcessTap:
             if #available(macOS 14.2, *) {
-                session = CoreAudioTapSession(
-                    outputDeviceUID: outputDeviceUID,
-                    frame: frame,
-                    context: context)
+                session = CoreAudioTapSession(frame: frame, context: context)
             } else {
                 session = UnsupportedSession("Core Audio process taps require macOS 14.2 or later")
             }
@@ -91,7 +87,6 @@ private final class CaptureHandle: @unchecked Sendable {
 @_cdecl("kanal_system_audio_start")
 public func kanalSystemAudioStart(
     _ backend: Int32,
-    _ outputDeviceUID: UnsafePointer<CChar>?,
     _ frame: @escaping FrameCallback,
     _ error: @escaping ErrorCallback,
     _ context: UnsafeMutableRawPointer?
@@ -101,10 +96,8 @@ public func kanalSystemAudioStart(
         return nil
     }
 
-    let uid = outputDeviceUID.map { String(cString: $0) }
     let handle = CaptureHandle(
         backend: backend,
-        outputDeviceUID: uid,
         frame: frame,
         error: error,
         context: context)
@@ -130,7 +123,6 @@ public func kanalSystemAudioStopWithCompletion(
 
 @available(macOS 14.2, *)
 private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession {
-    private let outputDeviceUID: String?
     private let frame: FrameCallback
     private let context: UnsafeMutableRawPointer?
     private let callbackQueue = DispatchQueue(label: "app.kanal.system-audio.tap", qos: .userInitiated)
@@ -139,22 +131,14 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
     private var ioProcID: AudioDeviceIOProcID?
     private var format = AudioStreamBasicDescription()
 
-    init(
-        outputDeviceUID: String?,
-        frame: @escaping FrameCallback,
-        context: UnsafeMutableRawPointer?
-    ) {
-        self.outputDeviceUID = outputDeviceUID
+    init(frame: @escaping FrameCallback, context: UnsafeMutableRawPointer?) {
         self.frame = frame
         self.context = context
     }
 
     func start() throws {
-        let uid = try outputDeviceUID ?? Self.defaultOutputDeviceUID()
-        let description = CATapDescription(
-            excludingProcesses: [],
-            deviceUID: uid,
-            stream: 0)
+        let uid = try Self.defaultOutputDeviceUID()
+        let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         description.name = "Kanal computer audio"
         description.uuid = UUID()
         description.isPrivate = true

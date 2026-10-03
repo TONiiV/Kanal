@@ -17,7 +17,12 @@ public static class SystemAudioCaptureFactory
     public static SystemAudioSupport DescribeSupport(SystemAudioPlatform platform, Version version) =>
         platform switch
         {
-            SystemAudioPlatform.Windows => new(true, SystemAudioBackend.WasapiLoopback),
+            SystemAudioPlatform.Windows when version >= new Version(10, 0, 19041) =>
+                new(true, SystemAudioBackend.WasapiLoopback),
+            SystemAudioPlatform.Windows => new(
+                false,
+                SystemAudioBackend.Unavailable,
+                "Online meeting capture requires Windows 10 version 2004 (build 19041) or later."),
             SystemAudioPlatform.MacOS when version >= new Version(14, 2) =>
                 new(true, SystemAudioBackend.CoreAudioProcessTap),
             SystemAudioPlatform.MacOS when version >= new Version(13, 0) =>
@@ -36,7 +41,7 @@ public static class SystemAudioCaptureFactory
     public static ISystemAudioCaptureService? TryCreate()
     {
         var backend = Support.Backend;
-        if (backend == SystemAudioBackend.WasapiLoopback && OperatingSystem.IsWindows())
+        if (backend == SystemAudioBackend.WasapiLoopback && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             return new WasapiLoopbackAudioCapture();
         if (backend is SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit
             && OperatingSystem.IsMacOSVersionAtLeast(13))

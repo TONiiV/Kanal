@@ -7,7 +7,7 @@ internal static class OnlineAudioDoctor
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private const string Usage =
-        "Use: system <seconds:1..120> [outputIndex] | online <seconds:1..120> [outputIndex] [microphoneIndex]. Run devices first.";
+        "Use: system <seconds:1..120> | online <seconds:1..120> [microphoneIndex]. Run devices first.";
 
     public static async Task<int> RunAsync(string[] args)
     {
@@ -15,29 +15,27 @@ internal static class OnlineAudioDoctor
         try
         {
             var microphones = AudioCaptureFactory.TryCreate();
-            var outputs = SystemAudioCaptureFactory.TryCreate();
+            var computer = SystemAudioCaptureFactory.TryCreate();
             if (command == "devices")
             {
                 List(OnlineMeetingCapture.MicrophoneSource, microphones?.GetDevices() ?? []);
-                List(OnlineMeetingCapture.SystemSource, outputs?.GetDevices() ?? []);
                 Console.WriteLine(JsonSerializer.Serialize(SystemAudioCaptureFactory.Support, Json));
                 return CaptureCheck.Ok;
             }
 
             if (args.Length < 2 || !int.TryParse(args[1], out var seconds) || seconds is < 1 or > 120)
                 return UsageError("seconds must be a whole number from 1 to 120.");
-            if (!TryIndex(args, 2, out var outputIndex) || !TryIndex(args, 3, out var microphoneIndex))
-                return UsageError("device indices must be whole numbers.");
-            if (outputs is null)
+            if (!TryIndex(args, 2, out var microphoneIndex))
+                return UsageError("the microphone index must be a whole number.");
+            if (computer is null)
                 throw new AudioCaptureException(AudioCaptureFault.SourceFailed,
                     SystemAudioCaptureFactory.Support.Reason ?? "Computer-audio capture is unavailable on this platform.",
                     OnlineMeetingCapture.SystemSource);
 
-            var output = Pick(outputs.GetDevices(), outputIndex, OnlineMeetingCapture.SystemSource);
             Console.WriteLine("Local diagnostic only: nothing is written to disk and nothing is sent over the network.");
             return command == "online"
-                ? await OnlineAsync(microphones, outputs, output, args.Length > 3 ? microphoneIndex : null, seconds)
-                : await SystemAsync(outputs, output, seconds);
+                ? await OnlineAsync(microphones, computer, microphoneIndex, seconds)
+                : await SystemAsync(computer, seconds);
         }
         catch (Exception error)
         {
@@ -47,14 +45,14 @@ internal static class OnlineAudioDoctor
         }
     }
 
-    private static async Task<int> SystemAsync(IAudioCaptureService outputs, AudioDeviceInfo output, int seconds)
+    private static async Task<int> SystemAsync(ISystemAudioCaptureService computer, int seconds)
     {
         var check = new CaptureCheck(TimeProvider.System, OnlineMeetingCapture.SystemSource);
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         var received = 0L;
         try
         {
-            await foreach (var frame in outputs.CaptureAsync(output.Id, stop.Token))
+            await foreach (var frame in computer.CaptureAsync(stop.Token))
             {
                 received += frame.Length / sizeof(short);
                 var peak = 0;
@@ -65,7 +63,7 @@ internal static class OnlineAudioDoctor
 
             if (!stop.IsCancellationRequested)
                 throw new AudioCaptureException(AudioCaptureFault.SourceEnded,
-                    "The computer output stopped delivering audio.", OnlineMeetingCapture.SystemSource);
+                    "The computer audio stopped arriving.", OnlineMeetingCapture.SystemSource);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
@@ -81,16 +79,15 @@ internal static class OnlineAudioDoctor
     }
 
     private static async Task<int> OnlineAsync(
-        IAudioCaptureService? microphones, IAudioCaptureService outputs, AudioDeviceInfo output,
-        int? microphoneIndex, int seconds)
+        IAudioCaptureService? microphones, ISystemAudioCaptureService computer, int microphoneIndex, int seconds)
     {
         if (microphones is null)
             throw new AudioCaptureException(AudioCaptureFault.SourceFailed,
                 "Microphone capture is unavailable on this platform.", OnlineMeetingCapture.MicrophoneSource);
-        var microphone = Pick(microphones.GetDevices(), microphoneIndex ?? 0, OnlineMeetingCapture.MicrophoneSource);
+        var microphone = Pick(microphones.GetDevices(), microphoneIndex, OnlineMeetingCapture.MicrophoneSource);
         var check = new CaptureCheck(
             TimeProvider.System, OnlineMeetingCapture.MicrophoneSource, OnlineMeetingCapture.SystemSource);
-        var capture = new OnlineMeetingCapture(microphones, outputs);
+        var capture = new OnlineMeetingCapture(microphones, computer);
         capture.Diagnostic += diagnostic =>
         {
             if (check.Observe(diagnostic))
@@ -100,7 +97,7 @@ internal static class OnlineAudioDoctor
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         try
         {
-            await foreach (var _ in capture.CaptureAsync(microphone.Id, output.Id, stop.Token))
+            await foreach (var _ in capture.CaptureAsync(microphone.Id, stop.Token))
             {
             }
         }
@@ -141,7 +138,7 @@ internal static class OnlineAudioDoctor
             foreach (var source in check.SilentSources)
                 Console.WriteLine(source == OnlineMeetingCapture.MicrophoneSource
                     ? "SILENT microphone: speak into it; check the selected microphone, its mute switch and the microphone permission."
-                    : "SILENT system: play speech through the selected output; check the meeting app's speaker, volume, mute and capture permission.");
+                    : "SILENT system: play speech on this computer; check the meeting app's volume, mute and the capture permission.");
         else
             Console.WriteLine("OK: every source carried sound.");
         return exit;

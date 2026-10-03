@@ -38,11 +38,9 @@ internal static class MacCoreAudio
     private static uint SelectorName => FourCC("lnam");
     private static uint SelectorStreamConfiguration => FourCC("slay");
     private static uint SelectorDefaultInput => FourCC("dIn ");
-    private static uint SelectorDefaultOutput => FourCC("dOut");
     private static uint PropertyCurrentDevice => FourCC("aqcd");
     private static uint ScopeGlobal => FourCC("glob");
     private static uint ScopeInput => FourCC("inpt");
-    private static uint ScopeOutput => FourCC("outp");
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PropertyAddress
@@ -137,7 +135,7 @@ internal static class MacCoreAudio
     internal static void AddDeviceTopologyListener(AudioObjectPropertyListener listener)
     {
         var registered = new List<uint>(2);
-        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput, SelectorDefaultOutput })
+        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput })
         {
             var address = new PropertyAddress { Selector = selector, Scope = ScopeGlobal, Element = 0 };
             var status = AudioObjectAddPropertyListener(SystemObject, ref address, listener, IntPtr.Zero);
@@ -159,7 +157,7 @@ internal static class MacCoreAudio
 
     internal static void RemoveDeviceTopologyListener(AudioObjectPropertyListener listener)
     {
-        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput, SelectorDefaultOutput })
+        foreach (var selector in new[] { SelectorDevices, SelectorDefaultInput })
         {
             var address = new PropertyAddress { Selector = selector, Scope = ScopeGlobal, Element = 0 };
             // Best effort: on teardown there is nothing useful to do with a failure.
@@ -188,23 +186,6 @@ internal static class MacCoreAudio
             Marshal.FreeHGlobal(block);
         }
     }
-
-    internal static List<AudioDeviceInfo> GetOutputDevices()
-    {
-        var devices = GetDevicesWithChannels(ScopeOutput);
-        var defaultUid = GetDefaultOutputUid();
-        var index = devices.FindIndex(device => device.Id == defaultUid);
-        if (index > 0)
-        {
-            var preferred = devices[index];
-            devices.RemoveAt(index);
-            devices.Insert(0, preferred);
-        }
-
-        return devices;
-    }
-
-    internal static string? GetDefaultOutputUid() => GetDefaultDeviceUid(SelectorDefaultOutput);
 
     /// <summary>
     /// Open a running-ready input queue delivering 16 kHz mono PCM16. AudioQueue performs the
@@ -320,24 +301,6 @@ internal static class MacCoreAudio
         }
 
         return devices;
-    }
-
-    private static string? GetDefaultDeviceUid(uint selector)
-    {
-        var address = new PropertyAddress { Selector = selector, Scope = ScopeGlobal, Element = 0 };
-        var size = (uint)sizeof(uint);
-        var block = Marshal.AllocHGlobal((int)size);
-        try
-        {
-            if (AudioObjectGetPropertyData(SystemObject, ref address, 0, IntPtr.Zero, ref size, block) != 0)
-                return null;
-            var uid = GetStringProperty((uint)Marshal.ReadInt32(block), SelectorDeviceUid);
-            return string.IsNullOrEmpty(uid) ? null : uid;
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(block);
-        }
     }
 
     private static int ChannelCount(uint deviceId, uint scope)

@@ -64,12 +64,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<ModelDownloadManager> _downloads;
     /// <summary>Enumeration source for the device dropdown; the capture pump opens its own.</summary>
     private readonly Func<IAudioCaptureService?> _captureFactory;
-    private readonly Func<IAudioCaptureService?> _systemCaptureFactory;
+    private readonly Func<ISystemAudioCaptureService?> _systemCaptureFactory;
     private readonly TimeProvider _signalClock;
     private Task? _captureTask;
     private Task? _captureStopping;
     private string? _activeMicrophoneId;
-    private string? _activeOutputId;
     private bool _activeOnline;
     private CancellationTokenSource? _previewCts;
     private SignalState _microphoneSignal;
@@ -125,7 +124,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
-        Func<IAudioCaptureService?>? systemCaptureFactory = null,
+        Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null)
     {
         _titler = titler;
@@ -209,7 +208,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             "capture.online.guidance",
             "online-meeting",
             _systemCaptureFactory() is not null ? null :
-                OperatingSystem.IsMacOS() ? "capture.online.macosversion" : "capture.online.unavailable")));
+                OperatingSystem.IsMacOS() ? "capture.online.macosversion"
+                : OperatingSystem.IsWindows() ? "capture.online.windowsversion"
+                : "capture.online.unavailable")));
         _selectedCaptureProfile = CaptureProfiles[0];
 
         foreach (var (code, name) in LanguageCatalog.Known)
@@ -293,21 +294,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return; // enumeration can fail transiently mid-unplug; a stale list beats none
         }
 
-        IReadOnlyList<AudioDeviceInfo>? outputs;
-        try
-        {
-            outputs = _systemCaptureFactory()?.GetDevices() ?? [];
-        }
-        catch
-        {
-            outputs = null;
-        }
-
         // The active ids, not the selections: clearing a bound ComboBox's items nulls its selection.
-        var lost = !IsRunning || IsStopping || !_activeOnline ? null
-            : IsMissing(_activeMicrophoneId, fresh) ? OnlineMeetingCapture.MicrophoneSource
-            : outputs is not null && IsMissing(_activeOutputId, outputs) ? OnlineMeetingCapture.SystemSource
-            : null;
+        var lost = IsRunning && !IsStopping && _activeOnline && IsMissing(_activeMicrophoneId, fresh);
 
         var selectedId = SelectedDevice?.Id;
         Devices.Clear();
@@ -315,18 +303,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Devices.Add(device);
         SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
 
-        if (outputs is not null)
+        if (lost)
         {
-            var outputId = SelectedComputerOutput?.Id;
-            ComputerOutputs.Clear();
-            foreach (var output in outputs)
-                ComputerOutputs.Add(output);
-            SelectedComputerOutput = outputs.FirstOrDefault(d => d.Id == outputId) ?? outputs.FirstOrDefault();
-        }
-
-        if (lost is not null)
-        {
-            Log.Warning(AudioLog, $"capture_fault code=device_unavailable source={lost} reason=device_list_changed");
+            Log.Warning(AudioLog,
+                $"capture_fault code=device_unavailable source={OnlineMeetingCapture.MicrophoneSource} reason=device_list_changed");
             _ = StopAfterAudioFaultAsync(L["capture.device.lost"]);
         }
     }
@@ -515,9 +495,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public AssistantViewModel Assistant { get; } = new();
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
-
-    /// <summary>Filled by the native adapter slice; kept separate from microphone endpoints.</summary>
-    public ObservableCollection<AudioDeviceInfo> ComputerOutputs { get; } = new();
 
     public ObservableCollection<CaptureProfileOption> CaptureProfiles { get; } = new();
 
@@ -747,9 +724,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [RelayCommand]
     private void DismissCaptureNote() => CaptureNoteDismissed = true;
-
-    [ObservableProperty]
-    private AudioDeviceInfo? _selectedComputerOutput;
 
     public delegate Task<bool?> ConsentPrompt(bool saveAudio, bool emphasiseRemote);
 
@@ -1168,7 +1142,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var profile = SelectedCaptureProfile;
         var online = mode.NeedsMicrophone && profile.Id == CaptureProfileId.OnlineMeeting;
         var microphoneId = mode.NeedsMicrophone ? SelectedDevice?.Id : null;
-        var outputId = online ? SelectedComputerOutput?.Id : null;
         if (mode.NeedsMicrophone && !profile.IsAvailable)
         {
             Status = profile.Unavailable!;
@@ -1366,7 +1339,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : null;
         _activeOnline = online;
         _activeMicrophoneId = microphoneId;
-        _activeOutputId = outputId;
         IsRunning = true;
         IsTranscribing = session.IsTranscribing;
         Log.Info(
@@ -1463,7 +1435,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsPaused = false;
             _activeOnline = false;
             _activeMicrophoneId = null;
-            _activeOutputId = null;
             ResetAudioHints();
             _pendingConsentConfirmedAt = null;
             _saveAudioThisMeeting = null;
@@ -1631,10 +1602,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         ResetAudioHints();
         var cts = new CancellationTokenSource();
         var microphoneId = _activeMicrophoneId;
-        var outputId = _activeOutputId;
         var online = _activeOnline;
         _captureCts = cts;
-        _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, outputId, online, cts.Token));
+        _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, online, cts.Token));
     }
 
     private Task StopCaptureAsync()
@@ -1727,7 +1697,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     private async Task PumpCaptureAsync(MeetingSession? session, string? microphoneId,
-        string? outputId, bool online, CancellationToken ct)
+        bool online, CancellationToken ct)
     {
         var mode = session is null ? "preview" : online ? "online" : "in-room";
         var signals = new CaptureSignals(this, preview: session is null, ct);
@@ -1749,7 +1719,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 var combined = new OnlineMeetingCapture(microphone, system);
                 combined.Diagnostic += signals.OnDiagnostic;
-                frames = combined.CaptureAsync(microphoneId, outputId, ct);
+                frames = combined.CaptureAsync(microphoneId, ct);
             }
             else
             {
@@ -1793,7 +1763,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 // On the first frame, not before the loop: the device is acquired inside it.
                 if (count == 0)
                     Log.Debug(AudioLog, online
-                        ? "Capture running on the microphone and the computer output."
+                        ? "Capture running on the microphone and the computer audio."
                         : $"Capture running on {(microphoneId is null ? "the default device" : AudioDeviceIds.Hash(microphoneId))}.");
                 if (++count % 500 == 0)
                     Log.Debug(AudioLog, $"{count} frames captured.");
@@ -2005,11 +1975,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         ResetAudioHints();
         var microphoneId = SelectedDevice?.Id;
         var online = NeedsComputerAudio;
-        var outputId = online ? SelectedComputerOutput?.Id : null;
         Log.Info(AudioLog, $"Audio preview started: capture {(online ? "online" : "in-room")}.");
         try
         {
-            await Task.Run(() => PumpCaptureAsync(null, microphoneId, outputId, online, cts.Token));
+            await Task.Run(() => PumpCaptureAsync(null, microphoneId, online, cts.Token));
         }
         finally
         {
