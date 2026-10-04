@@ -107,13 +107,12 @@ public class ModelDownloadManagerTests : IDisposable
         var progress = new List<double>();
 
         Assert.False(manager.IsDownloaded(model));
-        await manager.DownloadAsync(model, new Progress<double>(progress.Add), CancellationToken.None);
+        await manager.DownloadAsync(model, new SyncProgress(progress.Add), CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(model));
         Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
         // progress lands via a SynchronizationContext-free Progress<>, give it a beat
-        await Task.Delay(50);
         Assert.Contains(progress, p => p >= 1.0);
     }
 
@@ -272,10 +271,9 @@ public class ModelDownloadManagerTests : IDisposable
         };
         var progress = new List<double>();
 
-        await manager.DownloadAsync(parts, new Progress<double>(progress.Add), CancellationToken.None);
+        await manager.DownloadAsync(parts, new SyncProgress(progress.Add), CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(parts));
-        await Task.Delay(50);
         // one of two files done, but a tenth of the bytes — counting files would say 0.5
         Assert.Contains(progress, p => Math.Abs(p - 0.1) < 0.001);
         Assert.DoesNotContain(progress, p => Math.Abs(p - 0.5) < 0.001);
@@ -294,6 +292,12 @@ public class ModelDownloadManagerTests : IDisposable
 
         Assert.False(manager.IsDownloaded(parts));
         Assert.All(parts, p => Assert.False(manager.IsDownloaded(p)));
+    }
+
+    // Progress<T> posts to the thread pool, so reports land late and out of order on a slow runner.
+    private sealed class SyncProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 
     private static IDownloadableFile[] ThreeParts() =>
