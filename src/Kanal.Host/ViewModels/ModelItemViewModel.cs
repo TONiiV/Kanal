@@ -1,51 +1,77 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Host.Localization;
 using Kanal.Core.Models;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.ViewModels;
 
 /// <summary>
-/// One row in the TRANSLATION section's local-model list: either the "None" default
-/// (no download lifecycle) or a catalog model with download / cancel / delete.
-/// Which stage runs where is the mode's decision — this row only says *which* local
-/// model the local-translation modes should load.
+/// One row in a local-model list: either the translation list's "None" default (no download
+/// lifecycle) or a catalog model with download / cancel / delete. Which stage runs where is the
+/// mode's decision — this row only says *which* local model the local modes should load.
 /// </summary>
-public partial class TranslationModelItemViewModel : ViewModelBase
+public partial class ModelItemViewModel : ViewModelBase
 {
-    private readonly LocalModelInfo? _model;
     private readonly ModelDownloadManager? _downloads;
+    private readonly IReadOnlyList<IDownloadableFile> _parts = [];
+    private readonly string? _name;
+    private readonly string? _meta;
+    private readonly bool _transcription;
     private CancellationTokenSource? _downloadCts;
 
     /// <summary>The "no local model" row — the cloud-translation modes need nothing here.</summary>
-    public TranslationModelItemViewModel()
+    public ModelItemViewModel()
     {
     }
 
-    public TranslationModelItemViewModel(LocalModelInfo model, ModelDownloadManager downloads)
+    public ModelItemViewModel(LocalModelInfo model, ModelDownloadManager downloads)
+        : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
+            model.LicenseNote, [model], downloads, transcription: false)
     {
-        _model = model;
+    }
+
+    public ModelItemViewModel(AsrModelInfo model, ModelDownloadManager downloads)
+        : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
+            model.LicenseNote, model.Parts, downloads, transcription: true)
+    {
+    }
+
+    private ModelItemViewModel(
+        string id, string name, string parameters, string size, string license, string? licenseNote,
+        IReadOnlyList<IDownloadableFile> parts, ModelDownloadManager downloads, bool transcription)
+    {
+        _transcription = transcription;
+        ModelId = id;
+        _name = name;
+        _meta = $"{parameters} · {size} · {license}";
+        LicenseNote = licenseNote;
+        _parts = parts;
         _downloads = downloads;
-        IsDownloaded = downloads.IsDownloaded(model);
+        IsDownloaded = downloads.IsDownloaded(parts);
     }
 
-    public bool IsLocal => _model is not null;
+    public bool IsLocal => _downloads is not null;
 
-    public string? ModelId => _model?.Id;
+    public string? ModelId { get; }
 
-    public string DisplayName => _model?.DisplayName ?? Localizer.Instance["settings.model.none"];
+    public string DisplayName => _name ?? Localizer.Instance["settings.model.none"];
 
-    public string MetaLabel => _model is null
-        ? Localizer.Instance["settings.model.none.note"]
-        : $"{_model.Parameters} · {_model.SizeLabel} · {_model.License}";
+    public string MetaLabel => _meta ?? Localizer.Instance["settings.model.none.note"];
 
-    public string? LicenseNote => _model?.LicenseNote;
+    public string? LicenseNote { get; }
 
-    public bool HasLicenseNote => !string.IsNullOrEmpty(_model?.LicenseNote);
+    public bool HasLicenseNote => !string.IsNullOrEmpty(LicenseNote);
+
+    // Avalonia scopes GroupName to the window, so both lists sharing one name would be one group.
+    public string RadioGroup => _transcription ? "activeTranscriptionModel" : "activeModel";
+
+    public string UseTip => Localizer.Instance[_transcription ? "settings.asrmodel.usetip" : "settings.model.usetip"];
 
     [ObservableProperty]
     private bool _isActive;
@@ -86,13 +112,14 @@ public partial class TranslationModelItemViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(MetaLabel));
+        OnPropertyChanged(nameof(UseTip));
         OnPropertyChanged(nameof(StatusLabel));
     }
 
     [RelayCommand]
     private async Task DownloadAsync()
     {
-        if (_model is null || _downloads is null || IsDownloading || IsDownloaded)
+        if (_downloads is null || IsDownloading || IsDownloaded)
             return;
 
         Error = "";
@@ -101,8 +128,9 @@ public partial class TranslationModelItemViewModel : ViewModelBase
         _downloadCts = new CancellationTokenSource();
         try
         {
+            // a cancelled transcription download may already hold its 627 MB encoder
             await _downloads.DownloadAsync(
-                _model, new Progress<double>(p => Progress = p), _downloadCts.Token);
+                _downloads.MissingParts(_parts), new Progress<double>(p => Progress = p), _downloadCts.Token);
             IsDownloaded = true;
         }
         catch (OperationCanceledException)
@@ -129,9 +157,9 @@ public partial class TranslationModelItemViewModel : ViewModelBase
     [RelayCommand]
     private void Delete()
     {
-        if (_model is null || _downloads is null || IsDownloading)
+        if (_downloads is null || IsDownloading)
             return;
-        _downloads.Delete(_model);
+        _downloads.Delete(_parts);
         IsDownloaded = false;
         Error = "";
     }

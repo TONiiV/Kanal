@@ -61,7 +61,7 @@ public class TranslationModelSettingsTests
     {
         var downloads = new ModelDownloadManager(
             Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N")));
-        var item = new TranslationModelItemViewModel(LocalModelCatalog.Models[0], downloads);
+        var item = new ModelItemViewModel(LocalModelCatalog.Models[0], downloads);
 
         Assert.Equal("not downloaded", item.StatusLabel);
 

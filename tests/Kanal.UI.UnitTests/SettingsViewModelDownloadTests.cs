@@ -57,7 +57,7 @@ public class SettingsViewModelDownloadTests
     {
         var dir = Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N"));
         var handler = new StalledHandler();
-        var item = new TranslationModelItemViewModel(
+        var item = new ModelItemViewModel(
             LocalModelCatalog.Models[0], new ModelDownloadManager(dir, new HttpClient(handler)));
 
         var vm = new SettingsViewModel(new AppSettings(), () => null);
