@@ -70,10 +70,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private Task? _captureStopping;
     private string? _activeMicrophoneId;
     private bool _activeOnline;
-    private CancellationTokenSource? _previewCts;
     private SignalState _microphoneSignal;
     private SignalState _systemSignal;
-    private string? _audioFault;
     private string? _statusBeforePushFailure;
     private string? _pushFailureStatus;
     private readonly Func<DateTimeOffset> _utcNow;
@@ -317,7 +315,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
-        _previewCts?.Cancel();
         _captureCts?.Cancel();
         if (_deviceWatcher is null)
             return;
@@ -710,7 +707,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
     [NotifyPropertyChangedFor(nameof(NeedsComputerAudio))]
     [NotifyPropertyChangedFor(nameof(ShowComputerLevel))]
     [NotifyPropertyChangedFor(nameof(CaptureProfileGuidance))]
@@ -757,7 +753,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     [NotifyPropertyChangedFor(nameof(ShowComputerLevel))]
     [NotifyPropertyChangedFor(nameof(ShowAudioHintInStatusBar))]
@@ -792,17 +787,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
-    [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
-    private bool _isPreviewing;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
     [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
     private bool _isOpening;
 
-    public bool CanChooseAudio => !IsRunning && !IsOpening && !IsPreviewing;
+    public bool CanChooseAudio => !IsRunning && !IsOpening;
 
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
@@ -1016,7 +1004,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
     private bool _isStopping;
 
     /// <summary>
@@ -1029,7 +1016,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewAudioCommand))]
     [NotifyPropertyChangedFor(nameof(ShowRecord))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
     [NotifyPropertyChangedFor(nameof(StopTip))]
@@ -1064,7 +1050,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     // Consent is not a precondition of the button: pressing record is how the operator gets the
     // dialog that asks for it (ADR 0054, decision 26).
     private bool CanStart() =>
-        !IsRunning && !IsStopping && !IsOpening && !IsPreviewing && Sidebar.NamingMeetingId is null &&
+        !IsRunning && !IsStopping && !IsOpening && Sidebar.NamingMeetingId is null &&
         (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
 
     // Stop is offered while a model is still loading: pressing it then aborts the load.
@@ -1114,7 +1100,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
-        if (IsPreviewing || IsOpening)
+        if (IsOpening)
             return;
         IsOpening = true;
         try
@@ -1590,7 +1576,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         string? InviteTicket,
         string? Warning);
 
-    private static readonly TimeSpan PreviewDuration = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LevelLogInterval = TimeSpan.FromSeconds(5);
     private async Task StartCaptureAsync(MeetingSession session)
     {
@@ -1653,7 +1638,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         _microphoneSignal = SignalState.Pending;
         _systemSignal = SignalState.Pending;
-        _audioFault = null;
         _statusBeforePushFailure = null;
         _pushFailureStatus = null;
         RefreshAudioSourceStatus();
@@ -1662,10 +1646,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void RefreshAudioSourceStatus()
     {
         var lines = new List<string>();
-        if (IsPreviewing)
-            lines.Add(L["capture.preview.running"]);
-        if (_audioFault is not null)
-            lines.Add(L.Format("status.audiofailed", _audioFault));
         if (SignalHint(OnlineMeetingCapture.MicrophoneSource, _microphoneSignal) is { } microphone)
             lines.Add(microphone);
         if (SignalHint(OnlineMeetingCapture.SystemSource, _systemSignal) is { } system)
@@ -1696,11 +1676,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
     }
 
-    private async Task PumpCaptureAsync(MeetingSession? session, string? microphoneId,
+    private async Task PumpCaptureAsync(MeetingSession session, string? microphoneId,
         bool online, CancellationToken ct)
     {
-        var mode = session is null ? "preview" : online ? "online" : "in-room";
-        var signals = new CaptureSignals(this, preview: session is null, ct);
+        var mode = online ? "online" : "in-room";
+        var signals = new CaptureSignals(this, ct);
         using var meterCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var meter = Task.CompletedTask;
         try
@@ -1734,29 +1714,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 ct.ThrowIfCancellationRequested();
                 if (system is null)
                     signals.Accumulate(frame.Span);
-                if (session is not null)
+                try
                 {
-                    try
+                    await session.PushAudioAsync(frame, ct);
+                    if (failedPushes > 0)
                     {
-                        await session.PushAudioAsync(frame, ct);
-                        if (failedPushes > 0)
-                        {
-                            Log.Info(AsrLog, $"transcription_push_recovered dropped_frames={failedPushes}");
-                            Dispatcher.UIThread.Post(() => ReportPushRecovered(session, ct));
-                            failedPushes = 0;
-                        }
+                        Log.Info(AsrLog, $"transcription_push_recovered dropped_frames={failedPushes}");
+                        Dispatcher.UIThread.Post(() => ReportPushRecovered(session, ct));
+                        failedPushes = 0;
                     }
-                    catch (Exception ex) when (!ct.IsCancellationRequested)
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    if (failedPushes++ == 0)
                     {
-                        if (failedPushes++ == 0)
-                        {
-                            Log.Error(
-                                AsrLog,
-                                $"transcription_push_failed source=asr mode={mode}; frames are dropped until a push succeeds.",
-                                ex);
-                            var detail = Bounded(ex.Message);
-                            Dispatcher.UIThread.Post(() => ReportPushFailed(session, detail, ct));
-                        }
+                        Log.Error(
+                            AsrLog,
+                            $"transcription_push_failed source=asr mode={mode}; frames are dropped until a push succeeds.",
+                            ex);
+                        var detail = Bounded(ex.Message);
+                        Dispatcher.UIThread.Post(() => ReportPushFailed(session, detail, ct));
                     }
                 }
 
@@ -1835,20 +1812,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = before;
     }
 
-    private void ReportUnavailable(MeetingSession? session, bool online, bool noMicrophone, CancellationToken ct)
+    private void ReportUnavailable(MeetingSession session, bool online, bool noMicrophone, CancellationToken ct)
     {
         if (ct.IsCancellationRequested)
             return;
         var message = noMicrophone ? L["status.nobackend"] : L["capture.online.unavailable"];
-        if (session is null)
-        {
-            _audioFault = message;
-            RefreshAudioSourceStatus();
-        }
-        else if (!ReferenceEquals(session, _session))
-        {
-        }
-        else if (online)
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (online)
         {
             _ = StopAfterAudioFaultAsync(message);
         }
@@ -1858,20 +1829,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void ReportFault(MeetingSession? session, bool online, AudioCaptureException fault, CancellationToken ct)
+    private void ReportFault(MeetingSession session, bool online, AudioCaptureException fault, CancellationToken ct)
     {
         if (ct.IsCancellationRequested)
             return;
         var message = DescribeFault(fault);
-        if (session is null)
-        {
-            _audioFault = message;
-            RefreshAudioSourceStatus();
-        }
-        else if (!ReferenceEquals(session, _session))
-        {
-        }
-        else if (online)
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (online)
         {
             _ = StopAfterAudioFaultAsync(message);
         }
@@ -1881,12 +1846,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private sealed class CaptureSignals(MainViewModel owner, bool preview, CancellationToken ct)
+    private sealed class CaptureSignals(MainViewModel owner, CancellationToken ct)
     {
         private readonly SignalWatch _microphone = new(owner._signalClock);
         // In a meeting the far end is legitimately silent until someone in the room has spoken.
         private readonly SignalWatch _system = new(
-            owner._signalClock, preview ? SignalWatch.StartupGrace : SignalWatch.RemoteStartupGrace);
+            owner._signalClock, SignalWatch.RemoteStartupGrace);
         private readonly Dictionary<string, long> _levelsLogged = [];
         private readonly object _gate = new();
         private long _received;
@@ -1936,7 +1901,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             var isSystem = source == OnlineMeetingCapture.SystemSource;
             var watch = isSystem ? _system : _microphone;
-            if (watch.Observe(receivedSamples, peak, mayConclude: !isSystem || preview || _microphone.HeardSound))
+            if (watch.Observe(receivedSamples, peak, mayConclude: !isSystem || _microphone.HeardSound))
                 Log.Info(AudioLog, $"signal source={source} state={SignalWatch.CodeOf(watch.State)}");
             var state = watch.State;
             Dispatcher.UIThread.Post(() =>
@@ -1955,37 +1920,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
                 owner.RefreshAudioSourceStatus();
             });
-        }
-    }
-
-    [RelayCommand]
-    private void CancelPreview() => _previewCts?.Cancel();
-
-    private bool CanPreview =>
-        !IsRunning && !IsOpening && !IsStopping && !IsPreviewing && SelectedCaptureProfile.IsAvailable;
-
-    [RelayCommand(CanExecute = nameof(CanPreview))]
-    private async Task PreviewAudioAsync()
-    {
-        if (!CanPreview)
-            return;
-        using var cts = new CancellationTokenSource(PreviewDuration, _signalClock);
-        _previewCts = cts;
-        IsPreviewing = true;
-        ResetAudioHints();
-        var microphoneId = SelectedDevice?.Id;
-        var online = NeedsComputerAudio;
-        Log.Info(AudioLog, $"Audio preview started: capture {(online ? "online" : "in-room")}.");
-        try
-        {
-            await Task.Run(() => PumpCaptureAsync(null, microphoneId, online, cts.Token));
-        }
-        finally
-        {
-            _previewCts = null;
-            IsPreviewing = false;
-            RefreshAudioSourceStatus();
-            Log.Info(AudioLog, "Audio preview ended.");
         }
     }
 

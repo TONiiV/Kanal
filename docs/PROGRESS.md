@@ -188,6 +188,10 @@ ever chose which device to miss.
   new key, `computer.label` (zh 电脑声音). Output-default listeners added for the selector (Core
   Audio `dOut`, WASAPI render default) are removed with it.
 - **Doctor:** `devices` lists microphones only; `system <seconds>`, `online <seconds> [mic]`.
+- **Audio test removed.** The 10-second *Test audio* button, its command and its three strings are
+  gone. The operator checks both meters after Start; `Kanal.Doctor system|online` stays the local
+  check without a meeting. Capture now always runs inside a session, so the preview branches of the
+  fault and unavailable reports are gone too.
 
 ## 2026-10-02
 
@@ -246,7 +250,7 @@ signed-bundle permission paths are listed there as not yet verified.
   arguments, unlisted device) or 3 (silent, naming the source); they write no file and make no
   network call.
 - **Consent.** Profile, microphone and output are captured before the consent dialog and used for
-  the attestation and the capture; selectors and the audio test are locked from Start until the room
+  the attestation and the capture; selectors are locked from Start until the room
   is live.
 - **Follow-ups (macOS, untested on hardware):** the Core Audio tap session reports no error after
   start, so a dead tapped output pads silence instead of stopping; the private aggregate lists the

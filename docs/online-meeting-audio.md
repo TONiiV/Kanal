@@ -12,9 +12,8 @@ all computer audio, mixed into the single 16 kHz mono stream the speech pipeline
    Bluetooth device it plays on, including notification sounds, other browser tabs, and media
    players. There is no output to choose: the meeting app can play to headphones, the built-in
    speakers or any other device and Kanal hears it. Kanal itself plays nothing.
-3. In the toolbar's microphone menu, pick the microphone, then press **Test audio for 10 seconds**.
-   Speak, and play speech in the meeting app. Both meters must move. The test is local: nothing is
-   transcribed, recorded, or sent.
+3. In the toolbar's microphone menu, pick the microphone. Start the meeting. Speak, and let the
+   meeting app play speech. Both meters in the microphone menu must move.
 4. Muting yourself in Teams, Slack, Meet, or Tencent Meeting does **not** mute Kanal's microphone.
    Use Pause in Kanal for private moments; pause sends nothing to transcription and records nothing.
 
@@ -59,7 +58,7 @@ Capture lines use the `audio` category. Audio samples, transcript text, and API 
 - A JSON line per mixer event: `starting`, `first_frame`, `fault`, `stopped` at Info, and `levels` at
   Debug, at most once per source every 5 seconds.
 - `signal source=<microphone|system> state=<state>` at Info, once per change.
-- `capture_fault code=<code> source=<source> mode=<online|in-room|preview>` at Error, with the
+- `capture_fault code=<code> source=<source> mode=<online|in-room>` at Error, with the
   exception attached. An in-room line adds `the room is live with no audio arriving`.
 - `capture_fault code=device_unavailable source=microphone reason=device_list_changed` at Warning, when
   the microphone the meeting is using disappears from the device list. Computer audio is not tied to a
@@ -70,7 +69,7 @@ Fields of the JSON lines:
 
 | Field | Meaning |
 |---|---|
-| `Session` | Random id of one capture run; joins the lines of one Start, Resume, or test. |
+| `Session` | Random id of one capture run; joins the lines of one Start or Resume. |
 | `Event` | `starting`, `first_frame`, `levels`, `fault`, `stopped`. |
 | `Source` | `microphone`, `system`, or `mixer` for faults that belong to neither source. |
 | `Device` | Microphone lines: first 12 hex characters of the SHA-256 of the device id; `default` when none was chosen. Matches across lines without exposing the device name. Empty for `system` and `mixer`. |
@@ -101,7 +100,7 @@ transcription* until a push succeeds again, the room stays live, and frames are 
 
 ## Silent source hints
 
-A hint appears in the status bar during a meeting, and under the meters during a test:
+A hint appears in the status bar and under the meters during a meeting:
 
 - *No microphone sound detected* — check the selected microphone, its hardware mute switch, and the
   microphone permission.
@@ -122,8 +121,7 @@ The state behind the hint, also logged as `signal … state=`:
 
 The microphone may be judged 8 s after it opens. During a meeting the computer audio is judged only
 after the microphone has heard sound and 30 s have passed, because the far end is legitimately silent
-until the room speaks and a loopback delivers nothing while nothing plays. During the 10-second test
-both use the 8 s grace.
+until the room speaks and a loopback delivers nothing while nothing plays.
 
 ## Manual acceptance checklist
 
@@ -136,7 +134,7 @@ Everything here needs real hardware and a second person. None of it is covered b
 | Tencent Meeting, same | NOT YET VERIFIED | NOT YET VERIFIED |
 | Google Meet in a browser, same | NOT YET VERIFIED | NOT YET VERIFIED |
 | Meeting app playing to wired headphones, a Bluetooth headset, and the built-in speakers in turn → the remote sentence is transcribed in each case | NOT YET VERIFIED | NOT YET VERIFIED |
-| Meeting app muted → *No computer sound detected* within ~10 s in the audio test; in a meeting ~30 s after someone in the room has spoken | NOT YET VERIFIED | NOT YET VERIFIED |
+| Meeting app muted → *No computer sound detected* ~30 s after someone in the room has spoken | NOT YET VERIFIED | NOT YET VERIFIED |
 | Unplug the active USB microphone mid-meeting → meeting stops with *The microphone disconnected or changed* | NOT YET VERIFIED | NOT YET VERIFIED |
 | Switch the meeting app's output (speakers ↔ headphones) mid-meeting → computer audio keeps arriving | NOT YET VERIFIED | NOT YET VERIFIED |
 | Replug and Start again → both meters move | NOT YET VERIFIED | NOT YET VERIFIED |

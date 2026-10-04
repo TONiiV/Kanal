@@ -252,12 +252,6 @@
                                                          Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
                                                          CornerRadius="0" AutomationProperties.Name="{l:T computer.label}" />
                                         </StackPanel>
-                                        <Button Classes="ghost" Content="{l:T capture.preview}"
-                                                Command="{Binding PreviewAudioCommand}"
-                                                IsVisible="{Binding CanChooseAudio}" />
-                                        <Button Classes="ghost" Content="{l:T capture.preview.stop}"
-                                                Command="{Binding CancelPreviewCommand}"
-                                                IsVisible="{Binding IsPreviewing}" />
                                         <TextBlock Text="{Binding AudioSourceStatus}" TextWrapping="Wrap" FontSize="11.5"
                                                    Foreground="{StaticResource Ink2}" IsVisible="{Binding HasAudioSourceStatus}" />
                                     </StackPanel>

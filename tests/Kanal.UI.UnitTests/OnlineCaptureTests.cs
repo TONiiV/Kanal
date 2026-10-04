@@ -376,92 +376,6 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task APreviewOpensBothChosenSourcesWithoutARoomAndEndsOnItsOwn()
-    {
-        using var rig = new Rig();
-        rig.Online();
-        rig.Choose("mic-b");
-
-        var preview = rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
-        await Until(() => rig.Microphone.Opened.Count == 1 && rig.Computer.Opened.Count == 1);
-
-        Assert.True(rig.Vm.IsPreviewing);
-        Assert.False(rig.Vm.StartCommand.CanExecute(null));
-        Assert.False(rig.Vm.PreviewAudioCommand.CanExecute(null));
-        Assert.False(rig.Vm.CanChooseAudio);
-        Assert.Equal(L["capture.preview.running"], rig.Vm.AudioSourceStatus);
-        Assert.Equal(["mic-b"], rig.Microphone.Opened);
-        Assert.Single(rig.Computer.Opened);
-        Assert.Equal(0, rig.Asr.Sessions);
-
-        rig.Clock.Advance(TimeSpan.FromSeconds(10));
-        await Until(() => preview.IsCompleted, timeoutMs: 3000);
-        await preview;
-        Dispatcher.UIThread.RunJobs();
-
-        Assert.False(rig.Vm.IsPreviewing);
-        Assert.Equal(1, rig.Microphone.Closes);
-        Assert.Equal(1, rig.Computer.Closes);
-        Assert.Equal("", rig.Vm.AudioSourceStatus);
-        Assert.True(rig.Vm.StartCommand.CanExecute(null));
-        Assert.True(rig.Vm.PreviewAudioCommand.CanExecute(null));
-    }
-
-    [AvaloniaFact]
-    public async Task CancellingAPreviewReleasesBothSources()
-    {
-        using var rig = new Rig();
-        rig.Online();
-        var preview = rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
-        await Until(() => rig.Computer.Opened.Count == 1);
-
-        rig.Vm.CancelPreviewCommand.Execute(null);
-        await preview;
-
-        Assert.False(rig.Vm.IsPreviewing);
-        Assert.Equal(1, rig.Microphone.Closes);
-        Assert.Equal(1, rig.Computer.Closes);
-    }
-
-    [AvaloniaFact]
-    public async Task APreviewSourceFaultIsShownBesideTheMetersAndEndsThePreview()
-    {
-        using var rig = new Rig();
-        rig.Online();
-        var preview = rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
-        await Until(() => rig.Computer.Opened.Count == 1);
-
-        rig.Computer.Fail(new AudioCaptureException(AudioCaptureFault.DeviceUnavailable, "gone"));
-        await preview;
-        Dispatcher.UIThread.RunJobs();
-
-        Assert.False(rig.Vm.IsPreviewing);
-        Assert.Equal(
-            L.Format("status.audiofailed",
-                L.Format("capture.fault.device_unavailable", L["capture.source.system"])),
-            rig.Vm.AudioSourceStatus);
-        Assert.False(rig.Vm.IsRunning);
-    }
-
-    [AvaloniaFact]
-    public async Task APreviewThatHearsNothingLeavesTheHintAfterItEnds()
-    {
-        using var rig = new Rig();
-        rig.Online();
-        rig.Computer.Level = 0;
-        var preview = rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
-        await Until(() => rig.Vm.ComputerLevel == 0 && rig.Vm.MicLevel > 0);
-
-        rig.Clock.Advance(SignalWatch.StartupGrace + TimeSpan.FromSeconds(1));
-        await Until(() => rig.Vm.AudioSourceStatus.Contains(L["capture.system.silent"]));
-        rig.Vm.CancelPreviewCommand.Execute(null);
-        await preview;
-        Dispatcher.UIThread.RunJobs();
-
-        Assert.Equal(L["capture.system.silent"], rig.Vm.AudioSourceStatus);
-    }
-
-    [AvaloniaFact]
     public async Task TheComputerAudioIsNotFlaggedWhileNobodyHasSpokenYet()
     {
         using var rig = new Rig();
@@ -559,7 +473,7 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task AudioChoicesAndThePreviewAreLockedUntilTheRoomIsLive()
+    public async Task AudioChoicesAreLockedUntilTheRoomIsLive()
     {
         using var rig = new Rig();
         rig.Choose("mic-a");
@@ -569,12 +483,9 @@ public class OnlineCaptureTests
         await Until(() => rig.Asr.Starts == 1);
 
         Assert.False(rig.Vm.CanChooseAudio);
-        Assert.False(rig.Vm.PreviewAudioCommand.CanExecute(null));
         Assert.False(rig.Vm.StartCommand.CanExecute(null));
         rig.Online();
         rig.Choose("mic-b");
-        await rig.Vm.PreviewAudioCommand.ExecuteAsync(null);
-        Assert.False(rig.Vm.IsPreviewing);
         Assert.Empty(rig.Microphone.Opened);
 
         rig.Asr.Release();
@@ -586,7 +497,6 @@ public class OnlineCaptureTests
         Assert.Empty(rig.Computer.Opened);
         await rig.Vm.StopCommand.ExecuteAsync(null);
         Assert.True(rig.Vm.CanChooseAudio);
-        Assert.True(rig.Vm.PreviewAudioCommand.CanExecute(null));
     }
 
     [AvaloniaTheory]
@@ -654,7 +564,7 @@ public class OnlineCaptureTests
             "capture.source.microphone", "capture.source.system", "capture.source.mixer",
             "capture.fault.clock_stalled", "capture.fault.consumer_stalled", "capture.fault.source_ended",
             "capture.fault.permission_denied", "capture.fault.device_unavailable", "capture.fault.source_failed",
-            "capture.device.lost", "capture.preview", "capture.preview.running", "capture.preview.stop",
+            "capture.device.lost",
         ];
         foreach (var language in Localizer.Available)
         foreach (var key in keys)
@@ -769,7 +679,6 @@ public class OnlineCaptureTests
             Asr.Release();
             if (Vm.IsRunning && !Vm.IsStopping)
                 _ = Vm.StopCommand.ExecuteAsync(null);
-            Vm.CancelPreviewCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
             Vm.Dispose();
             Log.Install(_previousSink);

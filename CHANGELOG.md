@@ -16,8 +16,7 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - The Online meeting capture profile now works: Kanal hears your microphone and everything the
   computer plays, together, with a separate meter for each. There is no output to pick: the meeting
-  app can play to headphones, a Bluetooth headset or the speakers. Test audio for 10 seconds checks
-  both before a meeting without transcribing or recording anything. A source that stays silent says
+  app can play to headphones, a Bluetooth headset or the speakers. A source that stays silent says
   so; an unplugged microphone, a refused permission or a stalled machine stops the meeting with a
   reason in your language instead of carrying on without audio. Wear headphones and turn on Do Not
   Disturb: all computer audio is captured, notifications included; muting yourself in the meeting
