@@ -166,8 +166,10 @@ missing standalone cloud translator, and now says only that.
 
 Measured on the real model (560 ms int8, CPU, 4 threads, Apple M4), fed in 20 ms frames the way the
 capture layer pushes them: load 0.7–1.6 s, real-time factor ≈ 0.09 (28.6 s of zh/de audio in
-2.3 s). Windows is not measured yet; the provider runs on CPU only. Polish is not measured on real
-audio — this Mac has no Polish voice to synthesise a test clip.
+2.3 s). The provider runs on CPU only. `local-asr-windows.yml` runs the Core tests and the real model
+on a hosted Windows runner for every PR that touches it and posts the result as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`. Polish is
+not measured on real audio — this Mac has no Polish voice to synthesise a test clip.
 
 Four things the ADR did not anticipate, all found by running the model:
 

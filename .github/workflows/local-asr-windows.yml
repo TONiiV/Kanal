@@ -1,0 +1,66 @@
+name: Local ASR on Windows
+
+# Hosted windows-latest has no NVIDIA GPU, and GPU runners are a paid feature of organisations, not
+# personal accounts. The report states what the runner has; it cannot verify CUDA.
+
+on:
+  pull_request:
+    paths:
+      - 'src/Kanal.Providers.LocalAsr/**'
+      - 'tools/Kanal.Doctor/**'
+      - 'tests/TestData/**'
+      - '.github/workflows/local-asr-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Core unit tests
+        run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --logger "console;verbosity=minimal"
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/kanal-models
+          key: asr-models-${{ hashFiles('src/Kanal.Providers.LocalAsr/AsrModelCatalog.cs') }}
+
+      - name: Real-model transcription
+        run: |
+          dotnet run --configuration Release --project tools/Kanal.Doctor -- \
+            asr tests/TestData/tts-zh.wav "$RUNNER_TEMP/kanal-models" | tee report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # a fork's token is read-only, so the comment is for same-repo PRs; the step summary covers the rest
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- local-asr-windows -->'
+          if [ -s report.md ]; then
+            body="$marker"$'\n'"$(cat report.md)"$'\n\n'"[workflow run]($RUN_URL) · commit \`${GITHUB_SHA::7}\`"
+          else
+            body="$marker"$'\n'"### Local ASR on Windows"$'\n\n'"No report: the job failed before the transcription step. [workflow run]($RUN_URL)"
+          fi
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
