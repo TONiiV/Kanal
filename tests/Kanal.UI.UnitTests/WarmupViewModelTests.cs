@@ -51,6 +51,23 @@ public class WarmupViewModelTests
         }
     }
 
+    private sealed class WarmableAsr(IAsrProvider inner, Task gate) : IAsrProvider, IWarmupProvider
+    {
+        public int WarmUpCalls;
+
+        public string Id => inner.Id;
+        public AsrCapabilities Caps => inner.Caps;
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            inner.StartAsync(options, ct);
+
+        public async Task WarmUpAsync(CancellationToken ct)
+        {
+            Interlocked.Increment(ref WarmUpCalls);
+            await gate.WaitAsync(ct);
+        }
+    }
+
     private static async Task PumpAsync(int ms)
     {
         var deadline = Environment.TickCount64 + ms;
@@ -151,5 +168,35 @@ public class WarmupViewModelTests
 
         Assert.True(vm.IsRunning);
         await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task ALocalTranscriptionModelLoadsFirstAndAFailedLoadStopsTheStart()
+    {
+        var asrGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = TestViewModels.Demo();
+        var mt = new GatedWarmupMt(Task.CompletedTask);
+        WarmableAsr? asr = null;
+        vm.PlanFilter = plan =>
+        {
+            asr = new WarmableAsr(plan.Asr!, asrGate.Task);
+            return plan with { Asr = asr, Mt = mt };
+        };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+
+        Assert.Equal(1, asr!.WarmUpCalls);
+        Assert.Contains("Loading the transcription model", vm.Status);
+        Assert.Equal(0, mt.WarmUpCalls);
+
+        asrGate.SetException(new FileNotFoundException("encoder missing"));
+        await starting;
+        await PumpAsync(50);
+
+        Assert.Contains("Transcription model failed to load", vm.Status);
+        Assert.Contains("encoder missing", vm.Status);
+        Assert.Equal(0, mt.WarmUpCalls);
+        Assert.False(vm.IsRunning);
     }
 }

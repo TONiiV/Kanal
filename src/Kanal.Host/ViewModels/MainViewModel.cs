@@ -1111,16 +1111,24 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = plan.Titler;
         OnTitlingChanged();
 
-        // A local translation model loads to a working state *before* the room opens. Loading
-        // it on the first final — which is what lazy loading did — meant the meeting's opening
-        // sentences waited out a multi-gigabyte load with nothing on screen saying why.
-        // Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
-        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start
-        // rather than opening a room that cannot translate.
-        if (mt is IWarmupProvider warmable)
+        // Local models load to a working state *before* the room opens. Loading on first use
+        // meant the meeting's opening sentences waited out the load with nothing on screen saying
+        // why. Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
+        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start rather
+        // than opening a room that cannot transcribe or translate.
+        foreach (var (warmable, loading, failed, label) in new[]
+                 {
+                     (asr as IWarmupProvider, "status.loadingasrmodel", "status.asrmodelloadfailed",
+                         plan.Status.TranscriptionLabel),
+                     (mt as IWarmupProvider, "status.loadingmodel", "status.modelloadfailed",
+                         plan.Status.TranslationLabel),
+                 })
         {
+            if (warmable is null)
+                continue;
+
             IsStarting = true;
-            Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
+            Status = L.Format(loading, label);
             var warmupCts = new CancellationTokenSource();
             _warmupCts = warmupCts;
             try
@@ -1136,8 +1144,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             catch (Exception ex)
             {
                 await DisposeProvidersAsync();
-                Status = L.Format("status.modelloadfailed", ex.Message);
-                Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
+                Status = L.Format(failed, ex.Message);
+                Log.Error(RoomLog, $"A local model failed to load ({label}); the room was not opened.", ex);
                 return;
             }
             finally

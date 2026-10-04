@@ -157,6 +157,43 @@ its preservation rules are specified as implementation work after design approva
 
 ## 2026-10-04
 
+### Local transcription runs (ADR 0053, slices C-4 and C-5)
+
+`NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process, and
+`PipelinePlanner` resolves `StageKind.Local` transcription to it. *Local · Local* is available once
+a transcription model and a translation model are downloaded. *Local · Cloud* stays blocked on the
+missing standalone cloud translator, and now says only that.
+
+Measured on the real model (560 ms int8, CPU, 4 threads, Apple M4), fed in 20 ms frames the way the
+capture layer pushes them: load 0.7–1.6 s, real-time factor ≈ 0.09 (28.6 s of zh/de audio in
+2.3 s). Windows is not measured yet; the provider runs on CPU only. Polish is not measured on real
+audio — this Mac has no Polish voice to synthesise a test clip.
+
+Four things the ADR did not anticipate, all found by running the model:
+
+- **sherpa-onnx strips the detected language.** The model writes a language tag, and sherpa-onnx
+  filters it out of text and tokens; the C# API has no other route to it. A room of one language
+  forces that language (with `zh` → `zh-CN`, `ja` → `ja-JP`); any other room decodes with `auto`
+  and `TranscriptLanguage` reads the source language back from the text: script first, then
+  distinctive letters and stopwords among the room's Latin languages. Correct on every test
+  sentence; a short Latin sentence with no signal falls to the room's first Latin language.
+- **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
+  ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
+  second of silence when it is created. Priming again after an endpoint reset made things worse:
+  the padding counts as trailing silence and fired the next endpoint mid-sentence.
+- **Endpointing counts blank frames, not silence.** A stretch the model cannot transcribe — a
+  spoken part number — produces blanks, and with sherpa's 1.2 s rule a German sentence was cut at
+  "für K X", losing the number and the start of the rest. Rules are 2.4 s (nothing heard) and 1.6 s
+  (after speech), 20 s maximum; 1.6 s kept every test sentence whole. A final therefore lands
+  ≈1.6 s after the speaker stops, and translation starts then.
+- **Partial numbers.** On synthesised speech the model still loses digits: German "KX-4402" came
+  out as "Kx", Chinese as "KX47402". These are TTS clips, not a meeting; the stage-3 acceptance run
+  against Gladia on real speech decides whether this is good enough.
+
+Warm-up is generalised: Start loads the transcription model, then the translation model, each
+with its own status line, and a failed load of either stops the Start. One speaker label (`S01`)
+for every sentence until diarization lands (#13).
+
 ### Settings lists the transcription models (ADR 0053, slice C-3)
 
 Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from

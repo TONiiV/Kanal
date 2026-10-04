@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Transcription can now run on this laptop. Settings → Transcription → Local models downloads a
+  Nemotron 3.5 speech model (about 680 MB, three latency choices), and the *Local transcription ·
+  Local translation* mode becomes available once it and a translation model are downloaded — the
+  meeting's audio then never leaves the machine. It recognises Chinese, German, Polish, English and
+  about thirty more languages. It does not yet tell speakers apart: every sentence is labelled with
+  one speaker.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

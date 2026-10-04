@@ -154,10 +154,10 @@ v0.3 的 M0 全部，加工作空间壳、安装包链、网关加固。**M0 的
 | 片 | 内容 | 状态 |
 |---|---|---|
 | C-1 | `IDownloadableModel` + 下载器重构 | PR #88（阶段 1 合） |
-| C-2 | `AsrModelCatalog`、`ActiveTranscriptionModelId`、就绪状态 | PR #90，绿 |
+| C-2 | `AsrModelCatalog`、`ActiveTranscriptionModelId`、就绪状态 | PR #126，绿 |
 | C-3 | 设置「转写」页：下载、进度、选择、删除 | #72 |
-| C-4 | `NemotronAsrProvider` 走 sherpa-onnx：会话、预热、`zh` → `zh-CN`、partial 与 final | 未开 |
-| C-5 | `PipelinePlanner`：Local 转写解析到 provider；去掉 `reason.localasr` | 未开 |
+| C-4 | `NemotronAsrProvider` 走 sherpa-onnx：会话、预热、`zh` → `zh-CN`、partial 与 final | 本 PR，M4 CPU 实时因子 ≈ 0.09 |
+| C-5 | `PipelinePlanner`：Local 转写解析到 provider；去掉 `reason.localasr` | 与 C-4 同一 PR |
 
 **验收**：Local→Local 模式下断网开一场会；zh/de/pl 各一段真实料号与规格，与 Gladia 的结果并排比。
 数字进 PROGRESS。
