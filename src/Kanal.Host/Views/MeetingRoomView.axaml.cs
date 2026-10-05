@@ -24,7 +24,7 @@ public partial class MeetingRoomView : UserControl
     public MeetingRoomView()
     {
         InitializeComponent();
-        _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.HasUnseen;
+        _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.OffersJump;
     }
 
     protected override void OnDataContextChanged(EventArgs e)

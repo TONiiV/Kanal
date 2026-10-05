@@ -162,6 +162,66 @@ public class ColumnScrollSyncTests
     }
 
     [AvaloniaFact]
+    public void ScrollingOnDownwardsAboveTheBottomOffersTheJump()
+    {
+        var rig = Shown();
+        rig.Scroll(0, 0);
+        var seen = new List<bool>();
+        rig.Sync.Changed += () => seen.Add(rig.Sync.OffersJump);
+
+        rig.Scroll(0, 50);
+        Assert.False(rig.Sync.OffersJump);
+
+        rig.Scroll(0, 100);
+        rig.Scroll(0, 200);
+
+        Assert.True(rig.Sync.OffersJump);
+        Assert.False(rig.Sync.HasUnseen);
+        Assert.Contains(true, seen);
+        rig.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ScrollingBackUpWithdrawsTheJumpOfferedForScrollingDown()
+    {
+        var rig = Shown();
+        rig.Scroll(0, 0);
+        rig.Scroll(0, 300);
+
+        rig.Scroll(0, 250);
+
+        Assert.False(rig.Sync.OffersJump);
+        rig.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ScrollingUpKeepsTheJumpWhileNewContentWaitsBelow()
+    {
+        var rig = Shown();
+        rig.Scroll(0, 300);
+        rig.Append();
+
+        rig.Scroll(0, 250);
+
+        Assert.True(rig.Sync.OffersJump);
+        rig.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ScrollingDownToTheBottomWithdrawsTheJump()
+    {
+        var rig = Shown();
+        rig.Scroll(0, 0);
+        rig.Scroll(0, 300);
+
+        rig.Scrollers[0].ScrollToEnd();
+        rig.Settle();
+
+        Assert.False(rig.Sync.OffersJump);
+        rig.Window.Close();
+    }
+
+    [AvaloniaFact]
     public void ScrollingBackDownByHandToTheBottomClearsTheSignal()
     {
         var rig = Shown();

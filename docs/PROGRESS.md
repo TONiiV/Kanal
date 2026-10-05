@@ -42,7 +42,9 @@ handover brief that drove it is deleted. Verification record and screenshots:
   the live edge.
 - **Jump to latest.** New content while the reader is above the bottom shows a round button at the
   foot of the transcript. The button takes all columns to the end and resumes following. Scrolling to
-  the bottom by hand hides it. Ruler jumps stop following.
+  the bottom by hand hides it. Ruler jumps stop following. A downward scroll of 150 DIP or more
+  above the bottom also shows the button (`ColumnScrollSync.OffersJump`). An upward scroll hides it
+  again, unless new content waits below.
 - **Meeting list** is grouped under Today / Yesterday / Recent by the day the record was made
   (`MeetingGroupViewModel`, `WorkspaceSidebarViewModel.MeetingGroups`); each group folds on its own,
   the fold survives search and refresh, and selecting a meeting opens its group. `Meetings` stays

@@ -10,12 +10,18 @@ public sealed class ColumnScrollSync
 {
     private const double Epsilon = 1;
 
+    // ponytail: fixed 150 DIP threshold; make it a setting if operators find the button jumpy.
+    private const double DownwardRun = 150;
+
     private readonly List<ScrollViewer> _scrollers = [];
     private readonly Dictionary<ScrollViewer, double> _expected = [];
+    private double _down;
 
     public bool IsFollowing { get; private set; } = true;
 
     public bool HasUnseen { get; private set; }
+
+    public bool OffersJump => HasUnseen || _down >= DownwardRun;
 
     public event Action? Changed;
 
@@ -39,6 +45,7 @@ public sealed class ColumnScrollSync
     {
         IsFollowing = true;
         HasUnseen = false;
+        _down = 0;
         foreach (var scroller in Visible())
             ToEnd(scroller);
         Changed?.Invoke();
@@ -58,7 +65,7 @@ public sealed class ColumnScrollSync
 
         if (e.OffsetDelta.Y != 0 && !ours)
         {
-            OnReaderScrolled(scroller);
+            OnReaderScrolled(scroller, e.OffsetDelta.Y);
             return;
         }
 
@@ -86,13 +93,16 @@ public sealed class ColumnScrollSync
         }
     }
 
-    private void OnReaderScrolled(ScrollViewer source)
+    private void OnReaderScrolled(ScrollViewer source, double delta)
     {
         var atBottom = AtBottom(source);
+        var offered = OffersJump;
         var changed = IsFollowing != atBottom || (atBottom && HasUnseen);
         IsFollowing = atBottom;
         if (atBottom)
             HasUnseen = false;
+        _down = atBottom || delta < 0 ? 0 : _down + delta;
+        changed |= offered != OffersJump;
 
         // ponytail: finds the top line by scanning containers; binary search if a column ever holds thousands.
         var anchor = atBottom ? null : AnchorOf(source);

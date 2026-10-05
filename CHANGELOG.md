@@ -20,7 +20,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Each language column has an enlarge button that gives that language the whole transcript area,
   and a restore button to bring the others back; scroll position and live following are kept.
 - The language columns now scroll together. A round button appears when new lines arrive below
-  the line you are reading. It takes you to the latest line.
+  the line you are reading. It takes you to the latest line. The button also appears when you keep
+  scrolling down above the latest line.
 - The meeting list is grouped under Today, Yesterday and Recent, and each group can be folded.
 - Opening an earlier meeting now shows the speaker ruler on the right, as it does for a live one.
 - Opening a long earlier meeting no longer freezes the window: the transcript loads in the
