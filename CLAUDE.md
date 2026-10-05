@@ -48,6 +48,13 @@ dotnet test
   bullet to [`CHANGELOG.md`](CHANGELOG.md) under the heading being worked towards — written for the
   operator, not the committer. Refactors, tests and docs add nothing. A version heading gets its
   date only when that version is released.
+- **Explanations use ASD-STE100 (Simplified Technical English).** English prose — PR descriptions,
+  commit messages, `docs/`, CHANGELOG bullets, code comments — follows STE100: one topic per
+  sentence, at most 20 words in an instruction and 25 in a description, active voice, one word for
+  one meaning, the same technical name every time, steps as numbered lists. Chinese replies to the
+  user follow the same principles: short sentences, one fact per sentence, the actor as subject,
+  consistent terms, no vague words such as "大概" or "相关处理". State the result first, then the
+  cause, then the open items.
 
 ## Architecture invariants
 
