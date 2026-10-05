@@ -6,6 +6,11 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-05
 
+### Remove the ellipsis button beside the join QR
+
+The toolbar ellipsis menu held only "Export .md". Each meeting's sidebar menu already offers
+export, so the button was a duplicate. Removed it and its `meeting.more.tip` string.
+
 ### Native UI implementation of the approved Swiss design
 
 Implemented [Current UI design](design/ui-design.md) in the Avalonia host on `codex/new-ui`; the

@@ -222,7 +222,6 @@
   "transport.cancel.tip": "Cancel loading and close the room.",
   "audio.tip": "Audio devices",
   "join.tip": "Join QR — show participants how to connect",
-  "meeting.more.tip": "More — export this meeting",
   "mode.tip": "Processing mode — where transcription and translation run",
   "capture.tip": "Capture mode — who is in the room",
   "transport.stop.tip": "End the meeting: the room closes, the QR stops working and nothing further is sent.",
