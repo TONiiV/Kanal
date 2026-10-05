@@ -1268,7 +1268,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
         if (record is not null && RecordingPath.Length > 0)
-            Sidebar.SaveRecord(record with { AudioPath = RecordingPath });
+            Sidebar.SaveRecord((Sidebar.RecordOf(record.Id) ?? record) with { AudioPath = RecordingPath });
         if (record is null)
             Status = $"{Status} {L["status.notsaved"]}";
 

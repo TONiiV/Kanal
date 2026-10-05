@@ -204,6 +204,29 @@ public class StartConnectingTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task ARenameWhileConnectingSurvivesTheRoomOpening()
+    {
+        var (store, workspace) = Opened();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = CloudCloud(gate.Task, store, () => new DateTimeOffset(2026, 9, 23, 9, 5, 0, TimeSpan.Zero));
+        vm.ConfirmConsent = _ => Task.FromResult<bool?>(true);
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        vm.BeginRenameTitleCommand.Execute(null);
+        vm.TitleDraft = "Supplier review";
+        vm.CommitRenameTitleCommand.Execute(null);
+
+        gate.SetResult();
+        await starting;
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var record = Assert.Single(store.ListMeetings(workspace.Id).Meetings);
+        Assert.Equal("Supplier review", record.Title);
+        Assert.False(string.IsNullOrEmpty(record.AudioPath), "the room opened without saving audio.");
+    }
+
+    [AvaloniaFact]
     public async Task AStartThatFailsLeavesNoRecordBehind()
     {
         var (store, workspace) = Opened();
