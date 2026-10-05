@@ -258,8 +258,19 @@ and with it the name, was opened only after all of that.
 - **Log.** `relay`: "Relay room created in N ms." (or the failure, with its elapsed time). `room`:
   "Transcriber <id> connected in N ms." (from `MeetingSession.StartAsync`). The "Room … open" line
   now ends with "N ms after Start", counted from consent.
-- The `RelayPublisherFactory` test seam now returns a `Task`, so a test can hold relay creation
-  open.
+- The `RelayPublisherFactory` test seam now returns a `Task` and gets the start token, so a test
+  can hold relay creation open and cancel it.
+- Review fixes (2026-10-05):
+  - The room-open step reads the current record before it sets `AudioPath`. A rename typed while
+    the room connects is kept. Before, the step saved the copy from consent and wrote the default
+    name back.
+  - `StartAsync` clears `IsStarting` in a `finally` block. An exception after consent, or during
+    the teardown in `AbandonStartAsync`, no longer leaves Start disabled.
+  - `room.moved` is the commit point of a restart. The start checks for cancellation before it
+    sends `room.moved`. After `room.moved` is sent, the new room opens. A Stop pressed during the
+    publish then stops the new room normally, so the phones that moved get `room.closed`.
+  - `DiscardRecord` deletes the record from its own workspace (`WorkspaceId`), not from the
+    selected workspace. A workspace switch during the start no longer leaves a record behind.
 
 Open: a gateway that hangs still holds the room for up to its 15 s HttpClient timeout, because
 `room.config` waits for the relay. The fix would be to open the room on the transcriber alone and
