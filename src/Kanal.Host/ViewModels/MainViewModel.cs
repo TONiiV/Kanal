@@ -1202,24 +1202,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             await session.StartAsync(ct);
             relayConnection = await connecting;
-
-            // Phones hold the channel they scanned into, so the previous room has to be told
-            // where the meeting went — otherwise a restart strands everyone until they rescan.
-            if (_relay is not null)
-            {
-                if (relayConnection.InviteTicket is not null)
-                {
-                    await PublishSafeAsync(
-                        _relay,
-                        new RoomMovedMessage(
-                            config.RoomId,
-                            signingKey.VerificationKey,
-                            relayConnection.InviteTicket));
-                }
-                await _relay.DisposeAsync();
-                _relay = null;
-            }
-
             ct.ThrowIfCancellationRequested();
         }
         catch (Exception ex)
@@ -1236,6 +1218,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Status = L.Format("status.startfailed", ex.Message);
             Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
             return;
+        }
+
+        // Phones hold the channel they scanned into, so the previous room has to be told
+        // where the meeting went — otherwise a restart strands everyone until they rescan.
+        // Phones follow room.moved, so from here on Stop closes the new room instead of abandoning it.
+        if (_relay is not null)
+        {
+            if (relayConnection.InviteTicket is not null)
+            {
+                await PublishSafeAsync(
+                    _relay,
+                    new RoomMovedMessage(
+                        config.RoomId,
+                        signingKey.VerificationKey,
+                        relayConnection.InviteTicket));
+            }
+            await _relay.DisposeAsync();
         }
 
         _relay = relayConnection.Publisher;
@@ -1300,6 +1299,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _captureCts = new CancellationTokenSource();
             _ = PumpMicrophoneAsync(session, SelectedDevice?.Id, _captureCts.Token);
         }
+
+        if (ct.IsCancellationRequested)
+            await StopAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanStop))]

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Kanal.Core.Providers;
 using Kanal.Core.Relay;
 using Kanal.Host.ViewModels;
 
@@ -14,13 +15,17 @@ namespace Kanal.UI.UnitTests;
 /// </summary>
 public class RoomLifecycleTests
 {
-    private sealed class RecordingRelayPublisher(string roomId, ConcurrentQueue<(string Room, RelayMessage Message)> log)
+    private sealed class RecordingRelayPublisher(
+        string roomId,
+        ConcurrentQueue<(string Room, RelayMessage Message)> log,
+        Func<string, Task>? hold)
         : IRelayPublisher
     {
-        public Task PublishAsync(RelayMessage message, CancellationToken ct = default)
+        public async Task PublishAsync(RelayMessage message, CancellationToken ct = default)
         {
+            if (hold is not null)
+                await hold(roomId);
             log.Enqueue((roomId, message));
-            return Task.CompletedTask;
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -40,12 +45,24 @@ public class RoomLifecycleTests
 
     /// <summary>Relay stays on (this is what is being observed) but settings do not: the real
     /// %APPDATA% file would load whatever translation model the developer has downloaded.</summary>
-    private static MainViewModel BuildViewModel(ConcurrentQueue<(string Room, RelayMessage Message)> log)
+    private static MainViewModel BuildViewModel(
+        ConcurrentQueue<(string Room, RelayMessage Message)> log, Func<string, Task>? hold = null)
     {
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = room => Task.FromResult<IRelayPublisher>(new RecordingRelayPublisher(room, log));
+        vm.RelayPublisherFactory = room =>
+            Task.FromResult<IRelayPublisher>(new RecordingRelayPublisher(room, log, hold));
         return vm;
+    }
+
+    private sealed class RefusingAsr(IAsrProvider inner) : IAsrProvider
+    {
+        public string Id => inner.Id;
+
+        public AsrCapabilities Caps => inner.Caps;
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            throw new InvalidOperationException("transcriber refused");
     }
 
     private static string VerificationKey(MainViewModel vm)
@@ -126,5 +143,59 @@ public class RoomLifecycleTests
 
         Assert.DoesNotContain(log, e =>
             Verified(e.Message, verificationKey) is RoomMovedMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task AFailedRestartAnnouncesNoMove()
+    {
+        var log = new ConcurrentQueue<(string Room, RelayMessage Message)>();
+        var vm = BuildViewModel(log);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(200);
+        var firstRoom = log.First().Room;
+        var firstKey = VerificationKey(vm);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        vm.PlanFilter = plan => plan with { Asr = new RefusingAsr(plan.Asr!) };
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsRunning);
+        Assert.DoesNotContain(log, e =>
+            e.Room == firstRoom && Verified(e.Message, firstKey) is RoomMovedMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task StopWhileTheMoveIsAnnouncedClosesTheNewRoom()
+    {
+        var log = new ConcurrentQueue<(string Room, RelayMessage Message)>();
+        string? heldRoom = null;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = BuildViewModel(log, room => room == heldRoom ? gate.Task : Task.CompletedTask);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(200);
+        var firstRoom = log.First().Room;
+        var firstKey = VerificationKey(vm);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        heldRoom = firstRoom;
+        var restarting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(200);
+        Assert.True(vm.IsStarting);
+        await vm.StopCommand.ExecuteAsync(null);
+        gate.SetResult();
+        await restarting.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var moved = Assert.Single(log
+            .Where(e => e.Room == firstRoom)
+            .Select(e => Verified(e.Message, firstKey))
+            .OfType<RoomMovedMessage>());
+        Assert.Contains(log, e =>
+            e.Room == moved.NewRoomId &&
+            Verified(e.Message, moved.NewVerificationKey) is RoomClosedMessage);
+        Assert.False(vm.IsStarting);
+        Assert.False(vm.IsRunning);
+        Assert.True(vm.StartCommand.CanExecute(null));
     }
 }
