@@ -15,12 +15,21 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Classes.Set("reduce-motion", SystemMotion.Reduced);
+        Opened += (_, _) => PlaceTrafficLights();
+        Activated += (_, _) => PlaceTrafficLights();
+        SizeChanged += (_, _) => PlaceTrafficLights();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty) PlaceTrafficLights();
+        };
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
                 vm.ChooseExportPath = ChooseExportPathAsync;
         };
     }
+
+    private void PlaceTrafficLights() => MacTrafficLights.Apply(this, WorkspaceShellViewModel.HeaderHeight);
 
     protected override void OnClosed(EventArgs e)
     {

@@ -9,9 +9,11 @@ public readonly record struct WindowControlInsets(double Start, double End)
 {
     public static WindowControlInsets None { get; } = new(0, 0);
 
+    public static WindowControlInsets MacOs { get; } = new(78, 0);
+
     // Traffic lights on the left on macOS; three 46 DIP caption buttons on the right elsewhere.
     public static WindowControlInsets ForCurrentPlatform() =>
-        OperatingSystem.IsMacOS() ? new(78, 0) : new(0, 138);
+        OperatingSystem.IsMacOS() ? MacOs : new(0, 138);
 }
 
 public partial class WorkspaceShellViewModel : ViewModelBase
