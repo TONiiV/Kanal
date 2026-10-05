@@ -1,3 +1,4 @@
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
@@ -73,8 +74,10 @@ public sealed class MeetingSession : IAsyncDisposable
             throw new InvalidOperationException("Session already started.");
 
         var config = Room.Config;
+        var started = Environment.TickCount64;
         _session = await _asr.StartAsync(
             new AsrSessionOptions(16_000, config.Languages), ct);
+        Log.Info("room", $"Transcriber {_asr.Id} connected in {Environment.TickCount64 - started} ms.");
         Timeline.AsrClockRestarted();
         Interlocked.Exchange(ref _transcribing, _announceTranscription ? 1 : 0);
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
