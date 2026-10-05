@@ -30,6 +30,16 @@ _Avoid_: Relay device credential
 The page a participant opens on their phone to read captions from a Kanal session.
 _Avoid_: Relay backend
 
+**App update**:
+A newer release of the desktop host. Models, the mobile caption page and the relay are updated separately and are not app updates.
+_Avoid_: OTA (too broad), model download
+
+**Update check**:
+The host asking whether an app update exists and telling the operator. It never downloads or installs anything, and an unanswered check changes nothing.
+
+**Minimum supported version**:
+The oldest host version still allowed to start a meeting. A meeting already running is never interrupted by it.
+
 **Utterance playback**:
 Playback of the original recorded audio corresponding to a selected utterance in a meeting transcript.
 _Avoid_: Text-to-speech
