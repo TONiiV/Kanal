@@ -1030,6 +1030,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
+        try
+        {
+            await OpenRoomAsync();
+        }
+        finally
+        {
+            if (IsStarting)
+                EndStarting();
+        }
+    }
+
+    private async Task OpenRoomAsync()
+    {
         var languages = SelectedLanguages.Select(o => o.Code.ToLowerInvariant())
             .Distinct()
             .ToList();

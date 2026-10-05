@@ -250,6 +250,44 @@ public class StartConnectingTests : IDisposable
         Assert.False(vm.StopCommand.CanExecute(null));
     }
 
+    private sealed class BrokenAsr(IAsrProvider inner) : IAsrProvider, IAsyncDisposable
+    {
+        public string Id => inner.Id;
+
+        public AsrCapabilities Caps => inner.Caps;
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            throw new InvalidOperationException("transcriber refused");
+
+        public ValueTask DisposeAsync() => throw new InvalidOperationException("dispose failed");
+    }
+
+    [AvaloniaFact]
+    public async Task AFailedTeardownStillGivesStartBack()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
+        vm.PlanFilter = plan => plan with { Asr = new BrokenAsr(plan.Asr!) };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.False(vm.IsStarting);
+        Assert.True(vm.StartCommand.CanExecute(null), "Start never came back after a failed teardown.");
+    }
+
+    [AvaloniaFact]
+    public async Task AnErrorBeforeTheConnectStillGivesStartBack()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
+        vm.RelaySettingsFactory = () => throw new InvalidOperationException("settings unreadable");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.False(vm.IsStarting);
+        Assert.True(vm.StartCommand.CanExecute(null), "Start never came back after a failed start.");
+    }
+
     [AvaloniaFact]
     public async Task ABlankRecordTheStartWouldHaveUsedIsLeftBlank()
     {
