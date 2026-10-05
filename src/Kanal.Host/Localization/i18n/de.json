@@ -315,6 +315,7 @@
   "browse.recording": "Nimmt „{0}“ auf",
   "browse.return": "Zurück",
   "browse.notranscript": "In dieser Besprechungsakte steht noch nichts.",
+  "browse.loading": "Transkript wird geladen…",
   "browse.readonly": "Nur lesen",
   "workspace.recording": "Nimmt auf"
 }

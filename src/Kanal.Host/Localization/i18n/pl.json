@@ -315,6 +315,7 @@
   "browse.recording": "Trwa nagrywanie „{0}”",
   "browse.return": "Wróć",
   "browse.notranscript": "W tym zapisie spotkania nie ma jeszcze żadnej treści.",
+  "browse.loading": "Wczytywanie transkrypcji…",
   "browse.readonly": "Tylko do odczytu",
   "workspace.recording": "Nagrywanie"
 }

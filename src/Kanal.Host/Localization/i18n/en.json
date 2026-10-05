@@ -315,6 +315,7 @@
   "browse.recording": "Recording “{0}”",
   "browse.return": "Back",
   "browse.notranscript": "Nothing has been written down in this meeting record yet.",
+  "browse.loading": "Loading the transcript…",
   "browse.readonly": "Read only",
   "workspace.recording": "Recording"
 }

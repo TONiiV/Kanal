@@ -190,6 +190,14 @@
                        Foreground="{StaticResource Ink2}" Text="{l:T browse.notranscript}" />
         </StackPanel>
 
+        <StackPanel x:Name="LoadingTranscript" IsVisible="{Binding IsLoadingRecord}"
+                    Margin="28,8,28,10" MaxWidth="440"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
+            <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
+                       Foreground="{StaticResource Ink3}" Text="{l:T browse.loading}" />
+        </StackPanel>
+
         <StackPanel IsVisible="{Binding ShowStartHint}" Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
             <Image Source="/Assets/kanal-splash-mark.png" Width="92" Height="92"

@@ -80,11 +80,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private int _dragSource = -1;
     private IMeetingTitler? _titler;
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
+    private readonly Func<Action, Task> _offUiThread;
     private string? _titleOnRecord;
 
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
-            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
+            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
+            offUiThread: work => Task.Run(work))
     {
     }
 
@@ -107,9 +109,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<DateTimeOffset>? utcNow = null,
         Func<WorkspaceStore>? workspaces = null,
         IMeetingTitler? titler = null,
-        Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null)
+        Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
+        Func<Action, Task>? offUiThread = null)
     {
         _titler = titler;
+        _offUiThread = offUiThread ?? (work =>
+        {
+            work();
+            return Task.CompletedTask;
+        });
         _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
@@ -293,6 +301,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private readonly ObservableCollection<ColumnViewModel> _stored = new();
     private (string? Id, string? TranscriptPath) _shownMeeting;
+    private int _bodyVersion;
+
+    [ObservableProperty]
+    private bool _isLoadingRecord;
 
     public WorkspaceSidebarViewModel Sidebar { get; }
 
@@ -826,26 +838,38 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool ShowStartHint => !HasColumns && !IsBrowsingRecord;
 
-    public bool ShowNoStoredTranscript => !HasColumns && IsBrowsingRecord;
+    public bool ShowNoStoredTranscript => !HasColumns && IsBrowsingRecord && !IsLoadingRecord;
 
     [RelayCommand]
     private void ReturnToActiveMeeting() => Sidebar.Select(Sidebar.RecordingMeetingId ?? _sessionRecordId);
 
-    private void RefreshBody()
+    private async void RefreshBody()
     {
+        var version = ++_bodyVersion;
         _stored.Clear();
         BrowsedRuler.Clear();
-        if (IsBrowsingRecord && Sidebar.SelectedMeeting is { } meeting)
+        var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
+        IsLoadingRecord = record is not null;
+        NotifyBody();
+        if (record is null)
+            return;
+
+        IReadOnlyList<Utterance> utterances = [];
+        IReadOnlyList<ColumnViewModel> columns = [];
+        await _offUiThread(() =>
         {
-            var utterances = StoredTranscript.Utterances(meeting.Record);
-            foreach (var column in StoredTranscript.Columns(utterances, meeting.Record.Languages ?? []))
-                _stored.Add(column);
+            utterances = StoredTranscript.Utterances(record);
+            columns = StoredTranscript.Columns(utterances, record.Languages ?? []);
+        });
+        if (version != _bodyVersion)
+            return;
 
-            _storedColours = StoredTranscript.ColoursByTag(utterances);
-            foreach (var utterance in utterances)
-                BrowsedRuler.Observe(utterance);
-        }
-
+        foreach (var column in columns)
+            _stored.Add(column);
+        _storedColours = StoredTranscript.ColoursByTag(utterances);
+        foreach (var utterance in utterances)
+            BrowsedRuler.Observe(utterance);
+        IsLoadingRecord = false;
         NotifyBody();
     }
 
