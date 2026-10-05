@@ -1131,7 +1131,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = plan.Titler;
         OnTitlingChanged();
 
-        // Before the network, so the name is on screen at once; AbandonStartAsync takes it back.
         var selectedBefore = Sidebar.SelectedMeeting?.Record;
         var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
         _sessionRecordId = record?.Id;
