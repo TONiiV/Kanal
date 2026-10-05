@@ -214,6 +214,126 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
+    public async Task PickingAnotherMicrophoneWhileRecordingMovesCaptureToIt()
+    {
+        using var rig = new Rig();
+        rig.Choose("mic-a");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        Assert.True(rig.Vm.CanChooseDevice);
+        Assert.False(rig.Vm.CanChooseAudio);
+        rig.Choose("mic-b");
+        await Until(() => rig.Microphone.Opened.Count == 2);
+        var afterSwitch = rig.Asr.Pushes;
+        await Until(() => rig.Asr.Pushes > afterSwitch);
+
+        Assert.True(rig.Vm.IsRunning);
+        Assert.Equal(["mic-a", "mic-b"], rig.Microphone.Opened);
+        Assert.Equal(1, rig.Microphone.Closes);
+        Assert.Empty(rig.Computer.Opened);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task PickingAnotherMicrophoneInAnOnlineMeetingReopensTheComputerAudioToo()
+    {
+        using var rig = new Rig();
+        rig.Online();
+        rig.Choose("mic-a");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        rig.Choose("mic-b");
+        await Until(() => rig.Microphone.Opened.Count == 2 && rig.Computer.Opened.Count == 2);
+
+        Assert.True(rig.Vm.IsRunning);
+        Assert.Equal(["mic-a", "mic-b"], rig.Microphone.Opened);
+        Assert.Equal(1, rig.Computer.Closes);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task AfterTheInRoomMicrophoneIsUnpluggedTheMenuShowsNoneAndAnyRemainingOneCanBePicked()
+    {
+        using var rig = new Rig();
+        rig.Choose("mic-b");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        var live = rig.Vm.Status;
+        rig.Microphone.DeviceIds.Remove("mic-b");
+        rig.Microphone.Fail(new AudioCaptureException(AudioCaptureFault.DeviceUnavailable, "gone"));
+        await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
+        await Until(() => rig.Vm.Status != live);
+
+        Assert.True(rig.Vm.IsRunning);
+        Assert.Null(rig.Vm.SelectedDevice);
+        rig.Choose("mic-a");
+        await Until(() => rig.Microphone.Opened.Count == 2);
+
+        Assert.Equal(["mic-b", "mic-a"], rig.Microphone.Opened);
+        await Until(() => rig.Vm.Status == live);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal("mic-a", rig.Vm.SelectedDevice?.Id);
+    }
+
+    [AvaloniaFact]
+    public async Task AMicrophoneThatAppearsDuringAMeetingOnTheDefaultDeviceCanBePicked()
+    {
+        using var rig = new Rig(microphones: []);
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        rig.Microphone.DeviceIds.Add("usb-1");
+        await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
+        await Pump(150);
+
+        Assert.Null(rig.Vm.SelectedDevice);
+        rig.Choose("usb-1");
+        await Until(() => rig.Microphone.Opened.Count == 2);
+        Assert.Equal(new string?[] { null, "usb-1" }, rig.Microphone.Opened);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task PickingAWorkingMicrophoneAfterAnInRoomFaultClearsTheFailureFromTheStatus()
+    {
+        using var rig = new Rig();
+        rig.Choose("mic-a");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+        var live = rig.Vm.Status;
+
+        rig.Microphone.Fail(new IOException("usb gone"));
+        await Until(() => rig.Vm.Status != live);
+
+        rig.Choose("mic-b");
+        await Until(() => rig.Microphone.Opened.Count == 2);
+        await Until(() => rig.Vm.Status == live);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task ADevicePickedWhilePausedIsOpenedOnResume()
+    {
+        using var rig = new Rig();
+        rig.Choose("mic-a");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+        await rig.Vm.PauseCommand.ExecuteAsync(null);
+
+        rig.Choose("mic-b");
+        await Pump(150);
+        Assert.Equal(["mic-a"], rig.Microphone.Opened);
+
+        await rig.Vm.PauseCommand.ExecuteAsync(null);
+        await Until(() => rig.Microphone.Opened.Count == 2);
+        Assert.Equal(["mic-a", "mic-b"], rig.Microphone.Opened);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
     public async Task AMeetingOnTheDefaultDevicesIsNotStoppedByAListChange()
     {
         using var rig = new Rig(microphones: []);
@@ -483,6 +603,7 @@ public class OnlineCaptureTests
         await Until(() => rig.Asr.Starts == 1);
 
         Assert.False(rig.Vm.CanChooseAudio);
+        Assert.False(rig.Vm.CanChooseDevice);
         Assert.False(rig.Vm.StartCommand.CanExecute(null));
         rig.Online();
         rig.Choose("mic-b");
@@ -531,7 +652,7 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task MovingTheBoundSelectionMidMeetingDoesNotHideTheLossOfTheActiveDevice()
+    public async Task ClearingTheBoundSelectionMidMeetingNeitherMovesCaptureNorHidesTheLossOfTheActiveDevice()
     {
         using var rig = new Rig();
         rig.Online();
@@ -539,11 +660,13 @@ public class OnlineCaptureTests
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
 
-        rig.Vm.SelectedDevice = rig.Vm.Devices.Single(d => d.Id == "mic-a");
+        rig.Vm.SelectedDevice = null;
         rig.Microphone.DeviceIds.Remove("mic-a");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);
         await Pump(150);
         Assert.True(rig.Vm.IsRunning);
+        Assert.Equal(["mic-b"], rig.Microphone.Opened);
+        Assert.Single(rig.Computer.Opened);
 
         rig.Microphone.DeviceIds.Remove("mic-b");
         await Task.Run(rig.Watcher.Raise, TestContext.Current.CancellationToken);

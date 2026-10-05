@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The microphone can now be changed while a meeting is recording: pick another one in the
+  microphone menu and Kanal moves to it within a moment, without stopping the meeting. A microphone
+  picked while paused is used on resume. The capture profile (In room / Online meeting) still cannot
+  change once recording has started.
 - The Online meeting capture profile now works: Kanal hears your microphone and everything the
   computer plays, together, with a separate meter for each. There is no output to pick: the meeting
   app can play to headphones, a Bluetooth headset or the speakers. A source that stays silent says

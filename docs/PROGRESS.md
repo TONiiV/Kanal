@@ -157,6 +157,32 @@ its preservation rules are specified as implementation work after design approva
 
 ## 2026-10-03
 
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
+
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
 An end-to-end test on macOS heard the remote side only when the meeting app played to the device Kanal
