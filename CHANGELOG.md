@@ -20,6 +20,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The Files tab on the right now has an Open folder button beside Import file. It opens the folder
   of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
   and says so under the list if that folder was moved or deleted outside Kanal.
+- The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
+  transcription · Cloud translation instead; without an API key, that row says one is needed. To
+  test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.
