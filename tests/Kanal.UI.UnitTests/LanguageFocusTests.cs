@@ -169,6 +169,37 @@ public class LanguageFocusTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task SearchingTheSidebarKeepsTheLiveFocus()
+    {
+        var (vm, _) = DemoWithAStoredRecord();
+        await vm.StartCommand.ExecuteAsync(null);
+        var active = vm.Sidebar.RecordingMeetingId!;
+        vm.ToggleColumnFocus(vm.Columns[1]);
+
+        vm.Sidebar.Search = Row(vm, active).Title[..3];
+
+        Assert.Equal(active, vm.Sidebar.SelectedMeeting?.Id);
+        Assert.Equal("de", vm.FocusedLanguage);
+        Assert.Equal([false, true, false], vm.Columns.Select(c => c.IsShown));
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public void SearchingTheSidebarNeitherRereadsNorResetsTheBrowsedRecord()
+    {
+        var (vm, older) = DemoWithAStoredRecord();
+        vm.Sidebar.SelectedMeeting = Row(vm, older.Id);
+        var chinese = vm.ShownColumns.Single(c => c.Language == "zh");
+        vm.ToggleColumnFocus(chinese);
+
+        vm.Sidebar.Search = "Vorb";
+
+        Assert.Equal("zh", vm.FocusedLanguage);
+        Assert.Same(chinese, vm.ShownColumns.Single(c => c.Language == "zh"));
+    }
+
+    [AvaloniaFact]
     public void AStoredRecordCanBeEnlargedAndIsLeftSplitWhenReopened()
     {
         var (vm, older) = DemoWithAStoredRecord();

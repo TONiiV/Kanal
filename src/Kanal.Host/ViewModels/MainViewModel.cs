@@ -153,7 +153,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
                 return;
             Files.Show(Sidebar.SelectedMeeting?.Record);
-            FocusedLanguage = null;
+            // The sidebar re-creates every row on each search keystroke and re-selects by Id.
+            var shown = (Sidebar.SelectedMeeting?.Id, Sidebar.SelectedMeeting?.Record.TranscriptPath);
+            if (shown == _shownMeeting)
+                return;
+            if (shown.Id != _shownMeeting.Id)
+                FocusedLanguage = null;
+            _shownMeeting = shown;
             RefreshBody();
         };
         _loadSettings = loadSettings;
@@ -286,6 +292,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     private readonly ObservableCollection<ColumnViewModel> _stored = new();
+    private (string? Id, string? TranscriptPath) _shownMeeting;
 
     public WorkspaceSidebarViewModel Sidebar { get; }
 
