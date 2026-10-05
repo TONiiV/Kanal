@@ -141,7 +141,7 @@ public class RoomLoggingTests
         using var _ = Listening(out var sink);
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
+        vm.RelayPublisherFactory = (_, _) => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
 
         await vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(100);
@@ -156,7 +156,7 @@ public class RoomLoggingTests
         using var _ = Listening(out var sink);
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
+        vm.RelayPublisherFactory = (_, _) => Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
 
         await vm.StartCommand.ExecuteAsync(null);
         await vm.StopCommand.ExecuteAsync(null);

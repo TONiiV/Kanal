@@ -153,7 +153,7 @@ public class StartConnectingTests : IDisposable
         var (vm, asr) = Demo(asrGate.Task);
         var relayRequested = false;
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ =>
+        vm.RelayPublisherFactory = (_, _) =>
         {
             relayRequested = true;
             return relayGate.Task;
@@ -354,12 +354,48 @@ public class StartConnectingTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task StopWhileTheRelayRoomIsCreatedCancelsIt()
+    {
+        var (store, workspace) = Opened();
+        var (vm, _) = Demo(Task.CompletedTask, store);
+        var relayCancelled = false;
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = async (_, ct) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                relayCancelled = true;
+                throw;
+            }
+
+            return new NullRelayPublisher();
+        };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        Assert.True(vm.IsStarting);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        await starting.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(relayCancelled, "relay creation was left running after Stop.");
+        Assert.False(vm.IsStarting);
+        Assert.False(vm.IsRunning);
+        Assert.Empty(store.ListMeetings(workspace.Id).Meetings);
+        Assert.True(vm.StartCommand.CanExecute(null), "Start never came back after an abandoned start.");
+    }
+
+    [AvaloniaFact]
     public async Task ARelayThatCannotBeCreatedStillOpensTheRoomWithoutAQrCode()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var (vm, _) = Demo(gate.Task);
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ =>
+        vm.RelayPublisherFactory = (_, _) =>
             Task.FromException<IRelayPublisher>(new HttpRequestException("gateway unreachable"));
 
         var starting = vm.StartCommand.ExecuteAsync(null);

@@ -109,7 +109,7 @@ public class WarmupViewModelTests
         var (vm, _, _) = DemoWithGatedModel(gate.Task);
         var relayRequested = false;
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = _ =>
+        vm.RelayPublisherFactory = (_, _) =>
         {
             relayRequested = true;
             return Task.FromResult<IRelayPublisher>(new NullRelayPublisher());

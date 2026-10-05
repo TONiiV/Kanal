@@ -661,7 +661,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool RelayEnabled { get; set; } = true;
 
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
-    public Func<string, Task<IRelayPublisher>>? RelayPublisherFactory { get; set; }
+    public Func<string, CancellationToken, Task<IRelayPublisher>>? RelayPublisherFactory { get; set; }
 
     /// <summary>Loads relay runtime configuration; injectable so tests never read ambient secrets.</summary>
     public Func<RelaySettings> RelaySettingsFactory { get; set; } = RelaySettings.FromEnvironment;
@@ -1539,7 +1539,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (RelayPublisherFactory is not null)
             return new RelayConnection(
-                new SignedRelayPublisher(await RelayPublisherFactory(roomId), signingKey),
+                new SignedRelayPublisher(await RelayPublisherFactory(roomId, ct), signingKey),
                 settings.GatewayUrl ?? "https://relay.test/kanal-relay",
                 "test-reader-ticket",
                 null);

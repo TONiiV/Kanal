@@ -50,7 +50,7 @@ public class RoomLifecycleTests
     {
         var vm = TestViewModels.Demo();
         vm.RelayEnabled = true;
-        vm.RelayPublisherFactory = room =>
+        vm.RelayPublisherFactory = (room, _) =>
             Task.FromResult<IRelayPublisher>(new RecordingRelayPublisher(room, log, hold));
         return vm;
     }
