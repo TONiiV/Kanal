@@ -288,6 +288,25 @@ public class WorkspaceShellCompositionTests
     }
 
     [AvaloniaFact]
+    public void AnEndAlignedStackSetVerticalStacksItsChildrenDownwards()
+    {
+        var first = new Border { Width = 20, Height = 10, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var second = new Border { Width = 20, Height = 10, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var stack = new Kanal.Host.Controls.EndAlignedStack
+        {
+            Orientation = Avalonia.Layout.Orientation.Vertical,
+            Spacing = 4,
+            Children = { first, second },
+        };
+
+        stack.Measure(new Size(100, 100));
+        stack.Arrange(new Rect(0, 0, 100, 100));
+
+        Assert.Equal(new Point(0, 0), first.Bounds.Position);
+        Assert.Equal(new Point(0, 14), second.Bounds.Position);
+    }
+
+    [AvaloniaFact]
     public void AControlThatAppearsInANarrowBarAlreadyCutAwayStaysOutOfTheTabOrder()
     {
         var vm = TestViewModels.Hermetic();

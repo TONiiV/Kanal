@@ -1,6 +1,7 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 
 namespace Kanal.Host.Controls;
 
@@ -10,6 +11,9 @@ public sealed class EndAlignedStack : StackPanel
 {
     protected override Size ArrangeOverride(Size finalSize)
     {
+        if (Orientation != Orientation.Horizontal)
+            return base.ArrangeOverride(finalSize);
+
         var shown = Children.Where(child => child.IsVisible).ToList();
         var total = shown.Sum(child => child.DesiredSize.Width) + Spacing * System.Math.Max(0, shown.Count - 1);
         var x = finalSize.Width - total;
