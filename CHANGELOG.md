@@ -12,6 +12,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 ## 1.0.1
 
+The first release. Everything below is what Kanal does on the day it ships.
+
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.
@@ -21,13 +23,12 @@ newest heading has to match the version the build reports, and a test holds the 
   the line you are reading. It takes you to the latest line.
 - The meeting list is grouped under Today, Yesterday and Recent, and each group can be folded.
 - Opening an earlier meeting now shows the speaker ruler on the right, as it does for a live one.
+- Opening a long earlier meeting no longer freezes the window: the transcript loads in the
+  background and a loading note shows until it is ready.
 - Search, add-meeting and add-project buttons, the project list and the meeting list were redrawn;
   the application-language choice in Settings now shows a flag beside each language.
 - Kanal now uses the conversation-K logo, warm paper surfaces, rounded controls and a coordinated
   indigo/apricot palette across the desktop host, dialogs, startup screen and mobile reader.
-
-The first release. Everything below is what Kanal does on the day it ships.
-
 - A meeting's three-dot menu in the sidebar now offers Rename, which edits the name right in the
   list, and Generate title, which names the meeting from its transcript with the local model. It
   works on meetings that have ended, not only the one being recorded; the heading of an ended

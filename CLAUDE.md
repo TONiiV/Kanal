@@ -77,6 +77,18 @@ read [Conversation K](docs/design/conversation-k.md) for brand asset generation 
 The approved [preview](docs/design/swiss-review/index.html) illustrates the target, not shipped functionality.
 
 Keep transcription content readable in Chinese, German and Polish. Brand controls, speaker
-identity and recording state use distinct semantic resources. Desktop uses explicit light brushes;
-mobile follows system light/dark preferences and loads without external fonts or stylesheets.
-Preserve all existing consent, capture, language-limit and meeting-record behaviour.
+identity and recording state use distinct semantic resources. Mobile follows system light/dark
+preferences. Preserve all existing consent, capture, language-limit and meeting-record behaviour.
+
+### Hard constraints
+
+- **No external fonts or CSS on the mobile page.** Google Fonts is blocked in mainland China and the
+  Chinese supplier is a primary participant. System stacks only; the Supabase SDK is the sole runtime import.
+- **Latin font first in every font stack**, or `ą/ę/ł/ś/ż` fall back badly. Line-height is chosen for
+  the worst case — a Chinese sentence stacked against "wsporników".
+- Mobile must render from the `localStorage` cache after a lock-screen reconnect, before any snapshot lands.
+- **PRD-frozen layout:** host ≤ 4 language columns; mobile single column + language dropdown;
+  translation on top, source below; partial = muted, final = full ink; no TTS.
+- The host is Avalonia XAML: no CSS, no `clamp()`, no media queries. Fluid type is faked with fixed steps.
+- The host stays light on **explicit brushes** — inheriting FluentTheme's dark variant made control
+  foregrounds invisible.

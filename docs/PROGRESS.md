@@ -46,7 +46,9 @@ handover brief that drove it is deleted. Verification record and screenshots:
 - **Meeting list** is grouped under Today / Yesterday / Recent by the day the record was made
   (`MeetingGroupViewModel`, `WorkspaceSidebarViewModel.MeetingGroups`); each group folds on its own,
   the fold survives search and refresh, and selecting a meeting opens its group. `Meetings` stays
-  the flat list the rest of the host reads.
+  the flat list the rest of the host reads. Known limitation: the grouping is computed when the
+  list refreshes, so a host left open past midnight keeps the old Today/Yesterday split until the
+  next refresh.
 - **Ruler for history**: a browsed record now gets its own `BrowsedRuler`, rebuilt from the stored
   transcript (speaker colours by order of first appearance, as the stored columns use); the strip
   follows `ShownRuler` instead of disappearing while another record is on screen.
