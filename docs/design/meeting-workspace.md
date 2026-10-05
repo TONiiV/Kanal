@@ -1,10 +1,12 @@
 # 会议工作空间：已确认 UI 设计
 
+> 2026-10-05：最新桌面设计以 [当前 UI 设计规范](ui-design.md) 和 [当前预览](swiss-review/index.html) 为准，包括统一顶栏、窄窗裁切与单语言展开。本文保留未被覆盖的业务交互；下文 B 方案及原型为历史记录。
+
 状态：用户于 2026-09-07 确认样品设计完成。本文定义后续实现目标，不代表桌面程序已经实现。
 
 ## 设计基线
 
-采用最终 B 方案。原型随文档保存在 [meeting-ui.prototype.html](meeting-ui.prototype.html)，
+采用最终 B 方案。原型随文档保存在 [meeting-ui.prototype.html](obsolete/meeting-ui.prototype.html)，
 可直接用浏览器打开，无需 CMD 启动器或预览服务。
 原型用于理解布局和交互，正式 Avalonia 实现应重新组织组件，不能复制其多轮 CSS/脚本覆盖。
 

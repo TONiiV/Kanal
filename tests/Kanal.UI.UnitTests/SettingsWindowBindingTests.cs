@@ -2,6 +2,9 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Kanal.Host.Controls;
 using Kanal.Core.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -32,6 +35,44 @@ public class SettingsWindowBindingTests
         Assert.Equal(SettingsStore.MaxLogMaxFileSizeMb, size.Maximum);
         Assert.True(size.ClipValueToMinMax);
 
+        window.Close();
+    }
+
+    /// <summary>
+    /// The application's own language is picked by name and flag together: the flag alone would
+    /// say nothing to someone who cannot read it, so the name stays beside every one.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheApplicationLanguagePickerShowsAFlagBesideTheNameOfTheChosenAndEveryOtherLanguage()
+    {
+        var window = new SettingsWindow(new SettingsViewModel(
+            new AppSettings { AppLanguage = "de" },
+            () => null,
+            isMacOs: false,
+            deviceWatcherFactory: null,
+            openFolder: _ => { }));
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var picker = window.GetLogicalDescendants().OfType<ComboBox>().Where(c => c.Name == "AppLanguage").Distinct().Single();
+        var chosen = picker.GetVisualDescendants().OfType<FlagIcon>().Single();
+        Assert.Equal("de", chosen.Code);
+        Assert.Contains(picker.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Deutsch");
+
+        picker.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var rows = Enumerable.Range(0, Localizer.Available.Count)
+            .Select(i => Assert.IsType<ComboBoxItem>(picker.ContainerFromIndex(i)))
+            .ToList();
+        Assert.Equal(
+            Localizer.Available.Select(l => l.Code),
+            rows.Select(r => r.GetVisualDescendants().OfType<FlagIcon>().Single().Code));
+        Assert.Equal(
+            Localizer.Available.Select(l => l.NativeName),
+            rows.Select(r => r.GetVisualDescendants().OfType<TextBlock>().Single().Text));
+
+        picker.IsDropDownOpen = false;
         window.Close();
     }
 

@@ -176,7 +176,7 @@ public class MeetingTitleRowTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void ReopeningTheEditorSelectsTheWholeTitleInInkWithPaperTextFromItsStart()
+    public void ReopeningTheEditorSelectsTheWholeTitleWithReadableBrandSelectionFromItsStart()
     {
         var (vm, window, room) = ShowRoom(LongPolishTitle);
         var field = Named(room, "MeetingTitleField");
@@ -194,8 +194,8 @@ public class MeetingTitleRowTests : IDisposable
         var resources = Application.Current!.Resources;
         Assert.True(editor.IsFocused);
         Assert.Equal(LongPolishTitle, editor.SelectedText);
-        Assert.Same(resources["Ink"], editor.SelectionBrush);
-        Assert.Same(resources["Paper"], editor.SelectionForegroundBrush);
+        Assert.Same(resources["Brand"], editor.SelectionBrush);
+        Assert.Same(resources["OnBrand"], editor.SelectionForegroundBrush);
         Assert.Equal(0, editor.CaretIndex);
 
         window.Close();

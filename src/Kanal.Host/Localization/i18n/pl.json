@@ -76,6 +76,9 @@
   "lang.unknown": "NIEZNANY",
   "column.codeswitch.tip": "Mieszany język",
   "column.drag.tip": "Przeciągnij, aby przesunąć tę kolumnę — albo Alt+← / Alt+→",
+  "column.focus.tip": "Powiększ ten język na cały obszar transkrypcji",
+  "column.restore.tip": "Pokaż ponownie wszystkie języki",
+  "transcript.jumplatest.tip": "Przejdź do najnowszej linii",
   "ruler.name": "Nawigacja transkrypcji",
   "status.idle": "Bezczynny.",
   "status.pickalanguage": "Wybierz co najmniej jeden język.",
@@ -297,6 +300,9 @@
   "meeting.delete.cancel": "Zachowaj",
   "workspace.noproject": "Nie otwarto jeszcze projektu. Dodaj go, aby przechowywać zapisy.",
   "workspace.nomeetings": "Nie ma tu jeszcze spotkań.",
+  "workspace.group.today": "Dzisiaj",
+  "workspace.group.yesterday": "Wczoraj",
+  "workspace.group.recent": "Wcześniej",
   "workspace.picker": "Projekt",
   "workspace.meetings": "Spotkania",
   "workspace.nomatches": "Nic nie pasuje.",
@@ -309,6 +315,7 @@
   "browse.recording": "Trwa nagrywanie „{0}”",
   "browse.return": "Wróć",
   "browse.notranscript": "W tym zapisie spotkania nie ma jeszcze żadnej treści.",
+  "browse.loading": "Wczytywanie transkrypcji…",
   "browse.readonly": "Tylko do odczytu",
   "workspace.recording": "Nagrywanie"
 }

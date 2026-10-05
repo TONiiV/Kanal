@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Kanal.Host.ViewModels"
         xmlns:l="using:Kanal.Host.Localization"
+        xmlns:c="using:Kanal.Host.Controls"
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="{l:T settings.title}"
@@ -27,12 +28,12 @@
             <Setter Property="Foreground" Value="{StaticResource Ink2}" />
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Foreground" Value="{StaticResource Brand}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
-        <!-- Fluent draws the selection marker in the system accent; the host is ink and paper. -->
+
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="Background" Value="{StaticResource Brand}" />
         </Style>
         <Style Selector="TabControl WrapPanel">
             <Setter Property="Background" Value="Transparent" />
@@ -59,7 +60,10 @@
                                       SelectedItem="{Binding AppLanguage}" HorizontalAlignment="Left" Width="200">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="l:AppLanguage">
-                                        <TextBlock Text="{Binding NativeName}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <c:FlagIcon Code="{Binding Code}" Width="20" Height="20" />
+                                            <TextBlock Text="{Binding NativeName}" VerticalAlignment="Center" />
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -69,6 +73,9 @@
 
                         <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
+                        <Image Source="/Assets/kanal-splash-mark.png" Width="64" Height="64"
+                               HorizontalAlignment="Left" Margin="-10,0,0,8"
+                               AutomationProperties.Name="Kanal" />
                         <TextBlock x:Name="Version" Text="{Binding VersionLabel}" FontSize="12.5"
                                    FontWeight="SemiBold" Margin="0,0,0,4" />
                         <TextBlock Text="{l:T settings.about.note}" FontSize="11.5" TextWrapping="Wrap"
@@ -117,10 +124,10 @@
                             <Rectangle Fill="{StaticResource RuleFaint}" />
                             <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
                                          Foreground="{StaticResource Rule}" Background="Transparent"
-                                         CornerRadius="0" />
+                                         CornerRadius="3" />
                             <ProgressBar Value="{Binding LevelScale}" Maximum="100" Height="10"
-                                         Foreground="{StaticResource Ink}" Background="Transparent"
-                                         CornerRadius="0" />
+                                         Foreground="{StaticResource Brand}" Background="Transparent"
+                                         CornerRadius="3" />
                         </Panel>
                         <TextBlock Text="{Binding LevelReadout}" FontSize="11"
                                    Foreground="{StaticResource Ink3}" Margin="0,0,0,8" />

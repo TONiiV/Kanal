@@ -11,6 +11,8 @@
         Icon="/Assets/kanal.ico"
         Title="Kanal"
         Width="1320" Height="820"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="58"
         MinWidth="{Binding Shell.MinShellWidth}"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{StaticResource Ink}"
@@ -36,7 +38,7 @@
         </Grid.ColumnDefinitions>
 
         <views:WorkspaceSidebarView Grid.Column="0" IsVisible="{Binding !Shell.Left.Collapsed}" />
-        <GridSplitter Grid.Column="1" x:Name="WorkspaceSplitter"
+        <GridSplitter Grid.Column="1" x:Name="WorkspaceSplitter" Classes="shell"
                       Width="{x:Static vm:WorkspaceShellViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
                       IsVisible="{Binding !Shell.Left.Collapsed}"
@@ -48,7 +50,7 @@
             <views:MeetingRoomView />
         </DockPanel>
 
-        <GridSplitter Grid.Column="3" x:Name="AssistantSplitter"
+        <GridSplitter Grid.Column="3" x:Name="AssistantSplitter" Classes="shell"
                       Width="{x:Static vm:WorkspaceShellViewModel.SplitterWidth}"
                       ResizeDirection="Columns" Background="Transparent"
                       IsVisible="{Binding !Shell.Right.Collapsed}"

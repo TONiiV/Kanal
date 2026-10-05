@@ -35,9 +35,9 @@
         </Style>
         <Style Selector="TabItem">
             <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="LetterSpacing" Value="0.2" />
             <Setter Property="Foreground" Value="{StaticResource Ink3}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0,0,0,10" />
@@ -48,34 +48,36 @@
             <Setter Property="Foreground" Value="{StaticResource Ink2}" />
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Foreground" Value="{StaticResource Brand}" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
-        <!-- Fluent draws the marker in the system accent; the host is ink and paper. It sits flush
+        <!-- The selection marker sits flush
              under the header content, which is why each header carries its own bottom margin -
              without it the rule strikes through the descenders of "Points". -->
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="Background" Value="{StaticResource Brand}" />
         </Style>
     </UserControl.Styles>
 
-    <Border BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
+    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
-            <Border DockPanel.Dock="Top" Classes="sidebar-header"
-                    MinHeight="{Binding Shell.HeaderHeight}">
+            <Border DockPanel.Dock="Top" Classes="chrome-head" Padding="8,0,0,0">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="CollapseAssistant"
+                    <Border DockPanel.Dock="Right" Width="{Binding Shell.AssistantEndInset}" />
+                    <Button DockPanel.Dock="Left" Classes="ghost icon" x:Name="CollapseAssistant"
                             Command="{Binding Shell.Right.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
-                        <Path Classes="glyph" Data="{c:Icon chevron-right}" />
+                        <Path Classes="glyph" Data="{c:Icon sidebar}" Width="18" Height="18"
+                              RenderTransformOrigin="50%,50%" RenderTransform="scaleX(-1)" />
                     </Button>
-                    <TextBlock DockPanel.Dock="Right" Classes="label" x:Name="AssistantTitle"
+                    <TextBlock DockPanel.Dock="Left" x:Name="AssistantTitle" Margin="6,0,0,0"
+                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
                                Text="{l:T sidebar.assistant}" />
                 </DockPanel>
             </Border>
 
-            <TabControl Padding="0" Margin="20,14,0,0">
+            <TabControl Padding="0" Margin="20,18,0,0">
                 <TabItem x:Name="PointsTab" AutomationProperties.Name="{l:T assistant.tab.points}">
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.points}" Margin="0,0,0,7" />
@@ -98,7 +100,7 @@
                                         <DataTemplate x:DataType="vm:InsightTopicViewModel">
                                             <StackPanel Margin="0,0,0,22">
                                                 <TextBlock Text="{Binding Topic}" Classes="label" />
-                                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1"
+                                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                                                         Margin="0,6,0,12" />
                                                 <ItemsControl ItemsSource="{Binding Items}">
                                                     <ItemsControl.ItemTemplate>
@@ -125,17 +127,22 @@
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
-                                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                <StackPanel x:Name="InsightActions" Orientation="Horizontal"
+                                                                            Spacing="7" Margin="0,2,0,0">
                                                                     <Button Content="{l:T insight.confirm}"
-                                                                            Classes="ghost" Padding="9,4"
+                                                                            Height="32" MinHeight="32" Padding="12,0"
+                                                                            VerticalAlignment="Center"
                                                                             IsVisible="{Binding IsCandidate}"
                                                                             Command="{Binding ConfirmCommand}"
                                                                             ToolTip.Tip="{l:T insight.confirm.tip}"
                                                                             AutomationProperties.Name="{l:T insight.confirm.tip}" />
-                                                                    <Button Content="×" Classes="ghost" Padding="9,4"
+                                                                    <Button Classes="ghost" Width="32" Height="32" Padding="0"
+                                                                            VerticalAlignment="Center"
                                                                             Command="{Binding DismissCommand}"
                                                                             ToolTip.Tip="{l:T insight.dismiss.tip}"
-                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}" />
+                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}">
+                                                                        <Path Classes="glyph" Data="{c:Icon close}" Width="13" Height="13" />
+                                                                    </Button>
                                                                 </StackPanel>
                                                             </StackPanel>
                                                         </DataTemplate>
@@ -162,7 +169,7 @@
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
                                 <TextBlock Text="{l:T merge.label}" Classes="label" />
-                                <Border BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
+                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBox x:Name="MergeFrom" Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
                                     <TextBlock Text="→" VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />

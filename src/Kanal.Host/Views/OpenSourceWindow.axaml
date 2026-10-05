@@ -17,7 +17,7 @@
                 HorizontalAlignment="Right" Margin="0,16,0,0" Click="OnCloseClick" />
 
         <TextBlock DockPanel.Dock="Top" Text="{l:T licenses.title}" Classes="label" />
-        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Ink}" BorderThickness="0,0,0,2"
+        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
                 Margin="0,7,0,0" />
         <TextBlock DockPanel.Dock="Top" Text="{Binding LicenseNote}" FontSize="11.5"
                    TextWrapping="Wrap" Foreground="{StaticResource Ink3}" Margin="0,14,0,4" />

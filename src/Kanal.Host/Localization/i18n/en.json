@@ -76,6 +76,9 @@
   "lang.unknown": "UNKNOWN",
   "column.codeswitch.tip": "Mixed language",
   "column.drag.tip": "Drag to move this column — or Alt+← / Alt+→",
+  "column.focus.tip": "Enlarge this language to fill the transcript",
+  "column.restore.tip": "Show all languages again",
+  "transcript.jumplatest.tip": "Jump to the latest line",
   "ruler.name": "Transcript navigation",
   "status.idle": "Idle.",
   "status.pickalanguage": "Select at least one language.",
@@ -297,6 +300,9 @@
   "meeting.delete.cancel": "Keep it",
   "workspace.noproject": "No project open yet. Add one to keep meeting records.",
   "workspace.nomeetings": "No meetings here yet.",
+  "workspace.group.today": "Today",
+  "workspace.group.yesterday": "Yesterday",
+  "workspace.group.recent": "Recent",
   "workspace.picker": "Project",
   "workspace.meetings": "Meetings",
   "workspace.nomatches": "Nothing matches that.",
@@ -309,6 +315,7 @@
   "browse.recording": "Recording “{0}”",
   "browse.return": "Back",
   "browse.notranscript": "Nothing has been written down in this meeting record yet.",
+  "browse.loading": "Loading the transcript…",
   "browse.readonly": "Read only",
   "workspace.recording": "Recording"
 }

@@ -40,11 +40,9 @@ public partial class WorkspaceSidebarView : UserControl
         Dispatcher.UIThread.Post(
             () =>
             {
-                if (MeetingList.ContainerFromItem(meeting) is not Control row)
-                    return;
-
-                if (row.GetLogicalDescendants().OfType<TextBox>()
-                        .FirstOrDefault(box => box.Name == "MeetingRowEditor") is not { } editor)
+                if (MeetingList.GetLogicalDescendants().OfType<TextBox>()
+                        .FirstOrDefault(box => box.Name == "MeetingRowEditor"
+                            && ReferenceEquals(box.DataContext, meeting)) is not { } editor)
                     return;
 
                 editor.Focus();

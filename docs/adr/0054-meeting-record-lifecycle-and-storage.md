@@ -92,7 +92,7 @@
 ### H. 知情确认
 
 24. 知情确认从工具栏上的常驻复选框移入**点录制时弹出的对话框**，按
-    [`meeting-ui.prototype.html`](../design/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
+    [`meeting-ui.prototype.html`](../design/obsolete/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
     勾选项（同时保存音频文件／我已告知所有参与者），后者未勾时「确认并开始」禁用。
 25. 弹窗里的「同时保存音频文件」是**本场一次性覆盖**，不写回设置——为某一场敏感会议临时取消勾选，
     不应让下一场默默不录音。

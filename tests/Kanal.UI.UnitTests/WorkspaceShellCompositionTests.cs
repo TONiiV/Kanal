@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
@@ -128,9 +129,8 @@ public class WorkspaceShellCompositionTests
     }
 
     /// <summary>
-    /// "Left and right header bars share the centre toolbar's height so the separators line up."
-    /// A shared constant is only a floor: the toolbar outgrows it whenever the selected mode's
-    /// description wraps, so the two sidebars follow the bar's measured height instead.
+    /// The three headers are one row: nothing in the toolbar wraps, so a single fixed height keeps
+    /// the rules level at every window width.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(1320.0)]
@@ -144,6 +144,7 @@ public class WorkspaceShellCompositionTests
         Dispatcher.UIThread.RunJobs();
 
         var workspace = Rule<WorkspaceSidebarView>(window);
+        Assert.Equal(WorkspaceShellViewModel.HeaderHeight, workspace, precision: 1);
         Assert.Equal(workspace, Rule<IconBarView>(window), precision: 1);
         Assert.Equal(workspace, Rule<SidePanelView>(window), precision: 1);
 
@@ -157,7 +158,7 @@ public class WorkspaceShellCompositionTests
         var region = Region<T>(window);
         Assert.Equal(0, region.Bounds.Y);
         var headers = region.GetVisualDescendants().OfType<Border>()
-            .Where(border => border.BorderThickness.Bottom >= 2 && border.BorderThickness.Top == 0)
+            .Where(border => border.Classes.Contains("chrome-head"))
             .ToList();
         Assert.NotEmpty(headers);
         return headers[0].Bounds.Height;
@@ -198,18 +199,187 @@ public class WorkspaceShellCompositionTests
     }
 
     [AvaloniaFact]
-    public void EachSidebarPutsItsCollapseControlOnTheEdgeThatFacesTheMeeting()
+    public void EachHeaderLeadsWithItsSidebarControlAheadOfItsTitle()
     {
         var (window, _) = Shown();
 
         var workspace = Region<WorkspaceSidebarView>(window);
         var assistant = Region<SidePanelView>(window);
 
+        var collapseWorkspace = Named(workspace, "CollapseWorkspace");
+        var collapseAssistant = Named(assistant, "CollapseAssistant");
+        Assert.Equal(Dock.Left, DockPanel.GetDock(collapseWorkspace));
         Assert.Equal(Dock.Left, DockPanel.GetDock(Named(workspace, "WorkspaceTitle")));
-        Assert.Equal(Dock.Right, DockPanel.GetDock(Named(workspace, "CollapseWorkspace")));
+        Assert.Equal(Dock.Left, DockPanel.GetDock(collapseAssistant));
+        Assert.Equal(Dock.Left, DockPanel.GetDock(Named(assistant, "AssistantTitle")));
 
-        Assert.Equal(Dock.Left, DockPanel.GetDock(Named(assistant, "CollapseAssistant")));
-        Assert.Equal(Dock.Right, DockPanel.GetDock(Named(assistant, "AssistantTitle")));
+        Assert.True(
+            collapseWorkspace.TranslatePoint(default, workspace)!.Value.X
+                < Named(workspace, "WorkspaceTitle").TranslatePoint(default, workspace)!.Value.X);
+        Assert.True(
+            collapseAssistant.TranslatePoint(default, assistant)!.Value.X
+                < Named(assistant, "AssistantTitle").TranslatePoint(default, assistant)!.Value.X);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The recording group is centred on the middle column, whatever the two sides carry. The
+    /// device picker sits in the right cluster and the mode box on the left, so their unequal
+    /// lengths must not push it off-centre at any width.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1900.0)]
+    [InlineData(1320.0)]
+    [InlineData(874.0)]
+    public void TheRecordingGroupStaysOnTheCentreOfTheMiddleColumn(double width)
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = width, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var bar = Region<IconBarView>(window);
+        var group = Named(bar, "TransportGroup");
+        var centre = group.TranslatePoint(new Point(group.Bounds.Width / 2, 0), bar)!.Value.X;
+
+        Assert.Equal(bar.Bounds.Width / 2, centre, precision: 0);
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// A narrowing window cuts the outer ends of the two clusters and never squeezes a button: the
+    /// right cluster stays pinned to its right edge, and a control it has cut away leaves the tab
+    /// order instead of taking focus unseen.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheRightClusterKeepsItsEndAndLosesItsOuterControlsFromTheTabOrder()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var bar = Region<IconBarView>(window);
+        var cluster = (Panel)Named(bar, "RightCluster");
+        var devices = (Button)Named(cluster, "AudioDevices");
+        var join = (Button)Named(cluster, "JoinQr");
+        Assert.True(devices.IsTabStop);
+        Assert.True(join.IsTabStop);
+
+        window.Width = vm.Shell.MinShellWidth;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(cluster.Bounds.Width, join.Bounds.Right, precision: 0);
+        Assert.Equal(36, join.Bounds.Width, precision: 1);
+        Assert.True(devices.Bounds.X < 0, $"the outer control was not cut: it starts at {devices.Bounds.X}");
+        Assert.False(devices.IsTabStop);
+        Assert.True(join.IsTabStop);
+
+        window.Width = 1320;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(devices.IsTabStop);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void AnEndAlignedStackSetVerticalStacksItsChildrenDownwards()
+    {
+        var first = new Border { Width = 20, Height = 10, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var second = new Border { Width = 20, Height = 10, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var stack = new Kanal.Host.Controls.EndAlignedStack
+        {
+            Orientation = Avalonia.Layout.Orientation.Vertical,
+            Spacing = 4,
+            Children = { first, second },
+        };
+
+        stack.Measure(new Size(100, 100));
+        stack.Arrange(new Rect(0, 0, 100, 100));
+
+        Assert.Equal(new Point(0, 0), first.Bounds.Position);
+        Assert.Equal(new Point(0, 14), second.Bounds.Position);
+    }
+
+    [AvaloniaFact]
+    public void AControlThatAppearsInANarrowBarAlreadyCutAwayStaysOutOfTheTabOrder()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => !mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = vm.Shell.MinShellWidth, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var devices = (Button)Named(Region<IconBarView>(window), "AudioDevices");
+
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(devices.IsVisible);
+        Assert.True(devices.Bounds.X < 0, $"the outer control was not cut: it starts at {devices.Bounds.X}");
+        Assert.False(devices.IsTabStop);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheStatusBesideTheRecordingGroupGoesWhenTheMiddleColumnIsNarrow()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.IsRunning = true;
+        vm.RecordingPath = "/tmp/room.wav";
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var bar = Region<IconBarView>(window);
+        var status = Named(bar, "TransportStatus");
+        Assert.True(bar.Bounds.Width > 460);
+        Assert.True(status.IsVisible);
+
+        window.Width = vm.Shell.MinShellWidth;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(bar.Bounds.Width <= 460);
+        Assert.False(status.IsVisible);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void EnlargingALanguageGivesItTheWholeTranscriptWidthAndRestoringSharesItAgain()
+    {
+        var vm = TestViewModels.Hermetic();
+        foreach (var code in new[] { "zh", "de", "pl" })
+            vm.Columns.Add(new ColumnViewModel(code));
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var room = Region<MeetingRoomView>(window);
+        var heads = room.GetVisualDescendants().OfType<Border>()
+            .Where(border => border.Classes.Contains("colhead")).ToList();
+        Assert.Equal(3, heads.Count);
+        var share = heads[0].Bounds.Width;
+        Assert.All(heads, head => Assert.Equal(share, head.Bounds.Width, precision: 0));
+
+        vm.ToggleColumnFocus(vm.Columns[1]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(heads[0].IsEffectivelyVisible);
+        Assert.False(heads[2].IsEffectivelyVisible);
+        Assert.True(heads[1].IsEffectivelyVisible);
+        Assert.True(heads[1].Bounds.Width > share * 2.5, $"{heads[1].Bounds.Width} vs {share} each when shared");
+
+        vm.ToggleColumnFocus(vm.Columns[1]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.All(heads, head => Assert.True(head.IsEffectivelyVisible));
+        Assert.Equal(share, heads[1].Bounds.Width, precision: 0);
 
         window.Close();
     }

@@ -1,6 +1,6 @@
 {
   "input.label": "输入",
-  "capture.inroom.name": "同一房间",
+  "capture.inroom.name": "线下会议",
   "capture.online.name": "线上会议",
   "capture.online.guidance": "请佩戴耳机并开启勿扰模式。Kanal 会收取所选电脑输出，包括通知提示音。",
   "capture.online.unavailable": "本版本不含电脑音频采集。",
@@ -76,6 +76,9 @@
   "lang.unknown": "未知语言",
   "column.codeswitch.tip": "混合语种",
   "column.drag.tip": "拖动可移动此列——或按 Alt+← / Alt+→",
+  "column.focus.tip": "放大此语言以占满转写区域",
+  "column.restore.tip": "恢复显示全部语言",
+  "transcript.jumplatest.tip": "回到最新内容",
   "ruler.name": "转写导航",
   "status.idle": "空闲。",
   "status.pickalanguage": "请至少选择一种语言。",
@@ -297,6 +300,9 @@
   "meeting.delete.cancel": "保留",
   "workspace.noproject": "尚未打开项目。添加一个以保存会议记录。",
   "workspace.nomeetings": "这里还没有会议。",
+  "workspace.group.today": "今天",
+  "workspace.group.yesterday": "昨天",
+  "workspace.group.recent": "最近",
   "workspace.picker": "项目",
   "workspace.meetings": "会议",
   "workspace.nomatches": "没有匹配的会议。",
@@ -309,6 +315,7 @@
   "browse.recording": "正在录制《{0}》",
   "browse.return": "返回",
   "browse.notranscript": "这条会议记录里还没有转写内容。",
+  "browse.loading": "正在加载转写内容…",
   "browse.readonly": "只读",
   "workspace.recording": "录制中"
 }

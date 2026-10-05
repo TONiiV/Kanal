@@ -1,5 +1,7 @@
 # Kanal：会议工作空间、转写与会议智能
 
+> 2026-09-23：视觉样式改用 [Conversation K](../design/conversation-k.md)。本文继续约束布局与交互；历史原型的配色、直角与粗黑分隔线不再是视觉基线。
+
 ## Problem Statement
 
 操作者需要在会议中快速控制收音、转写、翻译并查看内容。当前主机工具栏拥挤、横向滚动，
@@ -126,7 +128,7 @@
 ## Further Notes
 
 - 用户已确认样品设计完成；总体规格由已讨论内容直接合成，不开展新访谈。
-- 原型随仓库设计文档保存为 `meeting-ui.prototype.html`，可直接使用浏览器打开，无需启动器。
+- 历史原型已归档至 [过时设计](../design/obsolete/meeting-ui.prototype.html)；当前视觉规范见 [UI 设计](../design/ui-design.md)。
   早期本地归档提交 `4c4d3db` 保留为历史。
 - #13 已补充发言人识别需求；#63 跟踪句子回放；#49 为本地 ASR；#34 为实时总结。
   #49 的 Whisper-first 方案与本次 Nemotron 首选存在历史差异，实施时以本次用户偏好为方向并重新核实。

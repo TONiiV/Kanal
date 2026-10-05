@@ -142,6 +142,58 @@ public class WorkspaceShellTests
         Assert.Equal(SidebarViewModel.MaxWidth, sidebar.ColumnMaxWidth);
     }
 
+    /// <summary>
+    /// The window's own buttons sit over the top corners. Whoever owns that corner reserves the
+    /// room: the sidebar header while its sidebar is open, the toolbar once it has collapsed away.
+    /// </summary>
+    [Fact]
+    public void TheWindowControlsReserveRoomInWhicheverHeaderOwnsTheCorner()
+    {
+        var shell = new WorkspaceShellViewModel(new WindowControlInsets(Start: 78, End: 138));
+
+        Assert.Equal(78, shell.WorkspaceStartInset);
+        Assert.Equal(0, shell.CenterStartInset);
+        Assert.Equal(138, shell.AssistantEndInset);
+        Assert.Equal(0, shell.CenterEndInset);
+
+        shell.Left.ToggleCommand.Execute(null);
+        shell.Right.ToggleCommand.Execute(null);
+
+        Assert.Equal(78, shell.CenterStartInset);
+        Assert.Equal(138, shell.CenterEndInset);
+    }
+
+    [Fact]
+    public void TheInsetsAreReannouncedWhenASidebarOpensOrCloses()
+    {
+        var shell = new WorkspaceShellViewModel(new WindowControlInsets(Start: 78, End: 138));
+        var changed = new List<string?>();
+        shell.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        shell.Left.ToggleCommand.Execute(null);
+        shell.Right.ToggleCommand.Execute(null);
+
+        Assert.Contains(nameof(WorkspaceShellViewModel.CenterStartInset), changed);
+        Assert.Contains(nameof(WorkspaceShellViewModel.CenterEndInset), changed);
+    }
+
+    [Fact]
+    public void AWindowWithNoControlsOverTheClientAreaReservesNothing()
+    {
+        var shell = Shell();
+
+        Assert.Equal(0, shell.WorkspaceStartInset);
+        Assert.Equal(0, shell.CenterEndInset);
+        shell.Right.ToggleCommand.Execute(null);
+        Assert.Equal(0, shell.CenterEndInset);
+    }
+
+    [Fact]
+    public void TheHeaderIsOneFixedHeightAcrossAllThreeColumns()
+    {
+        Assert.Equal(58, WorkspaceShellViewModel.HeaderHeight);
+    }
+
     [Fact]
     public void TheTwoSidebarsCarryTheirOwnStateRatherThanSharingIt()
     {

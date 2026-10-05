@@ -228,10 +228,11 @@ def resize_rgba(source: bytes, source_size: int, target_size: int) -> bytes:
 
 
 FAVICON_LINK = re.compile(rb'<link rel="icon" href="data:image/[^"]*">')
+BRAND_IMAGE = re.compile(rb'(<img class="brand-logo" src=")[^"]*(")')
 HTML_PAGES = [("web", "index.html"), ("docs", "index.html")]
 
 
-def write_favicon_into_pages(uri: str, log=print) -> None:
+def write_favicon_into_pages(uri: str, brand_uri: str, log=print) -> None:
     link = (f'<link rel="icon" href="{uri}">').encode()
     for parts in HTML_PAGES:
         path = os.path.join(ROOT, *parts)
@@ -241,6 +242,12 @@ def write_favicon_into_pages(uri: str, log=print) -> None:
         if replacements != 1:
             relative = os.path.relpath(path, ROOT)
             raise SystemExit(f"{relative}: expected one favicon link, found {replacements}")
+        after, replacements = BRAND_IMAGE.subn(
+            lambda match: match[1] + brand_uri.encode() + match[2], after
+        )
+        if replacements != 1:
+            relative = os.path.relpath(path, ROOT)
+            raise SystemExit(f"{relative}: expected one brand image, found {replacements}")
         if after != before:
             with open(path, "wb") as handle:
                 handle.write(after)
@@ -287,7 +294,10 @@ def main() -> None:
 
     favicon = "data:image/png;base64," + base64.b64encode(png_bytes(32, rgba(32))).decode()
     write(os.path.join(design, "favicon-datauri.txt"), (favicon + "\n").encode())
-    write_favicon_into_pages(favicon)
+    brand = "data:image/png;base64," + base64.b64encode(
+        png_bytes(96, resize_rgba(source_rgba, source_size, 96))
+    ).decode()
+    write_favicon_into_pages(favicon, brand)
 
 
 if __name__ == "__main__":
