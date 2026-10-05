@@ -9,10 +9,11 @@ namespace Kanal.Host.ViewModels;
 
 public static class StoredTranscript
 {
+    public static IReadOnlyList<Utterance> Utterances(MeetingRecord record) =>
+        record.TranscriptPath is { } path ? TranscriptLog.Read(path) : [];
+
     public static IReadOnlyList<ColumnViewModel> Of(MeetingRecord record) =>
-        Columns(
-            record.TranscriptPath is { } path ? TranscriptLog.Read(path) : [],
-            record.Languages ?? []);
+        Columns(Utterances(record), record.Languages ?? []);
 
     public static IReadOnlyList<ColumnViewModel> Columns(
         IReadOnlyList<Utterance> utterances, IReadOnlyList<string> languages)
@@ -64,7 +65,7 @@ public static class StoredTranscript
             .Where(code => code.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    private static Dictionary<string, string> ColoursByTag(IReadOnlyList<Utterance> utterances)
+    internal static Dictionary<string, string> ColoursByTag(IReadOnlyList<Utterance> utterances)
     {
         var colours = new Dictionary<string, string>();
         foreach (var utterance in utterances)

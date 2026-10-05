@@ -7,40 +7,33 @@
     <UserControl.Styles>
         <Style Selector="Border.rec">
             <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
-            <Setter Property="BorderThickness" Value="0,1,0,0" />
-            <Setter Property="Padding" Value="0,9,0,0" />
-            <Setter Property="Margin" Value="0,0,0,20" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="0,0,0,19" />
+            <Setter Property="Margin" Value="0,0,0,19" />
         </Style>
         <!-- A mark must not change the row's height: extent growth reads as new content and triggers ScrollToEnd. -->
         <Style Selector="Border.rec.jump">
             <Setter Property="Background" Value="{StaticResource Paper}" />
-            <Setter Property="Padding" Value="12,9,12,8" />
-            <Setter Property="Margin" Value="-12,0,-12,12" />
-        </Style>
-        <Style Selector="Border.rec.live" x:DataType="vm:BubbleViewModel">
-            <Setter Property="BorderBrush" Value="{Binding SpeakerColor}" />
-            <Setter Property="BorderThickness" Value="0,3,0,0" />
-            <Setter Property="Padding" Value="0,12,0,0" />
-            <Setter Property="Margin" Value="0,28,0,20" />
-        </Style>
-        <Style Selector="Border.rec.live.jump">
-            <Setter Property="Padding" Value="12,12,12,8" />
-            <Setter Property="Margin" Value="-12,28,-12,12" />
+            <Setter Property="Padding" Value="12,9,12,19" />
+            <Setter Property="Margin" Value="-12,0,-12,19" />
         </Style>
         <Style Selector="Border.rec TextBlock.body">
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
-            <Setter Property="FontSize" Value="14.5" />
-            <Setter Property="LineHeight" Value="24" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="LineHeight" Value="28" />
         </Style>
         <Style Selector="TextBlock.body.partial, TextBlock.body.pending">
             <Setter Property="Foreground" Value="{StaticResource Ink3}" />
         </Style>
-        <Style Selector="Border.rec.live TextBlock.body">
+        <Style Selector="Panel.focused Border.rec TextBlock.body">
             <Setter Property="FontSize" Value="19" />
-            <Setter Property="LineHeight" Value="30" />
+            <Setter Property="LineHeight" Value="33" />
         </Style>
-        <Style Selector="Border.rec TextBlock.who"><Setter Property="FontSize" Value="10.5" /></Style>
-        <Style Selector="Border.rec.live TextBlock.who"><Setter Property="FontSize" Value="11.5" /></Style>
+        <Style Selector="Panel.focused ItemsControl.bubbles">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="MaxWidth" Value="780" />
+        </Style>
+        <Style Selector="Border.rec TextBlock.who"><Setter Property="FontSize" Value="11" /></Style>
         <Style Selector="Border.rename">
             <Setter Property="BorderThickness" Value="0,0,0,2" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -48,16 +41,21 @@
         <Style Selector="Border.rename:pointerover, Border.rename:focus">
             <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
         </Style>
+        <Style Selector="TextBox#MeetingTitleEditor /template/ Border#PART_BorderElement">
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
         <Style Selector="TextBox#MeetingTitleEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingTitleEditor:focus /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="0,0,0,2" />
         </Style>
-        <Style Selector="Border.colhead:focus">
+        <Style Selector="Border.colhead">
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
-            <Setter Property="BorderThickness" Value="3,0,0,0" />
-            <Setter Property="Padding" Value="6,0,0,0" />
-            <Setter Property="Margin" Value="-9,0,0,16" />
+            <Setter Property="BorderThickness" Value="0,2,0,0" />
+        </Style>
+        <Style Selector="Border.colhead:focus">
+            <Setter Property="Background" Value="{StaticResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
         </Style>
         <Style Selector="Border.tickrow">
             <Setter Property="Height" Value="9" />
@@ -82,7 +80,7 @@
                 IsVisible="{Binding ShowRecordingBanner}"
                 Background="{StaticResource Paper}"
                 BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
-                Padding="24,9">
+                Padding="28,9">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Ellipse Width="7" Height="7" VerticalAlignment="Center"
                          Fill="{StaticResource Record}" />
@@ -101,36 +99,36 @@
             </StackPanel>
         </Border>
 
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="24,18,24,0" ColumnSpacing="16">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="28,24,28,22" ColumnSpacing="16">
+            <DockPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock x:Name="ReadOnlyNote" DockPanel.Dock="Right" Margin="12,0,0,0" Classes="label"
+                           Text="{l:T browse.readonly}" IsVisible="{Binding IsTitleReadOnly}" />
+
+                <TextBlock x:Name="TitleNote" DockPanel.Dock="Right" Margin="12,0,0,0" Text="{Binding TitleNote}"
+                           IsVisible="{Binding HasTitleNote}"
+                           FontSize="12" VerticalAlignment="Center"
+                           Foreground="{StaticResource Ink3}" />
+
                 <Border x:Name="MeetingTitleField" Classes="rename" Background="Transparent"
-                        Focusable="True" Cursor="Ibeam"
+                        HorizontalAlignment="Left" Focusable="True" Cursor="Ibeam"
                         IsEnabled="{Binding !IsTitleReadOnly}"
                         IsVisible="{Binding !IsRenamingTitle}"
                         PointerPressed="OnTitlePressed" KeyDown="OnTitleKeyDown"
                         ToolTip.Tip="{l:T title.rename.tip}"
                         AutomationProperties.Name="{l:T title.rename.tip}">
                     <TextBlock x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
-                               FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
+                               FontSize="25" LineHeight="32" FontWeight="SemiBold" LetterSpacing="-0.4"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                Foreground="{StaticResource Ink}" />
                 </Border>
-
-                <TextBlock x:Name="TitleNote" Text="{Binding TitleNote}"
-                           IsVisible="{Binding HasTitleNote}"
-                           FontSize="12" VerticalAlignment="Center"
-                           Foreground="{StaticResource Ink3}" />
-
-                <TextBlock x:Name="ReadOnlyNote" Classes="label" Text="{l:T browse.readonly}"
-                           IsVisible="{Binding IsTitleReadOnly}" />
-            </StackPanel>
+            </DockPanel>
 
             <!-- Selection foreground is explicit so the title stays readable inside the brand fill. -->
             <TextBox Grid.Column="0" x:Name="MeetingTitleEditor" Text="{Binding TitleDraft}"
                      IsVisible="{Binding IsRenamingTitle}"
                      HorizontalAlignment="Left" VerticalAlignment="Center"
                      MinWidth="120" MinHeight="0" VerticalContentAlignment="Center"
-                     FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.2"
+                     FontSize="25" LineHeight="32" FontWeight="SemiBold" LetterSpacing="-0.4"
                      Padding="0" BorderThickness="0,0,0,2"
                      BorderBrush="{StaticResource Ink}"
                      SelectionBrush="{StaticResource Brand}" SelectionForegroundBrush="{StaticResource OnBrand}"
@@ -138,7 +136,7 @@
                      KeyDown="OnTitleEditorKeyDown" LostFocus="OnTitleEditorLostFocus"
                      AutomationProperties.Name="{l:T title.rename.tip}" />
 
-            <Button Grid.Column="1" x:Name="RegenerateTitle" Classes="ghost" Padding="7,6"
+            <Button Grid.Column="1" x:Name="RegenerateTitle" Classes="ghost icon compact"
                     IsVisible="{Binding CanNameMeeting}"
                     Command="{Binding RegenerateTitleCommand}"
                     ToolTip.Tip="{l:T title.regenerate.tip}"
@@ -174,14 +172,14 @@
 
         <Panel>
         <StackPanel x:Name="NoStoredTranscript" IsVisible="{Binding ShowNoStoredTranscript}"
-                    Margin="24,30,24,10" MaxWidth="440"
+                    Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
             <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
                        Foreground="{StaticResource Ink2}" Text="{l:T browse.notranscript}" />
         </StackPanel>
 
-        <StackPanel IsVisible="{Binding ShowStartHint}" Margin="24,30,24,10" MaxWidth="440"
+        <StackPanel IsVisible="{Binding ShowStartHint}" Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
             <Image Source="/Assets/kanal-splash-mark.png" Width="92" Height="92"
                    HorizontalAlignment="Left" Margin="-18,0,0,0" AutomationProperties.Name="Kanal" />
@@ -194,39 +192,61 @@
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto">
-        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="12,22,0,10" Padding="12,0,0,0">
+        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="16,0,0,10" Padding="12,0,0,0">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemContainerTheme>
+                <ControlTheme TargetType="ContentPresenter" x:DataType="vm:ColumnViewModel">
+                    <Setter Property="IsVisible" Value="{Binding IsShown}" />
+                </ControlTheme>
+            </ItemsControl.ItemContainerTheme>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ColumnViewModel">
-                    <Panel Margin="0,0,30,0" DragDrop.AllowDrop="True"
+                    <Panel Margin="0,0,27,0" Classes.focused="{Binding IsFocused}" DragDrop.AllowDrop="True"
                            DragDrop.DragOver="OnColumnDragOver"
                            DragDrop.DragLeave="OnColumnDragLeave"
                            DragDrop.Drop="OnColumnDrop">
                         <DockPanel>
-                            <Border DockPanel.Dock="Top" Classes="colhead" Margin="0,0,0,16"
+                            <Border DockPanel.Dock="Top" Classes="colhead" Margin="0,0,0,22"
                                     Background="Transparent" Focusable="True" Cursor="SizeWestEast"
                                     ToolTip.Tip="{l:T column.drag.tip}"
                                     PointerPressed="OnColumnHeadPointerPressed" KeyDown="OnColumnHeadKeyDown">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="9">
-                                        <TextBlock Text="{Binding Code}" FontSize="21" FontWeight="Bold"
-                                                   LetterSpacing="0.5" />
-                                        <TextBlock Text="{Binding NativeName}" FontSize="12.5" Margin="0,0,0,3"
-                                                   Foreground="{StaticResource Ink3}" VerticalAlignment="Bottom" />
-                                    </StackPanel>
-                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
-                                            Margin="0,7,0,0" />
-                                </StackPanel>
+                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                                        Padding="0,9,0,8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Code}" FontSize="24" LineHeight="30"
+                                                       FontWeight="Bold" LetterSpacing="-0.6" />
+                                            <TextBlock Grid.Column="1" Text="{Binding NativeName}" FontSize="11.5"
+                                                       Foreground="{StaticResource Ink2}"
+                                                       VerticalAlignment="Bottom" Margin="9,0,4,5"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </Grid>
+                                        <Button Grid.Column="1" x:Name="ColumnFocus" Classes="ghost icon compact"
+                                                IsVisible="{Binding CanFocus}"
+                                                Click="OnColumnFocusClick"
+                                                ToolTip.Tip="{l:T column.focus.tip}"
+                                                AutomationProperties.Name="{l:T column.focus.tip}">
+                                            <Path Classes="glyph" Data="{c:Icon expand}" Width="16" Height="16"
+                                                  IsVisible="{Binding !IsFocused}" />
+                                        </Button>
+                                        <Button Grid.Column="1" x:Name="ColumnRestore" Classes="ghost icon compact"
+                                                IsVisible="{Binding IsFocused}"
+                                                Click="OnColumnFocusClick"
+                                                ToolTip.Tip="{l:T column.restore.tip}"
+                                                AutomationProperties.Name="{l:T column.restore.tip}">
+                                            <Path Classes="glyph" Data="{c:Icon restore}" Width="16" Height="16" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
                             </Border>
                             <ScrollViewer Loaded="OnColumnScrollLoaded" Margin="-12,0,-12,0"
                                           DetachedFromVisualTree="OnColumnScrollDetached">
-                                <ItemsControl ItemsSource="{Binding Bubbles}" Margin="12,0,26,40" ClipToBounds="False">
+                                <ItemsControl Classes="bubbles" ItemsSource="{Binding Bubbles}" Margin="12,0,26,40" ClipToBounds="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BubbleViewModel">
-                                            <Border Classes="rec" Classes.live="{Binding IsLive}"
-                                                    Classes.jump="{Binding IsJumpTarget}">
+                                            <Border Classes="rec" Classes.jump="{Binding IsJumpTarget}">
                                                 <StackPanel Spacing="5">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <TextBlock Classes="who" Text="{Binding SpeakerName}"
@@ -247,10 +267,10 @@
                                                                Classes.partial="{Binding IsPartial}"
                                                                Classes.pending="{Binding AwaitingTranslation}" />
                                                     <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
-                                                            BorderBrush="{StaticResource RuleFaint}"
-                                                            BorderThickness="1,0,0,0" Padding="11,0,0,0">
+                                                            BorderBrush="{StaticResource Rule}"
+                                                            BorderThickness="2,0,0,0" Padding="11,0,0,0">
                                                         <TextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
-                                                                   FontSize="12" LineHeight="20"
+                                                                   FontSize="12.5" LineHeight="22"
                                                                    Foreground="{StaticResource Ink3}" />
                                                     </Border>
                                                 </StackPanel>
@@ -269,9 +289,8 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <ItemsControl Grid.Column="1" ItemsSource="{Binding Ruler.Ticks}"
-                      Width="30" Margin="0,22,12,10" VerticalAlignment="Top"
-                      IsVisible="{Binding !IsBrowsingRecord}"
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding ShownRuler.Ticks}"
+                      Width="30" Margin="0,2,12,10" VerticalAlignment="Top"
                       AutomationProperties.Name="{l:T ruler.name}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RulerTickViewModel">
@@ -287,10 +306,10 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,22,12,10" IsHitTestVisible="False"
-                IsVisible="{Binding Ruler.IsPreviewOpen}">
-            <ContentControl Canvas.Right="40" Canvas.Top="{Binding Ruler.PreviewTop}"
-                            Content="{Binding Ruler.HoveredTick}">
+        <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,2,12,10" IsHitTestVisible="False"
+                IsVisible="{Binding ShownRuler.IsPreviewOpen}">
+            <ContentControl Canvas.Right="40" Canvas.Top="{Binding ShownRuler.PreviewTop}"
+                            Content="{Binding ShownRuler.HoveredTick}">
                 <ContentControl.ContentTemplate>
                     <DataTemplate x:DataType="vm:RulerTickViewModel">
                         <Border Width="308" Height="96" CornerRadius="{StaticResource OverlayRadius}"

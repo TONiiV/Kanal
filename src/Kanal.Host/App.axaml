@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Kanal.Host.App"
              xmlns:local="using:Kanal.Host"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
+             xmlns:vm="using:Kanal.Host.ViewModels"
              RequestedThemeVariant="Light">
     <!-- The window chrome is designed on a fixed light palette; following the OS
          dark theme made control foregrounds invisible on the light surfaces.
@@ -22,6 +24,7 @@
             <SolidColorBrush x:Key="Rule" Color="#CEC9C0" />
             <SolidColorBrush x:Key="RuleFaint" Color="#E9E3D9" />
             <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
+            <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
             <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
             <SolidColorBrush x:Key="Record" Color="#C42B22" />
             <SolidColorBrush x:Key="Hold" Color="#C08A12" />
@@ -82,6 +85,17 @@
             <Setter Property="Padding" Value="14,6" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button:not(.ghost):not(.mark)">
+            <Setter Property="MinHeight" Value="36" />
+        </Style>
+        <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource BrandWash}" />
@@ -167,10 +181,76 @@
             <Setter Property="Fill" Value="{StaticResource Brand}" />
         </Style>
 
-        <Style Selector="Border.sidebar-header">
+        <Style Selector="Border.chrome-head">
+            <Setter Property="Height" Value="58" />
+            <Setter Property="Background" Value="{StaticResource Paper}" />
             <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="20,9,12,9" />
+            <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="TitleBar" />
+        </Style>
+        <!-- Carries the header band across the splitter columns so the top row has no seam. -->
+        <Style Selector="GridSplitter.shell">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid RowDefinitions="Auto,*" Background="Transparent">
+                        <Border Height="{x:Static vm:WorkspaceShellViewModel.HeaderHeight}"
+                                Background="{StaticResource Paper}"
+                                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!-- The drawn caption overlay brings a title that would sit on the sidebar toggle and a
+             fullscreen button; the header carries the brand and keeps minimise/maximise/close. -->
+        <Style Selector="Button#PART_FullScreenButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel#PART_TitleTextPanel TextBlock">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button#PART_MinimizeButton, Button#PART_MaximizeButton, Button#PART_CloseButton">
+            <Setter Property="Height" Value="{x:Static vm:WorkspaceShellViewModel.HeaderHeight}" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="Button#PART_MinimizeButton:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button#PART_MaximizeButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource Brand}" />
+        </Style>
+        <Style Selector="Button#PART_CloseButton:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button#PART_CloseButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CloseHover}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="TextElement.Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button#PART_MinimizeButton:pointerover, Button#PART_MaximizeButton:pointerover">
+            <Setter Property="Foreground" Value="{StaticResource Brand}" />
+        </Style>
+        <Style Selector="Button#PART_MinimizeButton:pointerover Path, Button#PART_MaximizeButton:pointerover Path">
+            <Setter Property="Fill" Value="{StaticResource Brand}" />
+        </Style>
+        <Style Selector="Button#PART_CloseButton:pointerover, Button#PART_CloseButton:pressed">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button#PART_CloseButton:pointerover Path, Button#PART_CloseButton:pressed Path">
+            <Setter Property="Fill" Value="White" />
+        </Style>
+        <Style Selector="Border.chrome-head Button, Border.chrome-head ComboBox">
+            <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="User" />
+        </Style>
+
+        <!-- 36 DIP hit area, transparent until reached for. -->
+        <Style Selector="Button.icon">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.icon.compact">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
         </Style>
 
         <!-- Quiet secondary actions: no box until you reach for them. -->
@@ -183,6 +263,7 @@
         </Style>
         <!-- Without this the base disabled rule draws the box a ghost never had. -->
         <Style Selector="Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
 
@@ -190,6 +271,7 @@
         <Style Selector="Button.mark">
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="CornerRadius" Value="17" />
             <Setter Property="BorderThickness" Value="0" />
@@ -289,6 +371,16 @@
             <Setter Property="Opacity" Value="0.45" />
         </Style>
 
+        <Style Selector="Window.reduce-motion Button.mark">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Window.reduce-motion Button.mark:pointerover, Window.reduce-motion Button.mark:pressed">
+            <Setter Property="RenderTransform" Value="none" />
+        </Style>
+        <Style Selector="Window.reduce-motion Button /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+
 
         <Style Selector="ToggleButton">
             <Setter Property="Background" Value="{StaticResource Sheet}" />
@@ -352,6 +444,11 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <Style Selector="ComboBox /template/ Border#PopupBorder">
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="CornerRadius" Value="{StaticResource OverlayRadius}" />
+        </Style>
         <Style Selector="ComboBoxItem">
             <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
         </Style>
@@ -392,6 +489,25 @@
             <Setter Property="TextElement.Foreground" Value="{StaticResource OnBrand}" />
         </Style>
         <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
+        <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+        </Style>
+        <Style Selector="TextBox:disabled /template/ Border#PART_BorderElement">
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+        <Style Selector="TextBox.search">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Background" Value="{StaticResource Sheet}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.search /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="TextBox.search:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="1.5" />
             <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
         </Style>
         <Style Selector="MenuFlyoutPresenter">

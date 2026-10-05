@@ -28,11 +28,16 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private readonly WorkspaceStore _store;
     private readonly Action<string> _openFolder;
     private readonly List<MeetingRecord> _held = [];
+    private readonly Func<DateTimeOffset> _clock;
+    private readonly MeetingGroupViewModel[] _groups;
 
-    public WorkspaceSidebarViewModel(WorkspaceStore store, Action<string>? openFolder = null)
+    public WorkspaceSidebarViewModel(
+        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null)
     {
         _store = store;
         _openFolder = openFolder ?? SystemFolders.Open;
+        _clock = clock ?? (() => DateTimeOffset.Now);
+        _groups = [.. Enum.GetValues<MeetingAge>().Select(age => new MeetingGroupViewModel(age, Choose))];
         Refresh();
         Localizer.Instance.PropertyChanged += (_, e) =>
         {
@@ -42,12 +47,16 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             OnPropertyChanged(nameof(EmptyNote));
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
+            foreach (var group in _groups)
+                group.OnLanguageChanged();
         };
     }
 
     public ObservableCollection<Workspace> Workspaces { get; } = new();
 
     public ObservableCollection<MeetingItemViewModel> Meetings { get; } = new();
+
+    public ObservableCollection<MeetingGroupViewModel> MeetingGroups { get; } = new();
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
@@ -233,6 +242,16 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
+    partial void OnSelectedMeetingChanged(MeetingItemViewModel? value)
+    {
+        foreach (var group in _groups)
+            group.Selected = value is not null && group.Items.Contains(value) ? value : null;
+        if (value is not null)
+            _groups[(int)AgeOf(value.Record)].IsExpanded = true;
+    }
+
+    private void Choose(MeetingItemViewModel meeting) => SelectedMeeting = meeting;
+
     partial void OnSearchChanged(string value) => Show();
 
     partial void OnRecordingMeetingIdChanged(string? value)
@@ -291,7 +310,26 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 IsRecording = record.Id == RecordingMeetingId,
             }));
 
+        foreach (var group in _groups)
+        {
+            group.Items.Clear();
+            foreach (var meeting in Meetings.Where(m => AgeOf(m.Record) == group.Age))
+                group.Items.Add(meeting);
+        }
+
+        MeetingGroups.Clear();
+        foreach (var group in _groups.Where(g => g.Items.Count > 0))
+            MeetingGroups.Add(group);
+
         SelectedMeeting = Meetings.FirstOrDefault(m => m.Id == keep);
+    }
+
+    private MeetingAge AgeOf(MeetingRecord record)
+    {
+        var now = _clock();
+        var made = record.CreatedAt.ToOffset(now.Offset).Date;
+        var days = (now.Date - made).Days;
+        return days <= 0 ? MeetingAge.Today : days == 1 ? MeetingAge.Yesterday : MeetingAge.Recent;
     }
 
     private bool Matches(MeetingRecord record) =>

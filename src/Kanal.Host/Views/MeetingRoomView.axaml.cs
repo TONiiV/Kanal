@@ -24,11 +24,17 @@ public partial class MeetingRoomView : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         if (_bound is not null)
+        {
             _bound.Ruler.JumpRequested -= ScrollTo;
+            _bound.BrowsedRuler.JumpRequested -= ScrollTo;
+        }
 
         _bound = DataContext as MainViewModel;
         if (_bound is not null)
+        {
             _bound.Ruler.JumpRequested += ScrollTo;
+            _bound.BrowsedRuler.JumpRequested += ScrollTo;
+        }
 
         base.OnDataContextChanged(e);
     }
@@ -37,11 +43,11 @@ public partial class MeetingRoomView : UserControl
     {
         if (sender is Control row && row.DataContext is RulerTickViewModel tick &&
             DataContext is MainViewModel vm)
-            vm.Ruler.Hover(tick);
+            vm.ShownRuler.Hover(tick);
     }
 
     private void OnTickExited(object? sender, PointerEventArgs e) =>
-        (DataContext as MainViewModel)?.Ruler.Hover(null);
+        (DataContext as MainViewModel)?.ShownRuler.Hover(null);
 
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -50,7 +56,7 @@ public partial class MeetingRoomView : UserControl
             !e.GetCurrentPoint(row).Properties.IsLeftButtonPressed)
             return;
 
-        vm.Ruler.Jump(tick);
+        vm.ShownRuler.Jump(tick);
         e.Handled = true;
     }
 
@@ -109,6 +115,12 @@ public partial class MeetingRoomView : UserControl
 
         if (_following.TryGetValue(scroller, out var following) && following && !atBottom)
             scroller.ScrollToEnd();
+    }
+
+    private void OnColumnFocusClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ColumnViewModel column } && DataContext is MainViewModel vm)
+            vm.ToggleColumnFocus(column);
     }
 
     private async void OnColumnHeadPointerPressed(object? sender, PointerPressedEventArgs e)

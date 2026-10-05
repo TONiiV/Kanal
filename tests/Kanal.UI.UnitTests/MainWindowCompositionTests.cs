@@ -64,11 +64,13 @@ public class MainWindowCompositionTests
 
         var left = Cluster(window, "LeftCluster");
         var transport = Cluster(window, "Transport");
+        var group = Cluster(window, "TransportGroup");
         var right = Cluster(window, "RightCluster");
 
         Assert.Equal(0, Grid.GetColumn(left));
-        Assert.Equal(1, Grid.GetColumn(transport));
+        Assert.Equal(1, Grid.GetColumn(group));
         Assert.Equal(2, Grid.GetColumn(right));
+        Assert.Same(group, transport.Parent);
 
         Assert.Contains(
             left.GetLogicalDescendants().OfType<ComboBox>(),
@@ -81,12 +83,14 @@ public class MainWindowCompositionTests
         Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.StartCommand));
         Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.PauseCommand));
         Assert.Contains(marks, button => ReferenceEquals(button.Command, vm.StopCommand));
-        Assert.Single(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "AudioDevices");
+        Assert.DoesNotContain(transport.GetLogicalDescendants().OfType<Button>(), b => b.Name == "AudioDevices");
+        Assert.Single(right.GetLogicalDescendants().OfType<Button>(), b => b.Name == "AudioDevices");
 
         Assert.Single(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "JoinQr");
+        Assert.Single(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "MeetingMore");
 
         var grid = Assert.IsType<Grid>(left.Parent);
-        Assert.Equal([left, transport, right], grid.Children);
+        Assert.Equal([left, group, right], grid.Children);
 
         window.Close();
     }
@@ -100,7 +104,7 @@ public class MainWindowCompositionTests
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
-        var wide = Cluster(window, "Transport").Bounds.Width;
+        var wide = Cluster(window, "TransportGroup").Bounds.Width;
         Assert.True(wide > 0, "the transport measured nothing at 2200 px.");
 
         foreach (var width in new[] { 1320.0, 900.0 })
@@ -108,7 +112,7 @@ public class MainWindowCompositionTests
             window.Width = width;
             Dispatcher.UIThread.RunJobs();
 
-            var transport = Cluster(window, "Transport");
+            var transport = Cluster(window, "TransportGroup");
             Assert.Equal(wide, transport.Bounds.Width, precision: 1);
 
             var bar = Assert.IsType<Grid>(transport.Parent);
@@ -161,7 +165,7 @@ public class MainWindowCompositionTests
         var settings = Assert.Single(
             workspace.GetLogicalDescendants().OfType<Button>(),
             button => button.Name == "Settings");
-        Assert.Equal(Dock.Bottom, DockPanel.GetDock(settings));
+        Assert.Equal(Dock.Bottom, DockPanel.GetDock((Control)settings.Parent!));
         Assert.DoesNotContain(
             Bar(window).GetLogicalDescendants().OfType<Button>(),
             button => button.Name == "Settings");

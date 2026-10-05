@@ -61,21 +61,23 @@
 
     <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
-            <Border DockPanel.Dock="Top" Classes="sidebar-header"
-                    MinHeight="{Binding Shell.HeaderHeight}">
+            <Border DockPanel.Dock="Top" Classes="chrome-head" Padding="8,0,0,0">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="CollapseAssistant"
+                    <Border DockPanel.Dock="Right" Width="{Binding Shell.AssistantEndInset}" />
+                    <Button DockPanel.Dock="Left" Classes="ghost icon" x:Name="CollapseAssistant"
                             Command="{Binding Shell.Right.ToggleCommand}"
                             ToolTip.Tip="{l:T sidebar.collapse.tip}"
                             AutomationProperties.Name="{l:T sidebar.collapse.tip}">
-                        <Path Classes="glyph" Data="{c:Icon chevron-right}" />
+                        <Path Classes="glyph" Data="{c:Icon sidebar}" Width="18" Height="18"
+                              RenderTransformOrigin="50%,50%" RenderTransform="scaleX(-1)" />
                     </Button>
-                    <TextBlock DockPanel.Dock="Right" Classes="label" x:Name="AssistantTitle"
+                    <TextBlock DockPanel.Dock="Left" x:Name="AssistantTitle" Margin="6,0,0,0"
+                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
                                Text="{l:T sidebar.assistant}" />
                 </DockPanel>
             </Border>
 
-            <TabControl Padding="0" Margin="20,14,0,0">
+            <TabControl Padding="0" Margin="20,18,0,0">
                 <TabItem x:Name="PointsTab" AutomationProperties.Name="{l:T assistant.tab.points}">
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.points}" Margin="0,0,0,7" />
@@ -125,17 +127,22 @@
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
-                                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                <StackPanel x:Name="InsightActions" Orientation="Horizontal"
+                                                                            Spacing="7" Margin="0,2,0,0">
                                                                     <Button Content="{l:T insight.confirm}"
-                                                                            Classes="ghost" Padding="9,4"
+                                                                            Height="32" MinHeight="32" Padding="12,0"
+                                                                            VerticalAlignment="Center"
                                                                             IsVisible="{Binding IsCandidate}"
                                                                             Command="{Binding ConfirmCommand}"
                                                                             ToolTip.Tip="{l:T insight.confirm.tip}"
                                                                             AutomationProperties.Name="{l:T insight.confirm.tip}" />
-                                                                    <Button Content="×" Classes="ghost" Padding="9,4"
+                                                                    <Button Classes="ghost" Width="32" Height="32" Padding="0"
+                                                                            VerticalAlignment="Center"
                                                                             Command="{Binding DismissCommand}"
                                                                             ToolTip.Tip="{l:T insight.dismiss.tip}"
-                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}" />
+                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}">
+                                                                        <Path Classes="glyph" Data="{c:Icon close}" Width="13" Height="13" />
+                                                                    </Button>
                                                                 </StackPanel>
                                                             </StackPanel>
                                                         </DataTemplate>

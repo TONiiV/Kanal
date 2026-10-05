@@ -12,6 +12,15 @@ newest heading has to match the version the build reports, and a test holds the 
 
 ## 1.0.1
 
+- The window now has one top row across the sidebar, the meeting and the assistant, with the
+  recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
+  toolbar instead of squeezing buttons.
+- Each language column has an enlarge button that gives that language the whole transcript area,
+  and a restore button to bring the others back; scroll position and live following are kept.
+- The meeting list is grouped under Today, Yesterday and Recent, and each group can be folded.
+- Opening an earlier meeting now shows the speaker ruler on the right, as it does for a live one.
+- Search, add-meeting and add-project buttons, the project list and the meeting list were redrawn;
+  the application-language choice in Settings now shows a flag beside each language.
 - Kanal now uses the conversation-K logo, warm paper surfaces, rounded controls and a coordinated
   indigo/apricot palette across the desktop host, dialogs, startup screen and mobile reader.
 

@@ -5,28 +5,30 @@
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.IconBarView" x:DataType="vm:MainViewModel">
     <StackPanel>
-        <Border x:Name="Bar" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
-                MinHeight="{x:Static vm:WorkspaceShellViewModel.DefaultHeaderHeight}" Padding="16,9">
+        <Border x:Name="Bar" Classes="chrome-head" Padding="12,0">
             <!-- Outside the columns: a collapsed sidebar is reachable only through these. -->
             <DockPanel>
-                <Button DockPanel.Dock="Left" Classes="ghost chevron" x:Name="ExpandWorkspace"
-                        Margin="0,0,10,0" IsVisible="{Binding Shell.Left.CanExpand}"
+                <Border DockPanel.Dock="Left" Width="{Binding Shell.CenterStartInset}" />
+                <Button DockPanel.Dock="Left" Classes="ghost icon" x:Name="ExpandWorkspace"
+                        Margin="0,0,8,0" IsVisible="{Binding Shell.Left.CanExpand}"
                         Command="{Binding Shell.Left.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.workspace.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.workspace.show.tip}">
-                    <Path Classes="glyph" Data="{c:Icon chevron-right}" />
+                    <Path Classes="glyph" Data="{c:Icon sidebar}" Width="18" Height="18" />
                 </Button>
-                <Button DockPanel.Dock="Right" Classes="ghost chevron" x:Name="ExpandAssistant"
-                        Margin="10,0,0,0" IsVisible="{Binding Shell.Right.CanExpand}"
+                <Border DockPanel.Dock="Right" Width="{Binding Shell.CenterEndInset}" />
+                <Button DockPanel.Dock="Right" Classes="ghost icon" x:Name="ExpandAssistant"
+                        Margin="8,0,0,0" IsVisible="{Binding Shell.Right.CanExpand}"
                         Command="{Binding Shell.Right.ToggleCommand}"
                         ToolTip.Tip="{l:T sidebar.assistant.show.tip}"
                         AutomationProperties.Name="{l:T sidebar.assistant.show.tip}">
-                    <Path Classes="glyph" Data="{c:Icon chevron-left}" />
+                    <Path Classes="glyph" Data="{c:Icon sidebar}" Width="18" Height="18"
+                          RenderTransformOrigin="50%,50%" RenderTransform="scaleX(-1)" />
                 </Button>
 
                 <!-- A starred column gives up width, an Auto one does not: the transport must keep
                      every pixel it asked for, so the side clusters clip instead of the bar scrolling. -->
-                <Grid ColumnDefinitions="*,Auto,*">
+                <Grid ColumnDefinitions="*,Auto,*" x:Name="BarGrid">
                     <Grid Grid.Column="0" x:Name="LeftCluster"
                           ColumnSpacing="8" VerticalAlignment="Center" ClipToBounds="True">
                         <Grid.ColumnDefinitions>
@@ -39,7 +41,7 @@
                                  against the transport it says nothing about. The box stretches to
                                  the cap rather than to its own text, so the button beside it holds
                                  still as the mode and the language change. -->
-                            <ColumnDefinition Width="*" MaxWidth="200" />
+                            <ColumnDefinition Width="*" MaxWidth="160" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -80,7 +82,7 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <Button Grid.Column="1" Classes="ghost" Content="?" Padding="9,5" FontWeight="Bold"
+                        <Button Grid.Column="1" Classes="ghost icon compact" Content="?" FontWeight="Bold"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="{l:T modes.tip}"
                                 AutomationProperties.Name="{l:T modes.tip}">
@@ -181,40 +183,50 @@
                         </ComboBox>
                     </Grid>
 
-                    <StackPanel Grid.Column="1" x:Name="Transport" Orientation="Horizontal" Spacing="6"
-                                VerticalAlignment="Center" Margin="16,0">
-                        <Button Classes="mark" x:Name="RecordMark" Command="{Binding StartCommand}"
-                                IsVisible="{Binding ShowRecord}"
-                                ToolTip.Tip="{l:T transport.record.tip}"
-                                AutomationProperties.Name="{l:T transport.start}">
-                            <Path Classes="record disc" Data="{c:Icon record}" />
-                        </Button>
+                    <StackPanel Grid.Column="1" x:Name="TransportGroup" Orientation="Horizontal"
+                                VerticalAlignment="Center" Margin="20,0">
+                        <StackPanel x:Name="Transport" Orientation="Horizontal" Spacing="6"
+                                    VerticalAlignment="Center">
+                            <Button Classes="mark" x:Name="RecordMark" Command="{Binding StartCommand}"
+                                    IsVisible="{Binding ShowRecord}"
+                                    ToolTip.Tip="{l:T transport.record.tip}"
+                                    AutomationProperties.Name="{l:T transport.start}">
+                                <Path Classes="record disc" Data="{c:Icon record}" />
+                            </Button>
 
-                        <Button Classes="mark hold" x:Name="PauseMark" Command="{Binding PauseCommand}"
-                                IsVisible="{Binding ShowPause}"
-                                ToolTip.Tip="{Binding PauseTip}"
-                                AutomationProperties.Name="{Binding PauseLabel}">
-                            <Panel>
-                                <Path Classes="hold" Data="{c:Icon pause}" IsVisible="{Binding !IsPaused}" />
-                                <Path Classes="hold" Data="{c:Icon play}" IsVisible="{Binding IsPaused}" />
-                            </Panel>
-                        </Button>
+                            <Button Classes="mark hold" x:Name="PauseMark" Command="{Binding PauseCommand}"
+                                    IsVisible="{Binding ShowPause}"
+                                    ToolTip.Tip="{Binding PauseTip}"
+                                    AutomationProperties.Name="{Binding PauseLabel}">
+                                <Panel>
+                                    <Path Classes="hold" Data="{c:Icon pause}" IsVisible="{Binding !IsPaused}" />
+                                    <Path Classes="hold" Data="{c:Icon play}" IsVisible="{Binding IsPaused}" />
+                                </Panel>
+                            </Button>
 
-                        <Button Classes="mark" x:Name="StopMark" Command="{Binding StopCommand}"
-                                IsVisible="{Binding ShowStop}"
-                                ToolTip.Tip="{Binding StopTip}"
-                                AutomationProperties.Name="{l:T transport.stop}">
-                            <Panel>
-                                <Arc x:Name="StartingSpinner" Classes="spinner"
-                                     IsVisible="{Binding IsStarting}" />
-                                <Path Classes="record" Data="{c:Icon stop}" />
-                            </Panel>
-                        </Button>
+                            <Button Classes="mark" x:Name="StopMark" Command="{Binding StopCommand}"
+                                    IsVisible="{Binding ShowStop}"
+                                    ToolTip.Tip="{Binding StopTip}"
+                                    AutomationProperties.Name="{l:T transport.stop}">
+                                <Panel>
+                                    <Arc x:Name="StartingSpinner" Classes="spinner"
+                                         IsVisible="{Binding IsStarting}" />
+                                    <Path Classes="record" Data="{c:Icon stop}" />
+                                </Panel>
+                            </Button>
+                        </StackPanel>
 
-                        <Rectangle Width="1" Height="20" Fill="{StaticResource Rule}"
-                                   VerticalAlignment="Center" Margin="6,0" />
+                        <StackPanel x:Name="TransportStatus" VerticalAlignment="Center">
+                            <StackPanel Margin="12,0,0,0" IsVisible="{Binding IsRunning}">
+                                <TextBlock Text="{l:T workspace.recording}" Classes="label" IsVisible="{Binding !IsPaused}" />
+                                <TextBlock Text="{l:T recording.held}" Classes="label" IsVisible="{Binding IsPaused}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
 
-                        <Button Classes="ghost" Padding="8,6" x:Name="AudioDevices"
+                    <c:EndAlignedStack Grid.Column="2" x:Name="RightCluster" Orientation="Horizontal"
+                                       Spacing="4" VerticalAlignment="Center" ClipToBounds="True">
+                        <Button Classes="ghost icon" x:Name="AudioDevices"
                                 IsVisible="{Binding NeedsMicrophone}"
                                 ToolTip.Tip="{l:T audio.tip}"
                                 AutomationProperties.Name="{l:T audio.tip}">
@@ -245,13 +257,9 @@
                                 </Flyout>
                             </Button.Flyout>
                         </Button>
-                    </StackPanel>
 
-                    <StackPanel Grid.Column="2" x:Name="RightCluster" Orientation="Horizontal"
-                                Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                ClipToBounds="True">
                         <!-- Parked here until #69 gives the meeting record its own menu. -->
-                        <Button Classes="ghost" Padding="8,9" x:Name="MeetingMore"
+                        <Button Classes="ghost icon" x:Name="MeetingMore"
                                 ToolTip.Tip="{l:T meeting.more.tip}"
                                 AutomationProperties.Name="{l:T meeting.more.tip}">
                             <Path Classes="glyph" Data="{c:Icon ellipsis}" />
@@ -262,7 +270,7 @@
                             </Button.Flyout>
                         </Button>
 
-                        <Button Classes="ghost" Padding="8,7" x:Name="JoinQr"
+                        <Button Classes="ghost icon" x:Name="JoinQr"
                                 IsEnabled="{Binding CanShowJoin}"
                                 ToolTip.Tip="{l:T join.tip}"
                                 AutomationProperties.Name="{l:T join.tip}">
@@ -288,14 +296,14 @@
                                 </Flyout>
                             </Button.Flyout>
                         </Button>
-                    </StackPanel>
+                    </c:EndAlignedStack>
                 </Grid>
             </DockPanel>
         </Border>
 
         <Border IsVisible="{Binding ShowCaptureNote}"
                 BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
-                Background="{StaticResource Paper}" Padding="24,9">
+                Background="{StaticResource Paper}" Padding="28,9">
             <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                 <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="11.5"

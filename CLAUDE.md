@@ -63,11 +63,11 @@ dotnet test
 
 ## Design Context
 
-For any UI or brand work, read [Conversation K](docs/design/conversation-k.md) for current
-colours, shape, typography, asset generation and verification. It supersedes the previous
-monochrome-only and square-corner rules. Read [meeting workspace](docs/design/meeting-workspace.md)
-for layout and interaction requirements. The historical prototype illustrates those interactions;
-the application and Conversation K document define current visual styling.
+For desktop UI work, read [Current UI design](docs/design/ui-design.md), confirmed on 2026-10-05.
+It overrides conflicting visual and layout details in earlier design documents and prototypes.
+Read [meeting workspace](docs/design/meeting-workspace.md) for unchanged interaction requirements;
+read [Conversation K](docs/design/conversation-k.md) for brand asset generation and mobile rules.
+The approved [preview](docs/design/swiss-review/index.html) illustrates the target, not shipped functionality.
 
 Keep transcription content readable in Chinese, German and Polish. Brand controls, speaker
 identity and recording state use distinct semantic resources. Desktop uses explicit light brushes;

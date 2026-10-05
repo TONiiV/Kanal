@@ -39,6 +39,15 @@ public partial class ColumnViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isDropAfter;
 
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    [ObservableProperty]
+    private bool _isFocused;
+
+    [ObservableProperty]
+    private bool _canFocus;
+
     public BubbleViewModel GetOrAdd(string utteranceId)
     {
         if (_byId.TryGetValue(utteranceId, out var bubble))

@@ -27,9 +27,21 @@ namespace Kanal.Host.ViewModels;
 
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
-    public WorkspaceShellViewModel Shell { get; } = new();
+    public WorkspaceShellViewModel Shell { get; } = new(WindowControlInsets.ForCurrentPlatform());
 
     public TranscriptRulerViewModel Ruler { get; }
+
+    public TranscriptRulerViewModel BrowsedRuler { get; }
+
+    public TranscriptRulerViewModel ShownRuler => IsBrowsingRecord ? BrowsedRuler : Ruler;
+
+    private Dictionary<string, string> _storedColours = new();
+
+    private void MarkJumpTarget(string id)
+    {
+        foreach (var column in ShownColumns)
+            column.MarkJumpTarget(id);
+    }
 
     private readonly Dictionary<string, Speaker> _speakerModels = new();
     private readonly Dictionary<string, string> _tagToCanonical = new();
@@ -101,11 +113,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
-        Ruler.JumpRequested += id =>
-        {
-            foreach (var column in Columns)
-                column.MarkJumpTarget(id);
-        };
+        BrowsedRuler = new TranscriptRulerViewModel(tag =>
+            (tag, tag, _storedColours.GetValueOrDefault(tag, "#4C5C68")));
+        Ruler.JumpRequested += MarkJumpTarget;
+        BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
         Sidebar = new WorkspaceSidebarViewModel(store);
         Titling = new MeetingTitling(
@@ -142,6 +153,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (e.PropertyName != nameof(WorkspaceSidebarViewModel.SelectedMeeting))
                 return;
             Files.Show(Sidebar.SelectedMeeting?.Record);
+            FocusedLanguage = null;
             RefreshBody();
         };
         _loadSettings = loadSettings;
@@ -751,6 +763,45 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public IReadOnlyList<ColumnViewModel> ShownColumns => IsBrowsingRecord ? _stored : Columns;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLanguageFocused))]
+    private string? _focusedLanguage;
+
+    public bool IsLanguageFocused => FocusedLanguage is not null;
+
+    // Presentation only: the room, the recording and the translation tasks never see it, and the
+    // hidden columns keep their instances so their scroll position and live-follow survive.
+    public void ToggleColumnFocus(ColumnViewModel column)
+    {
+        if (!ShownColumns.Contains(column))
+            return;
+
+        if (FocusedLanguage is null && ShownColumns.Count < 2)
+            return;
+
+        FocusedLanguage = FocusedLanguage == column.Language ? null : column.Language;
+    }
+
+    partial void OnFocusedLanguageChanged(string? value) => ApplyFocus();
+
+    private void ApplyFocus()
+    {
+        var shown = ShownColumns;
+        if (FocusedLanguage is { } language && !shown.Any(c => c.Language == language))
+        {
+            FocusedLanguage = null;
+            return;
+        }
+
+        foreach (var column in Columns.Concat(_stored))
+        {
+            var onScreen = shown.Contains(column);
+            column.IsFocused = onScreen && column.Language == FocusedLanguage;
+            column.IsShown = !onScreen || FocusedLanguage is null || column.IsFocused;
+            column.CanFocus = onScreen && (column.IsFocused || shown.Count > 1);
+        }
+    }
+
     public bool IsBrowsingRecord =>
         Sidebar.SelectedMeeting is { } meeting && meeting.Id != _sessionRecordId;
 
@@ -776,9 +827,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void RefreshBody()
     {
         _stored.Clear();
+        BrowsedRuler.Clear();
         if (IsBrowsingRecord && Sidebar.SelectedMeeting is { } meeting)
-            foreach (var column in StoredTranscript.Of(meeting.Record))
+        {
+            var utterances = StoredTranscript.Utterances(meeting.Record);
+            foreach (var column in StoredTranscript.Columns(utterances, meeting.Record.Languages ?? []))
                 _stored.Add(column);
+
+            _storedColours = StoredTranscript.ColoursByTag(utterances);
+            foreach (var utterance in utterances)
+                BrowsedRuler.Observe(utterance);
+        }
 
         NotifyBody();
     }
@@ -786,6 +845,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void NotifyBody()
     {
         OnPropertyChanged(nameof(ShownColumns));
+        OnPropertyChanged(nameof(ShownRuler));
         OnPropertyChanged(nameof(HasColumns));
         OnPropertyChanged(nameof(IsBrowsingRecord));
         OnPropertyChanged(nameof(IsViewingAnotherRecord));
@@ -798,6 +858,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanNameMeeting));
         OnPropertyChanged(nameof(CanRegenerateTitle));
         RegenerateTitleCommand.NotifyCanExecuteChanged();
+        ApplyFocus();
     }
 
     /// <summary>An input device and a level meter only mean something for captured audio.</summary>
@@ -1010,6 +1071,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
             Columns.Add(new ColumnViewModel(lang));
+        FocusedLanguage = null;
 
         var asr = plan.Asr!;
         var mt = plan.Mt;

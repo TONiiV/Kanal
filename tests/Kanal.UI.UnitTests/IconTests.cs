@@ -37,6 +37,14 @@ public class IconTests
     }
 
     [AvaloniaFact]
+    public void TheDesignsOwnGlyphsAreAmongThem()
+    {
+        Assert.All(
+            new[] { "meeting-add", "project-add", "search", "sidebar", "expand", "restore" },
+            name => Assert.Contains(name, Icons.Names));
+    }
+
+    [AvaloniaFact]
     public void AnUnknownIconNameFailsLoudly() =>
         Assert.Throws<ArgumentException>(() => Icons.Of("no-such-icon"));
 }

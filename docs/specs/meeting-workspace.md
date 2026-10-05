@@ -128,7 +128,7 @@
 ## Further Notes
 
 - 用户已确认样品设计完成；总体规格由已讨论内容直接合成，不开展新访谈。
-- 原型随仓库设计文档保存为 `meeting-ui.prototype.html`，可直接使用浏览器打开，无需启动器。
+- 历史原型已归档至 [过时设计](../design/obsolete/meeting-ui.prototype.html)；当前视觉规范见 [UI 设计](../design/ui-design.md)。
   早期本地归档提交 `4c4d3db` 保留为历史。
 - #13 已补充发言人识别需求；#63 跟踪句子回放；#49 为本地 ASR；#34 为实时总结。
   #49 的 Whisper-first 方案与本次 Nemotron 首选存在历史差异，实施时以本次用户偏好为方向并重新核实。

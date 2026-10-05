@@ -4,6 +4,144 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-05
+
+### Native UI implementation of the approved Swiss design
+
+Implemented [Current UI design](design/ui-design.md) in the Avalonia host on `codex/new-ui`; the
+handover brief that drove it is deleted. Verification record and screenshots:
+[implementation-review](design/implementation-review/README.md).
+
+- **One 58 DIP header row** across the three columns (`WorkspaceShellViewModel.HeaderHeight`),
+  extended into the window frame; the splitter columns carry the band so it has no seam. Sidebar
+  toggles lead each header, brand mark and wordmark sit left, the assistant title right, and the
+  platform window controls own the corner (`WindowControlInsets`: 78 DIP left on macOS, 138 DIP
+  right elsewhere) — the header that owns the corner reserves the room, the toolbar once a sidebar
+  collapses. Avalonia's drawn title text and fullscreen button are hidden; minimise/maximise/close
+  stay. Drag and double-click go through `WindowDecorationProperties.ElementRole` (headers are
+  `TitleBar`, their buttons and pickers `User`).
+- **Toolbar** is `*, Auto, *`: mode/help/capture left, the recording marks and a status word in the
+  middle, devices/more/QR right. The recording group is centred on the middle column at every width;
+  the right cluster (`EndAlignedStack`) keeps its right end and loses its outer controls, the left
+  cluster keeps its left end; a control clipped away leaves the tab order; the status word hides at
+  460 DIP or less. Mode box is capped at 160 DIP.
+- **Language focus**: each column head has an enlarge/restore button. `MainViewModel.FocusedLanguage`
+  / `ToggleColumnFocus` / `ColumnViewModel.IsShown, IsFocused, CanFocus` project the focus onto the
+  body on screen without touching the room, recording or translation; hidden columns keep their
+  instances (scroll and live-follow survive). Switching meeting, a new room, or the language leaving
+  the body clears it. Focused text is 19/33, capped at 780 DIP.
+- **Sidebar/assistant**: bordered search field with full focus ring, `meeting-add` / `project-add`
+  icons (generated as filled outlines from the approved stroke SVGs, 16-unit view box), project
+  picker with folder glyph, square list rows, settings row with a rule; decision confirm/dismiss on
+  one 32 DIP row. Status bar is 34 DIP.
+- **Meeting list** is grouped under Today / Yesterday / Recent by the day the record was made
+  (`MeetingGroupViewModel`, `WorkspaceSidebarViewModel.MeetingGroups`); each group folds on its own,
+  the fold survives search and refresh, and selecting a meeting opens its group. `Meetings` stays
+  the flat list the rest of the host reads.
+- **Ruler for history**: a browsed record now gets its own `BrowsedRuler`, rebuilt from the stored
+  transcript (speaker colours by order of first appearance, as the stored columns use); the strip
+  follows `ShownRuler` instead of disappearing while another record is on screen.
+- **Settings**: app-language picker shows a `FlagIcon` beside every name, including the selected one.
+  Room-language, audio and consent windows are unchanged.
+- **Details**: the rename underlines (meeting title, sidebar row) are square-ended; the drawn
+  caption buttons are full header height, light wash on minimise/maximise and red with a white
+  glyph on close; ghost buttons no longer paint a white box when disabled; combo-box popups use the
+  sheet/rule/12 DIP overlay surface; reduced-motion (Windows client-area animation off) drops the
+  transport scale and button fades on the main window.
+- **Tests** (red first): `LanguageFocusTests`, shell inset/header tests, composition tests for the
+  centred group, end-pinned cluster, 460 DIP rule and enlarge/restore layout, flag picker and icon
+  presence; older composition tests that encoded the previous toolbar structure were updated.
+
+### Obsolete design archive
+
+Moved the rejected liquid-glass proposal, its complete preview/image folder, the historical meeting
+HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/`. Updated
+relative links, archived preview asset paths and the design index. Current UI docs and Swiss preview
+remain in place. Conversation K brand/mobile guidance and meeting-workspace business constraints
+remain active references outside the archive.
+
+### Design approved and promoted to the current baseline
+
+The user approved the revised Swiss design and requested that it replace the latest design docs.
+Consolidated all accepted changes into [Current UI design](design/ui-design.md), including the
+rounded search field, bounded toolbar clipping with 20-DIP transport margins, aligned decision
+actions, new add icons, original recording controls, unchanged room-language UI and flagged app
+language options. Updated the design index, CLAUDE.md and .impeccable.md to use that entry point.
+Earlier design documents now declare their precedence/history status; the former Swiss proposal
+path redirects readers to the current specification. Preview URLs remain stable and carry approved
+status. Refreshed reference images and checked local links. This completes design documentation;
+native application implementation is still outstanding.
+
+### Swiss-style redesign — current approval proposal
+
+The user rejected the cold glass-card direction and requested Swiss styling consistent with the
+current application icon. Inspected the real splash mark and Conversation K specification, then
+created [the Swiss proposal](design/obsolete/swiss-ui-proposal.md) and a clean, separate
+[preview](design/swiss-review/index.html). The preview now uses the actual folded-K PNG, existing
+indigo/apricot brand colors, warm-paper surfaces, a continuous three-column grid, clear type
+hierarchy and fine rules. Frosted texture is limited to popovers. The previous proposal is marked
+superseded. Existing centered transport, language-column focus/restore, flag language selector,
+distinct add icons, actual Points/Files tabs and status behavior remain in the specification.
+
+Rendered and inspected workspace, focused language, component/platform and settings boards.
+Checked preview JavaScript syntax and local artifact references. No application code was changed;
+native platform validation and focus-state implementation follow design approval.
+
+Browser-review revision: replaced both add-icon badge composites with purpose-drawn 24-unit SVGs,
+using the same 1.6-unit outline weight and integrated center plus. Meeting uses a speech bubble;
+project uses a folder. Updated the workspace and component specimens, design specification and
+rendered boards; native app assets remain unchanged.
+
+Current-element audit after browser feedback: compared App.axaml, transport, room-language,
+settings and consent views, FlagIcon, language catalogs and localized text. Restored red record/stop
+and yellow pause/resume circular controls, original dimensions/hover rules, existing brush values
+and 8-DIP control corners. Removed the invented room-language chip dialog and audio-settings form.
+The settings preview now follows the actual General page and adds circular flags only to its
+existing application-language dropdown (English/中文/Deutsch/Polski). Room language and consent
+windows remain native-design baselines. Added an explicit current-element mapping to the proposal.
+Re-rendered previews and checked syntax; production sources remain unchanged.
+
+Narrow-window review: toolbar side groups now occupy bounded, equally shrinking columns. Left
+actions clip at their right edge and right actions clip at their left edge, keeping a 20-DIP gap
+on each side of the centered, non-shrinking transport. Status text hides based on available toolbar
+width while bottom status remains. Checked an 800-pixel preview; recorded a narrow-workspace image.
+Decision confirm/dismiss buttons also share a centered 32-DIP action row with a 7-DIP gap.
+
+### Liquid glass UI proposal — awaiting approval
+
+Prepared [Quiet glass](design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
+self-contained [visual review](design/obsolete/liquid-glass-review/index.html) and three rendered boards:
+meeting workspace, components/platform chrome, and settings/dialogs. The proposal follows the
+user's title-bar reference without an in-window File/Edit/View strip, uses neutral plus indigo,
+and applies restrained glass to panels while keeping transcript content opaque. It specifies
+fonts, controls and states, icons, input adapters, motion, platform safe areas and material fallback.
+
+This is an approval artifact only: application sources and existing behavior are unchanged.
+Approval would replace the provisional Conversation K colors and speaker/flag color treatments,
+while retaining the approved workspace layout and lifecycle constraints. Boards were rendered in
+headless Chromium and visually inspected; native Windows/macOS blur and caption behavior remain
+implementation validation work. No .NET tests are needed for this documentation-only change.
+
+Follow-up revision: removed back/forward controls and moved existing meeting actions into one
+56-DIP topmost row aligned with the three body columns. Reviewed the actual views and shell
+bindings: the preview now uses visible Points/Files tabs (Speakers remains hidden in code),
+includes project-add and decision-dismiss entries, title regeneration and a compact status/input
+meter footer, and shows recording-time selection locks. Available preview icons reuse repository
+SVGs. The proposal includes a code-to-design mapping and preserves existing commands, flyout
+contents, availability, splitter bounds, and current 272-DIP sidebar defaults. Re-rendered all
+three boards and checked script syntax; no production UI code has changed.
+
+Latest screenshot-based revision: center transport geometrically within the transcript column
+using equal flexible zones on either side. Restore the actual per-language transcript columns and
+existing overlapping flag selector style. Each column now has a working preview-only focus/restore
+button; focus fills only the middle region and preserves the chosen language set. Added a fourth
+rendered board for focused German. Distinguish new meeting (people + badge, primary) from project
+add (folder + badge, neutral), retaining the existing project-add menu. Flags explicitly remain a
+content exception to the proposed neutral/indigo interface palette. Native column focus state and
+its preservation rules are specified as implementation work after design approval.
+
+---
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu
@@ -1251,7 +1389,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 - User confirmed the final B-based UI design. The authoritative specification is
   [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
   formerly collected here. Approval covers the visual direction, not completion of production code.
-- At the user's request the approved [HTML prototype](design/meeting-ui.prototype.html) now lives
+- At the user's request the approved [HTML prototype](design/obsolete/meeting-ui.prototype.html) now lives
   beside the design documents and opens directly in a browser. The CMD launcher is removed.
   The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
 - [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership

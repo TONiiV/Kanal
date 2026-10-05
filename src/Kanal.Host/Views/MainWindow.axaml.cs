@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Kanal.Host.Localization;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.Host.Views;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Classes.Set("reduce-motion", SystemMotion.Reduced);
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
