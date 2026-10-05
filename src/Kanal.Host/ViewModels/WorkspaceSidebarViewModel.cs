@@ -206,7 +206,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return;
         }
 
-        if (SelectedWorkspace is not { } workspace || Refused(_store.DeleteMeeting(workspace.Id, opened.Id)))
+        if (Refused(_store.DeleteMeeting(opened.WorkspaceId, opened.Id)))
             return;
 
         LoadMeetings([]);

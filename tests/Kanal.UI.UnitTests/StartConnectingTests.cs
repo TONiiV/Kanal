@@ -250,6 +250,28 @@ public class StartConnectingTests : IDisposable
         Assert.False(vm.StopCommand.CanExecute(null));
     }
 
+    [AvaloniaFact]
+    public async Task AFailedStartAfterAWorkspaceSwitchLeavesNoRecordBehind()
+    {
+        var (store, workspace) = Opened();
+        var other = Path.Combine(_root, "beta");
+        Directory.CreateDirectory(other);
+        var beta = store.CreateWorkspace("Beta", other).Workspace!;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (vm, _) = Demo(gate.Task, store);
+        vm.Sidebar.SelectedWorkspace = vm.Sidebar.Workspaces.Single(w => w.Id == workspace.Id);
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        Assert.Single(store.ListMeetings(workspace.Id).Meetings);
+        vm.Sidebar.SelectedWorkspace = vm.Sidebar.Workspaces.Single(w => w.Id == beta.Id);
+
+        gate.SetException(new InvalidOperationException("transcriber refused"));
+        await starting;
+
+        Assert.Empty(store.ListMeetings(workspace.Id).Meetings);
+    }
+
     private sealed class BrokenAsr(IAsrProvider inner) : IAsrProvider, IAsyncDisposable
     {
         public string Id => inner.Id;
