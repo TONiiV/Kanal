@@ -173,8 +173,11 @@ not measured on real audio — this Mac has no Polish voice to synthesise a test
 
 Four things the ADR did not anticipate, all found by running the model:
 
-- **sherpa-onnx strips the detected language.** The model writes a language tag, and sherpa-onnx
-  filters it out of text and tokens; the C# API has no other route to it. A room of one language
+- **The model does not report the language it heard.** The language is an input (a prompt id), and
+  `auto` is the id for decoding without one. sherpa-onnx filters `<de-DE>`-style tokens out of the
+  result, but a patched build that records the raw token sequence showed none in any frame, in
+  `auto`, `de-DE` or `zh-CN` (560 ms int8, seven synthesised de/en/zh utterances), so there is
+  nothing to expose upstream. A room of one language
   forces that language (with `zh` → `zh-CN`, `ja` → `ja-JP`); any other room decodes with `auto`
   and `TranscriptLanguage` reads the source language back from the text: script first, then
   distinctive letters and stopwords among the room's Latin languages. Correct on every test
