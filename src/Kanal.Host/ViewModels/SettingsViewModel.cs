@@ -13,6 +13,7 @@ using Kanal.Core.Models;
 using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 using CoreLogLevel = Kanal.Core.Diagnostics.LogLevel;
 
@@ -40,7 +41,7 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 }
 
 /// <summary>
-/// Manages the stored Gladia API keys and the active translation model.
+/// Manages the stored Gladia API keys and the active transcription and translation models.
 /// Multiple keys, one active; the env var GLADIA_API_KEY stays as the fallback
 /// when no stored key exists.
 /// </summary>
@@ -97,14 +98,19 @@ public partial class SettingsViewModel : ViewModelBase
         _envVarIsSet = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null;
 
         var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
-        TranslationModels.Add(new TranslationModelItemViewModel());
+        TranslationModels.Add(new ModelItemViewModel());
         foreach (var model in LocalModelCatalog.Models)
-            TranslationModels.Add(new TranslationModelItemViewModel(model, downloads));
+            TranslationModels.Add(new ModelItemViewModel(model, downloads));
 
         var active = TranslationModels.FirstOrDefault(
                          m => m.IsLocal && m.ModelId == settings.ActiveTranslationModelId)
                      ?? TranslationModels[0];
         active.IsActive = true;
+
+        foreach (var model in AsrModelCatalog.Models)
+            TranscriptionModels.Add(new ModelItemViewModel(model, downloads));
+        (TranscriptionModels.FirstOrDefault(m => m.ModelId == settings.ActiveTranscriptionModelId)
+         ?? TranscriptionModels[0]).IsActive = true;
 
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _recordAudio = settings.RecordAudio;
@@ -137,7 +143,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(LogFailureNote));
         OnPropertyChanged(nameof(VersionLabel));
         OnPropertyChanged(nameof(LicenseNote));
-        foreach (var model in TranslationModels)
+        foreach (var model in TranslationModels.Concat(TranscriptionModels))
             model.RefreshText();
         foreach (var level in LogLevels)
             level.RefreshText();
@@ -164,7 +170,9 @@ public partial class SettingsViewModel : ViewModelBase
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
 
-    public ObservableCollection<TranslationModelItemViewModel> TranslationModels { get; } = new();
+    public ObservableCollection<ModelItemViewModel> TranslationModels { get; } = new();
+
+    public ObservableCollection<ModelItemViewModel> TranscriptionModels { get; } = new();
 
     private readonly bool _envVarIsSet;
 
@@ -510,7 +518,7 @@ public partial class SettingsViewModel : ViewModelBase
         // every closed Settings dialog's view model alive and keeps refreshing it.
         Localizer.Instance.PropertyChanged -= OnLanguageChanged;
 
-        foreach (var model in TranslationModels)
+        foreach (var model in TranslationModels.Concat(TranscriptionModels))
             model.CancelDownload();
 
         // Same reasoning: a microphone left open behind a closed dialog is invisible and
@@ -545,6 +553,8 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        settings.ActiveTranscriptionModelId =
+            TranscriptionModels.FirstOrDefault(m => m.IsActive)?.ModelId;
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.RecordAudio = RecordAudio;
         settings.RecordOnlineAudio = RecordOnlineAudio;

@@ -40,6 +40,43 @@
         </Style>
     </Window.Styles>
 
+    <Window.Resources>
+        <DataTemplate x:Key="ModelRow" x:DataType="vm:ModelItemViewModel">
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                    <RadioButton Grid.Column="0" GroupName="{Binding RadioGroup}"
+                                 IsChecked="{Binding IsActive}"
+                                 VerticalAlignment="Top" Margin="0,1,0,0"
+                                 ToolTip.Tip="{Binding UseTip}" />
+                    <StackPanel Grid.Column="1" Margin="6,0,10,0">
+                        <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding MetaLabel}" FontSize="11"
+                                   Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
+                        <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
+                                   IsVisible="{Binding HasLicenseNote}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
+                               Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
+                               Margin="0,0,12,0" />
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                VerticalAlignment="Center">
+                        <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
+                                IsVisible="{Binding CanDownload}" />
+                        <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
+                                IsVisible="{Binding IsDownloading}" />
+                        <!-- Same outlined face as Download and Cancel beside it: the three
+                             are one family of actions, and a borderless odd one out read
+                             as a different kind of control rather than a quieter one. -->
+                        <Button Content="{l:T settings.model.delete}"
+                                Command="{Binding DeleteCommand}"
+                                IsVisible="{Binding CanDelete}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
     <DockPanel Margin="24,20,24,20">
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
@@ -185,6 +222,8 @@
                         <Border Classes="rule" />
                         <TextBlock Text="{l:T settings.localasr.note}" FontSize="11.5" TextWrapping="Wrap"
                                    Foreground="{StaticResource Ink3}" />
+                        <ItemsControl x:Name="TranscriptionModels" ItemsSource="{Binding TranscriptionModels}"
+                                      ItemTemplate="{StaticResource ModelRow}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -200,44 +239,8 @@
                         <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                                    Text="{l:T settings.translation.note}" />
 
-                        <ItemsControl x:Name="TranslationModels" ItemsSource="{Binding TranslationModels}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:TranslationModelItemViewModel">
-                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <RadioButton Grid.Column="0" GroupName="activeModel"
-                                                         IsChecked="{Binding IsActive}"
-                                                         VerticalAlignment="Top" Margin="0,1,0,0"
-                                                         ToolTip.Tip="{l:T settings.model.usetip}" />
-                                            <StackPanel Grid.Column="1" Margin="6,0,10,0">
-                                                <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding MetaLabel}" FontSize="11"
-                                                           Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
-                                                <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
-                                                           Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
-                                                           IsVisible="{Binding HasLicenseNote}" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
-                                                       Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
-                                                       Margin="0,0,12,0" />
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
-                                                        VerticalAlignment="Center">
-                                                <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
-                                                        IsVisible="{Binding CanDownload}" />
-                                                <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
-                                                        IsVisible="{Binding IsDownloading}" />
-                                                <!-- Same outlined face as Download and Cancel beside it: the three
-                                                     are one family of actions, and a borderless odd one out read
-                                                     as a different kind of control rather than a quieter one. -->
-                                                <Button Content="{l:T settings.model.delete}"
-                                                        Command="{Binding DeleteCommand}"
-                                                        IsVisible="{Binding CanDelete}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ItemsControl x:Name="TranslationModels" ItemsSource="{Binding TranslationModels}"
+                                      ItemTemplate="{StaticResource ModelRow}" />
 
                         <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
                                    Margin="0,14,0,0" Text="{l:T settings.translation.cloudnote}" />

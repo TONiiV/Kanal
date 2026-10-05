@@ -155,6 +155,25 @@ its preservation rules are specified as implementation work after design approva
 
 ---
 
+## 2026-10-04
+
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled transcription download can
+  already hold its 627 MB encoder; Download asks `ModelDownloadManager.MissingParts` first.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
 ## 2026-09-23
 
 ### Update check and minimum supported version ([ADR 0056](adr/0056-update-check-and-minimum-supported-version.md))
