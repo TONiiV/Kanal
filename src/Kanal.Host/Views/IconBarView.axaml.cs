@@ -21,12 +21,20 @@ public partial class IconBarView : UserControl
             if (DataContext is MainViewModel vm)
                 vm.ConfirmConsent = saveAudio => AskAsync(vm, saveAudio);
         };
-        LayoutUpdated += (_, _) =>
-        {
-            TransportStatus.IsVisible = Bounds.Width > StatusFloor;
-            KeepOnlyReachableInTabOrder(LeftCluster);
-            KeepOnlyReachableInTabOrder(RightCluster);
-        };
+        SizeChanged += (_, _) => TransportStatus.IsVisible = Bounds.Width > StatusFloor;
+        WatchReach(LeftCluster);
+        WatchReach(RightCluster);
+    }
+
+    // Not LayoutUpdated: it fires on every layout pass in the window, and live transcripts make many.
+    private static void WatchReach(Panel cluster)
+    {
+        foreach (var watched in cluster.Children.Prepend(cluster))
+            watched.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == BoundsProperty)
+                    KeepOnlyReachableInTabOrder(cluster);
+            };
     }
 
     // A control clipped away by the narrowing bar must not take keyboard focus unseen.

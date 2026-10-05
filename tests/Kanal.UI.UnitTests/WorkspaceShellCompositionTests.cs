@@ -288,6 +288,26 @@ public class WorkspaceShellCompositionTests
     }
 
     [AvaloniaFact]
+    public void AControlThatAppearsInANarrowBarAlreadyCutAwayStaysOutOfTheTabOrder()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.SelectedMode = vm.Modes.First(mode => !mode.Mode.NeedsMicrophone);
+        var window = new MainWindow { DataContext = vm, Width = vm.Shell.MinShellWidth, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var devices = (Button)Named(Region<IconBarView>(window), "AudioDevices");
+
+        vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(devices.IsVisible);
+        Assert.True(devices.Bounds.X < 0, $"the outer control was not cut: it starts at {devices.Bounds.X}");
+        Assert.False(devices.IsTabStop);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheStatusBesideTheRecordingGroupGoesWhenTheMiddleColumnIsNarrow()
     {
         var vm = TestViewModels.Hermetic();
