@@ -78,6 +78,7 @@
   "column.drag.tip": "Ziehen, um diese Spalte zu verschieben — oder Alt+← / Alt+→",
   "column.focus.tip": "Diese Sprache auf den ganzen Transkriptbereich vergrößern",
   "column.restore.tip": "Alle Sprachen wieder anzeigen",
+  "transcript.jumplatest.tip": "Zur neuesten Zeile springen",
   "ruler.name": "Transkript-Navigation",
   "status.idle": "Bereit.",
   "status.pickalanguage": "Mindestens eine Sprache wählen.",

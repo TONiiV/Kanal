@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -7,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Kanal.Host.Controls;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.Host.Views;
@@ -16,10 +18,14 @@ public partial class MeetingRoomView : UserControl
     private static readonly DataFormat<string> ColumnDragFormat =
         DataFormat.CreateStringApplicationFormat("kanal-column");
 
-    private readonly Dictionary<ScrollViewer, bool> _following = new();
+    private readonly ColumnScrollSync _scroll = new();
     private MainViewModel? _bound;
 
-    public MeetingRoomView() => InitializeComponent();
+    public MeetingRoomView()
+    {
+        InitializeComponent();
+        _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.HasUnseen;
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -27,6 +33,7 @@ public partial class MeetingRoomView : UserControl
         {
             _bound.Ruler.JumpRequested -= ScrollTo;
             _bound.BrowsedRuler.JumpRequested -= ScrollTo;
+            _bound.Sidebar.PropertyChanged -= OnSelectedMeetingChanged;
         }
 
         _bound = DataContext as MainViewModel;
@@ -34,10 +41,19 @@ public partial class MeetingRoomView : UserControl
         {
             _bound.Ruler.JumpRequested += ScrollTo;
             _bound.BrowsedRuler.JumpRequested += ScrollTo;
+            _bound.Sidebar.PropertyChanged += OnSelectedMeetingChanged;
         }
 
         base.OnDataContextChanged(e);
     }
+
+    private void OnSelectedMeetingChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkspaceSidebarViewModel.SelectedMeeting))
+            _scroll.ScrollToLatest();
+    }
+
+    private void OnJumpToLatestClick(object? sender, RoutedEventArgs e) => _scroll.ScrollToLatest();
 
     private void OnTickEntered(object? sender, PointerEventArgs e)
     {
@@ -62,12 +78,12 @@ public partial class MeetingRoomView : UserControl
 
     private void ScrollTo(string utteranceId)
     {
-        foreach (var scroller in _following.Keys.ToList())
+        _scroll.StopFollowing();
+        foreach (var scroller in this.GetVisualDescendants().OfType<ScrollViewer>().ToList())
         {
             if (scroller.Content is not ItemsControl items)
                 continue;
 
-            _following[scroller] = false;
             var bubble = items.ItemsSource?.OfType<BubbleViewModel>()
                 .FirstOrDefault(b => b.UtteranceId == utteranceId);
             if (bubble is not null && items.ContainerFromItem(bubble) is Control container)
@@ -85,36 +101,14 @@ public partial class MeetingRoomView : UserControl
 
     private void OnColumnScrollLoaded(object? sender, RoutedEventArgs e)
     {
-        if (sender is not ScrollViewer scroller || _following.ContainsKey(scroller))
-            return;
-
-        _following[scroller] = true;
-        scroller.ScrollChanged += OnColumnScrollChanged;
+        if (sender is ScrollViewer scroller)
+            _scroll.Attach(scroller);
     }
 
     private void OnColumnScrollDetached(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        if (sender is not ScrollViewer scroller)
-            return;
-
-        scroller.ScrollChanged -= OnColumnScrollChanged;
-        _following.Remove(scroller);
-    }
-
-    private void OnColumnScrollChanged(object? sender, ScrollChangedEventArgs e)
-    {
-        if (sender is not ScrollViewer scroller)
-            return;
-
-        var atBottom = scroller.Offset.Y >= scroller.Extent.Height - scroller.Viewport.Height - 2;
-        if (e.ExtentDelta.Y == 0)
-        {
-            _following[scroller] = atBottom;
-            return;
-        }
-
-        if (_following.TryGetValue(scroller, out var following) && following && !atBottom)
-            scroller.ScrollToEnd();
+        if (sender is ScrollViewer scroller)
+            _scroll.Detach(scroller);
     }
 
     private void OnColumnFocusClick(object? sender, RoutedEventArgs e)

@@ -34,6 +34,15 @@ handover brief that drove it is deleted. Verification record and screenshots:
   icons (generated as filled outlines from the approved stroke SVGs, 16-unit view box), project
   picker with folder glyph, square list rows, settings row with a rule; decision confirm/dismiss on
   one 32 DIP row. Status bar is 34 DIP.
+- **Columns scroll together.** `ColumnScrollSync` ties the language columns to one reading
+  position. It finds the line at the top of the column the reader moves. It puts the same line, at
+  the same fraction, at the top of the other columns. Line heights differ per language, so pixel
+  offsets would drift. Reaching the bottom of one column takes all columns to the bottom. A column
+  that comes back from enlarge mode aligns to the others. Switching meeting resets the position to
+  the live edge.
+- **Jump to latest.** New content while the reader is above the bottom shows a round button at the
+  foot of the transcript. The button takes all columns to the end and resumes following. Scrolling to
+  the bottom by hand hides it. Ruler jumps stop following.
 - **Meeting list** is grouped under Today / Yesterday / Recent by the day the record was made
   (`MeetingGroupViewModel`, `WorkspaceSidebarViewModel.MeetingGroups`); each group folds on its own,
   the fold survives search and refresh, and selecting a meeting opens its group. `Meetings` stays

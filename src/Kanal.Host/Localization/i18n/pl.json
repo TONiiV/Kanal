@@ -78,6 +78,7 @@
   "column.drag.tip": "Przeciągnij, aby przesunąć tę kolumnę — albo Alt+← / Alt+→",
   "column.focus.tip": "Powiększ ten język na cały obszar transkrypcji",
   "column.restore.tip": "Pokaż ponownie wszystkie języki",
+  "transcript.jumplatest.tip": "Przejdź do najnowszej linii",
   "ruler.name": "Nawigacja transkrypcji",
   "status.idle": "Bezczynny.",
   "status.pickalanguage": "Wybierz co najmniej jeden język.",

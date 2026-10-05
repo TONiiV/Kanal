@@ -17,6 +17,8 @@ newest heading has to match the version the build reports, and a test holds the 
   toolbar instead of squeezing buttons.
 - Each language column has an enlarge button that gives that language the whole transcript area,
   and a restore button to bring the others back; scroll position and live following are kept.
+- The language columns now scroll together. A round button appears when new lines arrive below
+  the line you are reading. It takes you to the latest line.
 - The meeting list is grouped under Today, Yesterday and Recent, and each group can be folded.
 - Opening an earlier meeting now shows the speaker ruler on the right, as it does for a live one.
 - Search, add-meeting and add-project buttons, the project list and the meeting list were redrawn;

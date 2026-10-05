@@ -17,6 +17,7 @@
 | `05-narrow-workspace.png` / `05b-minimum-workspace.png` | 900 DIP 与窗口下限（874 DIP，中栏 320 DIP） |
 | `06-paused.png` | 暂停 |
 | `07-sidebars-collapsed.png` | 两侧栏收起，工具栏承载展开入口 |
+| `08-jump-button.png` | 录制中向上翻阅，新内容在下方：各列同步，底部出现“回到最新”圆形按钮 |
 | `04-settings.png` / `04b-settings-language-open.png` | 常规设置与带旗标的应用语言 |
 | `native-windows-125-header.png` | 真实 Windows 11 窗口（125% 缩放）顶栏，含系统窗口按钮 |
 

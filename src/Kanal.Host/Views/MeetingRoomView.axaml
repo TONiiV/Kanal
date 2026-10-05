@@ -49,6 +49,17 @@
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="0,0,0,2" />
         </Style>
+        <Style Selector="Button.jump">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
         <Style Selector="Border.colhead">
             <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderThickness" Value="0,2,0,0" />
@@ -288,6 +299,14 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <Button x:Name="JumpToLatest" Grid.Column="0" Classes="jump" IsVisible="False"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="16,0,0,22"
+                Click="OnJumpToLatestClick"
+                ToolTip.Tip="{l:T transcript.jumplatest.tip}"
+                AutomationProperties.Name="{l:T transcript.jumplatest.tip}">
+            <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="16" Height="16" />
+        </Button>
 
         <ItemsControl Grid.Column="1" ItemsSource="{Binding ShownRuler.Ticks}"
                       Width="30" Margin="0,2,12,10" VerticalAlignment="Top"

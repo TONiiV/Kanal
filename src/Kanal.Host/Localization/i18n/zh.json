@@ -78,6 +78,7 @@
   "column.drag.tip": "拖动可移动此列——或按 Alt+← / Alt+→",
   "column.focus.tip": "放大此语言以占满转写区域",
   "column.restore.tip": "恢复显示全部语言",
+  "transcript.jumplatest.tip": "回到最新内容",
   "ruler.name": "转写导航",
   "status.idle": "空闲。",
   "status.pickalanguage": "请至少选择一种语言。",
