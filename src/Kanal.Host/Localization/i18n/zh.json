@@ -1,6 +1,6 @@
 {
   "input.label": "输入",
-  "capture.inroom.name": "同一房间",
+  "capture.inroom.name": "线下会议",
   "capture.online.name": "线上会议",
   "capture.online.guidance": "请佩戴耳机并开启勿扰模式。Kanal 会收取所选电脑输出，包括通知提示音。",
   "capture.online.unavailable": "本版本不含电脑音频采集。",
