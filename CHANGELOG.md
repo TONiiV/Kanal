@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
+  centre, most visibly on Save & Close and View open-source acknowledgements.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
   vertical centre of the header instead of near its top edge. In full screen, the header content
   moves to the left edge, because the buttons are gone.
