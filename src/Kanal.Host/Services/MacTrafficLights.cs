@@ -25,19 +25,21 @@ public static class MacTrafficLights
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern void Send(nint self, nint sel, CGRect arg);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern CGRect SendRect(nint self, nint sel);
 
+    private static CGSize? _nativeSize;
+
     // Avalonia ignores ExtendClientAreaTitleBarHeightHint for the title bar view: it stays 28 high,
-    // so the lights sit near the top of a taller header. Resize the view, then place each light.
+    // so the lights sit near the top of a taller header.
     public static void Apply(Window window, double barHeight)
     {
         // objc_msgSend returns a CGRect in registers on arm64 only; Intel needs objc_msgSend_stret.
         if (!OperatingSystem.IsMacOS() || RuntimeInformation.ProcessArchitecture != Architecture.Arm64) return;
         if (window.WindowState == WindowState.FullScreen) return;
-        var ns = window.TryGetPlatformHandle()?.Handle ?? 0;
-        if (ns == 0) return;
+        var nsWindow = window.TryGetPlatformHandle()?.Handle ?? 0;
+        if (nsWindow == 0) return;
         try
         {
             var standardButton = sel_registerName("standardWindowButton:");
-            var bar = Send(Send(ns, standardButton, 0L), sel_registerName("superview"));
+            var bar = Send(Send(nsWindow, standardButton, 0L), sel_registerName("superview"));
             var container = Send(bar, sel_registerName("superview"));
             var outer = SendRect(Send(container, sel_registerName("superview")), sel_registerName("frame"));
             var setFrame = sel_registerName("setFrame:");
@@ -46,8 +48,9 @@ public static class MacTrafficLights
 
             for (var index = 0; index < 3; index++)
             {
-                var button = Send(ns, standardButton, (long)index);
-                var native = SendRect(button, sel_registerName("bounds"));
+                var button = Send(nsWindow, standardButton, (long)index);
+                // Bounds shrink to 1/Scale if AppKit calls setFrame: on a scaled button, so read them once.
+                var native = _nativeSize ??= ReadSize(button);
                 var frame = TrafficLightLayout.Frame(index, barHeight, native.W, native.H);
                 Send(button, sel_registerName("setFrameSize:"), new CGSize(frame.Width, frame.Height));
                 // Frame and bounds sizes differing is what scales the drawing.
@@ -57,6 +60,13 @@ public static class MacTrafficLights
         }
         catch (Exception e) when (e is EntryPointNotFoundException or DllNotFoundException)
         {
+            // No libobjc (sandboxed or stripped system): keep the native buttons.
         }
+    }
+
+    private static CGSize ReadSize(nint button)
+    {
+        var bounds = SendRect(button, sel_registerName("bounds"));
+        return new CGSize(bounds.W, bounds.H);
     }
 }
