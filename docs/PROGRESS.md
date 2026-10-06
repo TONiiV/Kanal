@@ -14,6 +14,8 @@ Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar vi
 - `MacTrafficLights.Apply` makes the title bar view as high as the header, then places each button
   with `TrafficLightLayout`. The buttons are 1.2 times the native size, 24 DIP apart, centred
   vertically. They fit inside the 78 DIP that `WindowControlInsets.MacOs` reserves.
+- In full screen the window controls are gone. `WorkspaceShellViewModel.IsFullScreen` sets the
+  reserved insets to 0, so the header content moves to the edge.
 - The host applies the layout on open, activation, resize and window-state change. It skips full
   screen, where macOS owns the title bar.
 - The code runs on Apple silicon only. Intel Macs keep the native buttons: reading a `CGRect`

@@ -36,31 +36,26 @@ public static class MacTrafficLights
         if (window.WindowState == WindowState.FullScreen) return;
         var nsWindow = window.TryGetPlatformHandle()?.Handle ?? 0;
         if (nsWindow == 0) return;
-        try
-        {
-            var standardButton = sel_registerName("standardWindowButton:");
-            var bar = Send(Send(nsWindow, standardButton, 0L), sel_registerName("superview"));
-            var container = Send(bar, sel_registerName("superview"));
-            var outer = SendRect(Send(container, sel_registerName("superview")), sel_registerName("frame"));
-            var setFrame = sel_registerName("setFrame:");
-            Send(container, setFrame, new CGRect { Y = outer.H - barHeight, W = outer.W, H = barHeight });
-            Send(bar, setFrame, new CGRect { W = outer.W, H = barHeight });
+        var standardButton = sel_registerName("standardWindowButton:");
+        var bar = Send(Send(nsWindow, standardButton, 0L), sel_registerName("superview"));
+        var container = Send(bar, sel_registerName("superview"));
+        var outer = SendRect(Send(container, sel_registerName("superview")), sel_registerName("frame"));
+        var setFrame = sel_registerName("setFrame:");
+        Send(container, setFrame, new CGRect { Y = outer.H - barHeight, W = outer.W, H = barHeight });
+        Send(bar, setFrame, new CGRect { W = outer.W, H = barHeight });
 
-            for (var index = 0; index < 3; index++)
-            {
-                var button = Send(nsWindow, standardButton, (long)index);
-                // Bounds shrink to 1/Scale if AppKit calls setFrame: on a scaled button, so read them once.
-                var native = _nativeSize ??= ReadSize(button);
-                var frame = TrafficLightLayout.Frame(index, barHeight, native.W, native.H);
-                Send(button, sel_registerName("setFrameSize:"), new CGSize(frame.Width, frame.Height));
-                // Frame and bounds sizes differing is what scales the drawing.
-                Send(button, sel_registerName("setBoundsSize:"), new CGSize(native.W, native.H));
-                Send(button, sel_registerName("setFrameOrigin:"), new CGPoint(frame.X, frame.Y));
-            }
-        }
-        catch (Exception e) when (e is EntryPointNotFoundException or DllNotFoundException)
+        for (var index = 0; index < 3; index++)
         {
-            // No libobjc (sandboxed or stripped system): keep the native buttons.
+            var button = Send(nsWindow, standardButton, (long)index);
+            // Bounds shrink to 1/Scale if AppKit calls setFrame: on a scaled button, so read them once.
+            var native = _nativeSize ?? ReadSize(button);
+            if (native.W <= 0 || native.H <= 0) return;
+            _nativeSize = native;
+            var frame = TrafficLightLayout.Frame(index, barHeight, native.W, native.H);
+            Send(button, sel_registerName("setFrameSize:"), new CGSize(frame.Width, frame.Height));
+            // Frame and bounds sizes differing is what scales the drawing.
+            Send(button, sel_registerName("setBoundsSize:"), new CGSize(native.W, native.H));
+            Send(button, sel_registerName("setFrameOrigin:"), new CGPoint(frame.X, frame.Y));
         }
     }
 
