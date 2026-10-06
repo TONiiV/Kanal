@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
+  vertical centre of the header instead of near its top edge. In full screen, the header content
+  moves to the left edge, because the buttons are gone.
 - In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
   now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
   《》 used for books and films.

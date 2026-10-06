@@ -4,6 +4,25 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-06
+
+### macOS window buttons centred in the header and enlarged
+
+Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
+28 DIP high. The window buttons sat near the top of the 58 DIP header.
+
+- `MacTrafficLights.Apply` makes the title bar view as high as the header, then places each button
+  with `TrafficLightLayout`. The buttons are 1.2 times the native size, 24 DIP apart, centred
+  vertically. They fit inside the 78 DIP that `WindowControlInsets.MacOs` reserves.
+- In full screen the window controls are gone. `WorkspaceShellViewModel.IsFullScreen` sets the
+  reserved insets to 0, so the header content moves to the edge.
+- The host applies the layout on open, activation, resize and window-state change. It skips full
+  screen, where macOS owns the title bar.
+- The code runs on Apple silicon only. Intel Macs keep the native buttons: reading a `CGRect`
+  from `objc_msgSend` there needs `objc_msgSend_stret`.
+
+---
+
 ## 2026-10-05
 
 ### Remove the ellipsis button beside the join QR

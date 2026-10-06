@@ -164,6 +164,41 @@ public class WorkspaceShellTests
     }
 
     [Fact]
+    public void FullScreenGivesTheReservedRoomBack()
+    {
+        var shell = new WorkspaceShellViewModel(new WindowControlInsets(Start: 78, End: 138));
+
+        shell.IsFullScreen = true;
+
+        Assert.Equal(0, shell.WorkspaceStartInset);
+        Assert.Equal(0, shell.AssistantEndInset);
+        shell.Left.ToggleCommand.Execute(null);
+        shell.Right.ToggleCommand.Execute(null);
+        Assert.Equal(0, shell.CenterStartInset);
+        Assert.Equal(0, shell.CenterEndInset);
+
+        shell.IsFullScreen = false;
+
+        Assert.Equal(78, shell.CenterStartInset);
+        Assert.Equal(138, shell.CenterEndInset);
+    }
+
+    [Fact]
+    public void TheInsetsAreReannouncedWhenFullScreenChanges()
+    {
+        var shell = new WorkspaceShellViewModel(new WindowControlInsets(Start: 78, End: 138));
+        var changed = new List<string?>();
+        shell.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        shell.IsFullScreen = true;
+
+        Assert.Contains(nameof(WorkspaceShellViewModel.WorkspaceStartInset), changed);
+        Assert.Contains(nameof(WorkspaceShellViewModel.CenterStartInset), changed);
+        Assert.Contains(nameof(WorkspaceShellViewModel.CenterEndInset), changed);
+        Assert.Contains(nameof(WorkspaceShellViewModel.AssistantEndInset), changed);
+    }
+
+    [Fact]
     public void TheInsetsAreReannouncedWhenASidebarOpensOrCloses()
     {
         var shell = new WorkspaceShellViewModel(new WindowControlInsets(Start: 78, End: 138));
