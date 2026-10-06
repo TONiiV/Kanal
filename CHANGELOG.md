@@ -23,6 +23,18 @@ The first release. Everything below is what Kanal does on the day it ships.
   app does not mute Kanal. On Windows this needs Windows 10 version 2004 or later. In both profiles
   Pause now closes the devices, the meters drop to zero while paused, and a silent microphone is
   pointed out. `docs/online-meeting-audio.md` covers diagnosis.
+- On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
+  vertical centre of the header instead of near its top edge. In full screen, the header content
+  moves to the left edge, because the buttons are gone.
+- In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
+  now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
+  《》 used for books and films.
+- The Files tab on the right now has an Open folder button beside Import file. It opens the folder
+  of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
+  and says so under the list if that folder was moved or deleted outside Kanal.
+- The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
+  transcription · Cloud translation instead; without an API key, that row says one is needed. To
+  test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

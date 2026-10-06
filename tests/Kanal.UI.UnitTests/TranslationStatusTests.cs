@@ -26,7 +26,8 @@ internal static class TestViewModels
         Func<WorkspaceStore>? workspaces = null,
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
-        Func<Action, Task>? offUiThread = null)
+        Func<Action, Task>? offUiThread = null,
+        bool development = true)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -45,7 +46,8 @@ internal static class TestViewModels
             titlerFactory: titlerFactory,
             offUiThread: offUiThread,
             captureFactory: () => new SilentCapture(),
-            systemCaptureFactory: () => null)
+            systemCaptureFactory: () => null,
+            development: development)
         {
             RelayEnabled = false,
         };

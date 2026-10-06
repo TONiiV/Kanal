@@ -215,6 +215,13 @@ public class LocalizationTests
             Assert.Contains(phrase, text, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ChineseQuotesAMeetingTitleLikeAnyOtherNameNotAsABook()
+    {
+        foreach (var (key, text) in Table("zh"))
+            Assert.False(text.Contains('《') || text.Contains('》'), $"zh/{key} reads \"{text}\"");
+    }
+
     /// <summary>
     /// Switching has to reach windows that are already open — the operator changes it mid-meeting
     /// and the screen follows, without restarting a room.

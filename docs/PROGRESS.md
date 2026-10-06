@@ -4,7 +4,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-06
+
+### macOS window buttons centred in the header and enlarged
+
+Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
+28 DIP high. The window buttons sat near the top of the 58 DIP header.
+
+- `MacTrafficLights.Apply` makes the title bar view as high as the header, then places each button
+  with `TrafficLightLayout`. The buttons are 1.2 times the native size, 24 DIP apart, centred
+  vertically. They fit inside the 78 DIP that `WindowControlInsets.MacOs` reserves.
+- In full screen the window controls are gone. `WorkspaceShellViewModel.IsFullScreen` sets the
+  reserved insets to 0, so the header content moves to the edge.
+- The host applies the layout on open, activation, resize and window-state change. It skips full
+  screen, where macOS owns the title bar.
+- The code runs on Apple silicon only. Intel Macs keep the native buttons: reading a `CGRect`
+  from `objc_msgSend` there needs `objc_msgSend_stret`.
+
+---
+
 ## 2026-10-05
+
+### Remove the ellipsis button beside the join QR
+
+The toolbar ellipsis menu held only "Export .md". Each meeting's sidebar menu already offers
+export, so the button was a duplicate. Removed it and its `meeting.more.tip` string.
 
 ### Native UI implementation of the approved Swiss design
 
@@ -278,6 +302,45 @@ real install numbers.
 - **Plan:** host slice (Core policy with TDD, UI, i18n, version header) must merge before the
   `v1.0.0` tag on #125; the Worker slice can land after 1.0.0 but deploys before the host's first
   real call. Silent install (Velopack/Sparkle, MSI signing) gets its own ADR later.
+
+### Chinese meeting names take quotation marks, not book-title marks
+
+Operator report: 删除《支架料号 KX-4402》. 书名号 are for published works; a meeting name is a name,
+and zh.json already quoted every other name — a key, a model, a taken title — with “{0}”. The four
+strings added with the delete, bundle and browse slices now match. Dropping the marks entirely was
+rejected: a title running straight into the sentence (把支架料号 KX-4402打成一个文件) leaves no
+visible edge. `LocalizationTests` fails on any 《 or 》 in the Chinese table.
+
+### Open folder from the Files tab
+
+The Files tab gains an Open folder button beside Import file, for the meeting the tab is showing
+(the sidebar selection) and disabled with none, like Import. The check-then-open body of the
+sidebar's Open folder item (#132) moved into `SystemFolders.OpenMeetingFolder`, so both entry points
+refuse a missing folder rather than letting `SystemFolders.Open` recreate it empty. A failure lands
+in `Files.ProblemNote`, under the list the operator is looking at, not in the sidebar's note.
+`Show` now clears that note, so an open or import failure on one meeting no longer reads as the
+next meeting's problem. The two buttons sit in a `WrapPanel`: German labels do not fit side by
+side at the default panel width.
+
+### Demo mode only in development
+
+The operator asked that Demo — scripted not be offered on a normal install. The mode list now
+contains Demo only when `KANAL_ENV` is `development`, compared case-insensitively after trimming,
+and read the way the other `KANAL_*` variables are (`SettingsStore.ReadEnvAllScopes`: process, then
+user, then machine scope). Any other value, or none, hides it. The Demo pipeline itself is untouched.
+
+The decision is a `development` constructor parameter on `MainViewModel`, passed only by the
+production constructor; the seam defaults to `false`. `TestViewModels.Hermetic` passes `true`, so
+the headless suite keeps running Demo without touching the network, and no test mutates the process
+environment.
+
+Fallback: the mode is not persisted, so there is no saved Demo to migrate — the only question is
+what the app opens on. It still opens on the first row, which outside development is Cloud
+transcription · Cloud translation. That is the first mode that can run whenever any can: Cloud ·
+Local needs the same key plus a downloaded model, and both local-transcription modes cannot run yet.
+Without a key the row states the missing key, which is the operator's next step. The empty-state
+line "Demo needs no key." is dropped in all four languages, and `.vscode/launch.json`'s demo target
+sets `KANAL_ENV=development`.
 
 ## 2026-09-15
 

@@ -641,7 +641,8 @@ public class OnlineCaptureTests
                 deviceWatcherFactory: () => Watcher,
                 workspaces: () => new WorkspaceStore(Path.Combine(dir, "workspaces.json")),
                 systemCaptureFactory: () => Computer,
-                signalClock: Clock)
+                signalClock: Clock,
+                development: true)
             {
                 RelayEnabled = true,
                 RelayPublisherFactory = _ => Relay,
