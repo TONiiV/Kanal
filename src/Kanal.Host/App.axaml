@@ -85,6 +85,7 @@
             <Setter Property="Padding" Value="14,6" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Button:not(.ghost):not(.mark)">
             <Setter Property="MinHeight" Value="36" />
@@ -390,6 +391,7 @@
             <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
             <Setter Property="Padding" Value="11,5" />
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource Brand}" />

@@ -6,6 +6,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-06
 
+### Button text centred vertically
+
+Text on every `Button` and `ToggleButton` sat 2 to 6 px above the centre. `VerticalContentAlignment`
+resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its text at the top.
+
+- `App.axaml` sets `VerticalContentAlignment="Center"` in the base `Button` and `ToggleButton` styles.
+- A headless render of "Save & Close" now shows 14 px of space above and below the capitals, at the
+  36 px minimum height. Before: 10 px above, 18 px below.
+- Out of scope: the mode picker rows. The row without a description keeps the height of its
+  neighbours by design.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
