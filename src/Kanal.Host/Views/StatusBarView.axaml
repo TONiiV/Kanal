@@ -9,6 +9,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
                         IsVisible="{Binding ShowMicLevel}" VerticalAlignment="Center">
                 <TextBlock Text="{l:T input.label}" Classes="label" />
+                <!-- MinWidth="0": FluentTheme sets ProgressBar MinWidth=200, which overrides Width. -->
                 <ProgressBar Value="{Binding MicLevel}" Maximum="100" Width="64" MinWidth="0" Height="3"
                              Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
                              CornerRadius="0" AutomationProperties.Name="{l:T input.label}" />

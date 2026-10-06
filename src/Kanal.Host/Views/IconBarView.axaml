@@ -243,13 +243,13 @@
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
                                             <ProgressBar Minimum="0" Maximum="100" Value="{Binding MicLevel}" Height="5"
-                                                         Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
+                                                         Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
                                                          CornerRadius="0" AutomationProperties.Name="{l:T input.label}" />
                                         </StackPanel>
                                         <StackPanel Spacing="6" IsVisible="{Binding NeedsComputerAudio}">
                                             <TextBlock Text="{l:T computer.label}" Classes="label" />
                                             <ProgressBar Minimum="0" Maximum="100" Value="{Binding ComputerLevel}" Height="5"
-                                                         Foreground="{StaticResource Ink}" Background="{StaticResource RuleFaint}"
+                                                         Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
                                                          CornerRadius="0" AutomationProperties.Name="{l:T computer.label}" />
                                         </StackPanel>
                                         <TextBlock Text="{Binding AudioSourceStatus}" TextWrapping="Wrap" FontSize="11.5"

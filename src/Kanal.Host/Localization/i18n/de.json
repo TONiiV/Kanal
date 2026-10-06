@@ -19,7 +19,7 @@
   "capture.fault.source_failed": "{0} – Fehler: {1}",
   "capture.online.name": "Online-Besprechung",
   "capture.online.guidance": "Kopfhörer tragen und Nicht stören aktivieren. Kanal erfasst den gesamten Computerton, egal über welchen Lautsprecher oder Kopfhörer er läuft, einschließlich Benachrichtigungstönen.",
-  "capture.online.unavailable": "Computer-Audio-Aufnahme ist in dieser Version nicht enthalten.",
+  "capture.online.unavailable": "Computer-Audio kann auf diesem Computer nicht aufgenommen werden.",
   "capture.note.dismiss.tip": "Schließen — erscheint erneut, wenn Sie das Erfassungsprofil wechseln.",
   "computer.label": "COMPUTERTON",
   "consent.dialog.title": "Vor dem Start · Zustimmung der Teilnehmenden",

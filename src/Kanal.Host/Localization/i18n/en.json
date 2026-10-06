@@ -19,7 +19,7 @@
   "capture.fault.source_failed": "{0} failed: {1}",
   "capture.online.name": "Online meeting",
   "capture.online.guidance": "Wear headphones and enable Do Not Disturb. Kanal captures all computer audio, whichever speaker or headset it plays on, including notification sounds.",
-  "capture.online.unavailable": "Computer-audio capture is not in this version.",
+  "capture.online.unavailable": "Computer audio cannot be captured on this computer.",
   "capture.note.dismiss.tip": "Dismiss — reappears if you change the capture profile.",
   "computer.label": "COMPUTER",
   "consent.dialog.title": "Before you start · Participant consent",

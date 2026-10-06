@@ -14,15 +14,15 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- The Online meeting capture profile now works: Kanal hears your microphone and everything the
-  computer plays, together, with a separate meter for each. There is no output to pick: the meeting
-  app can play to headphones, a Bluetooth headset or the speakers. A source that stays silent says
-  so; an unplugged microphone, a refused permission or a stalled machine stops the meeting with a
-  reason in your language instead of carrying on without audio. Wear headphones and turn on Do Not
-  Disturb: all computer audio is captured, notifications included; muting yourself in the meeting
-  app does not mute Kanal. On Windows this needs Windows 10 version 2004 or later. In both profiles
-  Pause now closes the devices, the meters drop to zero while paused, and a silent microphone is
-  pointed out. `docs/online-meeting-audio.md` covers diagnosis.
+- The Online meeting capture profile now works. Kanal hears your microphone and computer audio
+  together, with a separate meter for each. You do not pick an output. The meeting app can play to
+  headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
+  the microphone is unplugged, a permission is refused or the machine stalls, the meeting stops
+  and shows the reason in your language. Wear headphones and turn on Do Not Disturb. Kanal captures
+  all computer audio, notifications included. Muting yourself in the meeting app does not mute
+  Kanal. On Windows, this needs Windows 10 version 2004 or later. In both profiles, Pause now
+  closes the devices. The meters drop to zero while paused. Kanal also tells you when the
+  microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
   vertical centre of the header instead of near its top edge. In full screen, the header content
   moves to the left edge, because the buttons are gone.

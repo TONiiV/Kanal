@@ -19,7 +19,7 @@
   "capture.fault.source_failed": "{0}出错：{1}",
   "capture.online.name": "线上会议",
   "capture.online.guidance": "请佩戴耳机并开启勿扰模式。Kanal 会收取电脑播放的全部声音（无论从扬声器还是耳机播放），包括通知提示音。",
-  "capture.online.unavailable": "本版本不含电脑音频采集。",
+  "capture.online.unavailable": "这台电脑无法采集电脑声音。",
   "capture.note.dismiss.tip": "关闭 —— 更换采集方案后会再次出现。",
   "computer.label": "电脑声音",
   "consent.dialog.title": "开始前 · 参与者知情确认",
