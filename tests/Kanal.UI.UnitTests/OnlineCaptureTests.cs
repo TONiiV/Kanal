@@ -315,6 +315,24 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
+    public async Task PickingAnotherMicrophoneKeepsAnInMeetingWarningInTheStatus()
+    {
+        using var rig = new Rig();
+        rig.Choose("mic-a");
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        var warning = L.Format("status.transcriptstopped", "disk full");
+        rig.Vm.Status = warning;
+        rig.Choose("mic-b");
+        await Until(() => rig.Microphone.Opened.Count == 2);
+        await Pump(200);
+
+        Assert.Equal(warning, rig.Vm.Status);
+        await rig.Vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
     public async Task ADevicePickedWhilePausedIsOpenedOnResume()
     {
         using var rig = new Rig();

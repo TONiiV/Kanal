@@ -72,6 +72,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool _activeOnline;
     private bool _refreshingDevices;
     private string _liveStatus = "";
+    private string? _audioFaultStatus;
     private SignalState _microphoneSignal;
     private SignalState _systemSignal;
     private string? _statusBeforePushFailure;
@@ -1398,6 +1399,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         _liveStatus = Status;
+        _audioFaultStatus = null;
         if (mode.NeedsMicrophone)
             await StartCaptureAsync(session);
     }
@@ -1630,7 +1632,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Log.Info(AudioLog, $"capture_device_switched source={OnlineMeetingCapture.MicrophoneSource}");
         await StopCaptureAsync();
         await StartCaptureAsync(session);
-        if (!IsStale(session) && !IsPaused)
+        if (!IsStale(session) && !IsPaused && Status == _audioFaultStatus)
             Status = _liveStatus;
     }
 
@@ -1867,7 +1869,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = message;
+            Status = _audioFaultStatus = message;
         }
     }
 
@@ -1884,7 +1886,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = L.Format("status.audiofailed", message);
+            Status = _audioFaultStatus = L.Format("status.audiofailed", message);
         }
     }
 
