@@ -121,7 +121,7 @@
                         <!-- Live level over a held peak: one bar showing both what is arriving now and
                              the loudest thing heard, because the judgement is about the pair. -->
                         <Panel Height="10" Margin="0,0,0,7">
-                            <Rectangle Fill="{StaticResource RuleFaint}" />
+                            <Rectangle Fill="{StaticResource RuleFaint}" RadiusX="3" RadiusY="3" />
                             <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
                                          Foreground="{StaticResource Rule}" Background="Transparent"
                                          CornerRadius="3" />

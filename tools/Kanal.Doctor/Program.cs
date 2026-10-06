@@ -3,13 +3,10 @@ using Kanal.Audio;
 using Kanal.Core.Providers;
 using Kanal.Providers.Gladia;
 
-// Kanal.Doctor — pipeline diagnostics (PRD D0-A / D0-B helpers).
-//   doctor mic [seconds] [deviceIndex]   capture → resample → WAV + level report
-//   doctor gladia <wav> [--fast]         stream a WAV to Gladia live, dump raw + normalized events
-
 var command = args.Length > 0 ? args[0].ToLowerInvariant() : "help";
 return command switch
 {
+    "devices" or "system" or "online" => await OnlineAudioDoctor.RunAsync(args),
     "mic" => await MicCheckAsync(
         args.Length > 1 && int.TryParse(args[1], out var s) ? s : 3,
         args.Length > 2 && int.TryParse(args[2], out var d) ? d : -1),
@@ -23,8 +20,14 @@ static int Help()
 {
     Console.WriteLine("""
         Kanal.Doctor
-          mic [seconds] [deviceIndex]   capture from the mic, write mic-check.wav, report levels
-          gladia <wav> [--fast]         stream a 16 kHz mono WAV to Gladia live and dump messages
+          devices                       list microphone indices and IDs, and computer-audio support
+          system <seconds>              all computer audio only; local, writes no file, no network
+          online <seconds> [mic]        microphone + all computer audio mixed; local, writes no file, no network
+          mic [seconds] [deviceIndex]   WRITES mic-check.wav to the current folder, reports levels
+          gladia <wav> [--fast]         SENDS the WAV to Gladia over the network and dumps messages
+
+        Exit codes for system/online: 0 every source carried sound, 2 fault or bad arguments,
+        3 a source was silent (named on the SILENT line).
         """);
     return 1;
 }

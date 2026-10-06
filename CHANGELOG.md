@@ -14,6 +14,15 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The Online meeting capture profile now works. Kanal hears your microphone and computer audio
+  together, with a separate meter for each. You do not pick an output. The meeting app can play to
+  headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
+  the microphone is unplugged, a permission is refused or the machine stalls, the meeting stops
+  and shows the reason in your language. Wear headphones and turn on Do Not Disturb. Kanal captures
+  all computer audio, notifications included. Muting yourself in the meeting app does not mute
+  Kanal. On Windows, this needs Windows 10 version 2004 or later. In both profiles, Pause now
+  closes the devices. The meters drop to zero while paused. Kanal also tells you when the
+  microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
 - The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
   centre, most visibly on Save & Close and View open-source acknowledgements.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
