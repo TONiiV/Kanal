@@ -117,7 +117,7 @@ Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Appli
 - [ ] 从下载链接获取 DMG，而不是直接运行构建目录内的文件
 - [ ] 双击 DMG、拖入 Applications、正常首次启动，无“无法验证开发者”警告
 - [ ] 麦克风权限文案正确，允许和拒绝两条路径都不会崩溃
-- [ ] Demo 模式可启动、暂停、恢复和停止
+- [ ] 正常启动时模式列表中没有 Demo；以 `KANAL_ENV=development /Applications/Kanal.app/Contents/MacOS/Kanal.Host` 启动时 Demo 出现，且可启动、暂停、恢复和停止
 - [ ] 配置 Gladia 后可捕获麦克风并产生字幕/翻译
 - [ ] relay 正常时 QR 可加入；relay 缺失/失败时会议仍可继续且错误可见
 - [ ] 本地录音开关、暂停边界、导出和输出目录正确

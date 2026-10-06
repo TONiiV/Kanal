@@ -9,9 +9,11 @@ public readonly record struct WindowControlInsets(double Start, double End)
 {
     public static WindowControlInsets None { get; } = new(0, 0);
 
+    public static WindowControlInsets MacOs { get; } = new(78, 0);
+
     // Traffic lights on the left on macOS; three 46 DIP caption buttons on the right elsewhere.
     public static WindowControlInsets ForCurrentPlatform() =>
-        OperatingSystem.IsMacOS() ? new(78, 0) : new(0, 138);
+        OperatingSystem.IsMacOS() ? MacOs : new(0, 138);
 }
 
 public partial class WorkspaceShellViewModel : ViewModelBase
@@ -36,13 +38,31 @@ public partial class WorkspaceShellViewModel : ViewModelBase
     public double MinShellWidth =>
         Demand(Left) + Demand(Right) + TranscriptReserve;
 
-    public double WorkspaceStartInset => Left.Collapsed ? 0 : _insets.Start;
+    public bool IsFullScreen
+    {
+        get => _isFullScreen;
+        set
+        {
+            if (_isFullScreen == value) return;
+            _isFullScreen = value;
+            OnPropertyChanged();
+            RaiseInsets();
+        }
+    }
 
-    public double CenterStartInset => Left.Collapsed ? _insets.Start : 0;
+    private bool _isFullScreen;
 
-    public double CenterEndInset => Right.Collapsed ? _insets.End : 0;
+    private double Start => _isFullScreen ? 0 : _insets.Start;
 
-    public double AssistantEndInset => Right.Collapsed ? 0 : _insets.End;
+    private double End => _isFullScreen ? 0 : _insets.End;
+
+    public double WorkspaceStartInset => Left.Collapsed ? 0 : Start;
+
+    public double CenterStartInset => Left.Collapsed ? Start : 0;
+
+    public double CenterEndInset => Right.Collapsed ? End : 0;
+
+    public double AssistantEndInset => Right.Collapsed ? 0 : End;
 
     public WorkspaceShellViewModel(WindowControlInsets? insets = null)
     {
@@ -60,11 +80,14 @@ public partial class WorkspaceShellViewModel : ViewModelBase
             OnPropertyChanged(nameof(MinShellWidth));
 
         if (e.PropertyName is nameof(SidebarViewModel.Collapsed))
-        {
-            OnPropertyChanged(nameof(WorkspaceStartInset));
-            OnPropertyChanged(nameof(CenterStartInset));
-            OnPropertyChanged(nameof(CenterEndInset));
-            OnPropertyChanged(nameof(AssistantEndInset));
-        }
+            RaiseInsets();
+    }
+
+    private void RaiseInsets()
+    {
+        OnPropertyChanged(nameof(WorkspaceStartInset));
+        OnPropertyChanged(nameof(CenterStartInset));
+        OnPropertyChanged(nameof(CenterEndInset));
+        OnPropertyChanged(nameof(AssistantEndInset));
     }
 }

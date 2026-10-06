@@ -14,19 +14,31 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- The microphone can now be changed while a meeting is recording: pick another one in the
-  microphone menu and Kanal moves to it within a moment, without stopping the meeting. A microphone
-  picked while paused is used on resume. The capture profile (In room / Online meeting) still cannot
-  change once recording has started.
-- The Online meeting capture profile now works: Kanal hears your microphone and everything the
-  computer plays, together, with a separate meter for each. There is no output to pick: the meeting
-  app can play to headphones, a Bluetooth headset or the speakers. A source that stays silent says
-  so; an unplugged microphone, a refused permission or a stalled machine stops the meeting with a
-  reason in your language instead of carrying on without audio. Wear headphones and turn on Do Not
-  Disturb: all computer audio is captured, notifications included; muting yourself in the meeting
-  app does not mute Kanal. On Windows this needs Windows 10 version 2004 or later. In both profiles
-  Pause now closes the devices, the meters drop to zero while paused, and a silent microphone is
-  pointed out. `docs/online-meeting-audio.md` covers diagnosis.
+- You can now change the microphone while a meeting records. Pick another one in the microphone
+  menu. Kanal moves capture to it, and the meeting continues. A microphone picked while
+  paused is used on resume. The capture profile (In room / Online meeting) stays locked after
+  recording starts.
+- The Online meeting capture profile now works. Kanal hears your microphone and computer audio
+  together, with a separate meter for each. You do not pick an output. The meeting app can play to
+  headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
+  the microphone is unplugged, a permission is refused or the machine stalls, the meeting stops
+  and shows the reason in your language. Wear headphones and turn on Do Not Disturb. Kanal captures
+  all computer audio, notifications included. Muting yourself in the meeting app does not mute
+  Kanal. On Windows, this needs Windows 10 version 2004 or later. In both profiles, Pause now
+  closes the devices. The meters drop to zero while paused. Kanal also tells you when the
+  microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
+- On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
+  vertical centre of the header instead of near its top edge. In full screen, the header content
+  moves to the left edge, because the buttons are gone.
+- In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
+  now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
+  《》 used for books and films.
+- The Files tab on the right now has an Open folder button beside Import file. It opens the folder
+  of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
+  and says so under the list if that folder was moved or deleted outside Kanal.
+- The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
+  transcription · Cloud translation instead; without an API key, that row says one is needed. To
+  test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.
