@@ -222,7 +222,6 @@
   "transport.cancel.tip": "取消加载并关闭房间。",
   "audio.tip": "音频设备",
   "join.tip": "入会二维码 — 向参会者展示如何连接",
-  "meeting.more.tip": "更多 — 导出本次会议",
   "mode.tip": "处理模式 — 转写与翻译在何处运行",
   "capture.tip": "收音模式 — 谁在这场会议里",
   "transport.stop.tip": "结束会议：关闭房间，二维码失效，不再发送任何内容。",

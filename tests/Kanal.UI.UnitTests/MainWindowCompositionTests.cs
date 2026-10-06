@@ -87,7 +87,7 @@ public class MainWindowCompositionTests
         Assert.Single(right.GetLogicalDescendants().OfType<Button>(), b => b.Name == "AudioDevices");
 
         Assert.Single(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "JoinQr");
-        Assert.Single(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "MeetingMore");
+        Assert.DoesNotContain(right.GetLogicalDescendants().OfType<Button>(), button => button.Name == "MeetingMore");
 
         var grid = Assert.IsType<Grid>(left.Parent);
         Assert.Equal([left, group, right], grid.Children);
@@ -190,7 +190,7 @@ public class MainWindowCompositionTests
     }
 
     [AvaloniaFact]
-    public void TheFlyoutsBehindTheMarksCarryTheDevicesAndTheExports()
+    public void TheAudioMarkFlyoutCarriesTheDevices()
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
@@ -206,13 +206,6 @@ public class MainWindowCompositionTests
         Assert.Contains(
             pickers.GetLogicalDescendants().OfType<ComboBox>(),
             combo => ReferenceEquals(combo.ItemsSource, vm.Devices));
-
-        var more = Assert.Single(
-            Bar(window).GetLogicalDescendants().OfType<Button>(),
-            button => button.Name == "MeetingMore");
-        var commands = Opened<MenuFlyout>(more).Items.OfType<MenuItem>()
-            .Select(item => item.Command).ToList();
-        Assert.Contains(commands, command => ReferenceEquals(command, vm.ExportMarkdownCommand));
 
         window.Close();
     }

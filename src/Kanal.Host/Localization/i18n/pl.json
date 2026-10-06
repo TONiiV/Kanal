@@ -222,7 +222,6 @@
   "transport.cancel.tip": "Przerwij wczytywanie i zamknij pokój.",
   "audio.tip": "Urządzenia audio",
   "join.tip": "Kod QR — pokaż uczestnikom, jak dołączyć",
-  "meeting.more.tip": "Więcej — wyeksportuj to spotkanie",
   "mode.tip": "Tryb przetwarzania — gdzie działa transkrypcja i tłumaczenie",
   "capture.tip": "Tryb nagrywania — kto jest w pokoju",
   "transport.stop.tip": "Zakończ spotkanie: pokój się zamyka, kod QR przestaje działać, nic więcej nie jest wysyłane.",
