@@ -31,18 +31,22 @@ send detail work to subagents.
       parallel, one subagent per worktree. Create each worktree first. Give its path to the subagent.
 4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
 
-The issue tracker is GitHub Issues on this repo. The loop skills come from
-[mattpocock/skills](https://github.com/mattpocock/skills). To set up a new environment:
+The loop skills come from [mattpocock/skills](https://github.com/mattpocock/skills). To set up a
+new environment:
 
 1. Install the editable copy. The Claude Code plugin is read-only, so step 2 cannot work on it.
 
    ```bash
-   npx skills@latest add mattpocock/skills -g -a claude-code --skill grill-with-docs grilling domain-modeling to-spec to-tickets implement tdd code-review
+   npx skills@latest add mattpocock/skills -g -a claude-code --skill grill-with-docs grilling domain-modeling to-spec to-tickets implement tdd code-review triage setup-matt-pocock-skills
    ```
 
 2. Delete the line `disable-model-invocation: true` from the `SKILL.md` of `grill-with-docs`,
-   `to-spec`, `to-tickets` and `implement`. With that line, the Skill tool refuses to start them.
+   `to-spec`, `to-tickets`, `implement` and `setup-matt-pocock-skills`. With that line, the Skill
+   tool refuses to start them.
 3. After `npx skills update`, do step 2 again.
+
+The repo configuration for these skills is committed (see [Agent skills](#agent-skills)). Run
+`/setup-matt-pocock-skills` again only to change the issue tracker or the label names.
 
 **Subagents.** Choose the model by task difficulty:
 
@@ -57,6 +61,21 @@ The issue tracker is GitHub Issues on this repo. The loop skills come from
 3. Repeat until the reviewer finds nothing open. It then posts a comment that starts with `APPROVED`.
    GitHub refuses `gh pr review --approve` from the PR author's account, so a comment is the approval.
 4. If a finding stays open after 3 rounds, stop. Ask the human in the PR to decide.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `TONiiV/Kanal`, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
+`wontfix`. See `docs/agents/issue-tracker.md#triage-labels`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Working practices
 
@@ -122,15 +141,8 @@ The issue tracker is GitHub Issues on this repo. The loop skills come from
 
 ## Design Context
 
-For desktop UI work, read [Current UI design](docs/design/ui-design.md), confirmed on 2026-10-05.
-It overrides conflicting visual and layout details in earlier design documents and prototypes.
-Read [meeting workspace](docs/design/meeting-workspace.md) for unchanged interaction requirements;
-read [Conversation K](docs/design/conversation-k.md) for brand asset generation and mobile rules.
-The approved [preview](docs/design/swiss-review/index.html) illustrates the target, not shipped functionality.
-
-Keep transcription content readable in Chinese, German and Polish. Brand controls, speaker
-identity and recording state use distinct semantic resources. Mobile follows system light/dark
-preferences. Preserve all existing consent, capture, language-limit and meeting-record behaviour.
+Before any UI work, read [`.impeccable.md`](.impeccable.md). It names the current design documents
+and the behaviour that UI changes must preserve. The hard constraints below apply to every UI change.
 
 ### Hard constraints
 
