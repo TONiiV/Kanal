@@ -23,6 +23,12 @@ the two shipped platforms.
    (`startup_failure`, as on the #158 merge) cannot be re-run. A manual run replaces it.
 5. `release.yml` installed SDK 9.0.x for `net10.0` projects. It built only because the runner
    image also has SDK 10. It now installs 10.0.x.
+6. A new push to a PR cancels the older run of that PR. Each PR has one concurrency group. A
+   `main` run and a nightly run each get a unique group. GitHub would otherwise replace a waiting
+   run in a shared group, and that `main` commit would get no result.
+7. CI runs every night at 03:00 UTC on `main`. It finds runner-image drift, dependency drift and
+   flaky tests when nobody pushes. GitHub sends the failure mail to the last person who changed
+   the `cron` line. GitHub turns the schedule off after 60 days without repository activity.
 
 Cost: none. GitHub-hosted runners are free for a public repository, macOS and Windows included. A PR
 now waits for the slowest platform job instead of one Linux job.
