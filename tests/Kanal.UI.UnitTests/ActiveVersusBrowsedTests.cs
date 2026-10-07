@@ -58,6 +58,20 @@ public class ActiveVersusBrowsedTests : IDisposable
         return vm;
     }
 
+    private static async Task PumpUntilAsync(Func<bool> condition, int timeoutMs = 15_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static async Task PumpAsync(int ms)
     {
         var deadline = Environment.TickCount64 + ms;
@@ -149,7 +163,7 @@ public class ActiveVersusBrowsedTests : IDisposable
         var vm = Demo(store);
 
         await vm.StartCommand.ExecuteAsync(null);
-        await PumpAsync(2000);
+        await PumpUntilAsync(() => vm.Columns.Any(c => c.Language == "de" && c.Bubbles.Count > 0));
         var live = vm.Columns.Single(c => c.Language == "de").Bubbles.Count;
         Assert.True(live > 0, "the demo meeting produced nothing to compare against.");
 

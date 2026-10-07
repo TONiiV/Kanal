@@ -45,8 +45,12 @@ The first macOS runs found two tests that depended on timing:
    16 512 samples/s, so the format is correct. The excess is the three AudioQueue buffers that
    fill during device start, plus one trailing buffer. The window is now 2 s, with a range of
    48 000 to 80 000 bytes. Stereo or un-resampled audio (128 000 or more) still fails.
-2. `NothingSaidInTheRoomIsWrittenToTheLog` waited a fixed 400 ms for the demo to speak. On the
-   macOS runner no utterance arrived in time. The test now waits until the first utterance appears.
+2. Five UI tests waited a fixed 400 to 2 500 ms for demo output. The demo emits a partial every
+   350 ms, so its first final arrives after about 1.4 s. On the macOS runner the fixed waits ended
+   too early. The tests now wait for the condition they assert, with a 15 s timeout:
+   `NothingSaidInTheRoomIsWrittenToTheLog`, `TheTranscriptIsOnDiskBeforeTheMeetingEnds`,
+   `ASecondMeetingNeverWritesOverTheFirst`, `BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne`
+   and the export tests.
 
 ### A meeting travels as one `.kl` file
 
