@@ -30,8 +30,18 @@ send detail work to subagents.
    4. `/implement`: build each ticket in its own worktree and PR.
 4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
 
-The four loop skills set `disable-model-invocation`, so the Skill tool refuses them. Read
-`~/.claude/skills/<name>/SKILL.md` and follow it. The issue tracker is GitHub Issues on this repo.
+The issue tracker is GitHub Issues on this repo. The loop skills come from
+[mattpocock/skills](https://github.com/mattpocock/skills). To set up a new environment:
+
+1. Install the editable copy. The Claude Code plugin is read-only, so step 2 cannot work on it.
+
+   ```bash
+   npx skills@latest add mattpocock/skills -g -a claude-code --skill grill-with-docs grilling domain-modeling to-spec to-tickets implement tdd code-review
+   ```
+
+2. Delete the line `disable-model-invocation: true` from the `SKILL.md` of `grill-with-docs`,
+   `to-spec`, `to-tickets` and `implement`. With that line, the Skill tool refuses to start them.
+3. After `npx skills update`, do step 2 again.
 
 **Subagents.** Choose the model by task difficulty:
 
