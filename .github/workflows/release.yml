@@ -1,8 +1,5 @@
 name: Release
 
-# published release  signed, notarised dmg and the msi, attached to that release
-# pull requests      unsigned smoke build of the same script, package thrown away
-
 on:
   release:
     types: [published]
@@ -13,7 +10,7 @@ on:
       - '.github/workflows/release.yml'
       - 'src/**/*.csproj'
 
-# same rule as ci.yml: a new push cancels the PR's older smoke build; a release run is never cancelled
+# a release run has a unique group, so a new push never cancels it
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
@@ -30,6 +27,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -41,6 +40,7 @@ jobs:
           CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
         run: |
+          [[ -n "$CERT_P12" ]] || { echo "secret MACOS_CERT_P12 is empty" >&2; exit 1; }
           keychain="$RUNNER_TEMP/build.keychain-db"
           keychain_pwd="$(uuidgen)"
 
@@ -72,9 +72,9 @@ jobs:
         shell: bash
         env:
           TAG: ${{ github.event.release.tag_name }}
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          MACOS_SIGN_IDENTITY: ${{ github.event_name == 'release' && secrets.MACOS_SIGNING_IDENTITY || '' }}
+          NOTARY_KEY_ID: ${{ github.event_name == 'release' && secrets.NOTARY_KEY_ID || '' }}
+          NOTARY_ISSUER_ID: ${{ github.event_name == 'release' && secrets.NOTARY_ISSUER_ID || '' }}
         run: |
           if [[ "${{ github.event_name }}" == release ]]; then
             bash installers/release.sh "$TAG"
@@ -95,4 +95,4 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           shopt -s nullglob
-          gh release upload "$TAG" artifacts/Kanal-*.dmg artifacts/Kanal-*.msi --clobber
+          gh release upload "$TAG" artifacts/Kanal-*.dmg artifacts/Kanal-*.msi artifacts/Kanal-*.sha256
