@@ -512,8 +512,7 @@ public class OnlineCaptureTests
         await Until(() => rig.Asr.Pushes > 0);
         var live = rig.Vm.Status;
 
-        // the failure status lasts until the next good push; failure and recovery can run in one
-        // UI batch, so polling Status can miss it
+        // ReportPushFailed and ReportPushRecovered can run in one dispatcher batch, so a poll on Status can miss the failure.
         var shown = new ConcurrentQueue<string>();
         rig.Vm.PropertyChanged += (_, e) =>
         {
