@@ -71,8 +71,9 @@ public class AudioCaptureFactoryTests
         if (capture.GetDevices().Count == 0)
             return;
 
-        // Device start can take well over a second on some Windows drivers, so the
-        // measurement window opens at the FIRST frame, not at StartCapture.
+        // Device start can take well over a second on some Windows drivers, so timing starts at the
+        // FIRST frame. Frames queued while the reader was not yet scheduled arrive at once, so the
+        // first 500 ms are drained uncounted; counting them made the result depend on test load.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         var sw = new System.Diagnostics.Stopwatch();
         var bytes = 0;
@@ -84,11 +85,12 @@ public class AudioCaptureFactoryTests
                 if (!sw.IsRunning)
                 {
                     sw.Start();
-                    // full measurement window even when device start ate most of the 6 s
                     cts.CancelAfter(TimeSpan.FromSeconds(4));
                 }
+                if (sw.ElapsedMilliseconds < 500)
+                    continue;
                 bytes += frame.Length;
-                if (sw.ElapsedMilliseconds >= 2000)
+                if (sw.ElapsedMilliseconds >= 2500)
                     break;
             }
         }
@@ -97,8 +99,8 @@ public class AudioCaptureFactoryTests
             // device never produced a frame within the overall timeout
         }
 
-        // 2 s of 16 kHz mono PCM16 is 64 000 bytes; buffers queued during device start add ~13 000.
-        // The upper bound stays below 2x (128 000), so stereo or un-resampled 32 kHz still fails.
+        // 2 s of 16 kHz mono PCM16 is 64 000 bytes. The upper bound stays below 2x (128 000), so
+        // stereo or un-resampled 32 kHz still fails.
         Assert.InRange(bytes, 48_000, 80_000);
     }
 
