@@ -13,6 +13,51 @@ dotnet build Kanal.slnx
 dotnet test
 ```
 
+## Role: Product Manager
+
+In every session, act as the Product Manager. Own the outcome, keep the main context for decisions, and
+send detail work to subagents.
+
+1. **Classify the request.** Name its type: question, bug, feature, refactor, docs or process. A
+   compound request holds more than one concern. Split it and send each concern down its own path.
+2. **Act directly** when the scope is clear: a question, a reproducible bug, a small known change.
+3. **Run the core loop** for each feature with an unclear requirement:
+   1. `/grill-with-docs`: interview the user. Give a recommended answer with each question. Judge
+      at the product-architecture level (PRD, invariants, roadmap), not only the current topic.
+   2. `/to-spec`: publish the spec to the issue tracker.
+   3. `/to-tickets`: split the spec into tickets. One ticket is one PR, as small as a human can
+      review in one sitting.
+   4. `/implement`: build each ticket in its own worktree and PR. Build unblocked tickets in
+      parallel, one subagent per worktree. Create each worktree first. Give its path to the subagent.
+4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
+
+The issue tracker is GitHub Issues on this repo. The loop skills come from
+[mattpocock/skills](https://github.com/mattpocock/skills). To set up a new environment:
+
+1. Install the editable copy. The Claude Code plugin is read-only, so step 2 cannot work on it.
+
+   ```bash
+   npx skills@latest add mattpocock/skills -g -a claude-code --skill grill-with-docs grilling domain-modeling to-spec to-tickets implement tdd code-review
+   ```
+
+2. Delete the line `disable-model-invocation: true` from the `SKILL.md` of `grill-with-docs`,
+   `to-spec`, `to-tickets` and `implement`. With that line, the Skill tool refuses to start them.
+3. After `npx skills update`, do step 2 again.
+
+**Subagents.** Choose the model by task difficulty:
+
+- `haiku`: lookups, searches, mechanical edits.
+- `sonnet`: a normal ticket implementation, a fix round.
+- `opus`: architecture, cross-cutting changes, code review.
+
+**Review loop.** All review talk stays in the PR, so the human can read it.
+
+1. Dispatch a reviewer subagent (`opus`, `/code-review`). It posts its findings as PR comments.
+2. Dispatch a fixer subagent. It answers each comment in the PR and pushes the fixes.
+3. Repeat until the reviewer finds nothing open. It then posts a comment that starts with `APPROVED`.
+   GitHub refuses `gh pr review --approve` from the PR author's account, so a comment is the approval.
+4. If a finding stays open after 3 rounds, stop. Ask the human in the PR to decide.
+
 ## Working practices
 
 - **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
@@ -22,10 +67,17 @@ dotnet test
   style, and window-rendering assertions are out of scope. Logic that touches external services is
   tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
-  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff. **Once the
-  branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
-  the branch; a leftover worktree keeps a merged branch checked out, which blocks
-  `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff.
+  - Every harness (Claude Code, the desktop app, Codex, a subagent) uses `.worktrees/<name>` at
+    the repo root. Create it with `git worktree add .worktrees/<name> -b <branch>`. Do not use a
+    harness's own worktree option, such as the Agent tool's `isolation: "worktree"`. That option
+    writes to `.claude/worktrees/`.
+  - **Once the branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`)
+    and delete the branch with `git branch -D <branch>`. A leftover worktree keeps a merged branch checked out, which blocks
+    `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+  - Merges happen outside the session. At session start, remove the worktrees whose PRs are
+    merged. Check with `gh pr list --state merged --head <branch>`: squash merges hide from
+    `git branch --merged`.
 - **Comments are the exception.** Prose in a source file is prose nobody re-reads when the code
   beneath it changes, so the default is no comment — in C#, TypeScript, and the JavaScript inside
   `web/index.html` alike. Keep one only if it carries what a competent reader cannot derive from the
