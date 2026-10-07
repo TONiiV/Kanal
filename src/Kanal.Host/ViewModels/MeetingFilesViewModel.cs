@@ -14,7 +14,10 @@ using Kanal.Host.Services;
 namespace Kanal.Host.ViewModels;
 
 public sealed partial class MeetingFilesViewModel(
-    WorkspaceStore store, Func<Task<string?>> chooseFile, Action<string>? openFolder = null) : ViewModelBase
+    WorkspaceStore store,
+    Func<Task<string?>> chooseFile,
+    Action<string>? openFolder = null,
+    Func<string, Task>? importMeeting = null) : ViewModelBase
 {
     private const string AttachmentsFolderName = "attachments";
     private const string LogCategory = "workspace";
@@ -66,20 +69,28 @@ public sealed partial class MeetingFilesViewModel(
         if (Folder() is not { } folder || await chooseFile() is not { } source)
             return;
 
-        var attachments = Path.Combine(folder, AttachmentsFolderName);
+        if (importMeeting is not null && MeetingBundle.Holds(source))
+            await importMeeting(source);
+        else
+            ProblemNote = Attach(folder, source) ?? "";
+
+        Refresh();
+    }
+
+    public static string? Attach(string meetingFolder, string source)
+    {
+        var attachments = Path.Combine(meetingFolder, AttachmentsFolderName);
         try
         {
             Directory.CreateDirectory(attachments);
             File.Copy(source, Free(attachments, Path.GetFileName(source)));
-            ProblemNote = "";
+            return null;
         }
         catch (Exception ex)
         {
-            ProblemNote = L.Format("workspace.importfailed", ex.Message);
             Log.Error(LogCategory, $"{source} could not be brought into {attachments}.", ex);
+            return L.Format("workspace.importfailed", ex.Message);
         }
-
-        Refresh();
     }
 
     [RelayCommand(CanExecute = nameof(HasMeeting))]

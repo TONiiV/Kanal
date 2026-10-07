@@ -14,5 +14,5 @@ public sealed record CaptureProfile(
     CaptureProfileId Id,
     string NameKey,
     string? GuidanceKey,
-    string MarkdownValue,
+    string RecordValue,
     string? UnavailableKey = null);

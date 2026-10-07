@@ -578,7 +578,7 @@ public class OnlineCaptureTests
         Assert.Empty(rig.Computer.Opened);
         Assert.Contains(rig.Lines, l => l.Category == "room" && l.Message.Contains("capture in-room"));
         Assert.Contains(
-            $"capture-profile: {rig.Profile(CaptureProfileId.InRoom).Profile.MarkdownValue}",
+            $"capture-profile: {rig.Profile(CaptureProfileId.InRoom).Profile.RecordValue}",
             rig.Vm.BuildMarkdownExport());
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }
@@ -605,7 +605,7 @@ public class OnlineCaptureTests
         Assert.Equal(["mic-b"], rig.Microphone.Opened);
         Assert.Single(rig.Computer.Opened);
         Assert.Contains(
-            $"capture-profile: {rig.Profile(CaptureProfileId.OnlineMeeting).Profile.MarkdownValue}",
+            $"capture-profile: {rig.Profile(CaptureProfileId.OnlineMeeting).Profile.RecordValue}",
             rig.Vm.BuildMarkdownExport());
         await rig.Vm.StopCommand.ExecuteAsync(null);
     }

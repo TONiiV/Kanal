@@ -7,6 +7,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.ViewModels;
 
@@ -24,6 +25,7 @@ public partial class WorkspaceSidebarView : UserControl
 
             vm.Sidebar.ChooseWorkspaceFolder = ChooseFolderAsync;
             vm.Sidebar.ChooseFileToImport = ChooseFileAsync;
+            vm.Sidebar.ChooseMeetingFile = ChooseMeetingFileAsync;
             vm.Sidebar.ChooseExportPath = ChooseTargetAsync;
             vm.Sidebar.ConfirmDeleteMeeting = ConfirmDeleteAsync;
             vm.Sidebar.ConfirmExportBundle = ConfirmExportBundleAsync;
@@ -115,15 +117,21 @@ public partial class WorkspaceSidebarView : UserControl
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
-    private async Task<string?> ChooseFileAsync()
+    private Task<string?> ChooseFileAsync() => PickAsync("files.import", null);
+
+    private Task<string?> ChooseMeetingFileAsync() =>
+        PickAsync("workspace.importrecord", [new FilePickerFileType("Kanal") { Patterns = ["*" + MeetingBundle.Extension] }]);
+
+    private async Task<string?> PickAsync(string title, FilePickerFileType[]? types)
     {
         if (TopLevel.GetTopLevel(this) is not { } top)
             return null;
 
         var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = Localizer.Instance["workspace.importrecord"],
+            Title = Localizer.Instance[title],
             AllowMultiple = false,
+            FileTypeFilter = types,
         });
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
@@ -135,8 +143,10 @@ public partial class WorkspaceSidebarView : UserControl
 
         var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = Localizer.Instance["export.dialog.title"],
+            Title = Localizer.Instance["meeting.exportbundle.title"],
             SuggestedFileName = suggestedName,
+            DefaultExtension = MeetingBundle.Extension.TrimStart('.'),
+            FileTypeChoices = [new FilePickerFileType("Kanal") { Patterns = ["*" + MeetingBundle.Extension] }],
             ShowOverwritePrompt = true,
         });
         return file?.TryGetLocalPath();
