@@ -155,7 +155,7 @@ handover brief that drove it is deleted. Verification record and screenshots:
 ### Obsolete design archive
 
 Moved the rejected liquid-glass proposal, its complete preview/image folder, the historical meeting
-HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/`. Updated
+HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/` (since deleted). Updated
 relative links, archived preview asset paths and the design index. Current UI docs and Swiss preview
 remain in place. Conversation K brand/mobile guidance and meeting-workspace business constraints
 remain active references outside the archive.
@@ -176,7 +176,7 @@ native application implementation is still outstanding.
 
 The user rejected the cold glass-card direction and requested Swiss styling consistent with the
 current application icon. Inspected the real splash mark and Conversation K specification, then
-created [the Swiss proposal](design/obsolete/swiss-ui-proposal.md) and a clean, separate
+created [the Swiss proposal](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/swiss-ui-proposal.md) and a clean, separate
 [preview](design/swiss-review/index.html). The preview now uses the actual folded-K PNG, existing
 indigo/apricot brand colors, warm-paper surfaces, a continuous three-column grid, clear type
 hierarchy and fine rules. Frosted texture is limited to popovers. The previous proposal is marked
@@ -209,8 +209,8 @@ Decision confirm/dismiss buttons also share a centered 32-DIP action row with a 
 
 ### Liquid glass UI proposal — awaiting approval
 
-Prepared [Quiet glass](design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
-self-contained [visual review](design/obsolete/liquid-glass-review/index.html) and three rendered boards:
+Prepared [Quiet glass](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
+self-contained [visual review](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-review/index.html) and three rendered boards:
 meeting workspace, components/platform chrome, and settings/dialogs. The proposal follows the
 user's title-bar reference without an in-window File/Edit/View strip, uses neutral plus indigo,
 and applies restrained glass to panels while keeping transcript content opaque. It specifies
@@ -1100,7 +1100,7 @@ part of it that was genuinely different — the shape of the meeting over time �
 the transcript's navigation ruler, whose semantic ticks reuse the topic boundaries that panel
 already produces. One model pass, two renderings, no way for the two to disagree.
 
-Superseded by this: `docs/specs/meeting-workspace.md`'s open item "工作空间内活动会议与浏览记录关系",
+Superseded by this: [#64](https://github.com/TONiiV/Kanal/issues/64)'s open item "工作空间内活动会议与浏览记录关系",
 and the acceptance line in `docs/design/meeting-workspace.md` that asks for the two not to be
 confused now has a contract to be checked against.
 
@@ -1198,7 +1198,7 @@ it goes red against a fixed-width mode box.
 ### Auth, feedback, relay hosting and recording import documentation PR
 
 - Product scope confirmed through Q1–Q16: accountless verified-email feedback to private issues, cloud accounts and invitations, a one-time 120-minute Gladia allowance, free local features and BYOK, mainland end-to-end availability, and consented cloud recording import (WAV/MP3/M4A, at most 60 minutes and 500 MB). Payments and paid listening-agent features are deferred.
-- Archived the [52-story specification](specs/auth-feedback-relay-import.md), [11-ticket breakdown](specs/auth-feedback-relay-import-tickets.md), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
+- Archived the [52-story specification](https://github.com/TONiiV/Kanal/issues/161), the 11-ticket breakdown (now GitHub issues #162–#172, listed in the specification), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
 - Reuse existing settings/workspace tasks #67/#68/#69 and mainland gateway work #41. Provider compatibility, VibeVoice measurements, mainland-network tests and production configuration remain implementation/release prerequisites.
 - Documentation validation covers story numbering, per-ticket acceptance criteria, dependency order and local links. No application code or runtime behaviour changed.
 
@@ -1643,7 +1643,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
-  `ready-for-agent`. The [local specification](specs/meeting-workspace.md) contains 60 user stories,
+  `ready-for-agent`. The [specification](https://github.com/TONiiV/Kanal/issues/64) contains 60 user stories,
   implementation/testing decisions and explicit unresolved future scope. Its prototype viewing
   instructions were subsequently updated to the design-document location.
   It links the existing speaker, replay, local-ASR and summary work items; no further interview
@@ -1652,7 +1652,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 - User confirmed the final B-based UI design. The authoritative specification is
   [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
   formerly collected here. Approval covers the visual direction, not completion of production code.
-- At the user's request the approved [HTML prototype](design/obsolete/meeting-ui.prototype.html) now lives
+- At the user's request the approved [HTML prototype](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html) now lives
   beside the design documents and opens directly in a browser. The CMD launcher is removed.
   The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
 - [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership
@@ -2453,7 +2453,7 @@ Four small host-UI fixes from screenshot review, one PR:
 
 The host now ships as a double-clickable install on both platforms, driven by
 `installers/Kanal.Installers.csproj`. Design and rationale in
-[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+[`docs/design/installers.md`](design/installers.md).
 
 **No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
 advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is
