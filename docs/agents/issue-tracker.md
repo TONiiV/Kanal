@@ -25,9 +25,6 @@ The skills name five canonical triage roles. This repo uses the default label st
 | `ready-for-human` | `ready-for-human` | Requires human implementation |
 | `wontfix` | `wontfix` | Will not be actioned |
 
-`needs-triage`, `needs-info` and `ready-for-human` do not exist on GitHub yet. Before you apply one
-of them for the first time, create it with `gh label create <name>`.
-
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
