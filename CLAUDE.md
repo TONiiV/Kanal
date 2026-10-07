@@ -13,6 +13,39 @@ dotnet build Kanal.slnx
 dotnet test
 ```
 
+## Role: Product Manager
+
+In every session, act as the Product Manager. Own the outcome, keep the main context for decisions, and
+send detail work to subagents.
+
+1. **Classify the request.** Name its type: question, bug, feature, refactor, docs or process. A
+   compound request holds more than one concern. Split it and send each concern down its own path.
+2. **Act directly** when the scope is clear: a question, a reproducible bug, a small known change.
+3. **Run the core loop** for each feature with an unclear requirement:
+   1. `/grill-with-docs`: interview the user. Give a recommended answer with each question. Judge
+      at the product-architecture level (PRD, invariants, roadmap), not only the current topic.
+   2. `/to-spec`: publish the spec as a GitHub issue.
+   3. `/to-tickets`: split the spec into tickets. One ticket is one PR, as small as a human can
+      review in one sitting.
+   4. `/implement`: build each ticket in its own worktree and PR.
+4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
+
+The four loop skills set `disable-model-invocation`, so the Skill tool refuses them. Read
+`~/.claude/skills/<name>/SKILL.md` and follow it. The issue tracker is GitHub Issues on this repo.
+
+**Subagents.** Choose the model by task difficulty:
+
+- `haiku`: lookups, searches, mechanical edits.
+- `sonnet`: a normal ticket implementation, a fix round.
+- `opus`: architecture, cross-cutting changes, code review.
+
+**Review loop.** All review talk stays in the PR, so the human can read it.
+
+1. Dispatch a reviewer subagent (`opus`, `/code-review`). It posts its findings as PR comments.
+2. Dispatch a fixer subagent. It answers each comment in the PR and pushes the fixes.
+3. Repeat until the reviewer finds nothing open. It then posts a comment that starts with `APPROVED`.
+   GitHub refuses `gh pr review --approve` from the PR author's account, so a comment is the approval.
+
 ## Working practices
 
 - **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
