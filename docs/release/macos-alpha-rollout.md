@@ -136,7 +136,7 @@ Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Appli
 
 Release 页面在附件上传完成前就已经公开。公证需要数分钟或更久。两个 job 都成功后，才通知测试者。
 
-如果一个 job 失败，公开的 Release 就缺少该平台的安装包。在 Actions 页面点击「Re-run failed jobs」补齐。工作流不覆盖已有附件。
+如果一个 job 失败，公开的 Release 就缺少该平台的安装包。在 Actions 页面点击「Re-run failed jobs」补齐。工作流不覆盖已有附件。如果失败的 job 已经上传了安装包、但没有上传 `.sha256` 文件，重跑会因附件已存在而失败。这时先在 Release 页面手动删除该安装包，再重跑。
 
 GitHub 运行 tag 所在提交里的 `release.yml`。在本流水线合并之前的提交上打 tag，不会启动任何工作流。
 

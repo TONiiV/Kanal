@@ -289,7 +289,7 @@ asserts:
 These are file assertions with no Apple tooling involved, so they run in the existing ubuntu CI job.
 
 Signing and notarisation are **not unit-testable** — they depend on a certificate and Apple's
-service. Coverage for them is the dispatched release run plus one local signed build.
+service. Coverage for them is the first published release run plus one local signed build.
 
 ## Verified
 
