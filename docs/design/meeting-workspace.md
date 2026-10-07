@@ -6,7 +6,7 @@
 
 ## 设计基线
 
-采用最终 B 方案。原型随文档保存在 [meeting-ui.prototype.html](obsolete/meeting-ui.prototype.html)，
+采用最终 B 方案。原型随文档保存在 [meeting-ui.prototype.html](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html)，
 可直接用浏览器打开，无需 CMD 启动器或预览服务。
 原型用于理解布局和交互，正式 Avalonia 实现应重新组织组件，不能复制其多轮 CSS/脚本覆盖。
 

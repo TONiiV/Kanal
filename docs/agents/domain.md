@@ -10,6 +10,8 @@ How the engineering skills use this repo's domain documentation. The layout is s
 Product requirements and the roadmap are in `docs/PRD-v0.4.md`. Design history is in
 `docs/PROGRESS.md`.
 
+The glossary is `CONTEXT.md`. Decisions go in `docs/adr/`. Do not create `GLOSSARY.md`.
+
 The `/domain-modeling` skill (reached through `/grill-with-docs`) adds glossary terms and ADRs when a
 term or decision is resolved. Do not create them in advance.
 

@@ -9,7 +9,7 @@
 
 延续 [ADR 0051](0051-peer-meeting-workspaces.md)（平级工作空间拥有会议记录）。0051 冻结了记录的
 归属边界，并明说「文件格式、迁移、跨空间移动、共享和运行中切换行为仍需独立设计」——本文补的
-就是那份设计。同时补上 [`docs/specs/meeting-workspace.md`](../specs/meeting-workspace.md) 未确认
+就是那份设计。同时补上 [工作空间规格 #64](https://github.com/TONiiV/Kanal/issues/64) 未确认
 清单里的「工作空间内活动会议与浏览记录关系」，以及
 [`docs/design/meeting-workspace.md`](../design/meeting-workspace.md) 验收项「工作空间切换不混淆
 活动会议与所浏览记录」所依赖的契约。
@@ -100,7 +100,7 @@
 ### H. 知情确认
 
 24. 知情确认从工具栏上的常驻复选框移入**点录制时弹出的对话框**，按
-    [`meeting-ui.prototype.html`](../design/obsolete/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
+    [`meeting-ui.prototype.html`](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
     勾选项（同时保存音频文件／我已告知所有参与者），后者未勾时「确认并开始」禁用。
 25. 弹窗里的「同时保存音频文件」是**本场一次性覆盖**，不写回设置——为某一场敏感会议临时取消勾选，
     不应让下一场默默不录音。

@@ -139,7 +139,7 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
   `Speaker.MergedFrom`.
 - `web/index.html` and `docs/index.html` must stay **byte-identical**; `docs/` is the GitHub Pages copy.
 
-## Design Context
+## UI work
 
 Before any UI work, read [`.impeccable.md`](.impeccable.md). It names the current design documents
 and the behaviour that UI changes must preserve. The hard constraints below apply to every UI change.
