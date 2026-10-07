@@ -22,3 +22,7 @@ gateway/.wrangler/
 
 # .icns build intermediate; regenerate with design/kanal-icon.py
 design/Kanal.iconset/
+
+# coverage output (README: Test coverage)
+coverage/
+coverage-report/

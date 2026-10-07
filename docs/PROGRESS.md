@@ -6,6 +6,54 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-07
 
+### CI tests on Windows and macOS, with a coverage report
+
+Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and
+macOS. The tests skip their Windows and macOS branches on Linux, so CI never ran the code paths of
+the two shipped platforms.
+
+1. The `test` job is a matrix: `windows-latest`, `macos-latest` and `ubuntu-latest`. Linux is
+   optional (`continue-on-error`). A red Linux job does not block a merge.
+2. Both suites collect coverage with `coverlet.collector`. File paths are SourceLink URLs, so the
+   reports from the three platforms name the same files.
+3. The `coverage` job merges the reports with ReportGenerator (local tool in
+   `.config/dotnet-tools.json`). It writes the summary table to the run page. The
+   `coverage-report` artifact holds the HTML report. README "Test coverage" gives the local commands.
+4. CI has a `workflow_dispatch` trigger. A run that GitHub refuses to start
+   (`startup_failure`, as on the #158 merge) cannot be re-run. A manual run replaces it.
+5. `release.yml` installed SDK 9.0.x for `net10.0` projects. It built only because the runner
+   image also has SDK 10. It now installs 10.0.x.
+6. A new push to a PR cancels the older run of that PR. Each PR has one concurrency group. A
+   `main` run and a nightly run each get a unique group. GitHub would otherwise replace a waiting
+   run in a shared group, and that `main` commit would get no result.
+7. CI runs every night at 03:00 UTC on `main`. It finds runner-image drift, dependency drift and
+   flaky tests when nobody pushes. GitHub sends the failure mail to the last person who changed
+   the `cron` line. GitHub turns the schedule off after 60 days without repository activity.
+
+Cost: none. GitHub-hosted runners are free for a public repository, macOS and Windows included. A PR
+now waits for the slowest platform job instead of one Linux job.
+
+No coverage threshold. The first merged report on a Windows workstation: 81.2 % lines, 71.1 %
+branches. A threshold is set after CI has produced a few reports from all platforms.
+
+The Windows job depends on the test fixes in #173. Before them, six Core tests failed on Windows.
+
+The first macOS runs found two tests that depended on timing:
+
+1. `DeliversSixteenKilohertzMonoFrames` read 37 120 bytes in a 700 ms window, against a 32 000
+   limit. A diagnostic run (#176) measured the runner's "Apple Virtual Sound Device": 16 288 to
+   16 512 samples/s, so the format is correct. The excess is a backlog: frames wait in the
+   capture channel (up to 64) until the test reader is scheduled, then arrive at once. Under
+   parallel test load a 2 s window still read 83 224 bytes. The test now drops the first 500 ms
+   after the first frame, then counts 2 s against 48 000 to 80 000 bytes. Stereo or
+   un-resampled audio (128 000 or more) still fails.
+2. Five UI tests waited a fixed 400 to 2 500 ms for demo output. The demo emits a partial every
+   350 ms, so its first final arrives after about 1.4 s. On the macOS runner the fixed waits ended
+   too early. The tests now wait for the condition they assert, with a 15 s timeout:
+   `NothingSaidInTheRoomIsWrittenToTheLog`, `TheTranscriptIsOnDiskBeforeTheMeetingEnds`,
+   `ASecondMeetingNeverWritesOverTheFirst`, `BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne`
+   and the export tests.
+
 ### A meeting travels as one `.kl` file
 
 The sidebar had two import actions and two export actions. "Import meeting record" copied any file
