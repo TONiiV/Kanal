@@ -17,9 +17,7 @@ public sealed record MeetingManifest(
 /// <summary>One meeting, one file, plantable in any workspace (ADR 0054, decisions 22–23).</summary>
 public static class MeetingBundle
 {
-    // Two extensions, not one: the second says what it holds, and the first keeps every operating
-    // system's archive tool willing to open it without a Kanal build on the machine.
-    public const string Extension = ".kanal-meeting.zip";
+    public const string Extension = ".kl";
     public const string ManifestFileName = "manifest.json";
     public const string TranscriptFileName = "transcript.md";
     private const string AttachmentsPrefix = "attachments/";
@@ -30,6 +28,9 @@ public static class MeetingBundle
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
+
+    public static bool Holds(string path) =>
+        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
 
     public static StoreProblem? Write(
         WorkspaceStore store, MeetingRecord meeting, bool includeAudio, string target)

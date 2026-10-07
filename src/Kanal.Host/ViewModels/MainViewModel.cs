@@ -148,7 +148,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
         Titling.Changed += OnTitlingChanged;
         Files = new MeetingFilesViewModel(
-            store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
+            store,
+            () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null),
+            importMeeting: Sidebar.ImportMeetingFromAsync);
+        Sidebar.MeetingFilesChanged += id =>
+        {
+            if (Sidebar.SelectedMeeting?.Id == id)
+                Files.Refresh();
+        };
         Sidebar.GenerateTitleFor = GenerateTitleForAsync;
         Sidebar.MeetingRenamed += (id, title) =>
         {

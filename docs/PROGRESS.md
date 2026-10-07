@@ -4,6 +4,25 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-07
+
+### A meeting travels as one `.kl` file
+
+The sidebar had two import actions and two export actions. "Import meeting record" copied any file
+into a new meeting and set it as `TranscriptPath`. A PDF or a PPTX then opened as a transcript with
+no lines. The operator read this as a meeting that never finished loading.
+
+1. The bundle extension is `.kl`, not `.kanal-meeting.zip`. The file is still a zip archive.
+2. "Import meeting" accepts only a `.kl` file. The picker filters on `*.kl`. Any other file is
+   refused with `workspace.importonlykl`. "Import migration bundle" is gone: it was the same action.
+3. "Import into this meeting" and the Files tab copy any other file into `attachments/`. They never
+   overwrite, and they never set `TranscriptPath`. A `.kl` file chosen there arrives as a meeting.
+4. "Export this meeting" writes a `.kl` file. The raw transcript copy is gone.
+5. A row import into the meeting on screen refreshes the Files tab (`MeetingFilesChanged`).
+
+Out of scope: `MainViewModel.ExportMarkdownCommand`. No view binds it, and tests still use it.
+`TranscriptPath` is now set only by a recorded meeting and by a `.kl` import.
+
 ## 2026-10-06
 
 ### Button text centred vertically

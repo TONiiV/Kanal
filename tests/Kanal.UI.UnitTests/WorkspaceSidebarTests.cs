@@ -109,56 +109,68 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [Fact]
-    public async Task ExportingAMeetingWritesWhereTheOperatorChose()
+    public async Task ImportingIntoAMeetingAttachesTheFileAndLeavesTheTranscriptAlone()
     {
         var store = Store();
         var vm = Opened(store, "Delivery call");
-        var meeting = vm.Meetings.Single();
-        var folder = store.MeetingFolder(vm.SelectedWorkspace!.Id, meeting.Id)!;
-        File.WriteAllText(Path.Combine(folder, "transcript.md"), "**S01** (de): Guten Tag");
-        store.SaveMeeting(meeting.Record with { TranscriptPath = Path.Combine(folder, "transcript.md") });
-        vm.Refresh();
-
-        var target = Path.Combine(Folder("out"), "delivery.md");
-        vm.ChooseExportPath = _ => Task.FromResult<string?>(target);
-
-        await vm.Meetings.Single().ExportCommand.ExecuteAsync(null);
-
-        Assert.Equal("**S01** (de): Guten Tag", File.ReadAllText(target));
-    }
-
-    [Fact]
-    public async Task ImportingIntoAMeetingPutsTheFileInThatMeetingsFolder()
-    {
-        var store = Store();
-        var vm = Opened(store, "Delivery call");
-        var source = Path.Combine(Folder("inbox"), "notes.md");
-        File.WriteAllText(source, "**S01** (pl): Dzień dobry");
+        var source = Path.Combine(Folder("inbox"), "pitch.pptx");
+        File.WriteAllBytes(source, [0x50, 0x4B, 3, 4]);
         vm.ChooseFileToImport = () => Task.FromResult<string?>(source);
 
         await vm.Meetings.Single().ImportCommand.ExecuteAsync(null);
 
         var stored = store.ListMeetings(vm.SelectedWorkspace!.Id).Meetings.Single();
-        Assert.NotNull(stored.TranscriptPath);
-        Assert.Equal("**S01** (pl): Dzień dobry", File.ReadAllText(stored.TranscriptPath!));
-        Assert.StartsWith(
-            store.MeetingFolder(stored.WorkspaceId, stored.Id)!, stored.TranscriptPath!);
+        Assert.Null(stored.TranscriptPath);
+        Assert.True(File.Exists(Path.Combine(
+            store.MeetingFolder(stored.WorkspaceId, stored.Id)!, "attachments", "pitch.pptx")));
     }
 
     [Fact]
-    public async Task ImportingARecordAddsAMeetingToTheOpenWorkspace()
+    public async Task ImportingAKlFileIntoAMeetingAddsItAsAMeetingInstead()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        var bundle = Path.Combine(Folder("outbox"), "delivery" + MeetingBundle.Extension);
+        Bundled(vm, meeting, bundle, audio: false);
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+        vm.ChooseImportChoice = _ => Task.FromResult(BundleImportChoice.SaveAsNew);
+        vm.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+
+        await vm.Meetings.Single().ImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(["Delivery call", "Delivery call (2)"], vm.Meetings.Select(m => m.Title).Order());
+        Assert.False(Directory.Exists(Path.Combine(vm.FolderOf(meeting.Record)!, "attachments")));
+    }
+
+    [Fact]
+    public async Task ImportingAMeetingOnlyAcceptsAKlFile()
     {
         var store = Store();
         var vm = Opened(store);
-        var source = Path.Combine(Folder("inbox"), "Kickoff.md");
-        File.WriteAllText(source, "**S01** (zh): 你好");
-        vm.ChooseFileToImport = () => Task.FromResult<string?>(source);
+        var source = Path.Combine(Folder("inbox"), "Kickoff.pdf");
+        File.WriteAllText(source, "%PDF-1.7");
+        vm.ChooseMeetingFile = () => Task.FromResult<string?>(source);
 
         await vm.ImportMeetingRecordCommand.ExecuteAsync(null);
 
-        var imported = Assert.Single(vm.Meetings);
-        Assert.Equal("Kickoff", imported.Title);
-        Assert.Equal("**S01** (zh): 你好", File.ReadAllText(imported.Record.TranscriptPath!));
+        Assert.Empty(vm.Meetings);
+        Assert.Equal(Kanal.Host.Localization.Localizer.Instance["workspace.importonlykl"], vm.ProblemNote);
+    }
+
+    [Fact]
+    public async Task AMeetingIsExportedAsAKlFile()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meeting = vm.Meetings.Single();
+        string? offered = null;
+        vm.ConfirmExportBundle = _ => Task.FromResult<bool?>(false);
+        vm.ChooseExportPath = name => { offered = name; return Task.FromResult<string?>(null); };
+
+        await meeting.ExportBundleCommand.ExecuteAsync(null);
+
+        Assert.Equal("Delivery call.kl", offered);
     }
 
     [Fact]
@@ -252,13 +264,13 @@ public class WorkspaceSidebarTests : IDisposable
 
         var flyout = Opened((Button)Named(sidebar, "WorkspaceAdd"));
 
-        Assert.Equal(["NewProject", "ImportRecord", "ImportBundle"], Reachable(flyout));
+        Assert.Equal(["NewProject", "ImportRecord"], Reachable(flyout));
 
         window.Close();
     }
 
     [AvaloniaFact]
-    public void EachMeetingCarriesItsOwnImportExportBundleAndDelete()
+    public void EachMeetingCarriesItsOwnImportExportAndDelete()
     {
         var (window, _) = Shown();
         var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
@@ -268,7 +280,7 @@ public class WorkspaceSidebarTests : IDisposable
 
         Assert.Equal(
             ["RenameMeeting", "GenerateMeetingTitle", "ImportIntoMeeting", "ExportMeeting",
-             "ExportBundle", "OpenMeetingFolder", "DeleteMeeting"],
+             "OpenMeetingFolder", "DeleteMeeting"],
             Reachable(Opened(ellipsis)));
 
         window.Close();
@@ -557,7 +569,7 @@ public class WorkspaceSidebarTests : IDisposable
         var bundle = Path.Combine(Folder("outbox"), "delivery" + MeetingBundle.Extension);
         Bundled(vm, meeting, bundle, audio: false);
         await meeting.ExportBundleCommand.ExecuteAsync(null);
-        vm.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+        vm.ChooseMeetingFile = () => Task.FromResult<string?>(bundle);
 
         var asked = 0;
         vm.ChooseImportChoice = _ =>
@@ -565,13 +577,13 @@ public class WorkspaceSidebarTests : IDisposable
             asked++;
             return Task.FromResult(BundleImportChoice.Skip);
         };
-        await vm.ImportBundleCommand.ExecuteAsync(null);
+        await vm.ImportMeetingRecordCommand.ExecuteAsync(null);
 
         Assert.Equal(1, asked);
         Assert.Single(vm.Meetings);
 
         vm.ChooseImportChoice = _ => Task.FromResult(BundleImportChoice.SaveAsNew);
-        await vm.ImportBundleCommand.ExecuteAsync(null);
+        await vm.ImportMeetingRecordCommand.ExecuteAsync(null);
 
         Assert.Equal(2, vm.Meetings.Count);
         Assert.Equal(["Delivery call", "Delivery call (2)"], vm.Meetings.Select(m => m.Title).Order());
@@ -591,9 +603,9 @@ public class WorkspaceSidebarTests : IDisposable
         var other = store.CreateWorkspace("Supplier", Folder("supplier")).Workspace!;
         elsewhere.Refresh();
         elsewhere.SelectedWorkspace = elsewhere.Workspaces.Single(w => w.Id == other.Id);
-        elsewhere.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+        elsewhere.ChooseMeetingFile = () => Task.FromResult<string?>(bundle);
 
-        await elsewhere.ImportBundleCommand.ExecuteAsync(null);
+        await elsewhere.ImportMeetingRecordCommand.ExecuteAsync(null);
 
         var arrived = Assert.Single(elsewhere.Meetings);
         Assert.Equal(meeting.Id, arrived.Id);

@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
+  accepts only a `.kl` file and refuses any other file with a message. Any other file that you
+  import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
+  imported as a meeting record opened as an empty transcript.
 - The Online meeting capture profile now works. Kanal hears your microphone and computer audio
   together, with a separate meter for each. You do not pick an output. The meeting app can play to
   headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
