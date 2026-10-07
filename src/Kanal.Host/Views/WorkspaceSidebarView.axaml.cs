@@ -143,7 +143,7 @@ public partial class WorkspaceSidebarView : UserControl
 
         var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = Localizer.Instance["export.dialog.title"],
+            Title = Localizer.Instance["meeting.exportbundle.title"],
             SuggestedFileName = suggestedName,
             DefaultExtension = MeetingBundle.Extension.TrimStart('.'),
             FileTypeChoices = [new FilePickerFileType("Kanal") { Patterns = ["*" + MeetingBundle.Extension] }],

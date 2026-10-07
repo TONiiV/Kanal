@@ -42,6 +42,20 @@ not open that way. It is still a zip archive: rename it to `.zip` to look inside
 Out of scope: `MainViewModel.ExportMarkdownCommand`. No view binds it, and tests still use it.
 `TranscriptPath` is now set only by a recorded meeting and by a `.kl` import.
 
+Follow-up decisions on the same day:
+
+1. **The consent attestation is in `transcript.jsonl`.** ADR 0054 decision 26 put it in the
+   Markdown export, and no view reached that export. `TranscriptLogWriter.Attest` now writes it as
+   the first line: `captureProfile` and `consentConfirmedAt`. `TranscriptLog.Read` skips the line,
+   because it has no utterance id. The `.kl` file carries `transcript.jsonl`, so the attestation
+   travels with the meeting. `CaptureProfile.MarkdownValue` is now `RecordValue`.
+2. **An imported recording is an attachment.** The planned WAV/MP3/M4A import (ticket T06) does not
+   create a meeting record. It copies the recording into the `attachments/` folder of a meeting
+   that the operator selects. The transcription of an attached recording is not decided. T08 and
+   T09 wait for that decision. The specs, tickets, design docs and PRD carry dated notes.
+3. **The `.kl` save dialog has its own title.** It used `export.dialog.title` ("Save transcript").
+   It now uses `meeting.exportbundle.title` ("Export meeting").
+
 ## 2026-10-06
 
 ### Button text centred vertically

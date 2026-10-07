@@ -20,6 +20,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   imported as a meeting record opened as an empty transcript. The meeting menu has no Markdown
   export now: the transcript as Markdown is `transcript.md` inside the `.kl` file. A `.kl` file is
   a zip archive, so rename it to `.zip` to open it without Kanal.
+- When you confirm consent and start a meeting, Kanal writes the capture profile and the time of
+  the confirmation into the meeting's transcript file. The record travels inside the `.kl` file.
 - The Online meeting capture profile now works. Kanal hears your microphone and computer audio
   together, with a separate meter for each. You do not pick an output. The meeting app can play to
   headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If

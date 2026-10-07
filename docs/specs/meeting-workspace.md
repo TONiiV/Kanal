@@ -49,8 +49,8 @@
 24. As a meeting operator, I want peer workspaces for projects, companies, teams or personal use, so that I can organise meetings without a mandatory hierarchy.
 25. As a meeting operator, I want each workspace to use a selected local folder, so that meeting records, transcripts and summaries have a durable home.
 26. As a meeting operator, I want the workspace add menu to offer new project and import meeting, so that both creation paths are discoverable.
-27. As a meeting operator, I want to import an audio recording as a meeting, so that it can be transcribed and reviewed.
-28. As a meeting operator, I want to import text as a meeting record, so that existing notes or transcripts can join the workspace.
+27. As a meeting operator, I want to import an audio recording as a meeting, so that it can be transcribed and reviewed. Amended 2026-10-07: an imported recording becomes an attachment of a selected meeting and creates no meeting record. Transcription of an attached recording is open.
+28. As a meeting operator, I want to import text as a meeting record, so that existing notes or transcripts can join the workspace. Amended 2026-10-07: meeting import accepts only `.kl` files. An imported text file becomes an attachment of a meeting (ADR 0054 decisions 20–21).
 29. As a meeting operator, I want import and export in each meeting's ellipsis menu, so that these actions are associated with the correct record.
 30. As a meeting operator, I want to browse each meeting's transcript and summary, so that I can revisit its content.
 31. As a meeting operator, I want the meeting title above the transcript without a redundant project-name header, so that content receives more space.
@@ -91,7 +91,7 @@
 - **工具栏顺序。** 中栏左侧为处理模式及其右侧收音模式；录制、暂停／继续、停止及麦克风位于中央；二维码靠右。设置归左栏底部。收窄时中央优先，两侧裁切，保持无横向滚动。
 - **录制状态机。** 保留现有 Start、Pause/Resume、Stop、加载取消和停止中防重复行为。音频保存与转写独立；真实开始前每次重新确认知情，在线会议提醒告知远程参与者。会中用紧凑状态和参会端说明表达处理状态。
 - **工作空间边界。** 按已接受 ADR 0051 使用平级 Workspace。每个工作空间对应用户选择的本地文件夹，拥有自己的 Meeting records。公司／项目层级未采用。
-- **记录操作。** 搜索与独立新建会议入口位于品牌下。项目旁添加菜单支持创建项目和导入新会议。记录三点菜单提供导入／导出；录音与文本导入均在目标范围，正式支持格式和持久化 schema 尚未冻结。
+- **记录操作。** 搜索与独立新建会议入口位于品牌下。项目旁添加菜单支持创建项目和导入新会议。记录三点菜单提供导入／导出；录音与文本导入均在目标范围，正式支持格式和持久化 schema 尚未冻结。2026-10-07 修订：会议记录只由录制会议或导入 `.kl` 文件产生。录音、文本等其他文件成为所选会议的附件，不新建会议记录（ADR 0054 决定 20–21）。附件录音是否转写、如何转写，尚未决定。
 - **标题与语言。** Meeting title 区别于 Workspace 名称；默认通过本地模型生成，支持手工重命名和重生成。标题右侧保留圆形重叠旗标选择最多四种显示语言。没有额外“目标显示语言”一行或中央重复页签。
 - **设置与模型。** 纵向设置页签覆盖通用、输入、本地 ASR、翻译、总结及工作空间，并保留现有关于和许可入口。Nemotron 3.5 为本地 ASR 首选；Handy 是模型管理及兼容目标的参考，不能直接当作已验证的 Kanal 支持清单。先验证 Windows NVIDIA，调查 CPU／Apple Silicon。
 - **能力驱动。** 保留现有基于 ASR 能力决定翻译路由的原则，收音模式与处理模式独立。标题模型与 Agent provider 分开配置；本地 CLI 不保证本地推理。现有本地文本生成模块可评估复用于标题，不能把单次生成接口直接当作完整 Agent 运行时。

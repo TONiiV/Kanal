@@ -2003,6 +2003,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Dispatcher.UIThread.Post(() => Status = L.Format("status.transcriptstopped", reason));
             });
             _transcriptLog = log;
+            if (_lastAttestation is { } attestation)
+                log.Attest(new ConsentAttestation(
+                    attestation.CaptureProfile.RecordValue, attestation.ConsentConfirmedAt));
             session.Room.UtteranceUpserted += u =>
             {
                 if (u.State == UtteranceState.Final)
@@ -2162,7 +2165,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (_lastAttestation is { } attestation)
         {
             sb.AppendLine();
-            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.MarkdownValue}");
+            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.RecordValue}");
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();

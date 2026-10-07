@@ -36,6 +36,23 @@ public class TranscriptLogTests
     }
 
     [Fact]
+    public void TheConsentAttestationOpensTheLogAndIsNotReadAsAnUtterance()
+    {
+        var path = TempFile();
+        var confirmed = new DateTimeOffset(2026, 9, 4, 12, 30, 0, TimeSpan.Zero);
+        using (var writer = new TranscriptLogWriter(path, _ => { }))
+        {
+            writer.Attest(new ConsentAttestation("in-room", confirmed));
+            writer.Append(Said("u1", "KX-4402 的公差"));
+        }
+
+        using var first = System.Text.Json.JsonDocument.Parse(File.ReadLines(path).First());
+        Assert.Equal("in-room", first.RootElement.GetProperty("captureProfile").GetString());
+        Assert.Equal(confirmed, first.RootElement.GetProperty("consentConfirmedAt").GetDateTimeOffset());
+        Assert.Equal(["KX-4402 的公差"], TranscriptLog.Read(path).Select(u => u.SrcText));
+    }
+
+    [Fact]
     public void EverythingNeededToRebuildAnUtteranceSurvivesTheRoundTrip()
     {
         var path = TempFile();
