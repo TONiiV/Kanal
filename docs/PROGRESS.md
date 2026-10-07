@@ -14,12 +14,15 @@ CI does not take part in a release.
 1. `release.yml` is now `package-smoke.yml`, named "Package smoke".
 2. The `workflow_dispatch` gear is gone, with its version input, certificate import, notary key and
    secrets check. It ran once, on 2026-09-02, and its signed package was discarded.
-3. The PR gear stays as it was: an unsigned msi and dmg build at version `0.0.0`, with the same
-   path filter. It is the only check that the installer chain still builds.
-4. `docs/release/macos-alpha-rollout.md` now gives local signing as the only signing path.
+3. `installers/release.sh <version>` builds a release on the maintainer's machine. On a Mac it
+   signs and notarises the dmg, and it stops first if a signing variable is unset. On Windows it
+   builds the msi, unsigned. It refuses a dirty working tree and prints the SHA-256.
+4. The PR gear runs the same script with `0.0.0-smoke --unsigned`, with the same path filter. A
+   change that breaks the release script makes a PR red.
+5. `docs/release/macos-alpha-rollout.md` now gives local signing as the only signing path.
 
 This amends the "two gears" table in `docs/superpowers/specs/2026-08-01-installers-design.md`.
-The local release commands in that document are unchanged.
+`installers/release.sh` replaces the manual commands in that document.
 
 The six signing secrets (`MACOS_CERT_P12` and the others) are still set on the repository. No
 workflow reads them now.

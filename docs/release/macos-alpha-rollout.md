@@ -66,7 +66,7 @@ GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release �
 
 ### 3.2 签名
 
-Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key。签名和公证只在维护者本机执行。GitHub Actions 不签名，也不读取证书或公证密钥。本地命令见 `docs/superpowers/specs/2026-08-01-installers-design.md`。不要提交证书文件。
+Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key。签名和公证只在维护者本机执行。GitHub Actions 不签名，也不读取证书或公证密钥。发布命令是 `installers/release.sh <版本号>`，例如 `installers/release.sh 0.1.0-alpha.2`。签名变量见 `docs/superpowers/specs/2026-08-01-installers-design.md`。不要提交证书文件。
 
 本地打包流程应：
 
