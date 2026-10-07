@@ -6,6 +6,32 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-07
 
+### CI tests on Windows and macOS, with a coverage report
+
+Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and
+macOS. The tests skip their Windows and macOS branches on Linux, so CI never ran the code paths of
+the two shipped platforms.
+
+1. The `test` job is a matrix: `windows-latest`, `macos-latest` and `ubuntu-latest`. Linux is
+   optional (`continue-on-error`). A red Linux job does not block a merge.
+2. Both suites collect coverage with `coverlet.collector`. File paths are SourceLink URLs, so the
+   reports from the three platforms name the same files.
+3. The `coverage` job merges the reports with ReportGenerator (local tool in
+   `.config/dotnet-tools.json`). It writes the summary table to the run page. The
+   `coverage-report` artifact holds the HTML report. README "Test coverage" gives the local commands.
+4. CI has a `workflow_dispatch` trigger. A run that GitHub refuses to start
+   (`startup_failure`, as on the #158 merge) cannot be re-run. A manual run replaces it.
+5. `release.yml` installed SDK 9.0.x for `net10.0` projects. It built only because the runner
+   image also has SDK 10. It now installs 10.0.x.
+
+Cost: none. GitHub-hosted runners are free for a public repository, macOS and Windows included. A PR
+now waits for the slowest platform job instead of one Linux job.
+
+No coverage threshold. The first merged report on a Windows workstation: 81.2 % lines, 71.1 %
+branches. A threshold is set after CI has produced a few reports from all platforms.
+
+The Windows job depends on the test fixes in #173. Before them, six Core tests failed on Windows.
+
 ### A meeting travels as one `.kl` file
 
 The sidebar had two import actions and two export actions. "Import meeting record" copied any file
