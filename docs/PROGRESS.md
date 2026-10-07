@@ -6,26 +6,25 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-07
 
-### Releases leave CI: `release.yml` becomes `package-smoke.yml`
+### A published GitHub Release builds and attaches the packages
 
-The maintainer builds, signs and notarises every release on a local Mac, and starts it by hand.
-CI does not take part in a release.
+The maintainer starts a release on the GitHub Releases page: create a tag, then Publish. CI builds
+the packages and attaches them to that release.
 
-1. `release.yml` is now `package-smoke.yml`, named "Package smoke".
-2. The `workflow_dispatch` gear is gone, with its version input, certificate import, notary key and
-   secrets check. It ran once, on 2026-09-02, and its signed package was discarded.
-3. `installers/release.sh <version>` builds a release on the maintainer's machine. On a Mac it
-   signs and notarises the dmg, and it stops first if a signing variable is unset. On Windows it
-   builds the msi, unsigned. It refuses a dirty working tree and prints the SHA-256.
+1. `release.yml` triggers on `release: published`. The `workflow_dispatch` gear and its version
+   input are gone. That gear ran once, on 2026-09-02, and discarded its signed package.
+2. The macOS job imports the Developer ID certificate, signs and notarises the dmg. The Windows job
+   builds the msi, unsigned. Each job uploads its package to the release with `gh release upload`.
+3. Both jobs call `installers/release.sh <tag>`. The script also runs on a developer machine. It
+   refuses a dirty working tree, and on a Mac it stops first if a signing variable is unset.
 4. The PR gear runs the same script with `0.0.0-smoke --unsigned`, with the same path filter. A
    change that breaks the release script makes a PR red.
-5. `docs/release/macos-alpha-rollout.md` now gives local signing as the only signing path.
 
-This amends the "two gears" table in `docs/superpowers/specs/2026-08-01-installers-design.md`.
-`installers/release.sh` replaces the manual commands in that document.
-
-The six signing secrets (`MACOS_CERT_P12` and the others) are still set on the repository. No
-workflow reads them now.
+This reverses "Nothing installable leaves CI" (2026-09-02 entry and
+`docs/superpowers/specs/2026-08-01-installers-design.md`). The repository is public, so every
+release asset is public. The owner accepted this on 2026-10-07. `docs/release/macos-alpha-rollout.md`
+now gives the public GitHub Release as the distribution channel. To withdraw a version, delete its
+release assets.
 
 ### CI tests on Windows and macOS, with a coverage report
 

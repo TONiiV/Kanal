@@ -1,0 +1,93 @@
+name: Release
+
+# published release  signed, notarised dmg and the msi, attached to that release
+# pull requests      unsigned smoke build of the same script, package thrown away
+
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - 'installers/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/release.yml'
+      - 'src/**/*.csproj'
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Import Developer ID certificate
+        if: github.event_name == 'release' && runner.os == 'macOS'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PWD: ${{ secrets.MACOS_CERT_PWD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_pwd="$(uuidgen)"
+
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$keychain_pwd" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_pwd" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PWD" \
+            -T /usr/bin/codesign -T /usr/bin/productsign
+
+          # without this, codesign waits for a GUI authorisation prompt and the job hangs until timeout
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_pwd" "$keychain"
+
+          security list-keychain -d user -s "$keychain" login.keychain-db
+
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Write notary API key
+        if: github.event_name == 'release' && runner.os == 'macOS'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Package
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          if [[ "${{ github.event_name }}" == release ]]; then
+            bash installers/release.sh "$TAG"
+          else
+            bash installers/release.sh 0.0.0-smoke --unsigned
+          fi
+
+      - name: Remove notary key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/notary.p8"
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          shopt -s nullglob
+          gh release upload "$TAG" artifacts/Kanal-*.dmg artifacts/Kanal-*.msi --clobber

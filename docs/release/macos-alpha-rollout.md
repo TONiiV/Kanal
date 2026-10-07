@@ -3,12 +3,12 @@
 ## 一、上线概况
 
 - **版本性质**：Pre-release Alpha
-- **上线策略**：仅向指定朋友发放私密下载链接
+- **上线策略**：公开 GitHub Release。仓库公开，任何人都能下载附件（2026-10-07 决定）
 - **发布环境**：直接生成正式 Developer ID 签名、公证并 staple 的 macOS 安装包
 - **发布时间**：流水线完成且全部检查通过后尽快发布
 - **发布节奏**：本 Alpha 单次发布；修复使用新的 Alpha 版本号，不覆盖旧产物
 - **撤回条件**：应用无法启动或频繁崩溃、隐私行为异常、凭据泄露或房间隔离失效等任一严重问题
-- **撤回时限**：决定撤回后 5 分钟内下架链接并通知测试者
+- **撤回时限**：决定撤回后 5 分钟内删除 Release 附件并通知测试者
 - **通知范围**：仅参与测试的朋友
 - **生成日期**：2026-09-02
 - **签名与公证脚本**：见 PR #27（`installers/macos/sign.sh`、`notarize.sh`、`Kanal.entitlements`）。本文是操作方案与验收清单，不重复其实现细节。
@@ -30,13 +30,13 @@ Kanal-0.1.0-alpha.1-macos-arm64.dmg.sha256
 
 第一轮只支持 Apple Silicon，以减少架构组合和本地模型原生库带来的风险。如果测试者有 Intel Mac，再增加独立的 `osx-x64` 产物；不要在未经完整原生库验证前合并成 Universal Binary。
 
-GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release 仍然公开可下载。指定朋友测试应把 DMG 上传到受控的私密文件链接，或直接发送文件；GitHub Release 可以先保持 Draft，仅供仓库协作者查看。
+GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release 仍然公开可下载。2026-10-07 起接受这一点：alpha 直接通过公开 GitHub Release 分发。
 
 ## 三、发布流水线
 
 ### 3.1 构建
 
-维护者在本机 Mac 上手动执行。GitHub Actions 只做未签名的打包冒烟测试（`.github/workflows/package-smoke.yml`），不产出发布包。
+维护者在 GitHub 的 Releases 页面创建 tag（如 `v0.1.0-alpha.2`）并点击 Publish。`.github/workflows/release.yml` 随后在 macOS runner 上签名、公证 dmg，在 Windows runner 上打包 msi，并把两者上传到该 Release。两边都调用 `installers/release.sh`。下面是脚本执行的步骤。
 
 1. Checkout 固定的 tag/commit。
 2. 安装 .NET 10 SDK（仓库内所有 csproj 的 `TargetFramework` 均为 `net10.0`）。
@@ -66,11 +66,11 @@ GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release �
 
 ### 3.2 签名
 
-Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key。签名和公证只在维护者本机执行。GitHub Actions 不签名，也不读取证书或公证密钥。发布命令是 `installers/release.sh <版本号>`，例如 `installers/release.sh 0.1.0-alpha.2`。签名变量见 `docs/superpowers/specs/2026-08-01-installers-design.md`。不要提交证书文件。
+Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key。证书和公证密钥存放在仓库的 GitHub Secrets 中：`MACOS_CERT_P12`、`MACOS_CERT_PWD`、`MACOS_SIGNING_IDENTITY`、`NOTARY_KEY_P8`、`NOTARY_KEY_ID`、`NOTARY_ISSUER_ID`。不要提交证书文件。本机也可以运行 `installers/release.sh <版本号>` 打包，签名变量见 `docs/superpowers/specs/2026-08-01-installers-design.md`。
 
-本地打包流程应：
+打包流程应：
 
-1. 把 `.p12` 导入本机 keychain。
+1. 把 `.p12` 导入 keychain（CI 上是临时 keychain）。
 2. 对 `.app` 内所有 Mach-O、`.dylib` 和原生库由内向外签名。
 3. 最后对 `Kanal.app` 使用 Developer ID、timestamp 和 Hardened Runtime 签名。
 4. 验证签名 authority 确实是 `Developer ID Application`，不能只依赖 `codesign --verify`，因为 ad-hoc 签名也可能通过该命令。
@@ -122,7 +122,7 @@ Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Appli
 
 给测试者发送以下内容：
 
-- 私密、可随时撤销的下载链接
+- GitHub Release 页面链接
 - SHA-256
 - 明确标注 `Alpha`，不得用于正式会议或敏感内容
 - 支持的 macOS/CPU 范围
@@ -137,7 +137,7 @@ Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Appli
 
 5 分钟撤回流程：
 
-1. 禁用或删除私密下载链接。
+1. 删除 GitHub Release 的附件，或删除整个 Release。
 2. 给全部测试者发送“停止使用并删除该版本”的通知。
 3. 若涉及 relay host credential，立即轮换 token；若涉及第三方 API key，撤销对应 key。
 4. 保留原 tag、commit、DMG hash 和公证记录用于调查，不覆盖原产物。
