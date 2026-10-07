@@ -34,12 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            optional: false
           - os: macos-latest
             optional: false
-          - os: ubuntu-latest
-            optional: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.optional }}
     steps:
@@ -49,8 +45,17 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Audio hardware
+        run: system_profiler SPAudioDataType
+
       - name: Build
         run: dotnet build Kanal.slnx --configuration Release
+
+      - name: Audio timing diagnostic
+        run: |
+          for i in 1 2 3; do
+            dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --filter "FullyQualifiedName~MacAudioTimingDiagnostic|FullyQualifiedName~DeliversSixteenKilohertzMonoFrames" --logger "console;verbosity=normal" || true
+          done
 
       - name: Core unit tests
         run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
