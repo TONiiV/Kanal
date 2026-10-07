@@ -148,7 +148,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
         Titling.Changed += OnTitlingChanged;
         Files = new MeetingFilesViewModel(
-            store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
+            store,
+            () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null),
+            importMeeting: Sidebar.ImportMeetingFromAsync);
+        Sidebar.MeetingFilesChanged += id =>
+        {
+            if (Sidebar.SelectedMeeting?.Id == id)
+                Files.Refresh();
+        };
         Sidebar.GenerateTitleFor = GenerateTitleForAsync;
         Sidebar.MeetingRenamed += (id, title) =>
         {
@@ -1996,6 +2003,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Dispatcher.UIThread.Post(() => Status = L.Format("status.transcriptstopped", reason));
             });
             _transcriptLog = log;
+            if (_lastAttestation is { } attestation)
+                log.Attest(new ConsentAttestation(
+                    attestation.CaptureProfile.RecordValue, attestation.ConsentConfirmedAt));
             session.Room.UtteranceUpserted += u =>
             {
                 if (u.State == UtteranceState.Final)
@@ -2155,7 +2165,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (_lastAttestation is { } attestation)
         {
             sb.AppendLine();
-            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.MarkdownValue}");
+            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.RecordValue}");
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();

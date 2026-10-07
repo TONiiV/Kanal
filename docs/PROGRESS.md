@@ -4,6 +4,58 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-07
+
+### A meeting travels as one `.kl` file
+
+The sidebar had two import actions and two export actions. "Import meeting record" copied any file
+into a new meeting and set it as `TranscriptPath`. A PDF or a PPTX then opened as a transcript with
+no lines. The operator read this as a meeting that never finished loading.
+
+1. The bundle extension is `.kl`, not `.kanal-meeting.zip`. The file is still a zip archive.
+2. "Import meeting" accepts only a `.kl` file. The picker filters on `*.kl`. Any other file is
+   refused with `workspace.importonlykl`. "Import migration bundle" is gone: it was the same action.
+3. "Import into this meeting" and the Files tab copy any other file into `attachments/`. They never
+   overwrite, and they never set `TranscriptPath`. A `.kl` file chosen there arrives as a meeting.
+4. "Export this meeting" writes a `.kl` file. The raw transcript copy is gone.
+5. A row import into the meeting on screen refreshes the Files tab (`MeetingFilesChanged`).
+
+This change amends ADR 0054 decisions 20–21 and the PRD v0.4 row "md/json 纪要导出". Those
+decisions kept a Markdown export in the meeting menu and kept json import. The new rule is one
+export format and one import format:
+
+- Every export packs one meeting into a `.kl` file.
+- Meeting import accepts only a `.kl` file.
+- Any other imported file becomes an attachment of the meeting.
+
+Reasons:
+
+1. The user chose one short extension and one export format. One file type now carries a meeting
+   in both directions.
+2. The Markdown transcript stays available. Each `.kl` file holds it as `transcript.md`. A meeting
+   imported from a `.kl` file also keeps `transcript.md` in its folder.
+
+Cost: this reverses the two-part extension choice in the 2026-09-12 entry "单场会议的迁移包". That
+choice let Explorer and Finder open the bundle as an archive with a double-click. A `.kl` file does
+not open that way. It is still a zip archive: rename it to `.zip` to look inside.
+
+Out of scope: `MainViewModel.ExportMarkdownCommand`. No view binds it, and tests still use it.
+`TranscriptPath` is now set only by a recorded meeting and by a `.kl` import.
+
+Follow-up decisions on the same day:
+
+1. **The consent attestation is in `transcript.jsonl`.** ADR 0054 decision 26 put it in the
+   Markdown export, and no view reached that export. `TranscriptLogWriter.Attest` now writes it as
+   the first line: `captureProfile` and `consentConfirmedAt`. `TranscriptLog.Read` skips the line,
+   because it has no utterance id. The `.kl` file carries `transcript.jsonl`, so the attestation
+   travels with the meeting. `CaptureProfile.MarkdownValue` is now `RecordValue`.
+2. **An imported recording is an attachment.** The planned WAV/MP3/M4A import (ticket T06) does not
+   create a meeting record. It copies the recording into the `attachments/` folder of a meeting
+   that the operator selects. The transcription of an attached recording is not decided. T08 and
+   T09 wait for that decision. The specs, tickets, design docs and PRD carry dated notes.
+3. **The `.kl` save dialog has its own title.** It used `export.dialog.title` ("Save transcript").
+   It now uses `meeting.exportbundle.title` ("Export meeting").
+
 ## 2026-10-06
 
 ### Button text centred vertically

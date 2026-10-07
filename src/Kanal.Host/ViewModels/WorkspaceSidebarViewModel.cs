@@ -13,7 +13,7 @@ using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
 
-// Two members, and never a third: see WorkspaceSidebarViewModel.ImportBundleAsync.
+// Two members, and never a third: see WorkspaceSidebarViewModel.ImportMeetingFromAsync.
 public enum BundleImportChoice
 {
     Skip,
@@ -61,7 +61,6 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportMeetingRecordCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ImportBundleCommand))]
     private Workspace? _selectedWorkspace;
 
     [ObservableProperty]
@@ -76,6 +75,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public Func<Task<string?>>? ChooseWorkspaceFolder { get; set; }
 
     public Func<Task<string?>>? ChooseFileToImport { get; set; }
+
+    public Func<Task<string?>>? ChooseMeetingFile { get; set; }
 
     public Func<string, Task<string?>>? ChooseExportPath { get; set; }
 
@@ -102,6 +103,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public Func<MeetingItemViewModel, Task>? GenerateTitleFor { get; set; }
 
     public event Action<string, string>? MeetingRenamed;
+
+    public event Action<string>? MeetingFilesChanged;
 
     public bool HasWorkspace => SelectedWorkspace is not null;
 
@@ -305,7 +308,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         foreach (var record in _held.Where(Matches))
             Meetings.Add(ShowNamingState(new MeetingItemViewModel(
                 record, RenameFromRow, GenerateTitleAsync,
-                ImportIntoAsync, ExportAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
+                ImportIntoAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
             }));
@@ -366,15 +369,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasWorkspace))]
     private async Task ImportMeetingRecordAsync()
     {
-        if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
-            return;
-
-        var (meeting, problem) = _store.CreateMeeting(
-            SelectedWorkspace!.Id, Path.GetFileNameWithoutExtension(source));
-        if (Refused(problem))
-            return;
-
-        await CopyIntoAsync(meeting!, source);
+        if (ChooseMeetingFile is not null && await ChooseMeetingFile() is { } source)
+            await ImportMeetingFromAsync(source);
     }
 
     private bool RenameFromRow(MeetingItemViewModel item, string title) =>
@@ -388,38 +384,26 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
             return;
 
-        await CopyIntoAsync(item.Record, source);
-    }
-
-    private Task CopyIntoAsync(MeetingRecord meeting, string source)
-    {
-        var folder = _store.MeetingFolder(meeting.WorkspaceId, meeting.Id);
-        if (folder is null)
-            return Task.CompletedTask;
-
-        var target = Path.Combine(folder, Path.GetFileName(source));
-        try
+        if (MeetingBundle.Holds(source))
         {
-            Directory.CreateDirectory(folder);
-            File.Copy(source, target, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            ProblemNote = L.Format("workspace.importfailed", ex.Message);
-            Log.Error(LogCategory, $"{source} could not be brought into {folder}.", ex);
-            return Task.CompletedTask;
-        }
-
-        Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
-        LoadMeetings([]);
-        return Task.CompletedTask;
-    }
-
-    [RelayCommand(CanExecute = nameof(HasWorkspace))]
-    private async Task ImportBundleAsync()
-    {
-        if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
+            await ImportMeetingFromAsync(source);
             return;
+        }
+
+        if (FolderOf(item.Record) is not { } folder)
+            return;
+
+        ProblemNote = MeetingFilesViewModel.Attach(folder, source) ?? "";
+        MeetingFilesChanged?.Invoke(item.Id);
+    }
+
+    public async Task ImportMeetingFromAsync(string source)
+    {
+        if (!MeetingBundle.Holds(source))
+        {
+            ProblemNote = L["workspace.importonlykl"];
+            return;
+        }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
         if (Refused(problem))
@@ -481,29 +465,6 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return;
 
         LoadMeetings([]);
-    }
-
-    private async Task ExportAsync(MeetingItemViewModel item)
-    {
-        if (item.Record.TranscriptPath is not { } transcript || !File.Exists(transcript))
-        {
-            ProblemNote = L["workspace.nothingtoexport"];
-            return;
-        }
-
-        if (ChooseExportPath is null || await ChooseExportPath(Path.GetFileName(transcript)) is not { } target)
-            return;
-
-        try
-        {
-            File.Copy(transcript, target, overwrite: true);
-            ProblemNote = "";
-        }
-        catch (Exception ex)
-        {
-            ProblemNote = L.Format("workspace.exportfailed", ex.Message);
-            Log.Error(LogCategory, $"{transcript} could not be written to {target}.", ex);
-        }
     }
 
     private bool Refused(StoreProblem? problem)
