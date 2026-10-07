@@ -27,7 +27,8 @@ send detail work to subagents.
    2. `/to-spec`: publish the spec as a GitHub issue.
    3. `/to-tickets`: split the spec into tickets. One ticket is one PR, as small as a human can
       review in one sitting.
-   4. `/implement`: build each ticket in its own worktree and PR.
+   4. `/implement`: build each ticket in its own worktree and PR. Build unblocked tickets in
+      parallel, one subagent per worktree.
 4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
 
 The issue tracker is GitHub Issues on this repo. The loop skills come from
@@ -65,10 +66,16 @@ The issue tracker is GitHub Issues on this repo. The loop skills come from
   style, and window-rendering assertions are out of scope. Logic that touches external services is
   tested against fakes (`FakeAsrProvider`/`FakeMtProvider` pattern).
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
-  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff. **Once the
-  branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`) and delete
-  the branch; a leftover worktree keeps a merged branch checked out, which blocks
-  `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+  worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff.
+  - Every harness (Claude Code, the desktop app, Codex, a subagent) uses `.worktrees/<name>` at
+    the repo root. Create it with `git worktree add .worktrees/<name> -b <branch>`. A harness's
+    own worktree option writes elsewhere, such as `.claude/worktrees/`.
+  - **Once the branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`)
+    and delete the branch. A leftover worktree keeps a merged branch checked out, which blocks
+    `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
+  - The human merges outside the session. At session start, remove the worktrees whose PRs are
+    merged. Check with `gh pr list --state merged --head <branch>`: squash merges hide from
+    `git branch --merged`.
 - **Comments are the exception.** Prose in a source file is prose nobody re-reads when the code
   beneath it changes, so the default is no comment — in C#, TypeScript, and the JavaScript inside
   `web/index.html` alike. Keep one only if it carries what a competent reader cannot derive from the
