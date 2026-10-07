@@ -20,6 +20,25 @@ no lines. The operator read this as a meeting that never finished loading.
 4. "Export this meeting" writes a `.kl` file. The raw transcript copy is gone.
 5. A row import into the meeting on screen refreshes the Files tab (`MeetingFilesChanged`).
 
+This change amends ADR 0054 decisions 20–21 and the PRD v0.4 row "md/json 纪要导出". Those
+decisions kept a Markdown export in the meeting menu and kept json import. The new rule is one
+export format and one import format:
+
+- Every export packs one meeting into a `.kl` file.
+- Meeting import accepts only a `.kl` file.
+- Any other imported file becomes an attachment of the meeting.
+
+Reasons:
+
+1. The user chose one short extension and one export format. One file type now carries a meeting
+   in both directions.
+2. The Markdown transcript stays available. Each `.kl` file holds it as `transcript.md`. A meeting
+   imported from a `.kl` file also keeps `transcript.md` in its folder.
+
+Cost: this reverses the two-part extension choice in the 2026-09-12 entry "单场会议的迁移包". That
+choice let Explorer and Finder open the bundle as an archive with a double-click. A `.kl` file does
+not open that way. It is still a zip archive: rename it to `.zip` to look inside.
+
 Out of scope: `MainViewModel.ExportMarkdownCommand`. No view binds it, and tests still use it.
 `TranscriptPath` is now set only by a recorded meeting and by a `.kl` import.
 

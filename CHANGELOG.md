@@ -17,7 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
-  imported as a meeting record opened as an empty transcript.
+  imported as a meeting record opened as an empty transcript. The meeting menu has no Markdown
+  export now: the transcript as Markdown is `transcript.md` inside the `.kl` file. A `.kl` file is
+  a zip archive, so rename it to `.zip` to open it without Kanal.
 - The Online meeting capture profile now works. Kanal hears your microphone and computer audio
   together, with a separate meter for each. You do not pick an output. The meeting app can play to
   headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
@@ -89,12 +91,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   until Kanal names it from what was said. Two meetings in one workspace cannot be given the same
   name by hand; a name Kanal generates takes the next free number instead of interrupting.
 
-- A meeting can now be packed into a single migration bundle from its three-dot menu and imported
-  into any other workspace — the transcript in both forms, the attachments, and the recording only
-  if the box in the export dialog is ticked, because an hour of audio is about 115 MB and most
-  bundles are sent by mail. Importing a bundle a workspace already holds offers to skip it or to
-  keep it as a second record; nothing is ever overwritten. The .json transcript export is gone —
-  the meeting's folder now holds that data, and Markdown export is unchanged.
+- A `.kl` file holds the transcript in two forms and the attachments. It holds the recording only
+  if you tick the box in the export dialog. An hour of audio is about 115 MB, and most `.kl` files
+  go by mail. If the workspace already holds the meeting, import offers to skip it or to keep it as
+  a second record. Import never overwrites a meeting. The .json transcript export is gone. The
+  meeting's folder now holds that data.
 - Two controls that had nothing to do in this version are off the screen. The right panel is Points
   alone — the live transcription tags every sentence as one speaker, so there was never a second
   person to rename or merge. Online meeting is still listed in the capture picker but cannot be
@@ -181,11 +182,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   window gets; the processing and capture pickers hold the left edge and the join QR the right. What
   the room is doing is spelled out in the status line at the bottom, and the two full-width bands
   that used to push the transcript down are gone. Settings moved to the foot of the workspace
-  sidebar, export to the bar's ellipsis menu, and the room's language flags to the top of the
+  sidebar, and the room's language flags to the top of the
   transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
-  audio file is recorded, and Markdown/JSON exports retain the attestation.
+  audio file is recorded.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
@@ -210,8 +211,7 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The microphone can be tested before the meeting: a level meter, a held peak, and a verdict that
   names the fault (silent, too quiet, clipping, noisy) and where to fix it.
 - The device list notices a microphone being plugged in or unplugged mid-session.
-- Transcripts export as Markdown to a folder you choose; the room's audio is recorded alongside it
-  unless you turn that off.
+- Kanal records the room's audio into the meeting's folder unless you turn that off.
 - Rooms are isolated from each other by a random room-id suffix, with a per-room cache on the
   phone, and clients are told when a room closes or moves — so a restart no longer strands
   everyone until they rescan.

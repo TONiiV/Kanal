@@ -163,6 +163,14 @@ public class MeetingBundleTests : IDisposable
     }
 
     [Fact]
+    public void OnlyTheKlExtensionMarksABundleInAnyCase()
+    {
+        Assert.True(MeetingBundle.Holds("Delivery.KL"));
+        Assert.False(MeetingBundle.Holds("delivery.kanal-meeting.zip"));
+        Assert.False(MeetingBundle.Holds("delivery.kl.pdf"));
+    }
+
+    [Fact]
     public void AFileThatIsNotABundleIsRefusedRatherThanImportedEmpty()
     {
         var (store, workspace) = Opened("laptop");

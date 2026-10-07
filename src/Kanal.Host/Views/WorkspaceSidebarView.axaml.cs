@@ -145,6 +145,8 @@ public partial class WorkspaceSidebarView : UserControl
         {
             Title = Localizer.Instance["export.dialog.title"],
             SuggestedFileName = suggestedName,
+            DefaultExtension = MeetingBundle.Extension.TrimStart('.'),
+            FileTypeChoices = [new FilePickerFileType("Kanal") { Patterns = ["*" + MeetingBundle.Extension] }],
             ShowOverwritePrompt = true,
         });
         return file?.TryGetLocalPath();

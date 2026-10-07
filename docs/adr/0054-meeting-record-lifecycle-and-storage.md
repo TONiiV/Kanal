@@ -2,6 +2,11 @@
 
 状态：accepted，2026-09-08。
 
+> **2026-10-07 修订：** 决定 20–21 改为「一种导出格式、一种导入格式」。所有导出都把一场会议打包成
+> 一个 `.kl` 文件。会议导入只接受 `.kl`。其他任何文件导入后都成为该会议的附件。会议的三点菜单
+> 不再有 Markdown 导出。Markdown 转写仍在 `.kl` 包内，文件名 `transcript.md`。原因记录在
+> [`docs/PROGRESS.md`](../PROGRESS.md) 的 2026-10-07 条目。下文决定 20–21 保留原文，供追溯。
+
 延续 [ADR 0051](0051-peer-meeting-workspaces.md)（平级工作空间拥有会议记录）。0051 冻结了记录的
 归属边界，并明说「文件格式、迁移、跨空间移动、共享和运行中切换行为仍需独立设计」——本文补的
 就是那份设计。同时补上 [`docs/specs/meeting-workspace.md`](../specs/meeting-workspace.md) 未确认
@@ -83,6 +88,9 @@
     能力缩水。
 21. `transcript.jsonl` **存储保留**，导入继续接受 json。刻度尺的语义层与句子回放都需要「这句话在
     音频的第几秒、谁说的」这样的锚点，Markdown 存不下。
+
+    > **2026-10-07 修订（决定 20–21）：** 三点菜单的唯一导出是「导出本场会议（.kl）」，不再有
+    > Markdown 导出。导入只接受 `.kl`，不接受 json。`transcript.jsonl` 的存储不变，它在 `.kl` 包内。
 22. **单场会议的迁移包**，可植入任意工作空间。包内含 manifest（id、标题、语言、`StartedAt` /
     `EndedAt`）、`transcript.md`、`transcript.jsonl`、`attachments/`；导出时一个勾选框决定是否含
     `audio.wav`，**默认不含**（一小时约 115 MB，邮件发不动）。
