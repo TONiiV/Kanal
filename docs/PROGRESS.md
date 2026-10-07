@@ -38,6 +38,16 @@ branches. A threshold is set after CI has produced a few reports from all platfo
 
 The Windows job depends on the test fixes in #173. Before them, six Core tests failed on Windows.
 
+The first macOS runs found two tests that depended on timing:
+
+1. `DeliversSixteenKilohertzMonoFrames` read 37 120 bytes in a 700 ms window, against a 32 000
+   limit. A diagnostic run (#176) measured the runner's "Apple Virtual Sound Device": 16 288 to
+   16 512 samples/s, so the format is correct. The excess is the three AudioQueue buffers that
+   fill during device start, plus one trailing buffer. The window is now 2 s, with a range of
+   48 000 to 80 000 bytes. Stereo or un-resampled audio (128 000 or more) still fails.
+2. `NothingSaidInTheRoomIsWrittenToTheLog` waited a fixed 400 ms for the demo to speak. On the
+   macOS runner no utterance arrived in time. The test now waits until the first utterance appears.
+
 ### A meeting travels as one `.kl` file
 
 The sidebar had two import actions and two export actions. "Import meeting record" copied any file
