@@ -19,6 +19,8 @@ the packages and attaches them to that release.
    refuses a dirty working tree, and on a Mac it stops first if a signing variable is unset.
 4. The PR gear runs the same script with `0.0.0-smoke --unsigned`, with the same path filter. A
    change that breaks the release script makes a PR red.
+5. `release.yml` uses the concurrency rule of `ci.yml`. A new push cancels the PR's older smoke
+   build. A run for a published release has a unique group and is never cancelled.
 
 This reverses "Nothing installable leaves CI" (2026-09-02 entry and
 `docs/superpowers/specs/2026-08-01-installers-design.md`). The repository is public, so every
