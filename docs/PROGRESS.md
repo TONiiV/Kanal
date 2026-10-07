@@ -6,6 +6,24 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-07
 
+### Releases leave CI: `release.yml` becomes `package-smoke.yml`
+
+The maintainer builds, signs and notarises every release on a local Mac, and starts it by hand.
+CI does not take part in a release.
+
+1. `release.yml` is now `package-smoke.yml`, named "Package smoke".
+2. The `workflow_dispatch` gear is gone, with its version input, certificate import, notary key and
+   secrets check. It ran once, on 2026-09-02, and its signed package was discarded.
+3. The PR gear stays as it was: an unsigned msi and dmg build at version `0.0.0`, with the same
+   path filter. It is the only check that the installer chain still builds.
+4. `docs/release/macos-alpha-rollout.md` now gives local signing as the only signing path.
+
+This amends the "two gears" table in `docs/superpowers/specs/2026-08-01-installers-design.md`.
+The local release commands in that document are unchanged.
+
+The six signing secrets (`MACOS_CERT_P12` and the others) are still set on the repository. No
+workflow reads them now.
+
 ### CI tests on Windows and macOS, with a coverage report
 
 Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and

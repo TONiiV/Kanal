@@ -1,0 +1,59 @@
+name: Package smoke
+
+# Proves the installer chain still builds, unsigned, and throws the package away. Releases are built
+# and signed on the maintainer's machine: on a public repository every Actions artifact is public.
+
+on:
+  pull_request:
+    paths:
+      - 'installers/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/package-smoke.yml'
+      - 'src/**/*.csproj'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # arm64 runner, builds osx-arm64 natively
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # 0.0.0 is a valid MSI ProductVersion and an obviously non-releasable one
+      - name: Package
+        shell: bash
+        run: |
+          dotnet build installers/Kanal.Installers.csproj \
+            -t:PackInstaller \
+            -p:Version=0.0.0 \
+            -p:FullVersion=0.0.0-smoke \
+            -p:TargetRid=${{ matrix.rid }}
+
+      # nothing is uploaded, so an empty build must be caught here
+      - name: The package was produced
+        shell: bash
+        run: |
+          cd artifacts
+          found=
+          for f in *.dmg *.msi; do
+            [ -e "$f" ] || continue
+            found=1
+            ls -lh "$f"
+            if command -v shasum > /dev/null; then shasum -a 256 "$f"
+            else sha256sum "$f"; fi
+          done
+          [ -n "$found" ] || { echo "no package in artifacts/" >&2; exit 1; }

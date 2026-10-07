@@ -36,7 +36,7 @@ GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release �
 
 ### 3.1 构建
 
-在 macOS runner 上执行：
+维护者在本机 Mac 上手动执行。GitHub Actions 只做未签名的打包冒烟测试（`.github/workflows/package-smoke.yml`），不产出发布包。
 
 1. Checkout 固定的 tag/commit。
 2. 安装 .NET 10 SDK（仓库内所有 csproj 的 `TargetFramework` 均为 `net10.0`）。
@@ -66,24 +66,15 @@ GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release �
 
 ### 3.2 签名
 
-Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key，但应在 Kanal 仓库中单独配置 GitHub Secrets，不复制或提交本地证书文件。
+Kanal 可以复用 DimensionX 所属 Apple Developer Team 的 Developer ID Application 证书和 App Store Connect notarization key。签名和公证只在维护者本机执行。GitHub Actions 不签名，也不读取证书或公证密钥。本地命令见 `docs/superpowers/specs/2026-08-01-installers-design.md`。不要提交证书文件。
 
-需要的 secrets：
+本地打包流程应：
 
-- `MACOS_CERT_P12`
-- `MACOS_CERT_PWD`
-- `MACOS_SIGNING_IDENTITY`
-- `NOTARY_KEY_P8`
-- `NOTARY_KEY_ID`
-- `NOTARY_ISSUER_ID`
-
-流水线应：
-
-1. 创建临时 keychain 并导入 `.p12`。
+1. 把 `.p12` 导入本机 keychain。
 2. 对 `.app` 内所有 Mach-O、`.dylib` 和原生库由内向外签名。
 3. 最后对 `Kanal.app` 使用 Developer ID、timestamp 和 Hardened Runtime 签名。
 4. 验证签名 authority 确实是 `Developer ID Application`，不能只依赖 `codesign --verify`，因为 ad-hoc 签名也可能通过该命令。
-5. 任一签名或公证 secret 缺失时让 release job 失败，禁止静默生成未签名发布包。
+5. 任一签名或公证变量缺失时让打包失败，禁止静默生成未签名发布包。
 
 不要直接复制 DimensionX 的 PyInstaller entitlements。Kanal 使用 .NET、Avalonia 和 llama.cpp，需要先用本地模型做 Hardened Runtime 冒烟测试，再按实际失败点决定是否加入 JIT、可执行内存或 library-validation 例外；权限应保持最小化。
 
