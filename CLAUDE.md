@@ -24,11 +24,11 @@ send detail work to subagents.
 3. **Run the core loop** for each feature with an unclear requirement:
    1. `/grill-with-docs`: interview the user. Give a recommended answer with each question. Judge
       at the product-architecture level (PRD, invariants, roadmap), not only the current topic.
-   2. `/to-spec`: publish the spec as a GitHub issue.
+   2. `/to-spec`: publish the spec to the issue tracker.
    3. `/to-tickets`: split the spec into tickets. One ticket is one PR, as small as a human can
       review in one sitting.
    4. `/implement`: build each ticket in its own worktree and PR. Build unblocked tickets in
-      parallel, one subagent per worktree.
+      parallel, one subagent per worktree. Create each worktree first. Give its path to the subagent.
 4. **Run the review loop** on each PR (below) until the reviewer approves it. The human merges.
 
 The issue tracker is GitHub Issues on this repo. The loop skills come from
@@ -56,6 +56,7 @@ The issue tracker is GitHub Issues on this repo. The loop skills come from
 2. Dispatch a fixer subagent. It answers each comment in the PR and pushes the fixes.
 3. Repeat until the reviewer finds nothing open. It then posts a comment that starts with `APPROVED`.
    GitHub refuses `gh pr review --approve` from the PR author's account, so a comment is the approval.
+4. If a finding stays open after 3 rounds, stop. Ask the human in the PR to decide.
 
 ## Working practices
 
@@ -68,12 +69,13 @@ The issue tracker is GitHub Issues on this repo. The loop skills come from
 - **One PR per concern.** Independent changesets get independent branches and PRs, built in
   worktrees under `.worktrees/<name>` — never mix unrelated changes into one diff.
   - Every harness (Claude Code, the desktop app, Codex, a subagent) uses `.worktrees/<name>` at
-    the repo root. Create it with `git worktree add .worktrees/<name> -b <branch>`. A harness's
-    own worktree option writes elsewhere, such as `.claude/worktrees/`.
+    the repo root. Create it with `git worktree add .worktrees/<name> -b <branch>`. Do not use a
+    harness's own worktree option, such as the Agent tool's `isolation: "worktree"`. That option
+    writes to `.claude/worktrees/`.
   - **Once the branch is merged, remove its worktree** (`git worktree remove .worktrees/<name>`)
-    and delete the branch. A leftover worktree keeps a merged branch checked out, which blocks
+    and delete the branch with `git branch -D <branch>`. A leftover worktree keeps a merged branch checked out, which blocks
     `gh pr merge --delete-branch` and leaves a stale copy of the tree on disk.
-  - The human merges outside the session. At session start, remove the worktrees whose PRs are
+  - Merges happen outside the session. At session start, remove the worktrees whose PRs are
     merged. Check with `gh pr list --state merged --head <branch>`: squash merges hide from
     `git branch --merged`.
 - **Comments are the exception.** Prose in a source file is prose nobody re-reads when the code
