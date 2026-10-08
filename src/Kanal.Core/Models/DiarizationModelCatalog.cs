@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Kanal.Core.Models;
 
 public enum DiarizationModelRole
@@ -16,35 +18,27 @@ public enum DiarizationReadiness
 
 public sealed record ModelLicense
 {
-    public static readonly ModelLicense Mit = Commercial("MIT");
+    public static readonly ModelLicense Mit = new("MIT", permitsCommercialUse: true);
 
-    public static readonly ModelLicense Apache20 = Commercial("Apache-2.0");
+    public static readonly ModelLicense Apache20 = new("Apache-2.0", permitsCommercialUse: true);
 
-    public static readonly ModelLicense CcBy40 = Commercial(
-        "CC-BY-4.0",
-        "Attribution required: NVIDIA NeMo TitaNet, CC BY 4.0 — credit it wherever this build is shipped.");
+    public static readonly ModelLicense CcBy40 = new("CC-BY-4.0", permitsCommercialUse: true);
 
-    /// <summary>Nameable so a model under it can be rejected, never so one can be listed.</summary>
+    // Nameable so a model under it can be rejected, never so one can be listed.
     public static readonly ModelLicense RevNonProduction =
-        new("Rev Model Non-Production License", permitsCommercialUse: false, note: null);
+        new("Rev Model Non-Production License", permitsCommercialUse: false);
 
-    public static readonly ModelLicense CcByNc40 =
-        new("CC-BY-NC-4.0", permitsCommercialUse: false, note: null);
+    public static readonly ModelLicense CcByNc40 = new("CC-BY-NC-4.0", permitsCommercialUse: false);
 
-    private ModelLicense(string name, bool permitsCommercialUse, string? note)
+    private ModelLicense(string name, bool permitsCommercialUse)
     {
         Name = name;
         PermitsCommercialUse = permitsCommercialUse;
-        Note = note;
     }
-
-    private static ModelLicense Commercial(string name, string? note = null) => new(name, true, note);
 
     public string Name { get; }
 
     public bool PermitsCommercialUse { get; }
-
-    public string? Note { get; }
 }
 
 public sealed record DiarizationModelInfo(
@@ -55,7 +49,8 @@ public sealed record DiarizationModelInfo(
     string FileName,
     long SizeBytes,
     string Sha256,
-    ModelLicense License) : IDownloadableFile
+    ModelLicense License,
+    string? LicenseNote = null) : IDownloadableFile
 {
     private readonly ModelLicense _license = Permitted(License);
 
@@ -68,9 +63,7 @@ public sealed record DiarizationModelInfo(
     public string DownloadUrl =>
         $"https://github.com/k2-fsa/sherpa-onnx/releases/download/{ReleaseTag}/{FileName}";
 
-    public string SizeLabel => $"{SizeBytes / (1024.0 * 1024):0.#} MB";
-
-    public string? LicenseNote => License.Note;
+    public string SizeLabel => string.Create(CultureInfo.InvariantCulture, $"{SizeBytes / (1024.0 * 1024):0.#} MB");
 
     // sherpa-onnx ships Rev's non-commercial Reverb models in the same release as the segmentation model.
     private static ModelLicense Permitted(ModelLicense license) =>
@@ -141,7 +134,8 @@ public static class DiarizationModelCatalog
             FileName: "nemo_en_titanet_small.onnx",
             SizeBytes: 40_257_283,
             Sha256: "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
-            License: ModelLicense.CcBy40),
+            License: ModelLicense.CcBy40,
+            LicenseNote: "Attribution required: NVIDIA NeMo TitaNet, CC BY 4.0 — credit it wherever this build is shipped."),
     ];
 
     public static IReadOnlyList<DiarizationModelInfo> Models { get; } = [.. Segmentation, .. Embeddings];
@@ -149,8 +143,6 @@ public static class DiarizationModelCatalog
     public static DiarizationModelInfo? Find(string? id) =>
         id is null ? null : Models.FirstOrDefault(m => m.Id == id);
 
-    /// <summary>What is on disk. An unset, unknown or mismatched pair reads as not downloaded
-    /// rather than as an error — a meeting starts without speaker attribution.</summary>
     public static DiarizationReadiness Readiness(
         ModelDownloadManager downloads, string? segmentationId, string? embeddingId)
     {
@@ -161,23 +153,6 @@ public static class DiarizationModelCatalog
             return DiarizationReadiness.NotDownloaded;
 
         return downloads.IsDownloaded(segmentation) && downloads.IsDownloaded(embedding)
-            ? DiarizationReadiness.Ready
-            : DiarizationReadiness.NotDownloaded;
-    }
-
-    public static DiarizationReadiness Readiness(
-        DiarizationModelDownload segmentation, DiarizationModelDownload embedding)
-    {
-        if (segmentation.Model.Role != DiarizationModelRole.Segmentation ||
-            embedding.Model.Role != DiarizationModelRole.Embedding)
-            return DiarizationReadiness.NotDownloaded;
-
-        DiarizationReadiness[] states = [segmentation.State, embedding.State];
-        if (states.Contains(DiarizationReadiness.Failed))
-            return DiarizationReadiness.Failed;
-        if (states.Contains(DiarizationReadiness.Downloading))
-            return DiarizationReadiness.Downloading;
-        return states.All(st => st == DiarizationReadiness.Ready)
             ? DiarizationReadiness.Ready
             : DiarizationReadiness.NotDownloaded;
     }

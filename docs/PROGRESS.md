@@ -1058,29 +1058,27 @@ Speaker attribution needs two models. The segmentation model finds where the spe
 
 Sizes come from the GitHub releases API. We recomputed every SHA-256 from the downloaded file on 2026-09-08. The four embedding hashes also match the upstream `checksum.txt`.
 
-**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless carried the same risk.
+**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless also have non-commercial licences.
 
-A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. A build that lists Reverb does not start.
+A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. If someone lists Reverb, the catalog throws on first use and the test suite fails.
 
-**Readiness never throws.** `DiarizationModelCatalog.Readiness` has two overloads.
+**Readiness never throws.** `DiarizationModelCatalog.Readiness` reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
 
-1. The first overload reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
-2. The second overload takes two `DiarizationModelDownload` objects. It returns `Failed` when either download failed. It returns `Downloading` when either download runs. It returns `Ready` when both are ready. Otherwise it returns `NotDownloaded`.
-
-The four state names are the same as in [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5.
+The catalog reports only *not downloaded* and *ready*, as [PR #126](https://github.com/TONiiV/Kanal/pull/126) does for the transcription catalog. The disk decides these two states. `DiarizationModelDownload` owns *downloading* and *failed* for one file. This follows [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5. The post-meeting pass needs only "both files on disk".
 
 `DiarizationModelDownload` holds the state of one file. A 404 or a hash mismatch ends in `Failed`, with the message on the object. It never throws. The host has no reason to show a dialog over a running meeting.
 
 Headless tests start a demo meeting with an empty models directory. The transcript arrives. No mode status mentions a speaker model.
 
-[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. No token is needed and no repository is gated. A test asserts that the downloader receives the URL unchanged.
+[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. The download needs no token. No repository is gated. A test asserts that the downloader receives the URL unchanged.
 
 The embedding release tag is `speaker-recongition-models` upstream. A test pins this spelling. The correct spelling gives a 404 for every embedding URL, and the error shows only at download time.
 
-Two items are open.
+Three items are open.
 
 1. The segmentation asset is a `.tar.bz2` that holds `model.onnx` and `model.int8.onnx`. The BCL has no bzip2. Unpacking needs a new dependency, so it ships with the slice that loads the model. Until then, `Ready` means that the verified archive is on disk.
-2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`.
+2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`. That issue also covers a race in `DiarizationModelDownload.Cancel`, which can touch a disposed token source.
+3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
 
 No operator can reach these models yet, so this PR adds no CHANGELOG entry.
 

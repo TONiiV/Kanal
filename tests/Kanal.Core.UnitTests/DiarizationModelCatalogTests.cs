@@ -1,3 +1,4 @@
+using System.Globalization;
 using Kanal.Core.Models;
 
 namespace Kanal.Core.UnitTests;
@@ -141,5 +142,20 @@ public class DiarizationModelCatalogTests
     {
         Assert.Equal("6.6 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
         Assert.Equal("38.4 MB", DiarizationModelCatalog.Find("titanet-small")!.SizeLabel);
+    }
+
+    [Fact]
+    public void SizeLabelDoesNotDependOnTheMachineCulture()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("6.6 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
     }
 }

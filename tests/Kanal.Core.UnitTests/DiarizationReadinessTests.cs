@@ -23,15 +23,6 @@ public class DiarizationReadinessTests : IDisposable
         }
     }
 
-    private sealed class BlockingHandler(Task gate) : HttpMessageHandler
-    {
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            await gate;
-            return Ok(request);
-        }
-    }
-
     private static HttpResponseMessage Ok(HttpRequestMessage _) =>
         new(HttpStatusCode.OK) { Content = new ByteArrayContent(Payload) };
 
@@ -147,6 +138,7 @@ public class DiarizationReadinessTests : IDisposable
 
         Assert.Equal(DiarizationReadiness.NotDownloaded, download.State);
         Assert.Equal("", download.Error);
+        Assert.False(Directory.Exists(_dir) && Directory.EnumerateFileSystemEntries(_dir).Any());
     }
 
     [Fact]
@@ -159,6 +151,7 @@ public class DiarizationReadinessTests : IDisposable
         download.Delete();
 
         Assert.Equal(DiarizationReadiness.NotDownloaded, download.State);
+        Assert.False(File.Exists(Path.Combine(_dir, model.FileName)));
     }
 
     [Fact]
@@ -180,50 +173,6 @@ public class DiarizationReadinessTests : IDisposable
         await new DiarizationModelDownload(model, downloads).DownloadAsync();
 
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
-    }
-
-    [Fact]
-    public async Task APairReadsAsFailedWhenEitherDownloadFailed()
-    {
-        var segmentation = new DiarizationModelDownload(TestModel(DiarizationModelRole.Segmentation, "seg"), Manager());
-        var embedding = new DiarizationModelDownload(
-            TestModel(DiarizationModelRole.Embedding, "emb"),
-            Manager(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
-        await segmentation.DownloadAsync();
-        await embedding.DownloadAsync();
-
-        Assert.Equal(DiarizationReadiness.Failed, DiarizationModelCatalog.Readiness(segmentation, embedding));
-    }
-
-    [Fact]
-    public async Task APairReadsAsDownloadingWhileEitherDownloadRuns()
-    {
-        var release = new TaskCompletionSource();
-        var segmentation = new DiarizationModelDownload(
-            TestModel(DiarizationModelRole.Segmentation, "seg"), Manager());
-        var embedding = new DiarizationModelDownload(
-            TestModel(DiarizationModelRole.Embedding, "emb"),
-            new ModelDownloadManager(_dir, new HttpClient(new BlockingHandler(release.Task))));
-        await segmentation.DownloadAsync();
-        var running = embedding.DownloadAsync();
-
-        Assert.Equal(DiarizationReadiness.Downloading, DiarizationModelCatalog.Readiness(segmentation, embedding));
-
-        release.SetResult();
-        await running;
-        Assert.Equal(DiarizationReadiness.Ready, DiarizationModelCatalog.Readiness(segmentation, embedding));
-    }
-
-    [Fact]
-    public void APairReadsAsNotDownloadedWhenOneModelIsMissingOrTheRolesAreWrong()
-    {
-        var downloads = Manager();
-        var segmentation = new DiarizationModelDownload(TestModel(DiarizationModelRole.Segmentation, "seg"), downloads);
-        var embedding = new DiarizationModelDownload(TestModel(DiarizationModelRole.Embedding, "emb"), downloads);
-        Place(segmentation.Model);
-
-        Assert.Equal(DiarizationReadiness.NotDownloaded, DiarizationModelCatalog.Readiness(segmentation, embedding));
-        Assert.Equal(DiarizationReadiness.NotDownloaded, DiarizationModelCatalog.Readiness(embedding, segmentation));
     }
 
     public void Dispose()
