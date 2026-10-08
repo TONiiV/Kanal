@@ -90,8 +90,10 @@ A model that is not ready never silently changes what the meeting does — the `
 **6. Translation stays post-processing, explicitly.** `Caps.Translation` is `false` and finals flow
 to whatever `IMtProvider` the mode resolved. This is the existing capability route; the orchestrator
 does not change. The rest of `Caps` is
-`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: true`, `Latency: Near`, and a
+`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: false`, `Latency: Near`, and a
 `Languages` set taken from the model's own prompt dictionary rather than hand-written.
+The model takes the language as input and reports none, so `AutoLanguageDetect` is `false`.
+`TranscriptLanguage` reads the source language back from the text (see `docs/PROGRESS.md`).
 
 **7. Chunk size is a setting with a default, not a constant.** 560 ms is the starting point — the
 accuracy/latency knee on the model card's own FLEURS curve — and it is recorded here so the number

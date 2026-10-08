@@ -160,7 +160,7 @@ public class NemotronAsrProviderTests
         Assert.False(caps.Translation);
         Assert.False(caps.Diarization);
         Assert.True(caps.Streaming);
-        Assert.True(caps.AutoLanguageDetect);
+        Assert.False(caps.AutoLanguageDetect);
         Assert.Superset(new HashSet<string> { "zh", "de", "pl", "en" }, caps.Languages.ToHashSet());
     }
 }
