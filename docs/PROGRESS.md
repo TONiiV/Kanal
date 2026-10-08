@@ -67,8 +67,15 @@ validation gate (phase 1.5) and two new tracks. This entry records which finding
 2. C and B tracks are not frozen. #126, #127, #146 and #147 get a merge assessment, then the review
    loop. The assessment checks if transcription and attribution stream.
 3. F track comes first after the gate, unless V data shows that ASR errors dominate.
-4. Open: the extractor design for each file type, and the intelligence provider (local model or
-   the operator's own subscription). These go through a design interview and an ADR.
+4. C and B slices may merge before the phase 2 acceptance (a real Teams meeting). This waives the
+   serial-phase rule for C and B. #147 is split into smaller PRs.
+5. Key facts are extracted by rules, not by a model. A checker must not invent values.
+6. Glossary import: XLSX, XLS and CSV by column mapping (ExcelDataReader, MIT). Other formats need
+   an intelligence provider. Without one, the entry is disabled with its reason.
+7. The intelligence provider serves glossary extraction, semantic checks, minutes, titles and the
+   listening agent. Live translation is not in its scope for now. Codex comes first. The consent
+   dialog names each intelligence vendor. Intelligence has priority over offline privacy.
+   ADR 0057 records the design.
 
 ## 2026-10-07
 
