@@ -2,8 +2,7 @@ using Kanal.Core.Models;
 
 namespace Kanal.Providers.LocalAsr;
 
-// FileName is the local name and carries the model id: every chunk configuration publishes a file
-// called encoder.int8.onnx, and they all land in one models directory.
+// FileName carries the model id: every package publishes the same encoder.int8.onnx name.
 public sealed record AsrModelFile(
     string FileName,
     string Repo,
@@ -14,26 +13,20 @@ public sealed record AsrModelFile(
     public string DownloadUrl => HuggingFace.FileUrl(Repo, RemoteName);
 }
 
-/// <summary>One downloadable transcription model. All values verified against the HF API 2026-09-08.</summary>
 public sealed record AsrModelInfo(
     string Id,
     string DisplayName,
     string Parameters,
-    string Repo,
     IReadOnlyList<AsrModelFile> Parts,
     string License,
     string? LicenseNote = null)
 {
     public long SizeBytes => Parts.Sum(p => p.SizeBytes);
 
-    public string SizeLabel => $"{SizeBytes / (1024.0 * 1024 * 1024):0.0} GB";
+    public string SizeLabel => ModelSize.Label(SizeBytes);
 }
 
-/// <summary>
-/// Nemotron 3.5 ASR Streaming 0.6B in sherpa-onnx transducer packaging, at three of its five
-/// published chunk sizes — see <c>docs/adr/0053-local-transcription-model-and-runtime.md</c>.
-/// Order matters: the first entry is the recommended default.
-/// </summary>
+// The first entry is the default.
 public static class AsrModelCatalog
 {
     private const string License = "OpenMDW-1.1";
@@ -41,8 +34,7 @@ public static class AsrModelCatalog
     private const string LicenseNote =
         "OpenMDW-1.1 — permissive but not OSI-approved; review before redistribution.";
 
-    // Not an LFS object, so this hash was computed from the downloaded file rather than read
-    // off the API the way every other hash here was.
+    // tokens.txt is not an LFS object: this hash comes from the downloaded file, not the HF API.
     private const string TokensSha = "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a";
 
     private const long TokensBytes = 131_440;
@@ -57,18 +49,18 @@ public static class AsrModelCatalog
 
     public static IReadOnlyList<AsrModelInfo> Models { get; } =
     [
-        Package("560", "0.6B · int8 · 560 ms", 657_601_403,
+        Package("560", 657_601_403,
             "012e9321373af99021415e0b0eb3ec827b4be3153be6f30d9b448fe65e896e68"),
-        Package("160", "0.6B · int8 · 160 ms", 657_601_518,
+        Package("160", 657_601_518,
             "e1b39e5e16bef578a54ed2fba5f031438e000cc36c3ea2ca49d55699d5baebd4"),
-        Package("1120", "0.6B · int8 · 1120 ms", 657_601_521,
+        Package("1120", 657_601_521,
             "2fff2166acaa535bd969fb223c1f0783d71029f143cb298bc54c2afe85abf772"),
     ];
 
     public static AsrModelInfo? Find(string? id) =>
         id is null ? null : Models.FirstOrDefault(m => m.Id == id);
 
-    private static AsrModelInfo Package(string chunkMs, string parameters, long encoderBytes, string encoderSha)
+    private static AsrModelInfo Package(string chunkMs, long encoderBytes, string encoderSha)
     {
         var id = $"nemotron-3.5-asr-{chunkMs}ms-int8";
         var repo = $"csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-{chunkMs}ms-int8-2026-06-11";
@@ -76,8 +68,7 @@ public static class AsrModelCatalog
         return new AsrModelInfo(
             Id: id,
             DisplayName: $"Nemotron 3.5 ASR Streaming ({chunkMs} ms)",
-            Parameters: parameters,
-            Repo: repo,
+            Parameters: $"0.6B · int8 · {chunkMs} ms",
             Parts:
             [
                 new($"{id}-encoder.int8.onnx", repo, "encoder.int8.onnx", encoderBytes, encoderSha),

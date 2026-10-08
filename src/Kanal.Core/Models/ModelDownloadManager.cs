@@ -54,7 +54,6 @@ public sealed class ModelDownloadManager
         }
     }
 
-    /// <summary>A model of several files is downloaded when every one of them is.</summary>
     public bool IsDownloaded(IEnumerable<IDownloadableFile> parts) => parts.All(IsDownloaded);
 
     public IReadOnlyList<IDownloadableFile> MissingParts(IEnumerable<IDownloadableFile> parts) =>
@@ -66,32 +65,34 @@ public sealed class ModelDownloadManager
             Delete(part);
     }
 
-    // Progress is weighted by declared size, not by file count: the encoder of a transcription
-    // model is 96% of its bytes.
     public async Task DownloadAsync(
-        IReadOnlyList<IDownloadableFile> parts, IProgress<double>? progress, CancellationToken ct)
+        IEnumerable<IDownloadableFile> parts, IProgress<double>? progress, CancellationToken ct)
     {
-        var grandTotal = Math.Max(1, parts.Sum(p => p.SizeBytes));
+        var all = parts.ToList();
+        var grandTotal = Math.Max(1, all.Sum(p => p.SizeBytes));
         long doneBytes = 0;
 
-        foreach (var part in parts)
+        foreach (var part in all)
         {
-            var before = doneBytes;
-            var share = part.SizeBytes;
-            var relay = progress is null
-                ? null
-                : new RelayProgress(fraction =>
-                    progress.Report(Math.Min(1.0, (before + fraction * share) / grandTotal)));
+            if (!IsDownloaded(part))
+            {
+                var before = doneBytes;
+                var share = part.SizeBytes;
+                var relay = progress is null
+                    ? null
+                    : new RelayProgress(fraction =>
+                        progress.Report(Math.Min(1.0, (before + fraction * share) / grandTotal)));
 
-            await DownloadAsync(part, relay, ct);
-            doneBytes += share;
+                await DownloadAsync(part, relay, ct);
+            }
+
+            doneBytes += part.SizeBytes;
         }
 
         progress?.Report(1.0);
     }
 
-    // Progress<T> posts through the synchronization context, which would let a part's last
-    // report land after the next part has already moved the baseline.
+    // Progress<T> would post each part's reports to the thread pool and deliver them out of order.
     private sealed class RelayProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);

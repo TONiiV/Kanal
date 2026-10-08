@@ -51,10 +51,7 @@ public sealed class AppSettings
     /// </summary>
     public string? ActiveTranslationModelId { get; set; }
 
-    /// <summary>
-    /// Catalog id of the local transcription model to run in-process, or null for the default:
-    /// transcription by the cloud ASR provider (Gladia).
-    /// </summary>
+    // Null keeps transcription on the cloud provider.
     public string? ActiveTranscriptionModelId { get; set; }
 
     /// <summary>Where the export dialog opens. Null or blank falls back to Documents\Kanal.</summary>

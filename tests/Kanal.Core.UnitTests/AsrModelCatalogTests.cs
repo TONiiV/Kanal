@@ -27,7 +27,9 @@ public class AsrModelCatalogTests
     [Fact]
     public void EveryEntryIsComplete()
     {
-        Assert.InRange(AsrModelCatalog.Models.Count, 2, 5);
+        Assert.Equal(
+            ["nemotron-3.5-asr-560ms-int8", "nemotron-3.5-asr-160ms-int8", "nemotron-3.5-asr-1120ms-int8"],
+            AsrModelCatalog.Models.Select(m => m.Id));
         foreach (var m in AsrModelCatalog.Models)
         {
             Assert.False(string.IsNullOrWhiteSpace(m.Id));
@@ -38,7 +40,7 @@ public class AsrModelCatalogTests
             {
                 Assert.Matches("^[0-9a-f]{64}$", p.Sha256);
                 Assert.True(p.SizeBytes > 0, $"{m.Id}/{p.FileName} size looks wrong");
-                Assert.StartsWith($"https://huggingface.co/{m.Repo}/resolve/main/", p.DownloadUrl);
+                Assert.StartsWith($"https://huggingface.co/{p.Repo}/resolve/main/", p.DownloadUrl);
             }
             Assert.True(m.SizeBytes > 500_000_000, $"{m.Id} total size looks wrong");
             Assert.Contains("GB", m.SizeLabel);
@@ -57,8 +59,6 @@ public class AsrModelCatalogTests
         }
     }
 
-    /// <summary>Downloading a second chunk configuration would otherwise overwrite the first
-    /// while both still claim to be on disk.</summary>
     [Fact]
     public void LocalFileNamesAreUniqueAcrossTheCatalog()
     {
