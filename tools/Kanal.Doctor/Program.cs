@@ -1,11 +1,15 @@
 using System.Runtime.InteropServices;
 using Kanal.Audio;
+using System.Diagnostics;
+using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.Gladia;
 
 // Kanal.Doctor — pipeline diagnostics (PRD D0-A / D0-B helpers).
 //   doctor mic [seconds] [deviceIndex]   capture → resample → WAV + level report
 //   doctor gladia <wav> [--fast]         stream a WAV to Gladia live, dump raw + normalized events
+//   doctor asr <wav> [modelsDir]         run the local Nemotron model over a WAV, print a Markdown report
 
 var command = args.Length > 0 ? args[0].ToLowerInvariant() : "help";
 return command switch
@@ -16,6 +20,7 @@ return command switch
     "gladia" => await GladiaCheckAsync(
         args.Length > 1 ? args[1] : null,
         args.Contains("--fast")),
+    "asr" => await AsrCheckAsync(args.Length > 1 ? args[1] : null, args.Length > 2 ? args[2] : null),
     _ => Help(),
 };
 
@@ -25,6 +30,7 @@ static int Help()
         Kanal.Doctor
           mic [seconds] [deviceIndex]   capture from the mic, write mic-check.wav, report levels
           gladia <wav> [--fast]         stream a 16 kHz mono WAV to Gladia live and dump messages
+          asr <wav> [modelsDir]         download the default local ASR model if needed, transcribe the WAV
         """);
     return 1;
 }
@@ -178,6 +184,93 @@ static async Task<int> GladiaCheckAsync(string? wavPath, bool fast)
     await Task.WhenAny(reader, Task.Delay(2_000));
     Console.WriteLine("Done.");
     return 0;
+}
+
+static async Task<int> AsrCheckAsync(string? wavPath, string? modelsDir)
+{
+    if (wavPath is null || !File.Exists(wavPath))
+    {
+        Console.WriteLine("Usage: doctor asr <wav> [modelsDir]");
+        return 1;
+    }
+
+    var model = AsrModelCatalog.Models[0];
+    var downloads = new ModelDownloadManager(modelsDir ?? Path.Combine(Path.GetTempPath(), "kanal-models"));
+    var missing = downloads.MissingParts(model.Parts);
+    var download = Stopwatch.StartNew();
+    if (missing.Count > 0)
+        await downloads.DownloadAsync(missing, null, CancellationToken.None);
+    download.Stop();
+
+    using var provider = new NemotronAsrProvider(model, downloads);
+    var load = Stopwatch.StartNew();
+    await provider.WarmUpAsync(CancellationToken.None);
+    load.Stop();
+
+    string[][] rooms = [["zh"], ["zh", "de", "pl", "en"]];
+    var runs = new List<(string[] Room, double Seconds, List<string> Finals)>();
+    foreach (var room in rooms)
+    {
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, room), CancellationToken.None);
+        var finals = new List<string>();
+        var reader = Task.Run(async () =>
+        {
+            await foreach (var e in session.Events)
+                if (e is AsrEvent.Transcript { IsFinal: true } t)
+                    finals.Add($"{t.SrcLang}: {t.Text}");
+        });
+
+        var run = Stopwatch.StartNew();
+        var source = new WavFileAudioSource(wavPath, realtime: false);
+        await foreach (var frame in source.CaptureAsync(null, CancellationToken.None))
+            await session.PushAudioAsync(frame);
+        await session.DisposeAsync();
+        await reader;
+        runs.Add((room, run.Elapsed.TotalSeconds, finals));
+    }
+
+    var duration = WavDuration(wavPath);
+    Console.WriteLine($"### Local ASR on {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
+    Console.WriteLine();
+    Console.WriteLine($"- model: `{model.Id}`, CPU, {Math.Clamp(Environment.ProcessorCount / 2, 1, 4)} threads of {Environment.ProcessorCount} logical cores");
+    Console.WriteLine($"- NVIDIA GPU: {NvidiaGpu()}");
+    Console.WriteLine($"- download {(missing.Count > 0 ? $"{download.Elapsed.TotalSeconds:F1} s" : "cached")}, load {load.Elapsed.TotalSeconds:F1} s");
+    Console.WriteLine($"- audio {Path.GetFileName(wavPath)}, {duration:F1} s");
+    foreach (var (room, seconds, finals) in runs)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"**room `{string.Join(",", room)}`** — {seconds:F2} s, real-time factor {seconds / duration:F2}, {finals.Count} final(s)");
+        foreach (var f in finals)
+            Console.WriteLine($"> {f}");
+    }
+
+    return runs.All(r => r.Finals.Count > 0) ? 0 : 3;
+}
+
+static double WavDuration(string path)
+{
+    using var stream = File.OpenRead(path);
+    var wav = WavFile.Read(stream);
+    return wav.Pcm16.Length / 2.0 / wav.Channels / wav.SampleRateHz;
+}
+
+static string NvidiaGpu()
+{
+    try
+    {
+        using var smi = Process.Start(new ProcessStartInfo("nvidia-smi", "--query-gpu=name,driver_version,memory.total --format=csv,noheader")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        })!;
+        var output = smi.StandardOutput.ReadToEnd().Trim();
+        smi.WaitForExit();
+        return smi.ExitCode == 0 && output.Length > 0 ? output.ReplaceLineEndings("; ") : $"nvidia-smi failed (exit {smi.ExitCode})";
+    }
+    catch (System.ComponentModel.Win32Exception)
+    {
+        return "none (nvidia-smi not found)";
+    }
 }
 
 static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
