@@ -5,11 +5,6 @@ using Kanal.Core.Models;
 
 namespace Kanal.Core.UnitTests;
 
-/// <summary>
-/// Speaker attribution is an addition to the transcript, not a precondition for it. Every
-/// unhappy path here has to end in a state the caller can read, never in an exception the
-/// host would have to turn into a dialog while a meeting is running.
-/// </summary>
 public class DiarizationReadinessTests : IDisposable
 {
     private readonly string _dir = Path.Combine(
@@ -25,6 +20,15 @@ public class DiarizationReadinessTests : IDisposable
         {
             LastUri = request.RequestUri;
             return Task.FromResult(respond(request));
+        }
+    }
+
+    private sealed class BlockingHandler(Task gate) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await gate;
+            return Ok(request);
         }
     }
 
@@ -69,8 +73,6 @@ public class DiarizationReadinessTests : IDisposable
             DiarizationModelCatalog.Readiness(downloads, segmentation.Id, embedding.Id));
     }
 
-    /// <summary>A settings file from before this catalog existed, or one naming a model that has
-    /// since been dropped, leaves attribution off — it does not throw on the way to a meeting.</summary>
     [Fact]
     public void NoChoiceOrAnUnknownChoiceIsSimplyNotReady()
     {
@@ -82,7 +84,6 @@ public class DiarizationReadinessTests : IDisposable
             DiarizationModelCatalog.Readiness(downloads, "reverb-diarization-v1", "no-such-model"));
     }
 
-    /// <summary>Two segmentation models is not a usable pair, however many files are on disk.</summary>
     [Fact]
     public void TheTwoChoicesMustBeOneOfEachRole()
     {
@@ -109,10 +110,6 @@ public class DiarizationReadinessTests : IDisposable
         Assert.Equal("", download.Error);
     }
 
-    /// <summary>
-    /// The one that matters: a download that fails mid-meeting must leave a state behind, not
-    /// an exception looking for somebody to display it.
-    /// </summary>
     [Fact]
     public async Task AFailedDownloadIsAStateRatherThanAnException()
     {
@@ -164,7 +161,6 @@ public class DiarizationReadinessTests : IDisposable
         Assert.Equal(DiarizationReadiness.NotDownloaded, download.State);
     }
 
-    /// <summary>A model already on disk is ready before anything is asked of the network.</summary>
     [Fact]
     public void AnAlreadyDownloadedModelStartsReady()
     {
@@ -174,7 +170,6 @@ public class DiarizationReadinessTests : IDisposable
         Assert.Equal(DiarizationReadiness.Ready, new DiarizationModelDownload(model, Manager()).State);
     }
 
-    /// <summary>The URL is handed to the downloader as it stands; nothing composes a repo path.</summary>
     [Fact]
     public async Task TheCatalogUrlReachesTheDownloaderVerbatim()
     {
@@ -185,6 +180,50 @@ public class DiarizationReadinessTests : IDisposable
         await new DiarizationModelDownload(model, downloads).DownloadAsync();
 
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
+    }
+
+    [Fact]
+    public async Task APairReadsAsFailedWhenEitherDownloadFailed()
+    {
+        var segmentation = new DiarizationModelDownload(TestModel(DiarizationModelRole.Segmentation, "seg"), Manager());
+        var embedding = new DiarizationModelDownload(
+            TestModel(DiarizationModelRole.Embedding, "emb"),
+            Manager(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
+        await segmentation.DownloadAsync();
+        await embedding.DownloadAsync();
+
+        Assert.Equal(DiarizationReadiness.Failed, DiarizationModelCatalog.Readiness(segmentation, embedding));
+    }
+
+    [Fact]
+    public async Task APairReadsAsDownloadingWhileEitherDownloadRuns()
+    {
+        var release = new TaskCompletionSource();
+        var segmentation = new DiarizationModelDownload(
+            TestModel(DiarizationModelRole.Segmentation, "seg"), Manager());
+        var embedding = new DiarizationModelDownload(
+            TestModel(DiarizationModelRole.Embedding, "emb"),
+            new ModelDownloadManager(_dir, new HttpClient(new BlockingHandler(release.Task))));
+        await segmentation.DownloadAsync();
+        var running = embedding.DownloadAsync();
+
+        Assert.Equal(DiarizationReadiness.Downloading, DiarizationModelCatalog.Readiness(segmentation, embedding));
+
+        release.SetResult();
+        await running;
+        Assert.Equal(DiarizationReadiness.Ready, DiarizationModelCatalog.Readiness(segmentation, embedding));
+    }
+
+    [Fact]
+    public void APairReadsAsNotDownloadedWhenOneModelIsMissingOrTheRolesAreWrong()
+    {
+        var downloads = Manager();
+        var segmentation = new DiarizationModelDownload(TestModel(DiarizationModelRole.Segmentation, "seg"), downloads);
+        var embedding = new DiarizationModelDownload(TestModel(DiarizationModelRole.Embedding, "emb"), downloads);
+        Place(segmentation.Model);
+
+        Assert.Equal(DiarizationReadiness.NotDownloaded, DiarizationModelCatalog.Readiness(segmentation, embedding));
+        Assert.Equal(DiarizationReadiness.NotDownloaded, DiarizationModelCatalog.Readiness(embedding, segmentation));
     }
 
     public void Dispose()

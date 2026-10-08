@@ -1,7 +1,5 @@
 namespace Kanal.Core.Models;
 
-/// <summary>One diarization model's download as a single state rather than three booleans. A
-/// failure is a state, never an exception somebody has to turn into a dialog mid-meeting.</summary>
 public sealed class DiarizationModelDownload
 {
     private readonly ModelDownloadManager _downloads;
@@ -35,9 +33,8 @@ public sealed class DiarizationModelDownload
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
-            // Synchronous relay rather than Progress<double>: a posted callback can land after
-            // the download has already finished and drag the state back to Downloading.
-            await _downloads.DownloadAsync(Model, new Relay(OnProgress), _cts.Token);
+            // Progress<double> posts its callback; one can land after the download ends and reset the state.
+            await _downloads.DownloadAsync(Model, new SyncProgress(OnProgress), _cts.Token);
             Progress = 1;
             State = DiarizationReadiness.Ready;
         }
@@ -77,7 +74,7 @@ public sealed class DiarizationModelDownload
             Progress = value;
     }
 
-    private sealed class Relay(Action<double> report) : IProgress<double>
+    private sealed class SyncProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);
     }

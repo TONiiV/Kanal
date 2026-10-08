@@ -2,10 +2,6 @@ using Kanal.Core.Models;
 
 namespace Kanal.Core.UnitTests;
 
-/// <summary>
-/// Sizes and hashes here were read from the GitHub releases API and recomputed from the
-/// downloaded files on 2026-09-08. A catalog entry nobody can verify is worse than no entry.
-/// </summary>
 public class DiarizationModelCatalogTests
 {
     [Fact]
@@ -37,11 +33,6 @@ public class DiarizationModelCatalogTests
             m => Assert.Equal(DiarizationModelRole.Embedding, m.Role));
     }
 
-    /// <summary>
-    /// Upstream spelled the embedding release tag <c>speaker-recongition-models</c>. Corrected
-    /// to "recognition" the URL is a 404, and the failure arrives as a download error rather
-    /// than as a compile error.
-    /// </summary>
     [Fact]
     public void EmbeddingUrlsKeepUpstreamsMisspeltReleaseTag()
     {
@@ -53,8 +44,6 @@ public class DiarizationModelCatalogTests
         }
     }
 
-    /// <summary>The whole point of the URL change: these assets are on GitHub releases, need no
-    /// token, and are not a HuggingFace repo path the downloader can compose.</summary>
     [Fact]
     public void EveryDownloadUrlIsAWholeGitHubReleaseUrl()
     {
@@ -101,7 +90,6 @@ public class DiarizationModelCatalogTests
         Assert.Equal(license, m.License.Name);
     }
 
-    /// <summary>CC-BY-4.0 is usable, but only if whoever ships it is told what it asks for.</summary>
     [Fact]
     public void AttributionLicencesSayWhatTheyRequire()
     {
@@ -112,12 +100,6 @@ public class DiarizationModelCatalogTests
             Assert.Null(m.LicenseNote);
     }
 
-    /// <summary>
-    /// Rev's Reverb models sit in the same GitHub release as the segmentation model above, one
-    /// line away in the asset list, under a licence whose §3.2 forbids commercial use; DiariZen's
-    /// weights are CC-BY-NC-4.0. Adding either has to fail at construction — a reviewer noticing
-    /// is not a mechanism.
-    /// </summary>
     [Theory]
     [MemberData(nameof(NonCommercialLicences))]
     public void ANonCommercialModelCannotBeAddedToACatalogAtAll(ModelLicense license)

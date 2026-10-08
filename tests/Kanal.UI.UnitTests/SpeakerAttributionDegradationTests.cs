@@ -6,11 +6,6 @@ using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
 
-/// <summary>
-/// No diarization model on disk means speaker attribution is unavailable, and unavailable has
-/// to mean nothing at all happens: the meeting starts, the transcript runs, and the operator is
-/// not told about a model they did not ask for. A blocking reason added here later fails these.
-/// </summary>
 public class SpeakerAttributionDegradationTests
 {
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 15_000)

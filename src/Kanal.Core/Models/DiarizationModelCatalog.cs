@@ -72,8 +72,7 @@ public sealed record DiarizationModelInfo(
 
     public string? LicenseNote => License.Note;
 
-    // sherpa-onnx ships Rev's non-commercial Reverb models in the same release as the segmentation
-    // model below; a licence that forbids commercial use has to fail here, not at review.
+    // sherpa-onnx ships Rev's non-commercial Reverb models in the same release as the segmentation model.
     private static ModelLicense Permitted(ModelLicense license) =>
         license.PermitsCommercialUse
             ? license
@@ -82,8 +81,6 @@ public sealed record DiarizationModelInfo(
                 nameof(license));
 }
 
-/// <summary>Sizes and SHA-256 read from the GitHub releases API and recomputed from the
-/// downloaded files on 2026-09-08.</summary>
 public static class DiarizationModelCatalog
 {
     private const string SegmentationTag = "speaker-segmentation-models";
@@ -164,6 +161,23 @@ public static class DiarizationModelCatalog
             return DiarizationReadiness.NotDownloaded;
 
         return downloads.IsDownloaded(segmentation) && downloads.IsDownloaded(embedding)
+            ? DiarizationReadiness.Ready
+            : DiarizationReadiness.NotDownloaded;
+    }
+
+    public static DiarizationReadiness Readiness(
+        DiarizationModelDownload segmentation, DiarizationModelDownload embedding)
+    {
+        if (segmentation.Model.Role != DiarizationModelRole.Segmentation ||
+            embedding.Model.Role != DiarizationModelRole.Embedding)
+            return DiarizationReadiness.NotDownloaded;
+
+        DiarizationReadiness[] states = [segmentation.State, embedding.State];
+        if (states.Contains(DiarizationReadiness.Failed))
+            return DiarizationReadiness.Failed;
+        if (states.Contains(DiarizationReadiness.Downloading))
+            return DiarizationReadiness.Downloading;
+        return states.All(st => st == DiarizationReadiness.Ready)
             ? DiarizationReadiness.Ready
             : DiarizationReadiness.NotDownloaded;
     }
