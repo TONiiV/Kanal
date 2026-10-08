@@ -17,6 +17,55 @@ The window background showed in it.
 
 ---
 
+## 2026-10-08
+
+### External review: validate before building
+
+A professional reviewer read the repository and the README. The PRD v0.4 roadmap now has a
+validation gate (phase 1.5) and two new tracks. This entry records which findings we accept and why.
+
+**Accepted.**
+
+1. **Build before validate.** The go/no-go question is still open: is zh↔pl terminology correct in
+   a real meeting? The repository confirms the finding. 1.0.0 is not released. Eleven PRs wait for
+   merge, and the PRD limit is five. Four of them belong to phases 3 and 4. Decision: phase 1.5
+   (V track) measures key-fact and terminology errors per language pair. Phases 2–5 stay frozen
+   until the gate passes. The gate data sets the order of the next phases.
+2. **Key-fact check.** Generic translation products do not compare numbers, units, tolerances and
+   part numbers between source and translation. One extractor (V-2) serves the evaluation and the
+   live warning (F-1). Glossary import from a BOM or a specification sheet is F-2.
+3. **Input quality limits the chain.** One laptop microphone hears the whole room. Zero-code step:
+   the launch checklist requires a USB conference speakerphone. V-4 measures the difference.
+4. **Read-only captions interrupt the conversation.** Zero-code step: project the host columns on
+   the room display. V-3 measures final latency. G-3 adds a minimum feedback path ("please
+   repeat", or a short question in the participant's language).
+5. **Decisions cause disputes, not only misunderstanding.** G track narrows the open
+   meeting-intelligence discussion. Its target is structured minutes that each party confirms on
+   the phone. G-0 is an ADR first, because a phone that sends messages changes the PRD-frozen
+   read-only rule.
+6. **True offline mode.** Local ASR (C-4, C-5) plus a LAN relay (new C-6) removes the public
+   network from the in-room scenario. The LAN relay also avoids the `workers.dev` block in mainland
+   China (#41) for in-room meetings.
+
+**Narrowed.** B-4 live speaker clustering waits for meeting data that shows a need. B-3 stays,
+because G-1 minutes need an owner per decision.
+
+**Not adopted.**
+
+- The commercial-moat argument. Kanal is an internal tool (PRD §00). The test is still "time saved
+  is more than time spent".
+- "The README overstates privacy." It does not. README and PRD §01 say that audio leaves the host in
+  cloud modes. The finding is correct only as "the private mode does not exist yet".
+- An in-app evaluation UI. V-3 is a command under `tools/`.
+- Participant phones as distributed microphones: listed as an unscheduled probe. Audio over the
+  network is possible only on the LAN relay, and `getUserMedia` needs HTTPS.
+
+**Open decisions for the operator.**
+
+1. Gate thresholds: key-fact error rate ≤ 2 % per language pair (proposed).
+2. Freeze of #126, #127, #146 and #147 until the gate passes (proposed).
+3. Default order after the gate: F track first (proposed), unless V data shows ASR errors dominate.
+
 ## 2026-10-07
 
 ### A published GitHub Release builds and attaches the packages
