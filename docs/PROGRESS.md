@@ -157,6 +157,18 @@ its preservation rules are specified as implementation work after design approva
 
 ## 2026-10-04
 
+### Local transcription runs (ADR 0053, slice C-5)
+
+`PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
+is available when a transcription model and a translation model are downloaded. *Local · Cloud*
+stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
+is removed.
+
+- **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
+  the planner uses it too. The mode row says "not downloaded" until every part is on disk.
+- **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
+  Each load has its own status line. A failed load of either model stops the Start.
+
 ### Nemotron provider (ADR 0053, slice C-4)
 
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode

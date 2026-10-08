@@ -51,7 +51,7 @@ offline.
 
 | Data | Where it goes |
 |---|---|
-| Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes once a local ASR provider exists. |
+| Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes. |
 | Captions and room state | Sent through the authenticated Kanal gateway (a Cloudflare Worker) to the meeting's private room object, which fans them out to joined phones. Messages include transcript text, translations, speaker labels, language configuration, and pause/recording/lifecycle state. Nothing is stored server-side. |
 | Joined-phone cache | The mobile client stores the current room transcript and state in browser `localStorage` so it can render before a reconnect snapshot arrives. |
 | Local recording | Live microphone modes record a WAV file by default in the configured audio folder. Recording pauses with the room and can be disabled in Settings. Kanal never publishes the WAV file. |
@@ -106,8 +106,8 @@ and explain what is missing.
 | Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Available without keys |
 | Cloud transcription · cloud translation | Gladia live | Gladia live | Audio | Available with a Gladia key |
 | Cloud transcription · local translation | Gladia live | Selected local GGUF model | Audio | Available with a Gladia key and downloaded model |
-| Local transcription · cloud translation | Not implemented | Standalone cloud MT not implemented | Text only | Unavailable |
-| Local transcription · local translation | Not implemented | Selected local GGUF model | Nothing | Unavailable until local ASR lands |
+| Local transcription · cloud translation | Selected local Nemotron 3.5 model | Standalone cloud MT not implemented | Text only | Unavailable |
+| Local transcription · local translation | Selected local Nemotron 3.5 model | Selected local GGUF model | Nothing | Available with both models downloaded |
 
 When started from the production UI, every mode publishes text and room state through the mobile
 relay. Cloud-to-local mode disables translation inside the cloud ASR session; the
@@ -245,7 +245,7 @@ question before starting a broad change.
 ## Current limitations and roadmap
 
 - Live microphone capture is available on Windows and macOS, but not Linux.
-- Local transcription is not implemented, so a fully local live pipeline is not available.
+- Local transcription has no speaker separation yet: every sentence carries one speaker label.
 - There is no standalone cloud text-translation provider, so local-to-cloud mode is also
   unavailable.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.

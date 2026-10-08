@@ -6,6 +6,7 @@ using Kanal.Core.Providers.Testing;
 using Kanal.Host.Localization;
 using Kanal.Providers.Gladia;
 using Kanal.Core.Models;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.Services;
@@ -71,6 +72,7 @@ public static class PipelinePlanner
                 // Translation, and the orchestrator picks up the IMtProvider — no special casing
                 EnableTranslation = mode.Translation == StageKind.Cloud,
             }),
+            StageKind.Local => new NemotronAsrProvider(resolved.Transcriber!, downloads),
             _ => (IAsrProvider)new FakeAsrProvider(loop: true),
         };
 
@@ -95,14 +97,15 @@ public static class PipelinePlanner
     }
 
     private sealed record Resolution(
-        PipelineStatus Status, string? Key, LocalModelInfo? Model, string? Substitution);
+        PipelineStatus Status, string? Key, AsrModelInfo? Transcriber, LocalModelInfo? Model, string? Substitution);
 
     private static Resolution Resolve(
         PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver key)
     {
         var reasons = new List<string>();
 
-        var (transcriptionLabel, apiKey) = ResolveTranscription(mode, settings, key, reasons);
+        var (transcriptionLabel, apiKey, transcriber) =
+            ResolveTranscription(mode, settings, downloads, key, reasons);
         var (translationLabel, model, substitution) =
             ResolveTranslation(mode, settings, downloads, reasons);
 
@@ -111,34 +114,49 @@ public static class PipelinePlanner
             reasons.Count == 0 ? null : string.Join("; ", reasons),
             transcriptionLabel,
             translationLabel);
-        return new Resolution(status, apiKey, model, substitution);
+        return new Resolution(status, apiKey, transcriber, model, substitution);
     }
 
-    private static (string Label, string? Key) ResolveTranscription(
-        PipelineMode mode, AppSettings settings, KeyResolver key, List<string> reasons)
+    private static (string Label, string? Key, AsrModelInfo? Model) ResolveTranscription(
+        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver key,
+        List<string> reasons)
     {
         switch (mode.Transcription)
         {
             case StageKind.Scripted:
-                return (L["stage.transcription.scripted"], null);
+                return (L["stage.transcription.scripted"], null, null);
 
             case StageKind.Local:
-                reasons.Add(L["reason.localasr"]);
-                return (L["stage.transcription.localsoon"], null);
+                // nothing chosen is the recommended model: Settings shows it selected
+                var id = settings.ActiveTranscriptionModelId ?? AsrModelCatalog.Models[0].Id;
+                var model = AsrModelCatalog.Find(id);
+                if (model is null)
+                {
+                    reasons.Add(L.Format("reason.unknownasrmodel", id));
+                    return (L.Format("stage.transcription.unknown", id), null, null);
+                }
+
+                if (!downloads.IsDownloaded(model.Parts))
+                {
+                    reasons.Add(L.Format("reason.notdownloaded", model.DisplayName));
+                    return (L.Format("stage.transcription.notdownloaded", model.DisplayName), null, null);
+                }
+
+                return (L.Format("stage.transcription.local", model.DisplayName), null, model);
 
             default:
                 var resolved = key(settings);
                 if (resolved is null)
                 {
                     reasons.Add(L["reason.nokey"]);
-                    return (L["stage.transcription.nokey"], null);
+                    return (L["stage.transcription.nokey"], null, null);
                 }
 
                 // the provider is named in Settings and only there; the masthead names the key
                 var label = resolved.Value.Name is { } name
                     ? L.Format("stage.transcription.named", name)
                     : L["stage.transcription.env"];
-                return (label, resolved.Value.Key);
+                return (label, resolved.Value.Key, null);
         }
     }
 

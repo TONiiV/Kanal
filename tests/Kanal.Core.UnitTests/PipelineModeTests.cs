@@ -1,6 +1,7 @@
 using Kanal.Core.Providers;
 using Kanal.Host.Services;
 using Kanal.Core.Models;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.Core.UnitTests;
@@ -219,45 +220,99 @@ public class PipelineModeTests
         Directory.Delete(dir, recursive: true);
     }
 
-    [Fact]
-    public void LocalTranscriptionModesAreUnavailableAndSaySoPlainly()
+    private static ModelDownloadManager WithParts(ModelDownloadManager downloads, IEnumerable<IDownloadableFile> parts)
     {
-        var model = LocalModelCatalog.Models[0];
-        var dir = DownloadedModelsDir(model);
-        var downloads = new ModelDownloadManager(dir);
-        var settings = new AppSettings { ActiveTranslationModelId = model.Id };
-
-        foreach (var id in new[] { PipelineModeId.LocalCloud, PipelineModeId.LocalLocal })
+        foreach (var part in parts)
         {
-            var status = PipelinePlanner.Describe(PipelineMode.Of(id), settings, downloads, SomeKey);
-
-            Assert.NotNull(status.Unavailable);
-            Assert.Contains("local transcription", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
-
-            var plan = PipelinePlanner.Plan(PipelineMode.Of(id), settings, downloads, SomeKey);
-            Assert.Null(plan.Asr); // nothing is constructed for a mode that cannot run
-            Assert.Null(plan.Mt);
+            Directory.CreateDirectory(Path.GetDirectoryName(downloads.GetPath(part))!);
+            File.WriteAllBytes(downloads.GetPath(part), [0]);
         }
+        return downloads;
+    }
 
+    [Fact]
+    public void LocalLocalRunsTheDownloadedTranscriptionModelAndRoutesFinalsThroughLocalTranslation()
+    {
+        var mt = LocalModelCatalog.Models[0];
+        var asr = AsrModelCatalog.Models[0];
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, [mt, .. asr.Parts]);
+        var settings = new AppSettings { ActiveTranslationModelId = mt.Id };
+
+        var plan = PipelinePlanner.Plan(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
+
+        Assert.Null(plan.Status.Unavailable);
+        Assert.IsType<NemotronAsrProvider>(plan.Asr);
+        Assert.False(plan.Asr!.Caps.Translation);
+        Assert.NotNull(plan.Mt);
+        Assert.Contains(asr.DisplayName, plan.Status.TranscriptionLabel);
+        Assert.Contains("local", plan.Status.TranscriptionLabel);
+
+        (plan.Asr as IDisposable)?.Dispose();
         Directory.Delete(dir, recursive: true);
     }
 
-    /// <summary>
-    /// local · cloud is blocked twice over: there is no local ASR, and cloud translation
-    /// today exists only inside the cloud ASR session — there is no standalone text MT
-    /// provider to pair with a local transcriber. Both reasons are stated.
-    /// </summary>
     [Fact]
-    public void LocalCloudAlsoStatesTheMissingStandaloneCloudTranslator()
+    public void NothingChosenMeansTheRecommendedTranscriptionModel()
+    {
+        var mt = LocalModelCatalog.Models[0];
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, [mt]);
+        var settings = new AppSettings { ActiveTranslationModelId = mt.Id };
+
+        var status = PipelinePlanner.Describe(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
+
+        Assert.Equal(
+            $"{AsrModelCatalog.Models[0].DisplayName} is not downloaded — open Settings", status.Unavailable);
+        Assert.Equal(
+            $"Transcription: {AsrModelCatalog.Models[0].DisplayName} — not downloaded", status.TranscriptionLabel);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void ATranscriptionModelMissingOnePartIsNotDownloaded()
+    {
+        var mt = LocalModelCatalog.Models[0];
+        var asr = AsrModelCatalog.Models[^1];
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, [mt, .. asr.Parts.Skip(1)]);
+        var settings = new AppSettings { ActiveTranslationModelId = mt.Id, ActiveTranscriptionModelId = asr.Id };
+
+        var plan = PipelinePlanner.Plan(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
+
+        Assert.Contains(asr.DisplayName, plan.Status.Unavailable);
+        Assert.Null(plan.Asr);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void AnUnknownTranscriptionModelIsNamed()
     {
         var (downloads, _) = TempDownloads();
+        var settings = new AppSettings { ActiveTranscriptionModelId = "gone" };
+
+        var status = PipelinePlanner.Describe(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
+
+        Assert.Contains("unknown transcription model “gone”", status.Unavailable);
+    }
+
+    /// <summary>
+    /// local · cloud stays blocked: cloud translation today exists only inside the cloud ASR
+    /// session — there is no standalone text MT provider to pair with a local transcriber.
+    /// </summary>
+    [Fact]
+    public void LocalCloudStatesTheMissingStandaloneCloudTranslator()
+    {
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, AsrModelCatalog.Models[0].Parts);
 
         var status = PipelinePlanner.Describe(
             PipelineMode.Of(PipelineModeId.LocalCloud), new AppSettings(), downloads, SomeKey);
 
         Assert.NotNull(status.Unavailable);
-        Assert.Contains("local transcription", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("local transcription", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cloud translation", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
+        Directory.Delete(dir, recursive: true);
     }
 
     /// <summary>
