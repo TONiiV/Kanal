@@ -1058,8 +1058,8 @@ The three models differ only in the encoder file. The decoder, the joiner and th
 byte-identical in all three. For this reason, chunk size is a catalog entry and not a setting on
 one model. A new chunk size means a new encoder, which is a new download.
 
-The catalog omits 80 ms and 320 ms. Both are published, but each adds a 657 MB download. They sit
-between sizes the operator can already pick. A catalog entry adds them later.
+The catalog omits 80 ms and 320 ms. Both are published. No measurement asks for latency below 160 ms.
+The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
 
 We read the sizes and hashes from the HF API on 2026-09-08. The exception is `tokens.txt`: it is
 not an LFS object, so we computed its hash from the downloaded file.

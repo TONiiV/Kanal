@@ -304,6 +304,7 @@ public class ModelDownloadManagerTests : IDisposable
         Assert.Equal([parts[1].DownloadUrl, parts[2].DownloadUrl], fetched);
         Assert.True(manager.IsDownloaded(parts));
         Assert.All(progress.Values, p => Assert.True(p > 1.0 / 3 - 0.001));
+        Assert.Contains(progress.Values, p => Math.Abs(p - 2.0 / 3) < 0.001);
     }
 
     [Fact]

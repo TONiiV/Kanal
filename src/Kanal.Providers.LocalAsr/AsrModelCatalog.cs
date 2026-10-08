@@ -2,7 +2,7 @@ using Kanal.Core.Models;
 
 namespace Kanal.Providers.LocalAsr;
 
-// FileName carries the model id: every package publishes the same encoder.int8.onnx name.
+// FileName carries the model id: every model publishes the same encoder.int8.onnx name.
 public sealed record AsrModelFile(
     string FileName,
     string Repo,

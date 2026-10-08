@@ -92,7 +92,7 @@ public sealed class ModelDownloadManager
         progress?.Report(1.0);
     }
 
-    // Progress<T> would post each part's reports to the thread pool and deliver them out of order.
+    // Progress<T> can deliver each file's reports out of order.
     private sealed class RelayProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);
