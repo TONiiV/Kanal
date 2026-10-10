@@ -12,12 +12,11 @@ public sealed class RoomState
 {
     private static readonly string[] Colours =
     [
-        "#3F7BD4", "#2E894A", "#AE5EA8", "#028080",
-        "#8F7ADA", "#737B95", "#74993B", "#1197C2",
+        "#3F7BD4", "#1F8A55", "#AE5EA8", "#038384",
+        "#8B77D5", "#9B6B47", "#788919", "#0092BD",
     ];
 
-    // Read back when a stored transcript is reopened: a meeting read a week later has to give
-    // each speaker the colour they had in the room.
+    // Stored meetings keep no colour. A change to this list recolours every reopened meeting.
     public static IReadOnlyList<string> Palette => Colours;
 
     private readonly object _gate = new();

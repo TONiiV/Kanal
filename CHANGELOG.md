@@ -14,9 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Speaker colours are now easy to read on a dark phone screen, not only on a light one. The eight
-  colours are new. A meeting that you reopen shows the new colours, because a saved meeting stores
-  no speaker colour. Each speaker keeps one colour in the whole meeting.
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
   notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.

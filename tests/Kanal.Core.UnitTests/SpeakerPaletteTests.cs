@@ -1,3 +1,4 @@
+using System.Globalization;
 using Kanal.Core.Room;
 
 namespace Kanal.Core.UnitTests;
@@ -5,8 +6,11 @@ namespace Kanal.Core.UnitTests;
 public class SpeakerPaletteTests
 {
     private const string LightSheet = "#FFFCF7";
+    private const string LightPaper = "#F5F0E6";
     private const string DarkSheet = "#181C28";
-    private const double MinimumContrast = 3.0;
+    private const string DarkPaper = "#222838";
+    private const double GraphicsContrast = 3.0;
+    private const double TextContrast = 4.5;
 
     public static TheoryData<string> Colours()
     {
@@ -25,10 +29,30 @@ public class SpeakerPaletteTests
 
     [Theory]
     [MemberData(nameof(Colours))]
-    public void ColourReachesThreeToOneOnBothSheets(string colour)
+    public void GraphicsColourReachesThreeToOneOnEverySurface(string colour)
     {
-        Assert.True(Contrast(colour, LightSheet) >= MinimumContrast, $"{colour} on light sheet");
-        Assert.True(Contrast(colour, DarkSheet) >= MinimumContrast, $"{colour} on dark sheet");
+        foreach (var surface in new[] { LightSheet, LightPaper, DarkSheet, DarkPaper })
+            Assert.True(Contrast(colour, surface) >= GraphicsContrast, $"{colour} on {surface}");
+    }
+
+    [Theory]
+    [MemberData(nameof(Colours))]
+    public void TextToneReachesFourPointFiveToOneOnItsOwnSurfaces(string colour)
+    {
+        var onLight = SpeakerTone.Text(colour, SpeakerTone.LightInk);
+        var onDark = SpeakerTone.Text(colour, SpeakerTone.DarkInk);
+
+        foreach (var surface in new[] { LightSheet, LightPaper })
+            Assert.True(Contrast(onLight, surface) >= TextContrast, $"{onLight} on {surface}");
+        foreach (var surface in new[] { DarkSheet, DarkPaper })
+            Assert.True(Contrast(onDark, surface) >= TextContrast, $"{onDark} on {surface}");
+    }
+
+    [Fact]
+    public void TextToneKeepsTheColourWhenNoInkIsMixedIn()
+    {
+        Assert.Equal("#3F7BD4", SpeakerTone.Mix("#3F7BD4", SpeakerTone.LightInk, 0));
+        Assert.Equal(SpeakerTone.LightInk, SpeakerTone.Mix("#3F7BD4", SpeakerTone.LightInk, 100));
     }
 
     private static double Contrast(string a, string b)
@@ -43,7 +67,7 @@ public class SpeakerPaletteTests
     {
         double Channel(int shift)
         {
-            var c = int.Parse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber) >> shift & 0xFF;
+            var c = int.Parse(hex.AsSpan(1), NumberStyles.HexNumber) >> shift & 0xFF;
             var s = c / 255.0;
             return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
         }
