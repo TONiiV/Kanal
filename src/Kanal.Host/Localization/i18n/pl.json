@@ -1,6 +1,6 @@
 {
   "input.label": "WEJŚCIE",
-  "capture.inroom.name": "W pomieszczeniu",
+  "capture.inroom.name": "Spotkanie stacjonarne",
   "capture.online.macosversion": "Przechwytywanie spotkań online wymaga macOS 13 lub nowszego.",
   "capture.online.windowsversion": "Przechwytywanie spotkań online wymaga Windows 10 w wersji 2004 lub nowszej.",
   "capture.device.lost": "Mikrofon odłączono lub zmieniono. Wybierz go ponownie.",

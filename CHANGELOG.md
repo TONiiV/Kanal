@@ -37,6 +37,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
 - The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
   centre, most visibly on Save & Close and View open-source acknowledgements.
+- The capture modes are now called Offline meeting and Online meeting. The mode menu shows only the
+  names and icons.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
   vertical centre of the header instead of near its top edge. In full screen, the header content
   moves to the left edge, because the buttons are gone.

@@ -1,6 +1,6 @@
 {
   "input.label": "INPUT",
-  "capture.inroom.name": "In the room",
+  "capture.inroom.name": "Offline meeting",
   "capture.online.macosversion": "Online meeting capture requires macOS 13 or later.",
   "capture.online.windowsversion": "Online meeting capture requires Windows 10 version 2004 or later.",
   "capture.device.lost": "The microphone disconnected or changed. Select it again.",

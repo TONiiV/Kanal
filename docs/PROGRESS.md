@@ -167,6 +167,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
 
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays

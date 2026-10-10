@@ -170,8 +170,6 @@
                                         </Panel>
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
-                                                       TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
                                             <TextBlock Text="{Binding Unavailable}" FontSize="10.5" LineHeight="15"
                                                        TextWrapping="Wrap" FontWeight="SemiBold"
                                                        IsVisible="{Binding !IsAvailable}"
