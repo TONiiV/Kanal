@@ -18,8 +18,9 @@ msi shows Repair and Remove. The install stays per-user, with no install-directo
   build, so two builds of one version are two products with one `UpgradeCode`. The newer install
   removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
   it, so nothing is suppressed.
-- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` and passes `-ext`. The cache is
-  the git-ignored `.wix/` folder in the repository root. The extension version equals the `wix` tool version.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
 
 ### Host colours move to the Light theme dictionary
 
