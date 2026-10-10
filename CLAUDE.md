@@ -113,6 +113,8 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
   here, and no project sets `GenerateDocumentationFile`, so deleting it cannot break the build. A
   rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.4.md`, where design
   history is already kept and will actually be maintained — not in the source file.
+- **UI PRs carry before/after screenshots.** A PR that changes how the UI looks adds a "before" and an
+  "after" screenshot to the PR. Take them with the headless Skia render. Post them as a PR comment.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
 - **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
