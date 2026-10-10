@@ -43,6 +43,8 @@ public enum StoreProblemKind
     TooLarge,
 
     WrongType,
+
+    NotThisWorkspace,
 }
 
 // Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.

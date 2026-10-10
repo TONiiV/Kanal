@@ -154,6 +154,7 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
         {
             StoreProblemKind.TooLarge => "workspace.icon.toolarge",
             StoreProblemKind.WrongType => "workspace.icon.badtype",
+            StoreProblemKind.NotThisWorkspace => "workspace.remove.notthisproject",
             StoreProblemKind.NotFound when problem.Subject == ImagePath => "workspace.icon.missing",
             _ => "workspace.settings.failed",
         }];

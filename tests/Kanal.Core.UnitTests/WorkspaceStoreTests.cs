@@ -1170,7 +1170,7 @@ public class WorkspaceStoreTests : IDisposable
 
         var problem = store.DeleteWorkspace(acme.Id);
 
-        Assert.NotNull(problem);
+        Assert.Equal(StoreProblemKind.NotThisWorkspace, problem!.Kind);
         Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
         Assert.Equal(2, Store().ListWorkspaces().Workspaces.Count);
     }
@@ -1183,7 +1183,7 @@ public class WorkspaceStoreTests : IDisposable
         Created(store.CreateMeeting(acme.Id, "Tooling review"));
         File.Delete(Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName));
 
-        Assert.NotNull(store.DeleteWorkspace(acme.Id));
+        Assert.Equal(StoreProblemKind.NotThisWorkspace, store.DeleteWorkspace(acme.Id)!.Kind);
         Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
 
         Assert.Null(store.ForgetWorkspace(acme.Id));

@@ -355,6 +355,7 @@
   "workspace.remove": "移除此项目",
   "workspace.remove.note": "把项目从列表中移除。下一步由你决定会议文件的去留。",
   "workspace.remove.button": "移除…",
+  "workspace.remove.notthisproject": "Kanal 没有删除任何文件。此文件夹不属于这个项目。要把项目从列表中移除，请选择“仅从列表移除”。",
   "workspace.remove.recording": "会议正在录制。停止会议后才能移除项目。",
   "workspace.remove.title": "移除项目",
   "workspace.remove.heading": "移除“{0}”？",

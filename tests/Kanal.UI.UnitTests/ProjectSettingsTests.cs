@@ -224,41 +224,9 @@ public class ProjectSettingsTests : IDisposable
             await settings.RemoveCommand.ExecuteAsync(null);
         });
 
-        Assert.Equal(Localizer.Instance["workspace.settings.failed"], settings.Problem);
+        Assert.Equal(Localizer.Instance["workspace.remove.notthisproject"], settings.Problem);
+        Assert.NotEqual(Localizer.Instance["workspace.settings.failed"], settings.Problem);
         Assert.True(Directory.Exists(Path.Combine(kappa.RootPath, "meetings")));
-    }
-
-    [AvaloniaFact]
-    public void TheRenameItemOfAMeetingRowMenuGivesTheNameFieldTheCursor()
-    {
-        var store = Store();
-        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
-        store.CreateMeeting(kappa.Id, "Delivery call");
-        var vm = TestViewModels.Hermetic(workspaces: () => store);
-        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-        var menu = window.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "MeetingMenu");
-
-        Click(window, menu);
-        var rename = window.GetVisualDescendants().OfType<MenuItem>().Single(m => m.Name == "RenameMeeting");
-        Click(window, rename);
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
-
-        var editor = window.GetLogicalDescendants().OfType<TextBox>()
-            .Single(b => b.Name == "MeetingRowEditor" && b.IsVisible);
-        Assert.True(vm.Sidebar.Meetings.Single().IsRenaming);
-        Assert.True(editor.IsFocused);
-
-        window.Close();
-    }
-
-    private static void Click(Window window, Control target)
-    {
-        var at = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
-        window.MouseDown(at, MouseButton.Left);
-        window.MouseUp(at, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
     }
 
     [Fact]

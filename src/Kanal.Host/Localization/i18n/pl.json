@@ -355,6 +355,7 @@
   "workspace.remove": "Usuń ten projekt",
   "workspace.remove.note": "Usuwa projekt z listy. W następnym kroku wybierasz, co stanie się z plikami spotkań.",
   "workspace.remove.button": "Usuń…",
+  "workspace.remove.notthisproject": "Kanal nie usunął żadnych plików. Ten folder nie należy do tego projektu. Aby usunąć projekt z listy, wybierz Usuń tylko z listy.",
   "workspace.remove.recording": "Trwa nagrywanie spotkania. Zakończ spotkanie, aby usunąć projekt.",
   "workspace.remove.title": "Usuń projekt",
   "workspace.remove.heading": "Usunąć „{0}”?",

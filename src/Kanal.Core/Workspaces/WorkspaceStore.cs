@@ -165,13 +165,13 @@ public sealed class WorkspaceStore(string registryPath)
         var root = workspace!.RootPath;
         var marker = Path.Combine(root, WorkspaceFileName);
         if (!File.Exists(marker))
-            return Invalid(root, "That folder does not hold this workspace.");
+            return NotThisWorkspace(root, "That folder does not hold this workspace.");
 
         var (stored, unreadable) = Read<StoredWorkspace>(marker);
         if (unreadable is not null)
             return unreadable;
         if (stored!.Id != id)
-            return Invalid(root, "That folder holds another workspace.");
+            return NotThisWorkspace(root, "That folder holds another workspace.");
 
         try
         {
@@ -691,6 +691,9 @@ public sealed class WorkspaceStore(string registryPath)
 
     private static StoreProblem Invalid(string subject, string detail) =>
         new(StoreProblemKind.Invalid, subject, detail);
+
+    private static StoreProblem NotThisWorkspace(string subject, string detail) =>
+        new(StoreProblemKind.NotThisWorkspace, subject, detail);
 
     private static WorkspaceResult Refused(
         string subject, string detail, StoreProblemKind kind = StoreProblemKind.Invalid) =>
