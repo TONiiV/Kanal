@@ -54,6 +54,50 @@ public sealed class ModelDownloadManager
         }
     }
 
+    public bool IsDownloaded(IEnumerable<IDownloadableFile> parts) => parts.All(IsDownloaded);
+
+    public IReadOnlyList<IDownloadableFile> MissingParts(IEnumerable<IDownloadableFile> parts) =>
+        parts.Where(p => !IsDownloaded(p)).ToList();
+
+    public void Delete(IEnumerable<IDownloadableFile> parts)
+    {
+        foreach (var part in parts)
+            Delete(part);
+    }
+
+    public async Task DownloadAsync(
+        IEnumerable<IDownloadableFile> parts, IProgress<double>? progress, CancellationToken ct)
+    {
+        var all = parts.ToList();
+        var grandTotal = Math.Max(1, all.Sum(p => p.SizeBytes));
+        long doneBytes = 0;
+
+        foreach (var part in all)
+        {
+            if (!IsDownloaded(part))
+            {
+                var before = doneBytes;
+                var share = part.SizeBytes;
+                var relay = progress is null
+                    ? null
+                    : new RelayProgress(fraction =>
+                        progress.Report(Math.Min(1.0, (before + fraction * share) / grandTotal)));
+
+                await DownloadAsync(part, relay, ct);
+            }
+
+            doneBytes += part.SizeBytes;
+        }
+
+        progress?.Report(1.0);
+    }
+
+    // Progress<T> can deliver each file's reports out of order.
+    private sealed class RelayProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
+    }
+
     /// <summary>Progress is 0..1 of the expected byte count.</summary>
     public async Task DownloadAsync(IDownloadableFile file, IProgress<double>? progress, CancellationToken ct)
     {

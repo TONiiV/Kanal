@@ -13,6 +13,13 @@ public class ModelDownloadManagerTests : IDisposable
 
     private static readonly byte[] Payload = Encoding.UTF8.GetBytes("fake gguf payload KX-4402");
 
+    private sealed class SyncProgress : IProgress<double>
+    {
+        public List<double> Values { get; } = [];
+
+        public void Report(double value) => Values.Add(value);
+    }
+
     private sealed class FakeHandler : HttpMessageHandler
     {
         public Func<HttpRequestMessage, HttpResponseMessage> Respond { get; set; } =
@@ -104,17 +111,15 @@ public class ModelDownloadManagerTests : IDisposable
         var handler = new FakeHandler();
         var manager = Manager(handler);
         var model = TestModel();
-        var progress = new List<double>();
+        var progress = new SyncProgress();
 
         Assert.False(manager.IsDownloaded(model));
-        await manager.DownloadAsync(model, new Progress<double>(progress.Add), CancellationToken.None);
+        await manager.DownloadAsync(model, progress, CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(model));
         Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
-        // progress lands via a SynchronizationContext-free Progress<>, give it a beat
-        await Task.Delay(50);
-        Assert.Contains(progress, p => p >= 1.0);
+        Assert.Contains(progress.Values, p => p >= 1.0);
     }
 
     [Fact]
@@ -240,6 +245,90 @@ public class ModelDownloadManagerTests : IDisposable
         string DownloadUrl,
         long SizeBytes,
         string Sha256) : IDownloadableFile;
+
+    [Fact]
+    public async Task AModelOfSeveralPartsIsReadyOnlyWhenEveryPartIsPresent()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = ThreeParts();
+
+        Assert.False(manager.IsDownloaded(parts));
+
+        await manager.DownloadAsync(parts[0], null, CancellationToken.None);
+        await manager.DownloadAsync(parts[1], null, CancellationToken.None);
+        Assert.False(manager.IsDownloaded(parts));
+        Assert.Equal([parts[2]], manager.MissingParts(parts));
+
+        await manager.DownloadAsync(parts[2], null, CancellationToken.None);
+        Assert.True(manager.IsDownloaded(parts));
+        Assert.Empty(manager.MissingParts(parts));
+    }
+
+    [Fact]
+    public async Task ProgressAcrossPartsIsWeightedByBytesNotByFileCount()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = new[]
+        {
+            Part("small.onnx", Payload.Length),
+            Part("big.onnx", Payload.Length * 9),
+        };
+        var progress = new SyncProgress();
+
+        await manager.DownloadAsync(parts, progress, CancellationToken.None);
+
+        Assert.True(manager.IsDownloaded(parts));
+        // one of two files done, but a tenth of the bytes — counting files would say 0.5
+        Assert.Contains(progress.Values, p => Math.Abs(p - 0.1) < 0.001);
+        Assert.DoesNotContain(progress.Values, p => Math.Abs(p - 0.5) < 0.001);
+        Assert.Contains(progress.Values, p => p >= 1.0);
+    }
+
+    [Fact]
+    public async Task DownloadOfSeveralPartsFetchesOnlyTheMissingOnes()
+    {
+        var handler = new FakeHandler();
+        var manager = Manager(handler);
+        var parts = ThreeParts();
+        await manager.DownloadAsync(parts[0], null, CancellationToken.None);
+        var fetched = new List<string>();
+        handler.Respond = request =>
+        {
+            fetched.Add(request.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Payload) };
+        };
+        var progress = new SyncProgress();
+
+        await manager.DownloadAsync(parts, progress, CancellationToken.None);
+
+        Assert.Equal([parts[1].DownloadUrl, parts[2].DownloadUrl], fetched);
+        Assert.True(manager.IsDownloaded(parts));
+        Assert.All(progress.Values, p => Assert.True(p > 1.0 / 3 - 0.001));
+        Assert.Contains(progress.Values, p => Math.Abs(p - 2.0 / 3) < 0.001);
+    }
+
+    [Fact]
+    public async Task DeleteRemovesEveryPart()
+    {
+        var manager = Manager(new FakeHandler());
+        var parts = ThreeParts();
+        await manager.DownloadAsync(parts, null, CancellationToken.None);
+        Assert.True(manager.IsDownloaded(parts));
+
+        manager.Delete(parts);
+
+        Assert.False(manager.IsDownloaded(parts));
+        Assert.All(parts, p => Assert.False(manager.IsDownloaded(p)));
+    }
+
+    private static IDownloadableFile[] ThreeParts() =>
+        [Part("encoder.onnx"), Part("decoder.onnx"), Part("tokens.txt")];
+
+    private static IDownloadableFile Part(string name, long? size = null) => new TestPart(
+        FileName: name,
+        DownloadUrl: $"https://example.invalid/{name}",
+        SizeBytes: size ?? Payload.Length,
+        Sha256: Convert.ToHexStringLower(SHA256.HashData(Payload)));
 
     [Fact]
     public async Task DeleteRemovesDownloadedModel()
