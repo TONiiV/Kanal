@@ -23,6 +23,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   stay. Kanal does not delete files when the folder does not hold this project. Kanal does not remove
   a project while a meeting is recording.
 - Rename in the menu of a meeting row now puts the cursor in the name field. Before, you had to click the field first.
+- You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
+  notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
 - The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting

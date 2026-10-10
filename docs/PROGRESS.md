@@ -52,6 +52,43 @@ The window background showed in it.
 
 ## 2026-10-07
 
+### A published GitHub Release builds and attaches the packages
+
+The maintainer starts a release on the GitHub Releases page: create a tag, then Publish. CI builds
+the packages and attaches them to that release.
+
+1. `release.yml` triggers on `release: published`. The `workflow_dispatch` gear and its version
+   input are gone. That gear ran once, on 2026-09-02, and discarded its signed package.
+2. The macOS job imports the Developer ID certificate, signs and notarises the dmg. The Windows job
+   builds the msi, unsigned. Each job uploads its package to the release with `gh release upload`.
+3. Both jobs call `installers/release.sh <tag>`. The script also runs on a developer machine. It
+   refuses a dirty working tree, and on a Mac it stops first if a signing variable is unset or the
+   notary key file is empty.
+4. The PR gear runs the same script with `0.0.0-smoke --unsigned`, with the same path filter. A
+   change that breaks the release script makes a PR red.
+5. `release.yml` uses the concurrency rule of `ci.yml`. A new push cancels the PR's older smoke
+   build. A run for a published release has a unique group and is never cancelled.
+6. For a real release, `release.sh` refuses a version whose numeric part differs from `<Version>` in
+   `Kanal.Host.csproj`. It prints both values. The `--unsigned` smoke build skips this check.
+   To release, the maintainer raises `<Version>` and the `CHANGELOG.md` heading in a PR, then tags
+   the same numeric version.
+7. `release.sh` writes `<package>.sha256` next to each package. The workflow uploads the package
+   and its `.sha256` file. The upload has no `--clobber`: a re-run cannot replace a public asset.
+8. The checkout keeps no token (`persist-credentials: false`). The Package step receives the
+   signing secrets only on a `release` event.
+9. The release workflow runs no tests. The maintainer tags only a commit of `main` with a green
+   `ci.yml` run.
+
+This reverses "Nothing installable leaves CI" (2026-09-02 entry and `docs/design/installers.md`).
+The repository is public, so every release asset is public. The maintainer accepted this on
+2026-10-07. `docs/design/installers.md` and ADR 0056 now carry an amendment note.
+`docs/release/macos-alpha-rollout.md` gives the public GitHub Release as the distribution channel.
+To withdraw a version, delete its release assets.
+
+Open item: the msi `MajorUpgrade` in `installers/windows/Kanal.wxs` has no
+`AllowSameVersionUpgrades`. Two alpha builds of one numeric version do not replace each other. A
+follow-up task covers this.
+
 ### CI tests on Windows and macOS, with a coverage report
 
 Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and
