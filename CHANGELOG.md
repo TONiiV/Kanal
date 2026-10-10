@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
 - Text in an input box now sits in the vertical centre of the box.
 - You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
   notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
