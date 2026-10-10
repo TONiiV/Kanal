@@ -27,7 +27,7 @@ public partial class RulerTickViewModel : ViewModelBase
     private string _speakerName = "";
 
     [ObservableProperty]
-    private string _speakerColor = ThemeColours.SpeakerFallback;
+    private string _speakerColor = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]

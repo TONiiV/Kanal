@@ -5,9 +5,7 @@
              xmlns:chrome="using:Avalonia.Controls.Chrome"
              xmlns:vm="using:Kanal.Host.ViewModels"
              RequestedThemeVariant="Light">
-    <!-- The window chrome is designed on a fixed light palette; following the OS
-         dark theme made control foregrounds invisible on the light surfaces.
-         Every colour below is therefore explicit — see .impeccable.md. -->
+    <!-- Colours are explicit: FluentTheme's dark variant made control foregrounds invisible. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />

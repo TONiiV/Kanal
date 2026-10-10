@@ -14,7 +14,7 @@ public partial class BubbleViewModel : ViewModelBase
     private string _speakerName = "";
 
     [ObservableProperty]
-    private string _speakerColor = ThemeColours.SpeakerFallback;
+    private string _speakerColor = "";
 
     /// <summary>ISO code of the language actually spoken, set upper-case for the column label.</summary>
     [ObservableProperty]

@@ -176,7 +176,7 @@ public class BrowsedRulerTests : IDisposable
         Assert.Empty(vm.BrowsedRuler.Ticks);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void ABrowsedMeetingHasARulerBuiltFromItsStoredTurns()
     {
         var (vm, _) = Browsing(
@@ -191,7 +191,7 @@ public class BrowsedRulerTests : IDisposable
         Assert.Empty(vm.Ruler.Ticks);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void JumpingFromABrowsedTickMarksTheStoredLine()
     {
         var (vm, _) = Browsing(

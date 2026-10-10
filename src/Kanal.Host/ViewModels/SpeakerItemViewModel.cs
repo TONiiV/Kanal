@@ -14,7 +14,7 @@ public partial class SpeakerItemViewModel : ViewModelBase
     public required string Tag { get; init; }
 
     [ObservableProperty]
-    private string _color = ThemeColours.SpeakerFallback;
+    private string _color = "";
 
     /// <summary>Editable display name; committed via <see cref="RenameCommand"/> (✓ or Enter).</summary>
     [ObservableProperty]
