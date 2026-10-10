@@ -38,6 +38,9 @@ of the project list opens it. The gear does not change the selected project.
    `Command` now. The handler starts the rename and moves the cursor to the name field.
 10. `ProjectSettingsViewModel.Save` applies the icon first and renames second. A refused icon
     leaves the name unchanged.
+11. Operator feedback on the PR: the danger button reads "Remove project" in full. The icon reset
+    is a text button, "Use default icon", in the icon button row. It shows only for an icon that is
+    not the default. The title of `RemoveProjectWindow` is 19 px, larger than the question (15.5 px).
 
 ### No gap beside a collapsed sidebar
 

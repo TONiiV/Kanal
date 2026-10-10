@@ -26,20 +26,12 @@
             <TextBox x:Name="ProjectName" Text="{Binding Name}"
                      AutomationProperties.Name="{l:T workspace.name.field}" />
 
-            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,28,0,0">
-                <TextBlock Text="{l:T workspace.icon}" Classes="label" />
-                <Button x:Name="ResetIcon" Classes="ghost icon compact" Width="24" Height="24"
-                        Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}"
-                        ToolTip.Tip="{l:T workspace.icon.reset}"
-                        AutomationProperties.Name="{l:T workspace.icon.reset}">
-                    <Path Classes="glyph" Data="{c:Icon regenerate}" Width="13" Height="13" />
-                </Button>
-            </StackPanel>
+            <TextBlock Text="{l:T workspace.icon}" Classes="label" Margin="0,28,0,0" />
             <Border Classes="rule" />
             <TextBlock x:Name="IconFileName" Text="{Binding ImageFileName}" FontSize="11.5"
                        Foreground="{StaticResource Ink3}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding ImageFileName, Converter={x:Static ObjectConverters.IsNotNull}}" />
-            <StackPanel Orientation="Horizontal" Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
                 <Border Width="44" Height="44" CornerRadius="8" Background="{StaticResource Paper}"
                         BorderBrush="{StaticResource Rule}" BorderThickness="1">
                     <Panel Width="24" Height="24">
@@ -77,6 +69,8 @@
                 </Button>
                 <Button x:Name="ChooseFile" Content="{l:T workspace.icon.file}" VerticalAlignment="Center"
                         Command="{Binding ChooseImageCommand}" />
+                <Button x:Name="ResetIcon" Content="{l:T workspace.icon.reset}" VerticalAlignment="Center"
+                        Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}" />
             </StackPanel>
 
             <TextBlock Text="{l:T workspace.danger}" Classes="label" Margin="0,28,0,0" />

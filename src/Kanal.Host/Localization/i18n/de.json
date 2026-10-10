@@ -354,7 +354,7 @@
   "workspace.danger": "GEFAHRENBEREICH",
   "workspace.remove": "Dieses Projekt entfernen",
   "workspace.remove.note": "Nimmt das Projekt aus der Liste. Im nächsten Schritt wählen Sie, was mit den Besprechungsdateien geschieht.",
-  "workspace.remove.button": "Entfernen…",
+  "workspace.remove.button": "Projekt entfernen",
   "workspace.remove.notthisproject": "Kanal hat keine Dateien gelöscht. Dieser Ordner gehört nicht zu diesem Projekt. Um das Projekt aus der Liste zu nehmen, wählen Sie Aus der Liste entfernen.",
   "workspace.remove.recording": "Eine Besprechung nimmt auf. Beenden Sie die Besprechung, um ein Projekt zu entfernen.",
   "workspace.remove.title": "Projekt entfernen",

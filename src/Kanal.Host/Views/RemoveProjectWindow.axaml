@@ -10,7 +10,7 @@
         Background="{StaticResource Sheet}">
 
     <StackPanel Margin="26,20,26,18" Spacing="0">
-        <TextBlock Text="{l:T workspace.remove.title}" Classes="label" />
+        <TextBlock Text="{l:T workspace.remove.title}" FontSize="19" FontWeight="SemiBold" />
         <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,0" />
 
         <TextBlock x:Name="Heading" Margin="0,16,0,0" FontSize="15.5" LineHeight="23"
