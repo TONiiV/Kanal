@@ -15,8 +15,8 @@
         ExtendClientAreaTitleBarHeightHint="58"
         MinWidth="{Binding Shell.MinShellWidth}"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
     <Design.DataContext>
         <vm:MainViewModel />
     </Design.DataContext>

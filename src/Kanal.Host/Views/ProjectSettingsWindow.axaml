@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:l="using:Kanal.Host.Localization"
+        xmlns:c="using:Kanal.Host.Controls"
+        x:Class="Kanal.Host.Views.ProjectSettingsWindow"
+        x:DataType="vm:ProjectSettingsViewModel"
+        Title="{l:T workspace.settings.title}"
+        Width="520" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{StaticResource Ink}"
+        Background="{StaticResource Sheet}">
+
+    <DockPanel Margin="24,20,24,20">
+        <Button DockPanel.Dock="Bottom" x:Name="Save" Classes="accent" Content="{l:T settings.save}"
+                Command="{Binding SaveCommand}" HorizontalAlignment="Right" Margin="0,18,0,0" />
+
+        <TextBlock DockPanel.Dock="Bottom" x:Name="Problem" Text="{Binding Problem}" TextWrapping="Wrap"
+                   Margin="0,14,0,0" FontSize="11.5" LineHeight="17" Foreground="{StaticResource Alarm}"
+                   IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <StackPanel>
+            <TextBlock Text="{l:T workspace.name}" Classes="label" />
+            <Border Classes="rule" />
+            <TextBox x:Name="ProjectName" Text="{Binding Name}"
+                     AutomationProperties.Name="{l:T workspace.name.field}" />
+
+            <TextBlock Text="{l:T workspace.icon}" Classes="label" Margin="0,28,0,0" />
+            <Border Classes="rule" />
+            <TextBlock x:Name="IconFileName" Text="{Binding ImageFileName}" FontSize="11.5"
+                       Foreground="{StaticResource Ink3}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding ImageFileName, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Border Width="44" Height="44" CornerRadius="8" Background="{StaticResource Paper}"
+                        BorderBrush="{StaticResource Rule}" BorderThickness="1">
+                    <Panel Width="24" Height="24">
+                        <Image x:Name="IconImage" Width="24" Height="24"
+                               Source="{Binding ImagePath, Converter={x:Static c:ProjectIcons.Image}}" />
+                        <Path Classes="glyph" Width="24" Height="24" Fill="{StaticResource Ink}"
+                              Data="{Binding Glyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                              IsVisible="{Binding #IconImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                    </Panel>
+                </Border>
+                <Button x:Name="ChooseGlyph" Content="{l:T workspace.icon.choose}" VerticalAlignment="Center">
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedLeft">
+                            <ItemsControl x:Name="Glyphs" ItemsSource="{Binding Glyphs}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="4" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Button Classes="ghost icon" Click="OnGlyphClick"
+                                                Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).ChooseGlyphCommand}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{Binding Converter={x:Static c:ProjectIcons.Label}}"
+                                                AutomationProperties.Name="{Binding Converter={x:Static c:ProjectIcons.Label}}">
+                                            <Path Classes="glyph" Width="18" Height="18"
+                                                  Data="{Binding Converter={x:Static c:ProjectIcons.Glyph}}" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button x:Name="ChooseFile" Content="{l:T workspace.icon.file}" VerticalAlignment="Center"
+                        Command="{Binding ChooseImageCommand}" />
+                <Button x:Name="ResetIcon" Content="{l:T workspace.icon.reset}" VerticalAlignment="Center"
+                        Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}" />
+            </StackPanel>
+
+            <TextBlock Text="{l:T workspace.danger}" Classes="label" Margin="0,28,0,0" />
+            <Border Classes="rule" />
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{l:T workspace.remove}" FontSize="12.5" FontWeight="SemiBold" />
+                        <TextBlock Text="{l:T workspace.remove.note}" FontSize="11.5" TextWrapping="Wrap"
+                                   LineHeight="17" Foreground="{StaticResource Ink3}" Margin="0,3,0,0" />
+                        <TextBlock x:Name="RemoveBlocked" Text="{Binding RemoveBlockedNote}" FontSize="11.5"
+                                   TextWrapping="Wrap" Foreground="{StaticResource Alarm}" Margin="0,4,0,0"
+                                   IsVisible="{Binding !CanRemove}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" x:Name="Remove" Classes="danger" VerticalAlignment="Center"
+                            Content="{l:T workspace.remove.button}" Command="{Binding RemoveCommand}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </DockPanel>
+</Window>

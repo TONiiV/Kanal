@@ -9,33 +9,33 @@
         Width="560" Height="600"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
 
     <DockPanel Margin="26,20,26,18">
         <Button DockPanel.Dock="Bottom" Content="{l:T licenses.close}"
                 HorizontalAlignment="Right" Margin="0,16,0,0" Click="OnCloseClick" />
 
         <TextBlock DockPanel.Dock="Top" Text="{l:T licenses.title}" Classes="label" />
-        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                 Margin="0,7,0,0" />
         <TextBlock DockPanel.Dock="Top" Text="{Binding LicenseNote}" FontSize="11.5"
-                   TextWrapping="Wrap" Foreground="{StaticResource Ink3}" Margin="0,14,0,4" />
+                   TextWrapping="Wrap" Foreground="{DynamicResource Ink3}" Margin="0,14,0,4" />
 
         <ScrollViewer AllowAutoHide="False">
             <ItemsControl ItemsSource="{Binding Notices}" Margin="0,0,14,0">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="services:OpenSourceNotice">
-                        <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1"
+                        <Border BorderBrush="{DynamicResource RuleFaint}" BorderThickness="0,0,0,1"
                                 Padding="0,9">
                             <Grid ColumnDefinitions="150,110,*">
                                 <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="12"
                                            FontWeight="SemiBold" TextWrapping="Wrap" />
                                 <TextBlock Grid.Column="1" Text="{Binding License}" FontSize="11"
-                                           Foreground="{StaticResource Ink2}" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Ink2}" TextWrapping="Wrap"
                                            Margin="8,1,8,0" />
                                 <TextBlock Grid.Column="2" Text="{Binding Url}" FontSize="11"
-                                           Foreground="{StaticResource Ink3}" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Ink3}" TextWrapping="Wrap"
                                            Margin="0,1,0,0" />
                             </Grid>
                         </Border>

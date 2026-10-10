@@ -9,15 +9,15 @@
         Width="780" Height="660"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
 
     <Window.Styles>
         <Style Selector="TabItem">
             <Setter Property="FontFamily" Value="{StaticResource Sans}" />
             <Setter Property="FontSize" Value="12.5" />
             <Setter Property="FontWeight" Value="Normal" />
-            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink3}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0,8" />
             <Setter Property="Margin" Value="0" />
@@ -25,15 +25,15 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
         <Style Selector="TabItem:pointerover">
-            <Setter Property="Foreground" Value="{StaticResource Ink2}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink2}" />
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Foreground" Value="{StaticResource Brand}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brand}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{DynamicResource Brand}" />
         </Style>
         <Style Selector="TabControl WrapPanel">
             <Setter Property="Background" Value="Transparent" />
@@ -69,7 +69,7 @@
                             </ComboBox>
                         </Grid>
                         <TextBlock Text="{l:T settings.applang.note}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" />
+                                   Foreground="{DynamicResource Ink3}" />
 
                         <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
@@ -79,14 +79,14 @@
                         <TextBlock x:Name="Version" Text="{Binding VersionLabel}" FontSize="12.5"
                                    FontWeight="SemiBold" Margin="0,0,0,4" />
                         <TextBlock Text="{l:T settings.about.note}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,0,0,10" />
                         <Button x:Name="Changelog" Content="{l:T settings.about.changelog}"
                                 HorizontalAlignment="Left" Click="OnChangelogClick" />
 
                         <TextBlock Text="{l:T settings.licenses.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,0,0,10" />
                         <Button x:Name="Licenses" Content="{l:T settings.licenses.open}"
                                 HorizontalAlignment="Left" Click="OnOpenSourceClick" />
                     </StackPanel>
@@ -121,23 +121,23 @@
                         <!-- Live level over a held peak: one bar showing both what is arriving now and
                              the loudest thing heard, because the judgement is about the pair. -->
                         <Panel Height="10" Margin="0,0,0,7">
-                            <Rectangle Fill="{StaticResource RuleFaint}" RadiusX="3" RadiusY="3" />
+                            <Rectangle Fill="{DynamicResource RuleFaint}" RadiusX="3" RadiusY="3" />
                             <ProgressBar Value="{Binding PeakScale}" Maximum="100" Height="10"
-                                         Foreground="{StaticResource Rule}" Background="Transparent"
+                                         Foreground="{DynamicResource Rule}" Background="Transparent"
                                          CornerRadius="3" />
                             <ProgressBar Value="{Binding LevelScale}" Maximum="100" Height="10"
-                                         Foreground="{StaticResource Brand}" Background="Transparent"
+                                         Foreground="{DynamicResource Brand}" Background="Transparent"
                                          CornerRadius="3" />
                         </Panel>
                         <TextBlock Text="{Binding LevelReadout}" FontSize="11"
-                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,8" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,0,0,8" />
 
                         <TextBlock Text="{Binding VerdictLabel}" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding VerdictDetail}" FontSize="11.5" TextWrapping="Wrap"
-                                   LineHeight="18" Foreground="{StaticResource Ink2}" Margin="0,3,0,10" />
+                                   LineHeight="18" Foreground="{DynamicResource Ink2}" Margin="0,3,0,10" />
 
                         <TextBlock Text="{Binding ProcessingNote}" FontSize="11" TextWrapping="Wrap"
-                                   LineHeight="17" Foreground="{StaticResource Ink3}" />
+                                   LineHeight="17" Foreground="{DynamicResource Ink3}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -151,12 +151,12 @@
                         <TextBlock Text="{l:T settings.transcription.keys}" FontSize="12.5"
                                    FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBlock Text="{Binding EnvFallback}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,0,0,10" />
 
                         <ItemsControl x:Name="ApiKeys" ItemsSource="{Binding Keys}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ApiKeyItemViewModel">
-                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
+                                    <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,1,0,0" Padding="0,9">
                                         <Grid ColumnDefinitions="Auto,152,*,Auto">
                                             <RadioButton Grid.Column="0" GroupName="activeKey" IsChecked="{Binding IsActive}"
                                                          VerticalAlignment="Center" ToolTip.Tip="{l:T settings.usekey.tip}" />
@@ -172,7 +172,7 @@
                         </ItemsControl>
 
                         <TextBlock Text="{l:T settings.addkey}" Classes="label" Margin="0,18,0,0" />
-                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
+                        <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,11" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBox x:Name="NewKeyName" Text="{Binding NewName}"
                                      PlaceholderText="{l:T settings.key.name}" Width="152" />
@@ -184,7 +184,7 @@
                         <TextBlock Text="{l:T settings.localasr.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
                         <TextBlock Text="{l:T settings.localasr.note}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" />
+                                   Foreground="{DynamicResource Ink3}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -197,13 +197,13 @@
                         <Border Classes="rule" />
                         <TextBlock Text="{l:T settings.translation.localmodel}" FontSize="12.5"
                                    FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
                                    Text="{l:T settings.translation.note}" />
 
                         <ItemsControl x:Name="TranslationModels" ItemsSource="{Binding TranslationModels}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:TranslationModelItemViewModel">
-                                    <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
+                                    <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Padding="0,10">
                                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                             <RadioButton Grid.Column="0" GroupName="activeModel"
                                                          IsChecked="{Binding IsActive}"
@@ -212,13 +212,13 @@
                                             <StackPanel Grid.Column="1" Margin="6,0,10,0">
                                                 <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
                                                 <TextBlock Text="{Binding MetaLabel}" FontSize="11"
-                                                           Foreground="{StaticResource Ink3}" Margin="0,2,0,0" />
+                                                           Foreground="{DynamicResource Ink3}" Margin="0,2,0,0" />
                                                 <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
-                                                           Foreground="{StaticResource Alarm}" Margin="0,2,0,0"
+                                                           Foreground="{DynamicResource Alarm}" Margin="0,2,0,0"
                                                            IsVisible="{Binding HasLicenseNote}" />
                                             </StackPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
-                                                       Foreground="{StaticResource Ink2}" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Ink2}" VerticalAlignment="Center"
                                                        Margin="0,0,12,0" />
                                             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
                                                         VerticalAlignment="Center">
@@ -239,7 +239,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
                                    Margin="0,14,0,0" Text="{l:T settings.translation.cloudnote}" />
                     </StackPanel>
                 </ScrollViewer>
@@ -251,7 +251,7 @@
                     <TextBlock Text="{l:T settings.summary.heading}" Classes="label" />
                     <Border Classes="rule" />
                     <TextBlock Text="{l:T settings.summary.note}" FontSize="11.5" TextWrapping="Wrap"
-                               LineHeight="18" Foreground="{StaticResource Ink3}" />
+                               LineHeight="18" Foreground="{DynamicResource Ink3}" />
                 </StackPanel>
             </TabItem>
 
@@ -263,10 +263,10 @@
                         <Border Classes="rule" />
                         <TextBlock Text="{l:T settings.files.title}" FontSize="12.5" FontWeight="SemiBold"
                                    Margin="0,0,0,4" />
-                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
                                    Text="{l:T settings.files.note}" />
                         <TextBlock Text="{Binding DefaultFolderNote}" FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" Margin="0,4,0,10" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,4,0,10" />
 
                         <Grid ColumnDefinitions="110,*,Auto" Margin="0,0,0,4">
                             <TextBlock Grid.Column="0" Text="{l:T settings.files.transcripts}"
@@ -280,11 +280,11 @@
 
                         <CheckBox x:Name="RecordAudio" IsChecked="{Binding RecordAudio}" Margin="0,12,0,0"
                                   Content="{l:T settings.record}" />
-                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
                                    Margin="0,2,0,0" Text="{l:T settings.record.note}" />
                         <CheckBox x:Name="RecordOnlineAudio" IsChecked="{Binding RecordOnlineAudio}" Margin="0,9,0,0"
                                   Content="{l:T settings.record.online}" />
-                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Ink3}"
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
                                    Margin="0,2,0,0" Text="{l:T settings.record.online.note}" />
 
                         <TextBlock Text="{l:T settings.logs.heading}" Classes="label" Margin="0,28,0,0" />
@@ -292,7 +292,7 @@
                         <TextBlock Text="{l:T settings.logs.title}" FontSize="12.5" FontWeight="SemiBold"
                                    Margin="0,0,0,4" />
                         <TextBlock Text="{Binding LogNote}" FontSize="11.5" TextWrapping="Wrap"
-                                   Foreground="{StaticResource Ink3}" Margin="0,0,0,10" />
+                                   Foreground="{DynamicResource Ink3}" Margin="0,0,0,10" />
 
                         <Grid ColumnDefinitions="Auto,180,Auto,110,*" Margin="0,0,0,10">
                             <TextBlock Grid.Column="0" Text="{l:T settings.logs.level}" Classes="label"
@@ -316,12 +316,12 @@
                             <Button x:Name="OpenLogFolder" Content="{l:T settings.logs.open}"
                                     Command="{Binding OpenLogFolderCommand}" />
                             <TextBlock Text="{Binding LogFolder}" FontSize="11" TextWrapping="Wrap"
-                                       Foreground="{StaticResource Ink3}" VerticalAlignment="Center" />
+                                       Foreground="{DynamicResource Ink3}" VerticalAlignment="Center" />
                         </StackPanel>
 
                         <TextBlock Text="{Binding LogFailureNote}" IsVisible="{Binding !LogIsWritable}"
                                    FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
-                                   Foreground="{StaticResource Alarm}" />
+                                   Foreground="{DynamicResource Alarm}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
