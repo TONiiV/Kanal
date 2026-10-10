@@ -5,7 +5,7 @@
              xmlns:chrome="using:Avalonia.Controls.Chrome"
              xmlns:vm="using:Kanal.Host.ViewModels"
              RequestedThemeVariant="Light">
-    <!-- Colours are explicit: FluentTheme's dark variant made control foregrounds invisible. -->
+    <!-- Every colour has a Light and a Dark value here: FluentTheme's own palette made control foregrounds invisible. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />
@@ -25,6 +25,7 @@
                     <SolidColorBrush x:Key="RuleFaint" Color="#E9E3D9" />
                     <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
                     <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="OnCloseHover" Color="#FFFFFF" />
                     <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
                     <SolidColorBrush x:Key="Record" Color="#C42B22" />
                     <SolidColorBrush x:Key="Hold" Color="#C08A12" />
@@ -40,6 +41,50 @@
 
                     <Color x:Key="SpeakerFallbackColor">#4C5C68</Color>
                     <Color x:Key="TickMixedColor">#7C8A93</Color>
+
+                    <Color x:Key="AccentRamp">#414B83</Color>
+                    <Color x:Key="AccentRampLight1">#535E96</Color>
+                    <Color x:Key="AccentRampLight2">#6B75A8</Color>
+                    <Color x:Key="AccentRampLight3">#EBEDF6</Color>
+                    <Color x:Key="AccentRampDark1">#35406F</Color>
+                    <Color x:Key="AccentRampDark2">#293359</Color>
+                    <Color x:Key="AccentRampDark3">#252B3B</Color>
+                </ResourceDictionary>
+
+                <!-- The mobile caption page's dark tokens; keys it lacks follow the same rule. -->
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="Sheet" Color="#181C28" />
+                    <SolidColorBrush x:Key="Paper" Color="#222838" />
+                    <SolidColorBrush x:Key="Ink" Color="#F6F1E8" />
+                    <SolidColorBrush x:Key="Ink2" Color="#BFC3D0" />
+                    <SolidColorBrush x:Key="Ink3" Color="#A1A8BA" />
+                    <SolidColorBrush x:Key="Rule" Color="#485165" />
+                    <SolidColorBrush x:Key="RuleFaint" Color="#303748" />
+                    <SolidColorBrush x:Key="Alarm" Color="#E28A83" />
+                    <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="OnCloseHover" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="Record" Color="#EF6A60" />
+                    <SolidColorBrush x:Key="Hold" Color="#E3AE3C" />
+                    <SolidColorBrush x:Key="RecordWash" Color="#4A2528" />
+                    <SolidColorBrush x:Key="HoldWash" Color="#433820" />
+
+                    <SolidColorBrush x:Key="Brand" Color="#B9C2FF" />
+                    <SolidColorBrush x:Key="BrandHover" Color="#CDD3FF" />
+                    <SolidColorBrush x:Key="BrandPressed" Color="#E0E4FF" />
+                    <SolidColorBrush x:Key="BrandWash" Color="#303B5B" />
+                    <SolidColorBrush x:Key="BrandAccent" Color="#EAA66A" />
+                    <SolidColorBrush x:Key="OnBrand" Color="#181C28" />
+
+                    <Color x:Key="SpeakerFallbackColor">#9AA8B3</Color>
+                    <Color x:Key="TickMixedColor">#7E8A99</Color>
+
+                    <Color x:Key="AccentRamp">#B9C2FF</Color>
+                    <Color x:Key="AccentRampLight1">#CDD3FF</Color>
+                    <Color x:Key="AccentRampLight2">#E0E4FF</Color>
+                    <Color x:Key="AccentRampLight3">#303B5B</Color>
+                    <Color x:Key="AccentRampDark1">#8D99E6</Color>
+                    <Color x:Key="AccentRampDark2">#6F7BC4</Color>
+                    <Color x:Key="AccentRampDark3">#545FA3</Color>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -229,7 +274,7 @@
         <Style Selector="Button#PART_CloseButton:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button#PART_CloseButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource CloseHover}" />
             <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="TextElement.Foreground" Value="White" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource OnCloseHover}" />
         </Style>
         <Style Selector="Button#PART_MinimizeButton:pointerover, Button#PART_MaximizeButton:pointerover">
             <Setter Property="Foreground" Value="{DynamicResource Brand}" />
@@ -238,10 +283,10 @@
             <Setter Property="Fill" Value="{DynamicResource Brand}" />
         </Style>
         <Style Selector="Button#PART_CloseButton:pointerover, Button#PART_CloseButton:pressed">
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Foreground" Value="{DynamicResource OnCloseHover}" />
         </Style>
         <Style Selector="Button#PART_CloseButton:pointerover Path, Button#PART_CloseButton:pressed Path">
-            <Setter Property="Fill" Value="White" />
+            <Setter Property="Fill" Value="{DynamicResource OnCloseHover}" />
         </Style>
         <Style Selector="Border.chrome-head Button, Border.chrome-head ComboBox">
             <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="User" />

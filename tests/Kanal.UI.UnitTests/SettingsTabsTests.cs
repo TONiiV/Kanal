@@ -4,6 +4,8 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Kanal.Host.Localization;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
 
@@ -14,6 +16,7 @@ public class SettingsTabsTests
     private static readonly string[] EverySettingThatExisted =
     [
         "AppLanguage", "Version", "Changelog", "Licenses",
+        "ColourScheme",
         "InputDevice", "InputTest",
         "ApiKeys", "NewKeyName", "NewKeyValue", "AddKey",
         "TranslationModels",
@@ -44,7 +47,7 @@ public class SettingsTabsTests
         Assert.Equal(Dock.Left, tabs.TabStripPlacement);
 
         var items = tabs.Items.OfType<TabItem>().ToList();
-        Assert.Equal(6, items.Count);
+        Assert.Equal(7, items.Count);
         Assert.All(items, tab => Assert.False(
             string.IsNullOrWhiteSpace(AutomationProperties.GetName(tab)),
             $"a tab has no accessible name: {tab.Header}"));
@@ -94,6 +97,28 @@ public class SettingsTabsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(OnScreen(window), name => name == "LogLevel");
         Assert.DoesNotContain(OnScreen(window), name => name == "InputDevice");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void AppearanceIsTheSecondTabAndShowsTheColourSchemeCards()
+    {
+        var window = new SettingsWindow(new SettingsViewModel(new AppSettings(), () => null));
+        window.Show();
+
+        var tabs = Tabs(window);
+        var appearance = tabs.Items.OfType<TabItem>().ElementAt(1);
+        Assert.Equal(Localizer.Instance["settings.tab.appearance"], AutomationProperties.GetName(appearance));
+
+        tabs.SelectedItem = appearance;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(OnScreen(window), name => name == "ColourScheme");
+        var cards = window.GetVisualDescendants().OfType<ListBoxItem>()
+            .Where(item => item.DataContext is ColourSchemeOption)
+            .ToList();
+        Assert.Equal(3, cards.Count);
 
         window.Close();
     }

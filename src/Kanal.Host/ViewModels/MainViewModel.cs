@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -267,6 +268,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             RefreshAudioSourceStatus();
             RefreshPipelineStatus();
         };
+
+        if (Application.Current is { } app)
+        {
+            _speakerFallback = ThemeColours.SpeakerFallback;
+            app.ActualThemeVariantChanged += (_, _) => RepaintThemeColours();
+        }
+    }
+
+    private string _speakerFallback = "";
+
+    // ThemeColours hands out hex strings, so a scheme change does not reach them on its own.
+    private void RepaintThemeColours()
+    {
+        var previous = _speakerFallback;
+        _speakerFallback = ThemeColours.SpeakerFallback;
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles).Where(b => b.SpeakerColor == previous))
+            bubble.SpeakerColor = _speakerFallback;
+        Ruler.Reresolve();
+        BrowsedRuler.Reresolve();
     }
 
     // Only the production path: a test that reached for Documents would create a workspace on

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -23,6 +24,19 @@ public sealed partial class LogLevelOption(LogLevel level) : ViewModelBase
     public LogLevel Level { get; } = level;
 
     public string Name => Localizer.Instance[$"log.level.{Level.ToString().ToLowerInvariant()}"];
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+}
+
+public sealed partial class ColourSchemeOption(ColourScheme scheme) : ViewModelBase
+{
+    public ColourScheme Scheme { get; } = scheme;
+
+    public string Name => Localizer.Instance[$"appearance.scheme.{Scheme.ToString().ToLowerInvariant()}"];
+
+    public ThemeVariant Left => Scheme == ColourScheme.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+
+    public ThemeVariant Right => Scheme == ColourScheme.Light ? ThemeVariant.Light : ThemeVariant.Dark;
 
     public void RefreshText() => OnPropertyChanged(nameof(Name));
 }
@@ -47,7 +61,10 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 public partial class SettingsViewModel : ViewModelBase
 {
     public SettingsViewModel()
-        : this(SettingsStore.Load(), deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
+        : this(
+            SettingsStore.Load(),
+            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
+            saveColourScheme: SettingsStore.SaveColourScheme)
     {
     }
 
@@ -67,8 +84,10 @@ public partial class SettingsViewModel : ViewModelBase
         Func<IAudioCaptureService?>? captureFactory = null,
         bool? isMacOs = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
-        Action<string>? openFolder = null)
+        Action<string>? openFolder = null,
+        Action<ColourScheme>? saveColourScheme = null)
     {
+        _saveColourScheme = saveColourScheme ?? (_ => { });
         _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
@@ -116,6 +135,7 @@ public partial class SettingsViewModel : ViewModelBase
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
 
+        _scheme = Schemes.First(o => o.Scheme == settings.ColourScheme);
         _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
         _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
@@ -141,6 +161,8 @@ public partial class SettingsViewModel : ViewModelBase
             model.RefreshText();
         foreach (var level in LogLevels)
             level.RefreshText();
+        foreach (var scheme in Schemes)
+            scheme.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -201,6 +223,27 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (value is not null)
             Localizer.Instance.Current = value.Code;
+    }
+
+    public IReadOnlyList<ColourSchemeOption> Schemes { get; } =
+        [new(ColourScheme.System), new(ColourScheme.Light), new(ColourScheme.Dark)];
+
+    private readonly Action<ColourScheme> _saveColourScheme;
+
+    [ObservableProperty]
+    private ColourSchemeOption _scheme;
+
+    partial void OnSchemeChanged(ColourSchemeOption value)
+    {
+        Appearance.Apply(value.Scheme);
+        try
+        {
+            _saveColourScheme(value.Scheme);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The colour scheme could not be saved.", ex);
+        }
     }
 
     // ---- microphone test -------------------------------------------------------------------
@@ -549,6 +592,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.RecordAudio = RecordAudio;
         settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
+        settings.ColourScheme = Scheme.Scheme;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
             ? _lastLogSize
