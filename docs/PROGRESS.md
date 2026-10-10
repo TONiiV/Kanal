@@ -60,7 +60,16 @@ validation gate (phase 1.5) and two new tracks. This entry records which finding
 - Participant phones as distributed microphones: listed as an unscheduled probe. Audio over the
   network is possible only on the LAN relay, and `getUserMedia` needs HTTPS.
 
-**Operator decisions.**
+**Operator decisions, 2026-10-11.**
+
+- Operators do not choose a diarization model. B-6 picks one default. Settings issue #179 is closed.
+- `Nemotron-3-Diarization` (2026-09-23, OpenMDW-1.1, up to 8 speakers) joins B-6 as a benchmark
+  candidate. The ADR 0055 trigger for re-evaluating frame-level diarization has fired. B-7 ports
+  the runtime if the model wins. Python runs only in the benchmark, never in Kanal.
+- Operators choose the transcription model and the chunk size. Settings marks the benchmark
+  winner as recommended.
+
+**Operator decisions, 2026-10-08.**
 
 1. The gate threshold is a key-fact error rate of 2 % per language pair. It is a setting. F-1 and
    V-3 read the same value.

@@ -221,7 +221,7 @@ V-2 是阶段 2 F 轨的同一个抽取器。评测与实时报警用一份代�
 |---|---|---|
 | C-1 | `IDownloadableModel` + 下载器重构 | PR #88（阶段 1 合） |
 | C-2 | `AsrModelCatalog`、`ActiveTranscriptionModelId`、就绪状态 | PR #90，绿 |
-| C-3 | 设置「转写」页：下载、进度、选择、删除 | #72 |
+| C-3 | 设置「转写」页：下载、进度、选择、删除。操作员可以选转写模型与 chunk 尺寸；基准测试选出的那一项标「推荐」（2026-10-11） | #72 |
 | C-4 | `NemotronAsrProvider` 走 sherpa-onnx：会话、预热、`zh` → `zh-CN`、partial 与 final | 未开 |
 | C-5 | `PipelinePlanner`：Local 转写解析到 provider；去掉 `reason.localasr` | 未开 |
 | C-6 | 局域网中继：第二个 `IRelayPublisher`，主机经笔记本热点或会议室局域网直接服务手机页与频道。会议室场景不再需要公网，也绕开 `workers.dev` 在大陆被墙（#41） | 未开（2026-10-08 新增） |
@@ -244,7 +244,8 @@ C-4、C-5、C-6 合起来才是真正的离线模式：没网的车间也能开�
 | B-3 | 会后权威分离：完整录音重跑，段落映射回句子，非破坏覆盖 | #108 |
 | B-4 | 实时暂定标签：`ISpeakerAttributionService`、逐句嵌入、在线聚类、暂定态可见 | #109 |
 | B-5 | 右栏「发言人」页签接真实标签：改名、合并、置信度、重叠语音 | #110 |
-| B-6 | zh/de/pl 实测：默认嵌入模型与聚类阈值 | #111 |
+| B-6 | zh/de/pl 实测：默认嵌入模型与聚类阈值；`Nemotron-3-Diarization` 作为对照组（开发机 NeMo 评测） | #111 |
+| B-7 | 若 `Nemotron-3-Diarization` 胜出：ONNX 导出 + ONNX Runtime 进程内运行；逐帧说话人活动映射到句子 | 未开（2026-10-11） |
 
 B-3 会后权威分离也是阶段 4.5 纪要的前置：纪要要靠它给出「谁负责」。
 
