@@ -15,12 +15,14 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - Each project in the project list has a gear button. It opens the project settings. There you
-  rename the project and give it an icon: a built-in symbol or an image file of up to 2 MB.
-  Kanal copies the image into the project folder as `kanal-icon`, so the icon moves with the
-  folder. The list and the project box show the icon. The settings also remove a project. You
-  choose to remove it from the list only, or to delete its meeting files too. Deleted files do
-  not go to the trash. Other files in the project folder stay. Kanal does not remove a project
-  while a meeting is recording.
+  rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
+  copies the image into the project folder as `kanal-icon` plus the image extension, for example
+  `kanal-icon.png`, so the icon moves with the folder. The project list shows the icon. The
+  settings also remove a project. You choose to remove it from the list only, or to delete its
+  meeting files too. Deleted files do not go to the trash. Other files in the project folder
+  stay. Kanal does not delete files when the folder holds another project. Kanal does not remove
+  a project while a meeting is recording.
+- Rename in the menu of a meeting row no longer does nothing. The name field now gets the cursor.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
 - The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting

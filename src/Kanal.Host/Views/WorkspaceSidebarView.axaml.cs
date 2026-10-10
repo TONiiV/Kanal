@@ -38,6 +38,8 @@ public partial class WorkspaceSidebarView : UserControl
         if (sender is not MenuItem { DataContext: MeetingItemViewModel meeting })
             return;
 
+        meeting.BeginRenameCommand.Execute(null);
+
         // Posted: the editor is not visible yet while the flyout closes, and cannot take focus.
         Dispatcher.UIThread.Post(
             () =>

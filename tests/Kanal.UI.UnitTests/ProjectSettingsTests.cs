@@ -238,23 +238,27 @@ public class ProjectSettingsTests : IDisposable
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
-
         var menu = window.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "MeetingMenu");
-        menu.Flyout!.ShowAt(menu);
-        Dispatcher.UIThread.RunJobs();
-        var rename = ((MenuFlyout)menu.Flyout).Items.OfType<MenuItem>().Single(m => m.Name == "RenameMeeting");
-        var at = rename.TranslatePoint(new Point(rename.Bounds.Width / 2, rename.Bounds.Height / 2), window)!.Value;
-        window.MouseDown(at, MouseButton.Left);
-        window.MouseUp(at, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
-        Dispatcher.UIThread.RunJobs();
+
+        Click(window, menu);
+        var rename = window.GetVisualDescendants().OfType<MenuItem>().Single(m => m.Name == "RenameMeeting");
+        Click(window, rename);
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
 
         var editor = window.GetLogicalDescendants().OfType<TextBox>()
             .Single(b => b.Name == "MeetingRowEditor" && b.IsVisible);
         Assert.True(vm.Sidebar.Meetings.Single().IsRenaming);
-        Assert.True(editor.IsFocused, "FOCUS " + window.FocusManager!.GetFocusedElement() + " vis " + editor.IsEffectivelyVisible + " " + editor.Bounds + " " + editor.Focusable + " active " + window.IsActive);
+        Assert.True(editor.IsFocused);
 
         window.Close();
+    }
+
+    private static void Click(Window window, Control target)
+    {
+        var at = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
     }
 
     [Fact]

@@ -229,6 +229,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return saved;
     }
 
+    // The project list drops its selection mid-rebuild; reloading on that null would close the open meeting.
     private bool _refreshing;
 
     public void Refresh()
@@ -252,8 +253,6 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings(listing.Problems);
     }
 
-    // The picker drops its selection while the list is rebuilt. Reloading on that null would
-    // close the meeting that is open, so Refresh reloads once, at the end.
     partial void OnSelectedWorkspaceChanged(Workspace? value)
     {
         OnPropertyChanged(nameof(HasWorkspace));

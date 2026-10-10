@@ -106,9 +106,6 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
     {
-        if (Name.Trim() != Project.Name && Refused(_store.RenameWorkspace(Project.Id, Name).Problem))
-            return;
-
         var icon = ImagePath is not null && ImagePath != Project.IconPath
                 ? _store.SetWorkspaceIconFile(Project.Id, ImagePath)
             : ImagePath is null && Glyph is not null && Glyph != Project.IconGlyph
@@ -117,9 +114,17 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
                 ? _store.ResetWorkspaceIcon(Project.Id)
             : null;
 
-        Changed = true;
         if (Refused(icon?.Problem))
             return;
+
+        Changed |= icon is not null;
+        if (Name.Trim() != Project.Name)
+        {
+            if (Refused(_store.RenameWorkspace(Project.Id, Name).Problem))
+                return;
+
+            Changed = true;
+        }
 
         Finished?.Invoke();
     }
@@ -127,7 +132,6 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRemove))]
     private async Task RemoveAsync()
     {
-        // An unwired confirmation reads as a refusal, as for a meeting.
         if (!CanRemove || ConfirmRemoval is null || await ConfirmRemoval(Project.Name) is not { } removal)
             return;
 
@@ -146,7 +150,13 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
         if (problem is null)
             return false;
 
-        Problem = problem.Detail;
+        Problem = L[problem.Kind switch
+        {
+            StoreProblemKind.TooLarge => "workspace.icon.toolarge",
+            StoreProblemKind.WrongType => "workspace.icon.badtype",
+            StoreProblemKind.NotFound when problem.Subject == ImagePath => "workspace.icon.missing",
+            _ => "workspace.settings.failed",
+        }];
         Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
         return true;
     }

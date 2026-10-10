@@ -244,8 +244,7 @@
                                                 <Button.Flyout>
                                                     <MenuFlyout>
                                                         <MenuItem Name="RenameMeeting" Header="{l:T meeting.rename}"
-                                                                  Click="OnRenameClick"
-                                                                  Command="{Binding BeginRenameCommand}">
+                                                                  Click="OnRenameClick">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon pencil}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
