@@ -4,6 +4,23 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-11
+
+### Speaker palette readable on light and dark sheets
+
+The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. The shared palette
+`RoomState.Palette` now has eight colours that reach 3:1 on the light sheet `#FFFCF7` and on the dark sheet.
+
+- All eight colours have a relative luminance of 0.17 to 0.27. No colour is red or amber, so none looks like
+  the record, hold or alarm colour. `SpeakerPaletteTests` checks the 3:1 rule.
+- A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette,
+  in order of first appearance. Old meetings therefore show the new colours. This is accepted.
+- The mobile page no longer lightens speaker colours in dark mode. The palette itself passes on both
+  sheets, so the host and the phone show the same colour. The mobile fallback for an unknown speaker
+  is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
+- Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68`
+  fails 3:1 on the dark sheet. Issue #191 handles them.
+
 ## 2026-10-10
 
 ### No gap beside a collapsed sidebar

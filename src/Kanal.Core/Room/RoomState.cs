@@ -12,8 +12,8 @@ public sealed class RoomState
 {
     private static readonly string[] Colours =
     [
-        "#B23A2E", "#1C6B58", "#2B57A0", "#9A6B10",
-        "#6B4FA0", "#A03A6E", "#4A7A2E", "#8A5A3A",
+        "#3F7BD4", "#2E894A", "#AE5EA8", "#028080",
+        "#8F7ADA", "#737B95", "#74993B", "#1197C2",
     ];
 
     // Read back when a stored transcript is reopened: a meeting read a week later has to give
