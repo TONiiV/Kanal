@@ -122,12 +122,13 @@ public sealed class WorkspaceStore(string registryPath)
     {
         var extension = Path.GetExtension(imagePath).ToLowerInvariant();
         if (!IconExtensions.Contains(extension))
-            return Refused(imagePath, "A project icon must be a PNG, JPEG, ICO, BMP or WebP image.");
+            return Refused(imagePath, "A project icon must be a PNG, JPEG, ICO, BMP or WebP image.",
+                StoreProblemKind.WrongType);
         if (!File.Exists(imagePath))
             return new WorkspaceResult(null, new StoreProblem(
                 StoreProblemKind.NotFound, imagePath, "That image is not there."));
         if (new FileInfo(imagePath).Length > MaxIconBytes)
-            return Refused(imagePath, "A project icon must be 2 MB or smaller.");
+            return Refused(imagePath, "A project icon must be 2 MB or smaller.", StoreProblemKind.TooLarge);
 
         var (_, problem) = Locate(id);
         if (problem is not null)
@@ -137,7 +138,10 @@ public sealed class WorkspaceStore(string registryPath)
         {
             var name = IconFileStem + extension;
             var target = Path.Combine(w.RootPath, name);
-            if (!SamePath(Path.GetFullPath(imagePath), target))
+            var source = Path.Combine(
+                CanonicalWorkspacePath(Path.GetDirectoryName(Path.GetFullPath(imagePath))!),
+                Path.GetFileName(imagePath));
+            if (!SamePath(source, target))
                 File.Copy(imagePath, target, overwrite: true);
             DeleteIconFiles(w.RootPath, except: name);
             return w with { IconGlyph = null, IconFile = name };
@@ -159,13 +163,23 @@ public sealed class WorkspaceStore(string registryPath)
             return problem;
 
         var root = workspace!.RootPath;
+        var marker = Path.Combine(root, WorkspaceFileName);
+        if (!File.Exists(marker))
+            return Invalid(root, "That folder does not hold this workspace.");
+
+        var (stored, unreadable) = Read<StoredWorkspace>(marker);
+        if (unreadable is not null)
+            return unreadable;
+        if (stored!.Id != id)
+            return Invalid(root, "That folder holds another workspace.");
+
         try
         {
             var meetings = Path.Combine(root, MeetingsFolderName);
             if (Directory.Exists(meetings))
                 Directory.Delete(meetings, recursive: true);
             DeleteIconFiles(root);
-            File.Delete(Path.Combine(root, WorkspaceFileName));
+            File.Delete(marker);
             if (!Directory.EnumerateFileSystemEntries(root).Any())
                 Directory.Delete(root);
         }
@@ -210,9 +224,9 @@ public sealed class WorkspaceStore(string registryPath)
         if (!Directory.Exists(root))
             return;
 
-        foreach (var file in Directory.EnumerateFiles(root, IconFileStem + ".*"))
-            if (!string.Equals(Path.GetFileName(file), except, NameComparison))
-                File.Delete(file);
+        foreach (var name in IconExtensions.Select(extension => IconFileStem + extension))
+            if (!string.Equals(name, except, NameComparison))
+                File.Delete(Path.Combine(root, name));
     }
 
     // Leaves every file where it is: dropping a row from a list is not deleting a year of meetings.
@@ -678,8 +692,9 @@ public sealed class WorkspaceStore(string registryPath)
     private static StoreProblem Invalid(string subject, string detail) =>
         new(StoreProblemKind.Invalid, subject, detail);
 
-    private static WorkspaceResult Refused(string subject, string detail) =>
-        new(null, Invalid(subject, detail));
+    private static WorkspaceResult Refused(
+        string subject, string detail, StoreProblemKind kind = StoreProblemKind.Invalid) =>
+        new(null, new StoreProblem(kind, subject, detail));
 
     private static MeetingResult RefusedMeeting(string subject, string detail) =>
         new(null, Invalid(subject, detail));

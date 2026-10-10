@@ -990,10 +990,10 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Theory]
-    [InlineData("logo.gif", 64)]
-    [InlineData("logo.svg", 64)]
-    [InlineData("logo.png", 2 * 1024 * 1024 + 1)]
-    public void AnImageOfTheWrongKindOrSizeIsRefused(string name, int bytes)
+    [InlineData("logo.gif", 64, StoreProblemKind.WrongType)]
+    [InlineData("logo.svg", 64, StoreProblemKind.WrongType)]
+    [InlineData("logo.png", 2 * 1024 * 1024 + 1, StoreProblemKind.TooLarge)]
+    public void AnImageOfTheWrongKindOrSizeIsRefused(string name, int bytes, StoreProblemKind kind)
     {
         var folder = Folder("acme");
         var workspace = Created(Store().CreateWorkspace("ACME", folder));
@@ -1001,7 +1001,7 @@ public class WorkspaceStoreTests : IDisposable
         var result = Store().SetWorkspaceIconFile(workspace.Id, Image(name, bytes));
 
         Assert.Null(result.Workspace);
-        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Equal(kind, result.Problem!.Kind);
         Assert.Empty(IconFiles(folder));
         Assert.Null(Assert.Single(Store().ListWorkspaces().Workspaces).IconFile);
     }
@@ -1088,6 +1088,106 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Equal(["kanal-icon.png"], IconFiles(folder));
         Assert.Equal("kanal-icon.png", Created(Store().OpenWorkspace(folder)).IconFile);
+    }
+
+    [Fact]
+    public void AnImageThatIsNotThereIsRefusedAsNotFound()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        var result = Store().SetWorkspaceIconFile(workspace.Id, Path.Combine(_root, "gone.png"));
+
+        Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
+    }
+
+    [Fact]
+    public void AFileOfTheOperatorNextToTheIconSurvivesAResetAndADelete()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+        var vector = Path.Combine(folder, "kanal-icon.svg");
+        var bare = Path.Combine(folder, "kanal-icon");
+        File.WriteAllText(vector, "<svg/>");
+        File.WriteAllText(bare, "mine");
+
+        Created(store.ResetWorkspaceIcon(workspace.Id));
+        Assert.True(File.Exists(vector));
+        Assert.True(File.Exists(bare));
+        Assert.False(File.Exists(Path.Combine(folder, "kanal-icon.png")));
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+        Assert.True(File.Exists(vector));
+        Assert.True(File.Exists(bare));
+    }
+
+    [Fact]
+    public void TheIconAlreadyInTheFolderIsRecognisedThroughALink()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        var copied = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png"))).IconPath!;
+        var link = Path.Combine(Path.GetTempPath(), "kanal-link-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateSymbolicLink(link, _root);
+        }
+        catch (IOException e) when (OperatingSystem.IsWindows() && (e.HResult & 0xFFFF) == 1314)
+        {
+            using var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "cmd", $"/c mklink /J \"{link}\" \"{_root}\"") { CreateNoWindow = true })!;
+            mklink.WaitForExit();
+            if (mklink.ExitCode != 0)
+                Assert.Skip("Neither a symlink nor a junction could be made.");
+        }
+
+        try
+        {
+            var again = Store().SetWorkspaceIconFile(
+                workspace.Id, Path.Combine(link, "acme", Path.GetFileName(copied)));
+
+            Assert.Null(again.Problem);
+            Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
+    [Fact]
+    public void DeletingARootThatHoldsAnotherWorkspacesMarkerIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        File.Copy(
+            Path.Combine(other.RootPath, WorkspaceStore.WorkspaceFileName),
+            Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName),
+            overwrite: true);
+
+        var problem = store.DeleteWorkspace(acme.Id);
+
+        Assert.NotNull(problem);
+        Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
+        Assert.Equal(2, Store().ListWorkspaces().Workspaces.Count);
+    }
+
+    [Fact]
+    public void DeletingARootWithoutAMarkerIsRefusedButTheListEntryCanStillGo()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        File.Delete(Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName));
+
+        Assert.NotNull(store.DeleteWorkspace(acme.Id));
+        Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
+
+        Assert.Null(store.ForgetWorkspace(acme.Id));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
     }
 
     [Fact]

@@ -171,6 +171,93 @@ public class ProjectSettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task AFailedIconStepLeavesTheNameUnchanged()
+    {
+        var store = Store();
+        var (vm, kappa, _) = TwoProjects(store);
+        var image = Path.Combine(Folder("pictures"), "logo.png");
+        File.WriteAllBytes(image, new byte[64]);
+
+        var settings = await Opened(vm, kappa, async settings =>
+        {
+            settings.ChooseImageFile = () => Task.FromResult<string?>(image);
+            await settings.ChooseImageCommand.ExecuteAsync(null);
+            settings.Name = "Kappa tooling";
+            File.Delete(image);
+            settings.SaveCommand.Execute(null);
+        });
+
+        Assert.Equal("Kappa", store.ListWorkspaces().Workspaces.Single(w => w.Id == kappa.Id).Name);
+        Assert.False(settings.Changed);
+        Assert.Equal(Localizer.Instance["workspace.icon.missing"], settings.Problem);
+    }
+
+    [Theory]
+    [InlineData("logo.gif", 64, "workspace.icon.badtype")]
+    [InlineData("logo.png", 2 * 1024 * 1024 + 1, "workspace.icon.toolarge")]
+    public async Task AnIconTheStoreRefusesIsExplainedInTheInterfaceLanguage(string name, int bytes, string key)
+    {
+        var (vm, kappa, _) = TwoProjects(Store());
+        var image = Path.Combine(Folder("pictures"), name);
+        File.WriteAllBytes(image, new byte[bytes]);
+
+        var settings = await Opened(vm, kappa, settings =>
+        {
+            settings.ImagePath = image;
+            settings.SaveCommand.Execute(null);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal(Localizer.Instance[key], settings.Problem);
+    }
+
+    [Fact]
+    public async Task ARefusedRemovalIsExplainedInTheInterfaceLanguage()
+    {
+        var store = Store();
+        var (vm, kappa, _) = TwoProjects(store);
+        File.Delete(Path.Combine(kappa.RootPath, WorkspaceStore.WorkspaceFileName));
+
+        var settings = await Opened(vm, kappa, async settings =>
+        {
+            settings.ConfirmRemoval = _ => Task.FromResult<ProjectRemoval?>(ProjectRemoval.DeleteFiles);
+            await settings.RemoveCommand.ExecuteAsync(null);
+        });
+
+        Assert.Equal(Localizer.Instance["workspace.settings.failed"], settings.Problem);
+        Assert.True(Directory.Exists(Path.Combine(kappa.RootPath, "meetings")));
+    }
+
+    [AvaloniaFact]
+    public void TheRenameItemOfAMeetingRowMenuGivesTheNameFieldTheCursor()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        store.CreateMeeting(kappa.Id, "Delivery call");
+        var vm = TestViewModels.Hermetic(workspaces: () => store);
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var menu = window.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "MeetingMenu");
+        menu.Flyout!.ShowAt(menu);
+        Dispatcher.UIThread.RunJobs();
+        var rename = ((MenuFlyout)menu.Flyout).Items.OfType<MenuItem>().Single(m => m.Name == "RenameMeeting");
+        var at = rename.TranslatePoint(new Point(rename.Bounds.Width / 2, rename.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        var editor = window.GetLogicalDescendants().OfType<TextBox>()
+            .Single(b => b.Name == "MeetingRowEditor" && b.IsVisible);
+        Assert.True(vm.Sidebar.Meetings.Single().IsRenaming);
+        Assert.True(editor.IsFocused, "FOCUS " + window.FocusManager!.GetFocusedElement() + " vis " + editor.IsEffectivelyVisible + " " + editor.Bounds + " " + editor.Focusable + " active " + window.IsActive);
+
+        window.Close();
+    }
+
+    [Fact]
     public async Task TheResetActionShowsOnlyForAnIconThatIsNotTheDefault()
     {
         var store = Store();
