@@ -155,6 +155,10 @@ public class WorkspaceShellTests
 
         Assert.Equal(0, sidebar.SplitterColumn.Value);
         Assert.Contains(nameof(SidebarViewModel.SplitterColumn), changed);
+
+        sidebar.ToggleCommand.Execute(null);
+
+        Assert.Equal(WorkspaceShellViewModel.SplitterWidth, sidebar.SplitterColumn.Value);
     }
 
     /// <summary>

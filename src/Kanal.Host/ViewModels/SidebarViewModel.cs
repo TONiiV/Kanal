@@ -55,9 +55,8 @@ public partial class SidebarViewModel : ViewModelBase
 
     public double ColumnMaxWidth => MaxWidth;
 
-    // Pinned rather than Auto: the splitter's template measures a pixel wider than the handle, and
-    // the window floor cannot account for a column whose width it does not set.
-    // Zero while collapsed: a hidden splitter still keeps its column, and the window background shows there.
+    // Pixel, not Auto: the splitter template measures 1 px wider, and MinShellWidth cannot count an Auto column.
+    // Zero while collapsed: a hidden splitter keeps its column, and the window background shows in it.
     public GridLength SplitterColumn => new(Collapsed ? 0 : WorkspaceShellViewModel.SplitterWidth);
 
     [RelayCommand]

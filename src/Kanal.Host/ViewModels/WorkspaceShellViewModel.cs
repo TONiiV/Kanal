@@ -68,7 +68,7 @@ public partial class WorkspaceShellViewModel : ViewModelBase
     }
 
     private static double Demand(SidebarViewModel sidebar) =>
-        sidebar.Collapsed ? 0 : sidebar.Width + SplitterWidth;
+        sidebar.Column.Value + sidebar.SplitterColumn.Value;
 
     private void OnSidebarChanged(object? sender, PropertyChangedEventArgs e)
     {

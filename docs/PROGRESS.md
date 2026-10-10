@@ -8,7 +8,7 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### No gap beside a collapsed sidebar
 
-On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid keeps one
+On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid kept one
 fixed 5 px column for each splitter. A collapsed sidebar hides its splitter, but the column stayed.
 The window background showed in it.
 
