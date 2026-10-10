@@ -205,7 +205,7 @@ public class BrowsedRulerTests : IDisposable
         Assert.NotEmpty(marked);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void LeavingTheBrowsedMeetingGivesTheLiveRulerBack()
     {
         var (vm, _) = Browsing(Said("u1", "S1", 0, "de", "Toleranz bei KX-4402"));
