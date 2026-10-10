@@ -17,6 +17,75 @@ The window background showed in it.
 
 ---
 
+## 2026-10-08
+
+### External review: validate before building
+
+A professional reviewer read the repository and the README. The PRD v0.4 roadmap now has a
+validation gate (phase 1.5) and two new tracks. This entry records which findings we accept and why.
+
+**Accepted.**
+
+1. **Build before validate.** The go/no-go question is still open: is zh↔pl terminology correct in
+   a real meeting? The repository confirms the finding. 1.0.0 is not released. Eleven PRs wait for
+   merge, and the PRD limit is five. Four of them belong to phases 3 and 4. Decision: phase 1.5
+   (V track) measures key-fact and terminology errors per language pair. F, G and E tracks wait
+   for the gate. C and B tracks are local capabilities and continue (operator decision). The gate
+   data sets the order of F and G.
+2. **Key-fact check.** Generic translation products do not compare numbers, units, tolerances and
+   part numbers between source and translation. One extractor (V-2) serves the evaluation and the
+   live warning (F-1). Glossary import from a BOM or a specification sheet is F-2.
+3. **Input quality limits the chain.** One laptop microphone hears the whole room. Zero-code step:
+   the launch checklist requires a USB conference speakerphone. V-4 measures the difference.
+4. **Read-only captions interrupt the conversation.** Zero-code step: project the host columns on
+   the room display. V-3 measures final latency. G-3 adds a minimum feedback path ("please
+   repeat", or a short question in the participant's language).
+5. **Decisions cause disputes, not only misunderstanding.** G track narrows the open
+   meeting-intelligence discussion. Its target is structured minutes that each party confirms on
+   the phone. G-0 is an ADR first, because a phone that sends messages changes the PRD-frozen
+   read-only rule.
+6. **True offline mode.** Local ASR (C-4, C-5) plus a LAN relay (new C-6) removes the public
+   network from the in-room scenario. The LAN relay also avoids the `workers.dev` block in mainland
+   China (#41) for in-room meetings.
+
+**Ordering.** B-3 comes before G-1, because the minutes need an owner per decision.
+
+**Not adopted.**
+
+- The commercial-moat argument. Kanal is an internal tool (PRD §00). The test is still "time saved
+  is more than time spent".
+- "The README overstates privacy." It does not. README and PRD §01 say that audio leaves the host in
+  cloud modes. The finding is correct only as "the private mode does not exist yet".
+- An in-app evaluation UI. V-3 is a command under `tools/`.
+- Participant phones as distributed microphones: listed as an unscheduled probe. Audio over the
+  network is possible only on the LAN relay, and `getUserMedia` needs HTTPS.
+
+**Operator decisions, 2026-10-11.**
+
+- Operators do not choose a diarization model. B-6 picks one default. Settings issue #179 is closed.
+- `Nemotron-3-Diarization` (2026-09-23, OpenMDW-1.1, up to 8 speakers) joins B-6 as a benchmark
+  candidate. The ADR 0055 trigger for re-evaluating frame-level diarization has fired. B-7 ports
+  the runtime if the model wins. Python runs only in the benchmark, never in Kanal.
+- Operators choose the transcription model and the chunk size. Settings marks the benchmark
+  winner as recommended.
+
+**Operator decisions, 2026-10-08.**
+
+1. The gate threshold is a key-fact error rate of 2 % per language pair. It is a setting. F-1 and
+   V-3 read the same value.
+2. C and B tracks are not frozen. #126, #127, #146 and #147 get a merge assessment, then the review
+   loop. The assessment checks if transcription and attribution stream.
+3. F track comes first after the gate, unless V data shows that ASR errors dominate.
+4. C and B slices may merge before the phase 2 acceptance (a real Teams meeting). This waives the
+   serial-phase rule for C and B. #147 is split into smaller PRs.
+5. Key facts are extracted by rules, not by a model. A checker must not invent values.
+6. Glossary import: XLSX, XLS and CSV by column mapping (ExcelDataReader, MIT). Other formats need
+   an intelligence provider. Without one, the entry is disabled with its reason.
+7. The intelligence provider serves glossary extraction, semantic checks, minutes, titles and the
+   listening agent. Live translation is not in its scope for now. Codex comes first. The consent
+   dialog names each intelligence vendor. Intelligence has priority over offline privacy.
+   ADR 0057 records the design.
+
 ## 2026-10-07
 
 ### A published GitHub Release builds and attaches the packages

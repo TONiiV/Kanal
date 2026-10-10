@@ -46,3 +46,15 @@ _Avoid_: Text-to-speech
 
 **Decision map**:
 A view connecting a meeting topic to alternative proposals and a resulting decision, with references to the source transcript. A model-suggested decision remains a candidate until a person confirms it.
+
+**Key fact**:
+A value in an utterance that must survive translation unchanged: a number with its unit, a tolerance, a part number, a standard number or a date.
+_Avoid_: Entity, keyword
+
+**Glossary**:
+A list of term pairs across the room languages that the operator imports from project files such as a BOM or a specification sheet.
+_Avoid_: Vocabulary (Gladia's name for its own input), dictionary
+
+**Intelligence provider**:
+A source of language-model inference for Kanal: a local model, the operator's own subscription through a locally installed CLI, or an API key. The listening agent, minutes and glossary extraction use it; none of them is it.
+_Avoid_: Agent, AI, listening agent
