@@ -175,9 +175,8 @@ first build needs network access to fetch the extension once. Later builds work 
 
 **Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
 numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
-with the downgrade message. Two builds with the same numeric version replace each other in both
-directions, with no downgrade message. Kanal ships only plain `x.y.z` versions, with no pre-release
-channel. This works because WiX 5 generates a new `ProductCode` in every build.
+with the downgrade message. A pre-release and the release of one numeric version replace each other in both
+directions, with no downgrade message. The suffix is not part of `ProductVersion`. This works because WiX 5 generates a new `ProductCode` in every build.
 Every build keeps the `UpgradeCode`, so Windows treats the old build as an older product. ICE61
 warns about this setting, but only `wix msi validate` runs it. `wix build` does not.
 
