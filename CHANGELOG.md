@@ -22,6 +22,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   not go to the trash. Other files in the project folder stay. Kanal does not remove a project
   while a meeting is recording.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
+- The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
