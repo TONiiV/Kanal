@@ -16,6 +16,7 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
   notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
+- A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
