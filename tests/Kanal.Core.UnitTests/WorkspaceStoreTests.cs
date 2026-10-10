@@ -709,7 +709,14 @@ public class WorkspaceStoreTests : IDisposable
         var workspace = Created(Store().CreateWorkspace("ACME", folder));
         var meeting = Created(Store().CreateMeeting(workspace.Id, "Tooling review"));
         var link = Path.Combine(_root, "link");
-        Directory.CreateSymbolicLink(link, _root);
+        try
+        {
+            Directory.CreateSymbolicLink(link, _root);
+        }
+        catch (IOException e) when (OperatingSystem.IsWindows() && (e.HResult & 0xFFFF) == 1314)
+        {
+            Assert.Skip("Windows refuses symlinks without admin rights or Developer Mode.");
+        }
         var sameFolder = Path.Combine(link, "acme");
 
         var again = Created(Store().OpenWorkspace(sameFolder));

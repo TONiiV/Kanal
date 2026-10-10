@@ -4,7 +4,68 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-10
+
+### No gap beside a collapsed sidebar
+
+On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid kept one
+fixed 5 px column for each splitter. A collapsed sidebar hides its splitter, but the column stayed.
+The window background showed in it.
+
+- `SidebarViewModel.SplitterColumn` is 0 while the sidebar is collapsed. `MainWindow.axaml` binds
+  both splitter columns to it. `MinShellWidth` already counted 0 for a collapsed sidebar.
+
+---
+
 ## 2026-10-07
+
+### CI tests on Windows and macOS, with a coverage report
+
+Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and
+macOS. The tests skip their Windows and macOS branches on Linux, so CI never ran the code paths of
+the two shipped platforms.
+
+1. The `test` job is a matrix: `windows-latest`, `macos-latest` and `ubuntu-latest`. Linux is
+   optional (`continue-on-error`). A red Linux job does not block a merge.
+2. Both suites collect coverage with `coverlet.collector`. File paths are SourceLink URLs, so the
+   reports from the three platforms name the same files.
+3. The `coverage` job merges the reports with ReportGenerator (local tool in
+   `.config/dotnet-tools.json`). It writes the summary table to the run page. The
+   `coverage-report` artifact holds the HTML report. README "Test coverage" gives the local commands.
+4. CI has a `workflow_dispatch` trigger. A run that GitHub refuses to start
+   (`startup_failure`, as on the #158 merge) cannot be re-run. A manual run replaces it.
+5. `release.yml` installed SDK 9.0.x for `net10.0` projects. It built only because the runner
+   image also has SDK 10. It now installs 10.0.x.
+6. A new push to a PR cancels the older run of that PR. Each PR has one concurrency group. A
+   `main` run and a nightly run each get a unique group. GitHub would otherwise replace a waiting
+   run in a shared group, and that `main` commit would get no result.
+7. CI runs every night at 03:00 UTC on `main`. It finds runner-image drift, dependency drift and
+   flaky tests when nobody pushes. GitHub sends the failure mail to the last person who changed
+   the `cron` line. GitHub turns the schedule off after 60 days without repository activity.
+
+Cost: none. GitHub-hosted runners are free for a public repository, macOS and Windows included. A PR
+now waits for the slowest platform job instead of one Linux job.
+
+No coverage threshold. The first merged report on a Windows workstation: 81.2 % lines, 71.1 %
+branches. A threshold is set after CI has produced a few reports from all platforms.
+
+The Windows job depends on the test fixes in #173. Before them, six Core tests failed on Windows.
+
+The first macOS runs found two tests that depended on timing:
+
+1. `DeliversSixteenKilohertzMonoFrames` read 37 120 bytes in a 700 ms window, against a 32 000
+   limit. A diagnostic run (#176) measured the runner's "Apple Virtual Sound Device": 16 288 to
+   16 512 samples/s, so the format is correct. The excess is a backlog: frames wait in the
+   capture channel (up to 64) until the test reader is scheduled, then arrive at once. Under
+   parallel test load a 2 s window still read 83 224 bytes. The test now drops the first 500 ms
+   after the first frame, then counts 2 s against 48 000 to 80 000 bytes. Stereo or
+   un-resampled audio (128 000 or more) still fails.
+2. Five UI tests waited a fixed 400 to 2 500 ms for demo output. The demo emits a partial every
+   350 ms, so its first final arrives after about 1.4 s. On the macOS runner the fixed waits ended
+   too early. The tests now wait for the condition they assert, with a 15 s timeout:
+   `NothingSaidInTheRoomIsWrittenToTheLog`, `TheTranscriptIsOnDiskBeforeTheMeetingEnds`,
+   `ASecondMeetingNeverWritesOverTheFirst`, `BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne`
+   and the export tests.
 
 ### A meeting travels as one `.kl` file
 
@@ -155,7 +216,7 @@ handover brief that drove it is deleted. Verification record and screenshots:
 ### Obsolete design archive
 
 Moved the rejected liquid-glass proposal, its complete preview/image folder, the historical meeting
-HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/`. Updated
+HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/` (since deleted). Updated
 relative links, archived preview asset paths and the design index. Current UI docs and Swiss preview
 remain in place. Conversation K brand/mobile guidance and meeting-workspace business constraints
 remain active references outside the archive.
@@ -176,7 +237,7 @@ native application implementation is still outstanding.
 
 The user rejected the cold glass-card direction and requested Swiss styling consistent with the
 current application icon. Inspected the real splash mark and Conversation K specification, then
-created [the Swiss proposal](design/obsolete/swiss-ui-proposal.md) and a clean, separate
+created [the Swiss proposal](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/swiss-ui-proposal.md) and a clean, separate
 [preview](design/swiss-review/index.html). The preview now uses the actual folded-K PNG, existing
 indigo/apricot brand colors, warm-paper surfaces, a continuous three-column grid, clear type
 hierarchy and fine rules. Frosted texture is limited to popovers. The previous proposal is marked
@@ -209,8 +270,8 @@ Decision confirm/dismiss buttons also share a centered 32-DIP action row with a 
 
 ### Liquid glass UI proposal — awaiting approval
 
-Prepared [Quiet glass](design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
-self-contained [visual review](design/obsolete/liquid-glass-review/index.html) and three rendered boards:
+Prepared [Quiet glass](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
+self-contained [visual review](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-review/index.html) and three rendered boards:
 meeting workspace, components/platform chrome, and settings/dialogs. The proposal follows the
 user's title-bar reference without an in-window File/Edit/View strip, uses neutral plus indigo,
 and applies restrained glass to panels while keeping transcript content opaque. It specifies
@@ -1126,7 +1187,7 @@ part of it that was genuinely different — the shape of the meeting over time �
 the transcript's navigation ruler, whose semantic ticks reuse the topic boundaries that panel
 already produces. One model pass, two renderings, no way for the two to disagree.
 
-Superseded by this: `docs/specs/meeting-workspace.md`'s open item "工作空间内活动会议与浏览记录关系",
+Superseded by this: [#64](https://github.com/TONiiV/Kanal/issues/64)'s open item "工作空间内活动会议与浏览记录关系",
 and the acceptance line in `docs/design/meeting-workspace.md` that asks for the two not to be
 confused now has a contract to be checked against.
 
@@ -1224,7 +1285,7 @@ it goes red against a fixed-width mode box.
 ### Auth, feedback, relay hosting and recording import documentation PR
 
 - Product scope confirmed through Q1–Q16: accountless verified-email feedback to private issues, cloud accounts and invitations, a one-time 120-minute Gladia allowance, free local features and BYOK, mainland end-to-end availability, and consented cloud recording import (WAV/MP3/M4A, at most 60 minutes and 500 MB). Payments and paid listening-agent features are deferred.
-- Archived the [52-story specification](specs/auth-feedback-relay-import.md), [11-ticket breakdown](specs/auth-feedback-relay-import-tickets.md), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
+- Archived the [52-story specification](https://github.com/TONiiV/Kanal/issues/161), the 11-ticket breakdown (now GitHub issues #162–#172, listed in the specification), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
 - Reuse existing settings/workspace tasks #67/#68/#69 and mainland gateway work #41. Provider compatibility, VibeVoice measurements, mainland-network tests and production configuration remain implementation/release prerequisites.
 - Documentation validation covers story numbering, per-ticket acceptance criteria, dependency order and local links. No application code or runtime behaviour changed.
 
@@ -1669,7 +1730,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
-  `ready-for-agent`. The [local specification](specs/meeting-workspace.md) contains 60 user stories,
+  `ready-for-agent`. The [specification](https://github.com/TONiiV/Kanal/issues/64) contains 60 user stories,
   implementation/testing decisions and explicit unresolved future scope. Its prototype viewing
   instructions were subsequently updated to the design-document location.
   It links the existing speaker, replay, local-ASR and summary work items; no further interview
@@ -1678,7 +1739,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 - User confirmed the final B-based UI design. The authoritative specification is
   [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
   formerly collected here. Approval covers the visual direction, not completion of production code.
-- At the user's request the approved [HTML prototype](design/obsolete/meeting-ui.prototype.html) now lives
+- At the user's request the approved [HTML prototype](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html) now lives
   beside the design documents and opens directly in a browser. The CMD launcher is removed.
   The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
 - [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership
@@ -2479,7 +2540,7 @@ Four small host-UI fixes from screenshot review, one PR:
 
 The host now ships as a double-clickable install on both platforms, driven by
 `installers/Kanal.Installers.csproj`. Design and rationale in
-[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+[`docs/design/installers.md`](design/installers.md).
 
 **No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
 advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is

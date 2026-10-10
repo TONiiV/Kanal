@@ -6,11 +6,11 @@
 
 ## 设计基线
 
-采用最终 B 方案。原型随文档保存在 [meeting-ui.prototype.html](obsolete/meeting-ui.prototype.html)，
-可直接用浏览器打开，无需 CMD 启动器或预览服务。
+采用最终 B 方案。原型已从仓库删除。历史版本见 [meeting-ui.prototype.html](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html)。
+要查看效果，运行 `git show 8783e2c:docs/design/obsolete/meeting-ui.prototype.html > prototype.html`，再用浏览器打开。
 原型用于理解布局和交互，正式 Avalonia 实现应重新组织组件，不能复制其多轮 CSS/脚本覆盖。
 
-此前的本地归档提交 `4c4d3db` 保留为历史；当前以文档目录中的原型为查看入口。
+此前的本地归档提交 `4c4d3db` 保留为历史。
 原型中的模型、生成结果、公开会议、导出和持久化均为演示；
 文本导入和音频试听只使用浏览器内存。历次验证仅覆盖脚本语法与 HTTP 可达性，
 浏览器工具不可用，完整视觉及交互验收仍需在正式实现阶段完成。

@@ -46,6 +46,20 @@ public class MeetingRecordStorageTests : IDisposable
         return vm;
     }
 
+    private static async Task PumpUntilAsync(Func<bool> condition, int timeoutMs = 15_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static async Task PumpAsync(int ms)
     {
         var deadline = Environment.TickCount64 + ms;
@@ -58,6 +72,9 @@ public class MeetingRecordStorageTests : IDisposable
         Dispatcher.UIThread.RunJobs();
     }
 
+    private static bool HasFinals(MeetingRecord meeting) =>
+        meeting.TranscriptPath is { } path && File.Exists(path) && TranscriptLog.Read(path).Count > 0;
+
     private static MeetingRecord Only(WorkspaceStore store, string workspaceId) =>
         Assert.Single(store.ListMeetings(workspaceId).Meetings);
 
@@ -69,7 +86,7 @@ public class MeetingRecordStorageTests : IDisposable
         var vm = Demo(store);
 
         await vm.StartCommand.ExecuteAsync(null);
-        await PumpAsync(2500);
+        await PumpUntilAsync(() => HasFinals(Only(store, workspace.Id)));
 
         // Read while the room is still open: a crash at this moment must not cost the hour.
         var running = Only(store, workspace.Id);
@@ -165,7 +182,7 @@ public class MeetingRecordStorageTests : IDisposable
         var vm = Demo(store);
 
         await vm.StartCommand.ExecuteAsync(null);
-        await PumpAsync(1500);
+        await PumpUntilAsync(() => HasFinals(Only(store, workspace.Id)));
         await vm.StopCommand.ExecuteAsync(null);
         var first = Only(store, workspace.Id);
 

@@ -6,7 +6,7 @@ name: Release
 #   pull requests      unsigned smoke build, artefacts only
 #
 # The PR gear exists so the packaging chain cannot rot unnoticed between releases, and it is
-# path-filtered so ordinary PRs stay on the fast ubuntu loop in ci.yml. It also covers fork PRs,
+# path-filtered so ordinary PRs run only ci.yml, which tests but does not package. It also covers fork PRs,
 # which cannot read secrets and therefore must be able to build unsigned.
 #
 # **Nothing installable leaves this workflow.** This repository is public, and on a public
@@ -53,7 +53,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       # A dispatch input is the source of truth for the version. A PR smoke build has none and
       # gets 0.0.0, which is a valid MSI ProductVersion and an obviously non-releasable one.

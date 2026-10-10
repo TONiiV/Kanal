@@ -220,6 +220,23 @@ scope. CI also enforces that the deployable web client and its GitHub Pages copy
 cmp web/index.html docs/index.html
 ```
 
+### Test coverage
+
+CI runs both suites on Windows and macOS, and on Linux as an optional job. The `coverage` job
+merges the reports of all platforms. The run page shows the summary table. The `coverage-report`
+artifact holds the full HTML report, line by line.
+
+To make the same report on your machine:
+
+```bash
+dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet tool restore
+dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:Html -filefilters:"-**/obj/**"
+```
+
+Open `coverage-report/index.html`. Delete `coverage/` before the next run, or old reports merge in.
+
 For pipeline diagnosis:
 
 ```bash
@@ -233,14 +250,8 @@ dotnet run --project tools/Kanal.Doctor -- gladia mic-check.wav
 ## Contributing
 
 Issues and focused pull requests are welcome. Before changing behavior, read
-[`CLAUDE.md`](CLAUDE.md) for repository invariants and [`.impeccable.md`](.impeccable.md) for the
-interaction and visual constraints.
-
-- Keep one concern per pull request, and include tests for behavior changes.
-- Update [`docs/PROGRESS.md`](docs/PROGRESS.md) with relevant plans or design decisions.
-- Preserve the provider-capability boundary: orchestration must not branch on vendors.
-- Keep `web/index.html` and `docs/index.html` byte-identical.
-- Do not weaken the text-only relay boundary or the non-destructive speaker-merge model.
+[`CLAUDE.md`](CLAUDE.md): it holds the working practices and the repository invariants. For UI work,
+also read [`.impeccable.md`](.impeccable.md).
 
 Open a [GitHub issue](https://github.com/TONiiV/Kanal/issues) for a bug, proposal, or deployment
 question before starting a broad change.
@@ -265,12 +276,7 @@ question before starting a broad change.
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.
 
-The approved next host UI is specified in [Meeting workspace design](docs/design/meeting-workspace.md),
-including the [HTML prototype](docs/design/obsolete/meeting-ui.prototype.html) and implementation checks. Future automatic titles and a listening
-agent are tracked separately in [Meeting intelligence design](docs/design/meeting-intelligence.md).
-These documents describe planned behaviour, not features already available in the desktop host.
-The consolidated [implementation specification](docs/specs/meeting-workspace.md) is published as
-[#64](https://github.com/TONiiV/Kanal/issues/64) with the `ready-for-agent` label.
+Design documents are indexed in [`docs/design/README.md`](docs/design/README.md).
 
 ## License
 

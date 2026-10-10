@@ -22,10 +22,6 @@ public partial class WorkspaceShellViewModel : ViewModelBase
     public const double HeaderHeight = 58;
     public const double SplitterWidth = 5;
 
-    // Pinned rather than Auto: the splitter's template measures a pixel wider than the handle, and
-    // the window floor cannot account for a column whose width it does not set.
-    public static GridLength SplitterColumn { get; } = new(SplitterWidth);
-
     private readonly WindowControlInsets _insets;
 
     public SidebarViewModel Left { get; } = new();
@@ -72,7 +68,7 @@ public partial class WorkspaceShellViewModel : ViewModelBase
     }
 
     private static double Demand(SidebarViewModel sidebar) =>
-        sidebar.Collapsed ? 0 : sidebar.Width + SplitterWidth;
+        sidebar.Column.Value + sidebar.SplitterColumn.Value;
 
     private void OnSidebarChanged(object? sender, PropertyChangedEventArgs e)
     {

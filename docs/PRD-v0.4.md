@@ -185,7 +185,7 @@ v0.3 的 M0 全部，加工作空间壳、安装包链、网关加固。**M0 的
 ### 阶段 5 · 1.4.0 · E 轨：账号、反馈、大陆与录音导入（ADR 0052）
 
 中国供应商的手机能连上，反馈不用注册。十一个 ticket 在
-[auth-feedback-relay-import-tickets](specs/auth-feedback-relay-import-tickets.md)，依赖链：
+[规格 #161](https://github.com/TONiiV/Kanal/issues/161) 的任务清单，依赖链：
 
 - T01 免登录邮箱验证反馈 → T02 自动转私有 issue
 - T03 系统浏览器登录 → T04 微信与手机号 → T05 受邀账号用平台 Gladia

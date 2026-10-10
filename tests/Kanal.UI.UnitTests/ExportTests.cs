@@ -13,11 +13,13 @@ namespace Kanal.UI.UnitTests;
 /// </summary>
 public class ExportTests
 {
-    private static async Task PumpAsync(int ms)
+    private static async Task PumpUntilAsync(Func<bool> condition, int timeoutMs = 15_000)
     {
-        var deadline = Environment.TickCount64 + ms;
-        while (Environment.TickCount64 < deadline)
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
         {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
             Dispatcher.UIThread.RunJobs();
             await Task.Delay(20);
         }
@@ -37,9 +39,8 @@ public class ExportTests
     {
         var vm = TestViewModels.Demo(settings);
         await vm.StartCommand.ExecuteAsync(null);
-        // long enough for the scripted provider to finalise at least one utterance: only
-        // finals are exported, and partials would leave the file empty
-        await PumpAsync(2000);
+        // only finals are exported; a second bubble in a column means the first utterance is final
+        await PumpUntilAsync(() => vm.Columns.Any(c => c.Bubbles.Count >= 2));
         await vm.StopCommand.ExecuteAsync(null);
         return vm;
     }
