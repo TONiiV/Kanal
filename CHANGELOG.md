@@ -15,6 +15,7 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
+- The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
