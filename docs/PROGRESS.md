@@ -4,6 +4,23 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-11
+
+### The first release is 1.0.0
+
+No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
+
+1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
+   without a date. `ChangelogTests` keeps the two equal.
+2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
+   `docs/release/macos-alpha-rollout.md` are `v1.0.0-alpha.N`.
+3. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   (see 2026-10-07). Its README limitations are rewritten at release time.
+
+Open item: ADR 0056 requires the update check and the minimum supported version in the host before
+the first `v1.0.0` tag. That work is not done. Do not publish a `v1.0.0-alpha.N` release before it
+merges.
+
 ## 2026-10-10
 
 ### No gap beside a collapsed sidebar
