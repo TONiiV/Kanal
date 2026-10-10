@@ -441,6 +441,7 @@
             <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBox /template/ Border#PART_BorderElement">
             <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
