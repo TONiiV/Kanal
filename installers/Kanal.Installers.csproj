@@ -57,7 +57,9 @@
     <WixSource>$(MSBuildThisFileDirectory)windows/Kanal.wxs</WixSource>
     <WindowsIcon>$(RepoRoot)src/Kanal.Host/Assets/kanal.ico</WindowsIcon>
     <WindowsLicense>$(MSBuildThisFileDirectory)windows/License.rtf</WindowsLicense>
-    <WixUiExtension>WixToolset.UI.wixext/5.0.2</WixUiExtension>
+    <WixUiExtensionId>WixToolset.UI.wixext</WixUiExtensionId>
+    <WixUiExtensionVersion>5.0.2</WixUiExtensionVersion>
+    <WixUiExtension>$(WixUiExtensionId)/$(WixUiExtensionVersion)</WixUiExtension>
   </PropertyGroup>
 
   <!--
@@ -190,8 +192,9 @@
 
     <Exec Command="dotnet tool restore" WorkingDirectory="$(RepoRoot)" />
 
-    <!-- Caches the extension in $(RepoRoot).wix. Adding it twice is a no-op. -->
-    <Exec Command="dotnet wix extension add $(WixUiExtension)" WorkingDirectory="$(RepoRoot)" />
+    <!-- `wix extension add` always queries nuget.org, even for a cached extension, so skip it when cached. -->
+    <Exec Condition="!Exists('$(RepoRoot).wix/extensions/$(WixUiExtensionId)/$(WixUiExtensionVersion)')"
+          Command="dotnet wix extension add $(WixUiExtension)" WorkingDirectory="$(RepoRoot)" />
 
     <!--
       Paths go in as absolute values. A relative path inside the .wxs resolves against this process's

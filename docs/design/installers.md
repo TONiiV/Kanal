@@ -170,11 +170,14 @@ and a finish page. A second run of the msi on a computer with Kanal shows Repair
 install-directory dialog, because the install is per-user. The licence page reads
 `installers/windows/License.rtf`. `WindowsLicenseRtfTests` compares it with `LICENSE`.
 `PackMsi` adds the extension to the git-ignored `.wix/` cache with `dotnet wix extension add`. That
-command does nothing when the extension is already there, so a fresh CI runner works.
+command always queries nuget.org, so `PackMsi` runs it only when the cache folder is missing. The
+first build needs network access to fetch the extension once. Later builds work offline.
 
 **Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
 numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
-with the downgrade message. This works because WiX 5 generates a new `ProductCode` in every build.
+with the downgrade message. Two builds with the same numeric version replace each other in both
+directions, with no downgrade message. Kanal ships only plain `x.y.z` versions, with no pre-release
+channel. This works because WiX 5 generates a new `ProductCode` in every build.
 Every build keeps the `UpgradeCode`, so Windows treats the old build as an older product. ICE61
 warns about this setting, but only `wix msi validate` runs it. `wix build` does not.
 
