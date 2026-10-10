@@ -24,6 +24,42 @@ Headless renders of the main window and of all six settings tabs are pixel-ident
 
 ## 2026-10-10
 
+### Project settings
+
+A project (a `Workspace` in the code) now has its own settings window. A gear button on each row
+of the project list opens it. The gear does not change the selected project.
+
+1. `ProjectSettingsWindow` holds three sections: name, project icon, and a danger zone. Name and
+   icon changes apply only on Save. Closing the window discards them.
+2. The icon is one of eight built-in icons (`ProjectIcons.Glyphs`) or an image file. The store
+   copies an image into the project root as `kanal-icon<ext>` and deletes any older copy. It
+   deletes only `kanal-icon<ext>` for the allowed extensions. It refuses a file over 2 MB or with
+   an extension other than png, jpg, jpeg, ico, bmp or webp. It treats a link to the existing
+   copy as the same file. The window explains every refusal in the language of the interface.
+3. `kanal-workspace.json` and the registry row both carry `iconGlyph` and `iconFile`, the same way
+   they carry `name`. A file without these fields reads as the default folder icon. An unknown
+   or unsafe value also reads as the default.
+4. Remove opens `RemoveProjectWindow`. The filled button keeps the project and is the default.
+   "Remove from list" calls `ForgetWorkspace` and keeps every file. "Delete meeting files" calls
+   `DeleteWorkspace`.
+5. `DeleteWorkspace` deletes only what Kanal wrote: the `meetings` folder, `kanal-workspace.json`
+   and `kanal-icon<ext>`. It first reads `kanal-workspace.json` and refuses when the file is
+   missing or holds another `Id`. It removes the root folder only when the folder is then empty.
+   The operator picked that folder, and it can hold other files.
+6. Kanal refuses removal while any meeting is recording. The Remove button is disabled and says why.
+7. `WorkspaceSidebarViewModel.Refresh` no longer reloads the meetings when the project list drops
+   its selection during the rebuild. Before, a rename through Refresh closed the meeting that was open.
+8. `WorkspaceSidebarView` now calls the generated `InitializeComponent`. With
+   `AvaloniaXamlLoader.Load`, the named fields such as `WorkspacePicker` and `MeetingList` stayed
+   null.
+9. The Rename item in the menu of a meeting row did not run its `Click` handler. The item has no
+   `Command` now. The handler starts the rename and moves the cursor to the name field.
+10. `ProjectSettingsViewModel.Save` applies the icon first and renames second. A refused icon
+    leaves the name unchanged.
+11. Operator feedback on the PR: the danger button reads "Remove project" in full. The icon reset
+    is a text button, "Use default icon", in the icon button row. It shows only for an icon that is
+    not the default. The title of `RemoveProjectWindow` is 19 px, larger than the question (15.5 px).
+
 ### No gap beside a collapsed sidebar
 
 On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid kept one
