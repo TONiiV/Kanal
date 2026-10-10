@@ -70,6 +70,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private Task? _captureStopping;
     private string? _activeMicrophoneId;
     private bool _activeOnline;
+    private bool _refreshingDevices;
+    private string _liveStatus = "";
+    private string? _audioFaultStatus;
     private SignalState _microphoneSignal;
     private SignalState _systemSignal;
     private string? _statusBeforePushFailure;
@@ -285,10 +288,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Re-enumerates into <see cref="Devices"/>. The selection survives by its stable id —
-    /// enumeration builds fresh instances every time — and an unplugged selection falls back
-    /// to the list head, which the backends already order default-first. A capture already
-    /// running keeps the device id it was started with: the dropdown updates, the meeting
-    /// does not switch microphones mid-sentence.
+    /// enumeration builds fresh instances every time. Idle, an unplugged selection falls back to
+    /// the list head, which the backends already order default-first; live, a refresh never moves
+    /// the capture — only the operator's pick does.
     /// </summary>
     private void RefreshDevices()
     {
@@ -305,11 +307,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // The active ids, not the selections: clearing a bound ComboBox's items nulls its selection.
         var lost = IsRunning && !IsStopping && _activeOnline && IsMissing(_activeMicrophoneId, fresh);
 
-        var selectedId = SelectedDevice?.Id;
-        Devices.Clear();
-        foreach (var device in fresh)
-            Devices.Add(device);
-        SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+        _refreshingDevices = true;
+        try
+        {
+            // Live, show the device in use or none: re-picking the item already shown raises no change.
+            var live = IsRunning && !IsStopping;
+            var selectedId = live ? _activeMicrophoneId : SelectedDevice?.Id;
+            Devices.Clear();
+            foreach (var device in fresh)
+                Devices.Add(device);
+            SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? (live ? null : Devices.FirstOrDefault());
+        }
+        finally
+        {
+            _refreshingDevices = false;
+        }
 
         if (lost)
         {
@@ -798,9 +810,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isOpening;
 
     public bool CanChooseAudio => !IsRunning && !IsOpening;
+
+    // Devices stay pickable while recording; the capture profile does not — consent was given for it.
+    public bool CanChooseDevice => !IsOpening && !IsStopping;
 
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
@@ -1014,6 +1030,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isStopping;
 
     /// <summary>
@@ -1391,6 +1408,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _snapshotTimer.Start();
         }
 
+        _liveStatus = Status;
+        _audioFaultStatus = null;
         if (mode.NeedsMicrophone)
             await StartCaptureAsync(session);
     }
@@ -1431,6 +1450,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsPaused = false;
             _activeOnline = false;
             _activeMicrophoneId = null;
+            SelectedDevice ??= Devices.FirstOrDefault();
             ResetAudioHints();
             _pendingConsentConfirmedAt = null;
             _saveAudioThisMeeting = null;
@@ -1600,6 +1620,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var online = _activeOnline;
         _captureCts = cts;
         _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, online, cts.Token));
+    }
+
+    partial void OnSelectedDeviceChanged(AudioDeviceInfo? value)
+    {
+        if (!IsLivePick(value, _activeMicrophoneId))
+            return;
+        _activeMicrophoneId = value!.Id;
+        _ = MoveCaptureAsync();
+    }
+
+    // A list refresh re-selects (or falls back) on its own; only the operator's pick moves a live capture.
+    private bool IsLivePick(AudioDeviceInfo? picked, string? activeId) =>
+        !_refreshingDevices && picked is not null && picked.Id != activeId &&
+        IsRunning && !IsStopping && NeedsMicrophone;
+
+    private async Task MoveCaptureAsync()
+    {
+        if (_session is not { } session || IsPaused)
+            return;
+        Log.Info(AudioLog, $"capture_device_switched source={OnlineMeetingCapture.MicrophoneSource}");
+        await StopCaptureAsync();
+        await StartCaptureAsync(session);
+        if (!IsStale(session) && !IsPaused && Status == _audioFaultStatus)
+            Status = _liveStatus;
     }
 
     private Task StopCaptureAsync()
@@ -1835,7 +1879,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = message;
+            Status = _audioFaultStatus = message;
         }
     }
 
@@ -1852,7 +1896,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = L.Format("status.audiofailed", message);
+            Status = _audioFaultStatus = L.Format("status.audiofailed", message);
         }
     }
 

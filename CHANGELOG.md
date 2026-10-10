@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- You can now change the microphone while a meeting records. Pick another one in the microphone
+  menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
+  Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
+  recording starts.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example
