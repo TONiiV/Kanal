@@ -73,15 +73,11 @@
 
             <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0"
                     Margin="16,0" Padding="0,10">
-                <Button x:Name="Settings" Classes="ghost" Click="OnSettingsClick"
-                        HorizontalAlignment="Left" Padding="6,5"
+                <Button x:Name="Settings" Classes="ghost icon" Click="OnSettingsClick"
+                        HorizontalAlignment="Left"
                         ToolTip.Tip="{l:T settings.tip}"
                         AutomationProperties.Name="{l:T settings.tip}">
-                    <StackPanel Orientation="Horizontal" Spacing="9">
-                        <Path Classes="glyph" Data="{c:Icon settings}" />
-                        <TextBlock Text="{l:T settings.tip}" FontSize="12" VerticalAlignment="Center"
-                                   Foreground="{StaticResource Ink2}" />
-                    </StackPanel>
+                    <Path Classes="glyph" Data="{c:Icon settings}" Width="18" Height="18" />
                 </Button>
             </Border>
 
