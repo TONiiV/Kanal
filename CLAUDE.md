@@ -156,5 +156,5 @@ and the behaviour that UI changes must preserve. The hard constraints below appl
 - **PRD-frozen layout:** host ≤ 4 language columns; mobile single column + language dropdown;
   translation on top, source below; partial = muted, final = full ink; no TTS.
 - The host is Avalonia XAML: no CSS, no `clamp()`, no media queries. Fluid type is faked with fixed steps.
-- Every host colour comes from **app-owned brushes, one set per variant** (Light and Dark). Never
+- Every host colour comes from **app-owned brushes and colours, one set per variant** (Light and Dark). Never
   inherit FluentTheme defaults: they made control foregrounds invisible. See ADR 0057.

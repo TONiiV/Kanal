@@ -270,21 +270,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
 
         if (Application.Current is { } app)
-        {
-            _speakerFallback = ThemeColours.SpeakerFallback;
-            app.ActualThemeVariantChanged += (_, _) => RepaintThemeColours();
-        }
+            app.ActualThemeVariantChanged += OnThemeVariantChanged;
     }
 
-    private string _speakerFallback = "";
-
     // ThemeColours hands out hex strings, so a scheme change does not reach them on its own.
-    private void RepaintThemeColours()
+    private void OnThemeVariantChanged(object? sender, EventArgs e)
     {
-        var previous = _speakerFallback;
-        _speakerFallback = ThemeColours.SpeakerFallback;
-        foreach (var bubble in Columns.SelectMany(c => c.Bubbles).Where(b => b.SpeakerColor == previous))
-            bubble.SpeakerColor = _speakerFallback;
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerColor = ResolveSpeaker(bubble.SpeakerTag).Color;
         Ruler.Reresolve();
         BrowsedRuler.Reresolve();
     }
@@ -345,6 +338,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged -= OnThemeVariantChanged;
         _captureCts?.Cancel();
         if (_deviceWatcher is null)
             return;

@@ -49,9 +49,27 @@
                     <Color x:Key="AccentRampDark1">#35406F</Color>
                     <Color x:Key="AccentRampDark2">#293359</Color>
                     <Color x:Key="AccentRampDark3">#252B3B</Color>
+
+                    <!-- FluentTheme keys: its own values are White glyphs and translucent disabled fills. -->
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminate" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#33000000" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#33000000" />
+                    <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#66000000" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundDisabled" Color="#66000000" />
                 </ResourceDictionary>
 
-                <!-- The mobile caption page's dark tokens; keys it lacks follow the same rule. -->
+                <!-- The mobile caption page's dark tokens (web/index.html). -->
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="Sheet" Color="#181C28" />
                     <SolidColorBrush x:Key="Paper" Color="#222838" />
@@ -85,6 +103,24 @@
                     <Color x:Key="AccentRampDark1">#8D99E6</Color>
                     <Color x:Key="AccentRampDark2">#6F7BC4</Color>
                     <Color x:Key="AccentRampDark3">#545FA3</Color>
+
+                    <!-- FluentTheme keys: its own values are White glyphs and translucent disabled fills. -->
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#181C28" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#181C28" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#181C28" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminate" Color="#181C28" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" Color="#181C28" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" Color="#181C28" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#181C28" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPointerOver" Color="#181C28" />
+                    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPressed" Color="#181C28" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#181C28" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#181C28" />
+                    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#181C28" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#303748" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#485165" />
+                    <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#A1A8BA" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundDisabled" Color="#A1A8BA" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

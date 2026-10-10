@@ -14,8 +14,8 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
    System, Light and Dark. Each card draws a small window in XAML. The System card shows a light
    half and a dark half. A click applies the scheme at once and saves it in `settings.json`.
 2. `App.axaml` has a `Dark` theme dictionary with the same keys as `Light`. A test holds the two
-   key sets equal. The values come from the mobile page dark tokens. Keys that the mobile page
-   lacks follow the same rule:
+   key sets equal. The values come from the mobile page dark tokens. For keys that the mobile page
+   lacks, hover and pressed move away from the sheet, and washes mix the colour into the sheet:
    - `BrandHover` `#CDD3FF` and `BrandPressed` `#E0E4FF` move away from the sheet, as in Light.
    - `OnBrand` `#181C28` is the dark sheet, so text on a light brand fill stays dark.
    - `Record` `#EF6A60`, `Hold` `#E3AE3C`, `RecordWash` `#4A2528` and `HoldWash` `#433820` keep
@@ -31,11 +31,16 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
    marker draw `#414B83` in Light and `#B9C2FF` in Dark.
 5. `ThemeColours` still returns hex strings. `MainViewModel` repaints the fallback speaker colour
    and the ruler ticks when the variant changes.
-6. Contrast tests check ink, ink-2, ink-3, alarm and the speaker fallback on sheet and paper,
-   and on-brand text on brand. Every pair reaches 4.5:1 in both variants.
+6. Contrast tests check `Ink`, `Ink2`, `Ink3`, `Alarm` and `SpeakerFallbackColor` on `Sheet`
+   and `Paper`, and `OnBrand` on `Brand`. Every pair reaches 4.5:1 in both variants.
+7. Both dictionaries also set FluentTheme keys. FluentTheme draws check, radio and switch glyphs
+   in `White`, which gives 1.7:1 on the Dark brand fill. The glyph keys use the `OnBrand` value.
+   A test requires 3:1 against `SystemAccentColor` in both variants.
+8. The disabled `ComboBox` keys keep the FluentTheme values in Light, so Light looks the same.
+   Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
+   every meeting.
 
-Open: the speaker name tone in Dark follows after #200 merges. The disabled mode box in the
-header keeps the FluentTheme fill in both variants.
+Open: the speaker name tone in Dark follows after #200 merges.
 
 ### Host colours move to the Light theme dictionary
 

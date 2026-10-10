@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -119,6 +120,9 @@ public class SettingsTabsTests
             .Where(item => item.DataContext is ColourSchemeOption)
             .ToList();
         Assert.Equal(3, cards.Count);
+        Assert.All(cards, card => Assert.Equal(
+            ((ColourSchemeOption)card.DataContext!).Name,
+            ControlAutomationPeer.CreatePeerForElement(card).GetName()));
 
         window.Close();
     }

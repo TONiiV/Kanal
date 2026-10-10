@@ -173,7 +173,6 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ColourSchemeOption">
                                     <StackPanel Spacing="8">
-                                        <!-- Each half resolves its own variant: System shows light and dark side by side. -->
                                         <Grid ColumnDefinitions="*,*" Width="132" Height="84">
                                             <ThemeVariantScope RequestedThemeVariant="{Binding Left}" ClipToBounds="True">
                                                 <ContentControl Template="{StaticResource MiniWindow}" Width="132"

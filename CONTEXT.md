@@ -49,9 +49,9 @@ _Avoid_: Text-to-speech
 A view connecting a meeting topic to alternative proposals and a resulting decision, with references to the source transcript. A model-suggested decision remains a candidate until a person confirms it.
 
 **Colour scheme**:
-Whether the desktop host draws its light or dark colours: Light, Dark, or System, which follows the operating system. It is a setting of this machine and never reaches the mobile caption page.
-_Avoid_: Theme (ambiguous with accent theme), dark mode (only one of the choices)
+The host's choice between Light, Dark and System, where System follows the operating system. It is a per-machine preference and never reaches the mobile caption page.
+_Avoid_: Theme, dark mode (as a setting name)
 
 **Accent theme**:
-The brand colour family of the desktop host, with a light and a dark variant. It never changes the paper, ink, recording, hold, alarm or speaker colours.
-_Avoid_: Skin, colour palette (the speaker palette is a different thing)
+A named set of brand colours, with one light and one dark variant, that tints the host's controls. It never changes reading surfaces, ink, recording state or speaker colours.
+_Avoid_: Skin, colour scheme

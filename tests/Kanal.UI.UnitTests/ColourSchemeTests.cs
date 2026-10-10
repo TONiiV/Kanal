@@ -144,6 +144,30 @@ public class ColourSchemeTests
     }
 
     [AvaloniaFact]
+    public void ADisposedMainViewNoLongerListensForSchemeChanges()
+    {
+        try
+        {
+            var vm = TestViewModels.Hermetic();
+            for (var i = 0; i < 200; i++)
+            {
+                vm.Ruler.Observe(new Utterance($"u{i}", i % 2 == 0 ? "s1" : "s2", 0, 900, "zh", $"turn {i}", 1,
+                    UtteranceState.Final, false, 1.0, new Dictionary<string, string>()));
+            }
+            var before = vm.Ruler.Ticks.Select(tick => tick.SpeakerColor).ToList();
+
+            vm.Dispose();
+            Appearance.Apply(ColourScheme.Dark);
+
+            Assert.Equal(before, vm.Ruler.Ticks.Select(tick => tick.SpeakerColor));
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [AvaloniaFact]
     public void ASettingsFileWithAnUnknownSchemeFallsBackToLight()
     {
         var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("""{"ColourScheme":"Sepia"}""")!;
@@ -214,6 +238,45 @@ public class ColourSchemeTests
         var ratio = Contrast(Brush(theme, text), Brush(theme, surface));
 
         Assert.True(ratio >= minimum, $"{variant}: {text} on {surface} is {ratio:F2}:1, below {minimum}:1.");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(ColourScheme.Light)]
+    [InlineData(ColourScheme.Dark)]
+    public void CheckMarksStandOutFromTheAccentFill(ColourScheme scheme)
+    {
+        try
+        {
+            Appearance.Apply(scheme);
+            var app = Application.Current!;
+            var fill = (Color)app.Resources["SystemAccentColor"]!;
+            string[] glyphs =
+            [
+                "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver",
+                "CheckBoxCheckGlyphForegroundCheckedPressed", "CheckBoxCheckGlyphForegroundIndeterminate",
+                "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed",
+                "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed",
+            ];
+
+            Assert.All(glyphs, key =>
+            {
+                var ratio = Contrast(Brush(app.ActualThemeVariant, key), fill);
+                Assert.True(ratio >= 3, $"{scheme}: {key} on the accent fill is {ratio:F2}:1, below 3:1.");
+            });
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [AvaloniaFact]
+    public void ADisabledDropDownStaysReadableInDark()
+    {
+        var box = Brush(ThemeVariant.Dark, "ComboBoxBackgroundDisabled");
+
+        Assert.True(Contrast(Brush(ThemeVariant.Dark, "ComboBoxForegroundDisabled"), box) >= 4.5);
+        Assert.True(Contrast(Brush(ThemeVariant.Dark, "ComboBoxDropDownGlyphForegroundDisabled"), box) >= 3);
     }
 
     [AvaloniaFact]

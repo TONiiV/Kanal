@@ -39,6 +39,8 @@ public sealed partial class ColourSchemeOption(ColourScheme scheme) : ViewModelB
     public ThemeVariant Right => Scheme == ColourScheme.Light ? ThemeVariant.Light : ThemeVariant.Dark;
 
     public void RefreshText() => OnPropertyChanged(nameof(Name));
+
+    public override string ToString() => Name;
 }
 
 public partial class ApiKeyItemViewModel : ViewModelBase
