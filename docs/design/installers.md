@@ -1,7 +1,7 @@
 # Installers — design
 
 **Date:** 2026-08-01 · **Branch:** `feat/installers` · **Status:** implemented; release gear amended
-2026-09-02 for private alpha distribution (see the CI section)
+2026-10-07 for public GitHub Releases (see the CI section)
 
 Ship Kanal to an operator's laptop as a double-clickable install, on macOS and Windows, without
 asking them to install a .NET runtime or open a terminal.
@@ -200,36 +200,47 @@ The MSI is unsigned. First run shows a SmartScreen warning that the operator mus
 
 ## Version numbers
 
-> **Amended 2026-09-02.** Two things below were written for a public tag-driven release and no
-> longer hold: the tag gear is gone, and signing is mandatory rather than best-effort. The reason is
-> the alpha's distribution model — see `docs/04-风控管理/上线执行方案.md`.
+> **Amended 2026-10-07.** The version now comes from the tag of a published GitHub Release. The
+> `workflow_dispatch` input and the private-link rule of 2026-09-02 are gone. See the CI section.
 
-The `workflow_dispatch` input is the source of truth: `0.1.0-alpha.1`. PR smoke builds use `0.0.0`.
+The release tag is the source of truth: `v1.0.1-alpha.1` gives `FullVersion` `1.0.1-alpha.1`.
+`release.sh` refuses a version whose numeric part differs from `<Version>` in
+`src/Kanal.Host/Kanal.Host.csproj`. The PR smoke build uses `0.0.0-smoke` and skips this check.
 
-MSI `ProductVersion` constrains the scheme: **major ≤ 255, minor ≤ 255, build ≤ 65535**, and a
+To release a new version, follow these steps:
+
+1. Raise `<Version>` and the `CHANGELOG.md` heading in a PR.
+2. Merge the PR.
+3. Tag the same numeric version on a green commit of `main`, for example `v1.0.1-alpha.2`.
+
+MSI `ProductVersion` constrains the scheme: **major <= 255, minor <= 255, build <= 65535**, and a
 fourth component is silently ignored for upgrade comparisons. Three-component semver stays well
-inside this. Pre-release suffixes (`0.1.0-alpha.1`) are stripped for the MSI and for
+inside this. Pre-release suffixes (`1.0.1-alpha.1`) are stripped for the MSI and for
 `CFBundleShortVersionString` — Apple rejects them there — and kept for the artifact name.
 
 ## CI
 
+> **Amended 2026-10-07.** A published GitHub Release now builds the packages and attaches them to
+> the release. The repository is public, so every asset is public. The maintainer accepted this on
+> 2026-10-07. This replaces "Nothing installable leaves CI" and the private-link rule of 2026-09-02.
+
 `ci.yml` is untouched — it is the fast ubuntu feedback loop (tests + the `web/` ↔ `docs/`
 byte-identity invariant) and packaging must not slow it down.
 
-New `.github/workflows/release.yml`, two gears:
+`.github/workflows/release.yml` has two triggers:
 
-| Trigger | Signing | Publishes |
+| Trigger | Signing | Result |
 |---|---|---|
-| `workflow_dispatch` (version input) | **required** | nothing — proves the chain, discards the package |
-| `pull_request` (paths-filtered) | no | nothing |
+| `release: published` | **required** on macOS | the signed, notarised dmg, the msi and their `.sha256` files are attached to the release |
+| `pull_request` (paths-filtered) | no | the same script runs with `0.0.0-smoke --unsigned`; the package is thrown away |
 
-**Nothing installable leaves CI, and there is no tag gear.** `gh release create` on a public
-repository is public even for a Pre-release — but so is an Actions artifact, which is the trap this
-originally fell into. On a public repo the artifact list is readable without logging in at all, and
-downloading one needs only a GitHub account, because "public" means everyone has read access. A
-Pre-release and an artifact fail the alpha's distribution requirement for exactly the same reason.
+Both jobs call `installers/release.sh`. The workflow runs no tests. The maintainer tags only a
+commit of `main` whose `ci.yml` run is green.
 
-So CI proves the chain works and throws the package away. The release path is local:
+A Pre-release on a public repository is public, as is an Actions artifact. The alpha accepts this.
+To withdraw a version, delete its release assets.
+
+The maintainer can also build on a Mac with the same script:
 
 ```bash
 # once: import the Developer ID certificate into the login keychain
@@ -240,20 +251,17 @@ export NOTARY_KEY_PATH=path/to/AuthKey_XXXXXXXX.p8
 export NOTARY_KEY_ID=XXXXXXXX
 export NOTARY_ISSUER_ID=<issuer uuid>
 
-dotnet build installers/Kanal.Installers.csproj -t:PackInstaller \
-  -p:Version=0.1.0 -p:SignBuild=true
-
-shasum -a 256 artifacts/Kanal-0.1.0-osx-arm64.dmg
+installers/release.sh 1.0.1-alpha.1
 ```
 
-The dmg goes to testers over a private, revocable link that GitHub never sees — which is also what
-makes "pull the download" something that can actually be done, per the rollback window in
-`docs/04-风控管理/上线执行方案.md`.
+The script writes `artifacts/Kanal-<full>-osx-arm64.dmg` and a `.sha256` file next to it.
 
-Signing is mandatory on the dispatch gear, not conditional on the secrets being present. A release
-that quietly comes out unsigned is worse than one that fails: it looks shippable and Gatekeeper
-refuses it on every Mac except the one that built it. Any unset secret fails the job before the
-build starts. The PR gear stays unsigned, which is what lets fork PRs exercise the same path.
+Signing is mandatory on a release, not conditional on the secrets being present. A release that
+quietly comes out unsigned is worse than one that fails: it looks shippable and Gatekeeper refuses
+it on every Mac except the one that built it. An unset signing variable, or an empty notary key
+file, fails the job before the build starts. The PR trigger stays unsigned, which is what lets fork
+PRs exercise the same path. The workflow gives the signing secrets to the Package step only on a
+`release` event, and the checkout does not keep the token in `.git/config`.
 
 Secrets (macOS only): `MACOS_CERT_P12`, `MACOS_CERT_PWD`, `MACOS_SIGNING_IDENTITY`, `NOTARY_KEY_P8`,
 `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. The workflow maps `MACOS_SIGNING_IDENTITY` onto the
@@ -281,7 +289,7 @@ asserts:
 These are file assertions with no Apple tooling involved, so they run in the existing ubuntu CI job.
 
 Signing and notarisation are **not unit-testable** — they depend on a certificate and Apple's
-service. Coverage for them is the dispatched release run plus one local signed build.
+service. Coverage for them is the first published release run plus one local signed build.
 
 ## Verified
 
