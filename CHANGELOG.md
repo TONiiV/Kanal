@@ -17,10 +17,22 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Each project in the project list has a gear button. It opens the project settings. There you
+  rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
+  copies the image into the project folder as `kanal-icon` plus the image extension, for example
+  `kanal-icon.png`, so the icon moves with the folder. The project list shows the icon. The
+  settings also remove a project. You choose to remove it from the list only, or to delete its
+  meeting files too. Deleted files do not go to the trash. Other files in the project folder
+  stay. Kanal does not delete files when the folder does not hold this project. Kanal does not
+  remove a project while a meeting is recording.
+- Rename in the menu of a meeting row now puts the cursor in the name field. Before, you had to
+  click the field first.
+- Text in an input box now sits in the vertical centre of the box.
 - You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
   notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
-- The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
+- The settings button at the bottom of the sidebar now shows an outline gear icon only.
+  The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck

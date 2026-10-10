@@ -9,8 +9,8 @@
         WindowDecorations="None"
         WindowStartupLocation="CenterScreen"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Paper}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Paper}">
 
     <StackPanel Margin="56,42,56,44" HorizontalAlignment="Center"
                 VerticalAlignment="Center" Spacing="10">
@@ -21,11 +21,11 @@
         <TextBlock Text="kanal" FontSize="48" FontWeight="Bold"
                    LetterSpacing="-0.8" HorizontalAlignment="Center" />
 
-        <Border Width="48" Height="4" CornerRadius="2" Background="{StaticResource BrandAccent}" Margin="0,6" />
+        <Border Width="48" Height="4" CornerRadius="2" Background="{DynamicResource BrandAccent}" Margin="0,6" />
 
         <TextBlock Text="One room. Every language." FontSize="16"
                    FontWeight="SemiBold" LetterSpacing="0.35"
-                   Foreground="{StaticResource Ink2}"
+                   Foreground="{DynamicResource Ink2}"
                    HorizontalAlignment="Center" />
     </StackPanel>
 </Window>

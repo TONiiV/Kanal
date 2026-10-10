@@ -39,28 +39,28 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="LetterSpacing" Value="0.2" />
-            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink3}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0,0,0,10" />
             <Setter Property="Margin" Value="0,0,20,0" />
             <Setter Property="MinHeight" Value="0" />
         </Style>
         <Style Selector="TabItem:pointerover">
-            <Setter Property="Foreground" Value="{StaticResource Ink2}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink2}" />
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Foreground" Value="{StaticResource Brand}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brand}" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
         <!-- The selection marker sits flush
              under the header content, which is why each header carries its own bottom margin -
              without it the rule strikes through the descenders of "Points". -->
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{DynamicResource Brand}" />
         </Style>
     </UserControl.Styles>
 
-    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="1,0,0,0">
+    <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Rule}" BorderThickness="1,0,0,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" Classes="chrome-head" Padding="8,0,0,0">
                 <DockPanel LastChildFill="False">
@@ -83,16 +83,16 @@
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.points}" Margin="0,0,0,7" />
                     </TabItem.Header>
-                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" x:Name="NoAnalystNote"
                                        Text="{l:T assistant.noanalyst}" TextWrapping="Wrap"
-                                       FontSize="12.5" LineHeight="19" Foreground="{StaticResource Ink3}"
+                                       FontSize="12.5" LineHeight="19" Foreground="{DynamicResource Ink3}"
                                        IsVisible="{Binding Assistant.ShowNoAnalystNote}" />
                             <TextBlock DockPanel.Dock="Top" x:Name="NothingYetNote"
                                        Text="{l:T assistant.nothingyet}" TextWrapping="Wrap"
-                                       FontSize="12.5" Foreground="{StaticResource Ink3}"
+                                       FontSize="12.5" Foreground="{DynamicResource Ink3}"
                                        IsVisible="{Binding Assistant.ShowNothingFoundYet}" />
                             <ScrollViewer x:Name="InsightList"
                                           IsVisible="{Binding Assistant.IsAnalystConnected}">
@@ -101,7 +101,7 @@
                                         <DataTemplate x:DataType="vm:InsightTopicViewModel">
                                             <StackPanel Margin="0,0,0,22">
                                                 <TextBlock Text="{Binding Topic}" Classes="label" />
-                                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                                                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                                                         Margin="0,6,0,12" />
                                                 <ItemsControl ItemsSource="{Binding Items}">
                                                     <ItemsControl.ItemTemplate>
@@ -110,21 +110,21 @@
                                                                 <StackPanel Orientation="Horizontal" Spacing="9">
                                                                     <TextBlock Text="{Binding KindLabel}" FontSize="10"
                                                                                FontWeight="Bold" LetterSpacing="1.2"
-                                                                               Foreground="{StaticResource Ink2}" />
+                                                                               Foreground="{DynamicResource Ink2}" />
                                                                     <TextBlock Text="{Binding StateLabel}" FontSize="10"
                                                                                LetterSpacing="0.6"
-                                                                               Foreground="{StaticResource Ink3}" />
+                                                                               Foreground="{DynamicResource Ink3}" />
                                                                 </StackPanel>
                                                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
                                                                            FontSize="13.5" LineHeight="21"
-                                                                           Foreground="{StaticResource Ink}" />
+                                                                           Foreground="{DynamicResource Ink}" />
                                                                 <ItemsControl ItemsSource="{Binding Sources}">
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate x:DataType="sys:String">
                                                                             <TextBlock Text="{Binding}" TextWrapping="Wrap"
                                                                                        FontSize="11.5" LineHeight="17"
                                                                                        Margin="9,0,0,3"
-                                                                                       Foreground="{StaticResource Ink3}" />
+                                                                                       Foreground="{DynamicResource Ink3}" />
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
@@ -165,15 +165,15 @@
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.speakers}" Margin="0,0,0,7" />
                     </TabItem.Header>
-                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
                                 <TextBlock Text="{l:T merge.label}" Classes="label" />
-                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
+                                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBox x:Name="MergeFrom" Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
-                                    <TextBlock Text="→" VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />
+                                    <TextBlock Text="→" VerticalAlignment="Center" Foreground="{DynamicResource Ink3}" />
                                     <TextBox x:Name="MergeInto" Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="58" />
                                 </StackPanel>
                                 <Button x:Name="MergeSpeakers" Content="{l:T merge.button}"
@@ -193,7 +193,7 @@
                                                         <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
                                                                    LetterSpacing="1.2" Foreground="{Binding Color, Converter={x:Static conv:SpeakerTones.OnLight}}" />
                                                         <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
-                                                                   Foreground="{StaticResource Ink3}" />
+                                                                   Foreground="{DynamicResource Ink3}" />
                                                     </StackPanel>
                                                     <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
                                                         <TextBox.KeyBindings>
@@ -217,7 +217,7 @@
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.files}" Margin="0,0,0,7" />
                     </TabItem.Header>
-                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{StaticResource Rule}"
+                    <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
                         <DockPanel>
                             <WrapPanel DockPanel.Dock="Bottom" ItemSpacing="7" LineSpacing="7"
@@ -244,12 +244,12 @@
                             <TextBlock DockPanel.Dock="Bottom" x:Name="FilesProblem"
                                        Text="{Binding Files.ProblemNote}" TextWrapping="Wrap"
                                        Margin="0,12,0,0" FontSize="11.5" LineHeight="17"
-                                       Foreground="{StaticResource Alarm}"
+                                       Foreground="{DynamicResource Alarm}"
                                        IsVisible="{Binding Files.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                             <TextBlock DockPanel.Dock="Top" x:Name="NoFilesNote"
                                        Text="{Binding Files.EmptyNote}" TextWrapping="Wrap"
-                                       FontSize="12.5" LineHeight="19" Foreground="{StaticResource Ink3}"
+                                       FontSize="12.5" LineHeight="19" Foreground="{DynamicResource Ink3}"
                                        IsVisible="{Binding Files.IsEmpty}" />
 
                             <ScrollViewer x:Name="FileTree">
@@ -257,16 +257,16 @@
                                               AutomationProperties.Name="{l:T assistant.tab.files}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:MeetingFileViewModel">
-                                            <Border BorderBrush="{StaticResource RuleFaint}"
+                                            <Border BorderBrush="{DynamicResource RuleFaint}"
                                                     BorderThickness="0,0,0,1" Padding="0,8">
                                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12"
                                                       Margin="{Binding Nesting}">
                                                     <TextBlock Text="{Binding Label}" FontSize="12.5"
                                                                TextTrimming="CharacterEllipsis"
-                                                               Foreground="{StaticResource Ink}" />
+                                                               Foreground="{DynamicResource Ink}" />
                                                     <TextBlock Grid.Column="1" Text="{Binding SizeLabel}"
                                                                FontSize="10.5" VerticalAlignment="Center"
-                                                               Foreground="{StaticResource Ink3}" />
+                                                               Foreground="{DynamicResource Ink3}" />
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>

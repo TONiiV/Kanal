@@ -7,24 +7,24 @@
              x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
         <Style Selector="Border.rec">
-            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="0,0,0,19" />
             <Setter Property="Margin" Value="0,0,0,19" />
         </Style>
         <!-- A mark must not change the row's height: extent growth reads as new content and triggers ScrollToEnd. -->
         <Style Selector="Border.rec.jump">
-            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="Background" Value="{DynamicResource Paper}" />
             <Setter Property="Padding" Value="12,9,12,19" />
             <Setter Property="Margin" Value="-12,0,-12,19" />
         </Style>
         <Style Selector="Border.rec TextBlock.body">
-            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink}" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="LineHeight" Value="28" />
         </Style>
         <Style Selector="TextBlock.body.partial, TextBlock.body.pending">
-            <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink3}" />
         </Style>
         <Style Selector="Panel.focused Border.rec TextBlock.body">
             <Setter Property="FontSize" Value="19" />
@@ -40,14 +40,14 @@
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
         <Style Selector="Border.rename:pointerover, Border.rename:focus">
-            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
         </Style>
         <Style Selector="TextBox#MeetingTitleEditor /template/ Border#PART_BorderElement">
             <Setter Property="CornerRadius" Value="0" />
         </Style>
         <Style Selector="TextBox#MeetingTitleEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingTitleEditor:focus /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
             <Setter Property="BorderThickness" Value="0,0,0,2" />
         </Style>
         <Style Selector="Button.jump">
@@ -57,17 +57,17 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="CornerRadius" Value="20" />
             <Setter Property="BorderThickness" Value="1.5" />
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.colhead">
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
             <Setter Property="BorderThickness" Value="0,2,0,0" />
         </Style>
         <Style Selector="Border.colhead:focus">
-            <Setter Property="Background" Value="{StaticResource BrandWash}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{DynamicResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
         </Style>
         <Style Selector="Border.tickrow">
             <Setter Property="Height" Value="9" />
@@ -90,23 +90,23 @@
     <DockPanel>
         <Border DockPanel.Dock="Top" x:Name="RecordingBanner"
                 IsVisible="{Binding ShowRecordingBanner}"
-                Background="{StaticResource Paper}"
-                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                Background="{DynamicResource Paper}"
+                BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                 Padding="28,9">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                         Fill="{StaticResource Record}" />
+                         Fill="{DynamicResource Record}" />
                 <TextBlock x:Name="RecordingBannerText" Text="{Binding RecordingBannerText}"
                            FontSize="12.5" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource Ink2}" />
+                           Foreground="{DynamicResource Ink2}" />
                 <TextBlock Text="·" FontSize="12.5" VerticalAlignment="Center"
-                           Foreground="{StaticResource Ink3}" />
+                           Foreground="{DynamicResource Ink3}" />
                 <Button x:Name="ReturnToActive" Classes="ghost" Padding="0"
                         Command="{Binding ReturnToActiveMeetingCommand}"
                         AutomationProperties.Name="{l:T browse.return}">
                     <TextBlock Text="{l:T browse.return}" FontSize="12.5" FontWeight="SemiBold"
-                               TextDecorations="Underline" Foreground="{StaticResource Ink}" />
+                               TextDecorations="Underline" Foreground="{DynamicResource Ink}" />
                 </Button>
             </StackPanel>
         </Border>
@@ -119,7 +119,7 @@
                 <TextBlock x:Name="TitleNote" DockPanel.Dock="Right" Margin="12,0,0,0" Text="{Binding TitleNote}"
                            IsVisible="{Binding HasTitleNote}"
                            FontSize="12" VerticalAlignment="Center"
-                           Foreground="{StaticResource Ink3}" />
+                           Foreground="{DynamicResource Ink3}" />
 
                 <Border x:Name="MeetingTitleField" Classes="rename" Background="Transparent"
                         HorizontalAlignment="Left" Focusable="True" Cursor="Ibeam"
@@ -131,7 +131,7 @@
                     <TextBlock x:Name="MeetingTitle" Text="{Binding MeetingTitle}"
                                FontSize="25" LineHeight="32" FontWeight="SemiBold" LetterSpacing="-0.4"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               Foreground="{StaticResource Ink}" />
+                               Foreground="{DynamicResource Ink}" />
                 </Border>
             </DockPanel>
 
@@ -142,9 +142,9 @@
                      MinWidth="120" MinHeight="0" VerticalContentAlignment="Center"
                      FontSize="25" LineHeight="32" FontWeight="SemiBold" LetterSpacing="-0.4"
                      Padding="0" BorderThickness="0,0,0,2"
-                     BorderBrush="{StaticResource Ink}"
-                     SelectionBrush="{StaticResource Brand}" SelectionForegroundBrush="{StaticResource OnBrand}"
-                     Background="Transparent" Foreground="{StaticResource Ink}"
+                     BorderBrush="{DynamicResource Ink}"
+                     SelectionBrush="{DynamicResource Brand}" SelectionForegroundBrush="{DynamicResource OnBrand}"
+                     Background="Transparent" Foreground="{DynamicResource Ink}"
                      KeyDown="OnTitleEditorKeyDown" LostFocus="OnTitleEditorLostFocus"
                      AutomationProperties.Name="{l:T title.rename.tip}" />
 
@@ -170,14 +170,14 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:LanguageOption">
-                                <Border Background="{StaticResource Sheet}" CornerRadius="13" Padding="2">
+                                <Border Background="{DynamicResource Sheet}" CornerRadius="13" Padding="2">
                                     <c:FlagIcon Code="{Binding Code}" Width="22" Height="22" />
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <TextBlock Text="{Binding SelectedLanguageSummary}" FontSize="12"
-                               Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
+                               Foreground="{DynamicResource Ink2}" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
         </Grid>
@@ -186,17 +186,17 @@
         <StackPanel x:Name="NoStoredTranscript" IsVisible="{Binding ShowNoStoredTranscript}"
                     Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
-            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
+            <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
-                       Foreground="{StaticResource Ink2}" Text="{l:T browse.notranscript}" />
+                       Foreground="{DynamicResource Ink2}" Text="{l:T browse.notranscript}" />
         </StackPanel>
 
         <StackPanel x:Name="LoadingTranscript" IsVisible="{Binding IsLoadingRecord}"
                     Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
-            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
+            <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
-                       Foreground="{StaticResource Ink3}" Text="{l:T browse.loading}" />
+                       Foreground="{DynamicResource Ink3}" Text="{l:T browse.loading}" />
         </StackPanel>
 
         <StackPanel IsVisible="{Binding ShowStartHint}" Margin="28,8,28,10" MaxWidth="440"
@@ -204,11 +204,11 @@
             <Image Source="/Assets/kanal-splash-mark.png" Width="92" Height="92"
                    HorizontalAlignment="Left" Margin="-18,0,0,0" AutomationProperties.Name="Kanal" />
             <TextBlock Text="{l:T empty.heading}" Classes="label" />
-            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" />
+            <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" />
             <TextBlock TextWrapping="Wrap" FontSize="14.5" LineHeight="25"
-                       Foreground="{StaticResource Ink2}" Text="{l:T empty.body1}" />
+                       Foreground="{DynamicResource Ink2}" Text="{l:T empty.body1}" />
             <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="21"
-                       Foreground="{StaticResource Ink3}" Text="{l:T empty.body2}" />
+                       Foreground="{DynamicResource Ink3}" Text="{l:T empty.body2}" />
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto">
@@ -232,14 +232,14 @@
                                     Background="Transparent" Focusable="True" Cursor="SizeWestEast"
                                     ToolTip.Tip="{l:T column.drag.tip}"
                                     PointerPressed="OnColumnHeadPointerPressed" KeyDown="OnColumnHeadKeyDown">
-                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                                         Padding="0,9,0,8">
                                     <Grid ColumnDefinitions="*,Auto">
                                         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Code}" FontSize="24" LineHeight="30"
                                                        FontWeight="Bold" LetterSpacing="-0.6" />
                                             <TextBlock Grid.Column="1" Text="{Binding NativeName}" FontSize="11.5"
-                                                       Foreground="{StaticResource Ink2}"
+                                                       Foreground="{DynamicResource Ink2}"
                                                        VerticalAlignment="Bottom" Margin="9,0,4,5"
                                                        TextTrimming="CharacterEllipsis" />
                                         </Grid>
@@ -273,25 +273,25 @@
                                                                    FontWeight="Bold" LetterSpacing="1.2"
                                                                    Foreground="{Binding SpeakerColor, Converter={x:Static conv:SpeakerTones.OnLight}}" />
                                                         <TextBlock Classes="who" Text="{Binding SourceLang}"
-                                                                   LetterSpacing="1.5" Foreground="{StaticResource Ink3}" />
+                                                                   LetterSpacing="1.5" Foreground="{DynamicResource Ink3}" />
                                                         <TextBlock Classes="who" Text="{l:T column.original}"
                                                                    LetterSpacing="1.5" IsVisible="{Binding IsTranscript}"
                                                                    ToolTip.Tip="{l:T column.original.tip}"
-                                                                   Foreground="{StaticResource Ink3}" />
+                                                                   Foreground="{DynamicResource Ink3}" />
                                                         <TextBlock Classes="who" Text="⇄"
                                                                    ToolTip.Tip="{l:T column.codeswitch.tip}"
                                                                    IsVisible="{Binding CodeSwitch}"
-                                                                   Foreground="{StaticResource Ink3}" />
+                                                                   Foreground="{DynamicResource Ink3}" />
                                                     </StackPanel>
                                                     <TextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
                                                                Classes.partial="{Binding IsPartial}"
                                                                Classes.pending="{Binding AwaitingTranslation}" />
                                                     <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
-                                                            BorderBrush="{StaticResource Rule}"
+                                                            BorderBrush="{DynamicResource Rule}"
                                                             BorderThickness="2,0,0,0" Padding="11,0,0,0">
                                                         <TextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
                                                                    FontSize="12.5" LineHeight="22"
-                                                                   Foreground="{StaticResource Ink3}" />
+                                                                   Foreground="{DynamicResource Ink3}" />
                                                     </Border>
                                                 </StackPanel>
                                             </Border>
@@ -301,9 +301,9 @@
                             </ScrollViewer>
                         </DockPanel>
                         <Rectangle Width="3" HorizontalAlignment="Left" Margin="-16,0,0,0"
-                                   Fill="{StaticResource Ink}" IsVisible="{Binding IsDropBefore}" />
+                                   Fill="{DynamicResource Ink}" IsVisible="{Binding IsDropBefore}" />
                         <Rectangle Width="3" HorizontalAlignment="Right" Margin="0,0,-16,0"
-                                   Fill="{StaticResource Ink}" IsVisible="{Binding IsDropAfter}" />
+                                   Fill="{DynamicResource Ink}" IsVisible="{Binding IsDropAfter}" />
                     </Panel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -341,8 +341,8 @@
                 <ContentControl.ContentTemplate>
                     <DataTemplate x:DataType="vm:RulerTickViewModel">
                         <Border Width="308" Height="96" CornerRadius="{StaticResource OverlayRadius}"
-                                Background="{StaticResource Sheet}"
-                                BorderBrush="{StaticResource Rule}" BorderThickness="1">
+                                Background="{DynamicResource Sheet}"
+                                BorderBrush="{DynamicResource Rule}" BorderThickness="1">
                             <Panel>
                                 <StackPanel Margin="15,11" Spacing="7">
                                     <StackPanel Orientation="Horizontal" Spacing="9">
@@ -352,19 +352,19 @@
                                                    Foreground="{Binding SpeakerColor, Converter={x:Static conv:SpeakerTones.OnLight}}" />
                                         <TextBlock Text="{Binding TimeLabel}" FontSize="10.5"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{StaticResource Ink3}" />
+                                                   Foreground="{DynamicResource Ink3}" />
                                         <TextBlock Text="{Binding FoldBadge}" FontSize="10.5"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{StaticResource Ink3}" />
+                                                   Foreground="{DynamicResource Ink3}" />
                                     </StackPanel>
-                                    <Border BorderBrush="{StaticResource RuleFaint}"
+                                    <Border BorderBrush="{DynamicResource RuleFaint}"
                                             BorderThickness="0,0,0,1" />
                                     <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2"
                                                TextTrimming="CharacterEllipsis" FontSize="12.5"
-                                               LineHeight="20" Foreground="{StaticResource Ink2}" />
+                                               LineHeight="20" Foreground="{DynamicResource Ink2}" />
                                 </StackPanel>
                                 <Rectangle Width="3" HorizontalAlignment="Right"
-                                           Fill="{StaticResource Ink}" />
+                                           Fill="{DynamicResource Ink}" />
                             </Panel>
                         </Border>
                     </DataTemplate>

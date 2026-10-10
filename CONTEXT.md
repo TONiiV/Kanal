@@ -6,6 +6,7 @@ Kanal organises meeting transcription, translation and summaries within user-sel
 
 **Workspace**:
 A named scope for a project, company, team or personal use, containing its own meeting records. Workspaces are peers rather than a company/project hierarchy.
+The UI says "project" for a Workspace.
 _Avoid_: Project scope
 
 **Meeting record**:
