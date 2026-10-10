@@ -48,6 +48,15 @@
         <Style Selector="Path.glyph.danger">
             <Setter Property="Fill" Value="{StaticResource Alarm}" />
         </Style>
+        <Style Selector="ComboBox#WorkspacePicker ComboBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button#ProjectSettings Path.glyph">
+            <Setter Property="Fill" Value="{StaticResource Ink3}" />
+        </Style>
+        <Style Selector="Button#ProjectSettings:pointerover Path.glyph">
+            <Setter Property="Fill" Value="{StaticResource Brand}" />
+        </Style>
     </UserControl.Styles>
 
     <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
@@ -116,7 +125,13 @@
                     <ComboBox.SelectionBoxItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
                             <StackPanel Orientation="Horizontal" Spacing="9">
-                                <Path Classes="glyph" Data="{c:Icon folder}" Width="15" Height="15" />
+                                <Panel Width="15" Height="15" VerticalAlignment="Center">
+                                    <Image x:Name="ProjectImage" Width="15" Height="15"
+                                           Source="{Binding IconPath, Converter={x:Static c:ProjectIcons.Image}}" />
+                                    <Path Classes="glyph" Width="15" Height="15"
+                                          Data="{Binding IconGlyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                                          IsVisible="{Binding #ProjectImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                                </Panel>
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
@@ -124,7 +139,24 @@
                     </ComboBox.SelectionBoxItemTemplate>
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
-                            <TextBlock Text="{Binding Name}" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                                <Panel Width="15" Height="15" VerticalAlignment="Center">
+                                    <Image x:Name="ProjectImage" Width="15" Height="15"
+                                           Source="{Binding IconPath, Converter={x:Static c:ProjectIcons.Image}}" />
+                                    <Path Classes="glyph" Width="15" Height="15"
+                                          Data="{Binding IconGlyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                                          IsVisible="{Binding #ProjectImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                                </Panel>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="2" x:Name="ProjectSettings" Classes="ghost icon"
+                                        Width="24" Height="24" Padding="0" Margin="0,-4,-6,-4"
+                                        Click="OnProjectSettingsClick"
+                                        ToolTip.Tip="{l:T workspace.settings.tip}"
+                                        AutomationProperties.Name="{l:T workspace.settings.tip}">
+                                    <Path Classes="glyph" Data="{c:Icon settings}" Width="14" Height="14" />
+                                </Button>
+                            </Grid>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>

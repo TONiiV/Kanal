@@ -920,4 +920,179 @@ public class WorkspaceStoreTests : IDisposable
         Assert.NotNull(result.Problem);
         Assert.Empty(Store().ListWorkspaces().Workspaces);
     }
+
+    private string Image(string name, int bytes = 64)
+    {
+        var path = Path.Combine(Folder("pictures"), name);
+        File.WriteAllBytes(path, new byte[bytes]);
+        return path;
+    }
+
+    private static string[] IconFiles(string folder) =>
+        [.. Directory.EnumerateFiles(folder, "kanal-icon.*").Select(Path.GetFileName).Order()!];
+
+    [Fact]
+    public void AGlyphIconSurvivesARestartAndAReopen()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        Assert.Equal("people", Created(Store().SetWorkspaceIcon(workspace.Id, "people")).IconGlyph);
+
+        Assert.Equal("people", Assert.Single(Store().ListWorkspaces().Workspaces).IconGlyph);
+        File.Delete(Registry);
+        Assert.Equal("people", Created(Store().OpenWorkspace(folder)).IconGlyph);
+    }
+
+    [Fact]
+    public void AWorkspaceWrittenBeforeIconsExistedHasTheDefaultIcon()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        var read = Assert.Single(Store().ListWorkspaces().Workspaces);
+
+        Assert.Equal(workspace, read);
+        Assert.Null(read.IconGlyph);
+        Assert.Null(read.IconFile);
+        Assert.Null(read.IconPath);
+    }
+
+    [Fact]
+    public void AnImageIconIsCopiedIntoTheWorkspaceFolderAndReplacesTheLastOne()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        var first = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.PNG")));
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        Assert.Equal(Path.Combine(folder, "kanal-icon.png"), first.IconPath);
+
+        var second = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("badge.jpg")));
+
+        Assert.Equal(["kanal-icon.jpg"], IconFiles(folder));
+        Assert.Equal("kanal-icon.jpg", second.IconFile);
+        Assert.Null(second.IconGlyph);
+        Assert.Equal("kanal-icon.jpg", Assert.Single(Store().ListWorkspaces().Workspaces).IconFile);
+        File.Delete(Registry);
+        Assert.Equal("kanal-icon.jpg", Created(Store().OpenWorkspace(folder)).IconFile);
+    }
+
+    [Fact]
+    public void ChoosingTheIconAlreadyInTheFolderAgainKeepsIt()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        var copied = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png"))).IconPath!;
+
+        Created(Store().SetWorkspaceIconFile(workspace.Id, copied));
+
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+    }
+
+    [Theory]
+    [InlineData("logo.gif", 64)]
+    [InlineData("logo.svg", 64)]
+    [InlineData("logo.png", 2 * 1024 * 1024 + 1)]
+    public void AnImageOfTheWrongKindOrSizeIsRefused(string name, int bytes)
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        var result = Store().SetWorkspaceIconFile(workspace.Id, Image(name, bytes));
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Empty(IconFiles(folder));
+        Assert.Null(Assert.Single(Store().ListWorkspaces().Workspaces).IconFile);
+    }
+
+    [Fact]
+    public void ResettingTheIconDeletesTheCopyAndForgetsBothKinds()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        var reset = Created(Store().ResetWorkspaceIcon(workspace.Id));
+
+        Assert.Null(reset.IconFile);
+        Assert.Null(reset.IconGlyph);
+        Assert.Empty(IconFiles(folder));
+        Assert.Equal(workspace, Assert.Single(Store().ListWorkspaces().Workspaces));
+    }
+
+    [Fact]
+    public void AGlyphReplacesAnImageIconAndItsCopy()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        var glyph = Created(Store().SetWorkspaceIcon(workspace.Id, "microphone"));
+
+        Assert.Null(glyph.IconFile);
+        Assert.Empty(IconFiles(folder));
+    }
+
+    [Fact]
+    public void AGlyphNameThatIsAPathIsRefused()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        Assert.Equal(
+            StoreProblemKind.Invalid,
+            Store().SetWorkspaceIcon(workspace.Id, "../people").Problem!.Kind);
+    }
+
+    [Fact]
+    public void DeletingAWorkspaceTakesOnlyWhatKanalPutThere()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+        var foreign = Path.Combine(folder, "drawing.dwg");
+        File.WriteAllText(foreign, "not Kanal's");
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+
+        Assert.True(File.Exists(foreign));
+        Assert.Equal([foreign], Directory.EnumerateFileSystemEntries(folder));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void DeletingAWorkspaceRemovesTheFolderItEmptied()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void ForgettingAWorkspaceKeepsItsIconAndMeetings()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        Assert.Null(store.ForgetWorkspace(workspace.Id));
+
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        Assert.Equal("kanal-icon.png", Created(Store().OpenWorkspace(folder)).IconFile);
+    }
+
+    [Fact]
+    public void DeletingAnUnknownWorkspaceIsReported()
+    {
+        Assert.Equal(StoreProblemKind.NotFound, Store().DeleteWorkspace("nosuchworkspace")!.Kind);
+    }
 }

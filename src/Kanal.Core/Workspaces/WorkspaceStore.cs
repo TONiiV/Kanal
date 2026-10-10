@@ -10,6 +10,9 @@ public sealed class WorkspaceStore(string registryPath)
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = "meeting.json";
     public const string AudioFileName = "audio.wav";
+    public const string IconFileStem = "kanal-icon";
+    public const long MaxIconBytes = 2 * 1024 * 1024;
+    public static readonly IReadOnlyList<string> IconExtensions = [".png", ".jpg", ".jpeg", ".ico", ".bmp", ".webp"];
     private const string MeetingsFolderName = "meetings";
     private const string LogCategory = "workspaces";
     private const string NeedsTitle = "A meeting needs a title.";
@@ -101,11 +104,81 @@ public sealed class WorkspaceStore(string registryPath)
             : Register(stored!.ToWorkspace(rootPath));
     }
 
-    public WorkspaceResult RenameWorkspace(string id, string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return Refused(registryPath, NeedsName);
+    public WorkspaceResult RenameWorkspace(string id, string name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? Refused(registryPath, NeedsName)
+            : Rewrite(id, "The rename could not be written.", w => w with { Name = name.Trim() });
 
+    public WorkspaceResult SetWorkspaceIcon(string id, string glyph) =>
+        IsFolderName(glyph)
+            ? Rewrite(id, "The icon could not be written.", w =>
+            {
+                DeleteIconFiles(w.RootPath);
+                return w with { IconGlyph = glyph, IconFile = null };
+            })
+            : Refused(glyph, "That is not an icon name.");
+
+    public WorkspaceResult SetWorkspaceIconFile(string id, string imagePath)
+    {
+        var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+        if (!IconExtensions.Contains(extension))
+            return Refused(imagePath, "A project icon must be a PNG, JPEG, ICO, BMP or WebP image.");
+        if (!File.Exists(imagePath))
+            return new WorkspaceResult(null, new StoreProblem(
+                StoreProblemKind.NotFound, imagePath, "That image is not there."));
+        if (new FileInfo(imagePath).Length > MaxIconBytes)
+            return Refused(imagePath, "A project icon must be 2 MB or smaller.");
+
+        var (_, problem) = Locate(id);
+        if (problem is not null)
+            return new WorkspaceResult(null, problem);
+
+        return Rewrite(id, "The icon could not be copied.", w =>
+        {
+            var name = IconFileStem + extension;
+            var target = Path.Combine(w.RootPath, name);
+            if (!SamePath(Path.GetFullPath(imagePath), target))
+                File.Copy(imagePath, target, overwrite: true);
+            DeleteIconFiles(w.RootPath, except: name);
+            return w with { IconGlyph = null, IconFile = name };
+        });
+    }
+
+    public WorkspaceResult ResetWorkspaceIcon(string id) =>
+        Rewrite(id, "The icon could not be reset.", w =>
+        {
+            DeleteIconFiles(w.RootPath);
+            return w with { IconGlyph = null, IconFile = null };
+        });
+
+    // Only what Kanal wrote: the operator picked this folder, and it may hold anything else.
+    public StoreProblem? DeleteWorkspace(string id)
+    {
+        var (workspace, problem) = Locate(id);
+        if (problem is not null)
+            return problem;
+
+        var root = workspace!.RootPath;
+        try
+        {
+            var meetings = Path.Combine(root, MeetingsFolderName);
+            if (Directory.Exists(meetings))
+                Directory.Delete(meetings, recursive: true);
+            DeleteIconFiles(root);
+            File.Delete(Path.Combine(root, WorkspaceFileName));
+            if (!Directory.EnumerateFileSystemEntries(root).Any())
+                Directory.Delete(root);
+        }
+        catch (Exception ex)
+        {
+            return Unwritable(root, "The workspace files could not be deleted.", ex);
+        }
+
+        return ForgetWorkspace(id);
+    }
+
+    private WorkspaceResult Rewrite(string id, string failure, Func<Workspace, Workspace> change)
+    {
         var (entries, problem) = ReadRegistry();
         if (problem is not null)
             return new WorkspaceResult(null, problem);
@@ -114,20 +187,32 @@ public sealed class WorkspaceStore(string registryPath)
         if (index < 0)
             return new WorkspaceResult(null, NoSuchWorkspace(id));
 
-        var renamed = entries[index].ToWorkspace() with { Name = name.Trim() };
-        entries[index] = StoredRegistryEntry.From(renamed);
+        var current = entries[index].ToWorkspace();
+        Workspace changed;
         try
         {
+            changed = change(current);
+            entries[index] = StoredRegistryEntry.From(changed);
             WriteRegistry(entries);
-            if (Directory.Exists(renamed.RootPath))
-                WriteWorkspaceFile(renamed);
+            if (Directory.Exists(changed.RootPath))
+                WriteWorkspaceFile(changed);
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Unwritable(renamed.RootPath, "The rename could not be written.", ex));
+            return new WorkspaceResult(null, Unwritable(current.RootPath, failure, ex));
         }
 
-        return new WorkspaceResult(renamed, null);
+        return new WorkspaceResult(changed, null);
+    }
+
+    private static void DeleteIconFiles(string root, string? except = null)
+    {
+        if (!Directory.Exists(root))
+            return;
+
+        foreach (var file in Directory.EnumerateFiles(root, IconFileStem + ".*"))
+            if (!string.Equals(Path.GetFileName(file), except, NameComparison))
+                File.Delete(file);
     }
 
     // Leaves every file where it is: dropping a row from a list is not deleting a year of meetings.
@@ -423,7 +508,12 @@ public sealed class WorkspaceStore(string registryPath)
 
             // The list holds the name the operator last gave it. A rename made while the drive was
             // out could not reach the marker file, and must not be undone by reading it back.
-            workspace = workspace with { Name = listed.Name! };
+            workspace = workspace with
+            {
+                Name = listed.Name!,
+                IconGlyph = GlyphOrNull(listed.IconGlyph),
+                IconFile = IconFileOrNull(listed.IconFile),
+            };
             entries[index] = StoredRegistryEntry.From(workspace);
         }
         else
@@ -615,8 +705,17 @@ public sealed class WorkspaceStore(string registryPath)
         public bool Complete => Workspaces is not null;
     }
 
+    // An unknown or unsafe icon reads as the default icon, never as a broken row.
+    private static string? GlyphOrNull(string? glyph) => IsFolderName(glyph) ? glyph : null;
+
+    private static string? IconFileOrNull(string? name) =>
+        IconExtensions.Any(ext => string.Equals(name, IconFileStem + ext, StringComparison.Ordinal))
+            ? name
+            : null;
+
     private sealed record StoredRegistryEntry(
-        string? Id, string? Name, string? RootPath, DateTimeOffset CreatedAt)
+        string? Id, string? Name, string? RootPath, DateTimeOffset CreatedAt,
+        string? IconGlyph = null, string? IconFile = null)
     {
         internal bool Complete =>
             IsFolderName(Id)
@@ -625,23 +724,26 @@ public sealed class WorkspaceStore(string registryPath)
             && CreatedAt != default;
 
         internal static StoredRegistryEntry From(Workspace w) =>
-            new(w.Id, w.Name, w.RootPath, w.CreatedAt);
+            new(w.Id, w.Name, w.RootPath, w.CreatedAt, w.IconGlyph, w.IconFile);
 
-        internal Workspace ToWorkspace() => new(Id!, Name!, RootPath!, CreatedAt);
+        internal Workspace ToWorkspace() =>
+            new(Id!, Name!, RootPath!, CreatedAt, GlyphOrNull(IconGlyph), IconFileOrNull(IconFile));
     }
 
     // No path field: the folder it is in is its path, and a stale copy would outrank the truth.
     private sealed record StoredWorkspace(
-        int SchemaVersion, string? Id, string? Name, DateTimeOffset CreatedAt) : IStoredRecord
+        int SchemaVersion, string? Id, string? Name, DateTimeOffset CreatedAt,
+        string? IconGlyph = null, string? IconFile = null) : IStoredRecord
     {
         [JsonIgnore]
         public bool Complete =>
             IsFolderName(Id) && !string.IsNullOrWhiteSpace(Name) && CreatedAt != default;
 
         internal static StoredWorkspace From(Workspace w) =>
-            new(WorkspaceStore.SchemaVersion, w.Id, w.Name, w.CreatedAt);
+            new(WorkspaceStore.SchemaVersion, w.Id, w.Name, w.CreatedAt, w.IconGlyph, w.IconFile);
 
-        internal Workspace ToWorkspace(string rootPath) => new(Id!, Name!, rootPath, CreatedAt);
+        internal Workspace ToWorkspace(string rootPath) =>
+            new(Id!, Name!, rootPath, CreatedAt, GlyphOrNull(IconGlyph), IconFileOrNull(IconFile));
     }
 
     private sealed record StoredMeeting(
