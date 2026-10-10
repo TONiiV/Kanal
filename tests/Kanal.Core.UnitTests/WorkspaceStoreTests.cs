@@ -965,7 +965,7 @@ public class WorkspaceStoreTests : IDisposable
 
         var first = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.PNG")));
         Assert.Equal(["kanal-icon.png"], IconFiles(folder));
-        Assert.Equal(Path.Combine(folder, "kanal-icon.png"), first.IconPath);
+        Assert.Equal(Path.Combine(workspace.RootPath, "kanal-icon.png"), first.IconPath);
 
         var second = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("badge.jpg")));
 
