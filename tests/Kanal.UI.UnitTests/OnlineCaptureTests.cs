@@ -650,16 +650,16 @@ public class OnlineCaptureTests
         await rig.StartAsync();
         await Until(() => rig.Asr.Pushes > 0);
         var live = rig.Vm.Status;
-        var shown = new List<string>();
+
+        // ReportPushFailed and ReportPushRecovered can run in one dispatcher batch, so a poll on Status can miss the failure.
+        var shown = new ConcurrentQueue<string>();
         rig.Vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.Status))
-                shown.Add(rig.Vm.Status);
+            if (e.PropertyName == nameof(rig.Vm.Status))
+                shown.Enqueue(rig.Vm.Status);
         };
-
         rig.Asr.FailNextPushes(3);
         var expected = L.Format("status.transcriptionpushfailed", "The remote party closed the WebSocket connection.");
-        // The mixer can catch up in one burst, so failure and recovery may land in a single dispatcher pass.
         await Until(() => shown.Contains(expected));
         var before = rig.Asr.Pushes;
         await Until(() => rig.Asr.Pushes > before + 5);
