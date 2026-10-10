@@ -4,6 +4,19 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-10
+
+### No gap beside a collapsed sidebar
+
+On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid kept one
+fixed 5 px column for each splitter. A collapsed sidebar hides its splitter, but the column stayed.
+The window background showed in it.
+
+- `SidebarViewModel.SplitterColumn` is 0 while the sidebar is collapsed. `MainWindow.axaml` binds
+  both splitter columns to it. `MinShellWidth` already counted 0 for a collapsed sidebar.
+
+---
+
 ## 2026-10-07
 
 ### CI tests on Windows and macOS, with a coverage report

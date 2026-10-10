@@ -142,6 +142,25 @@ public class WorkspaceShellTests
         Assert.Equal(SidebarViewModel.MaxWidth, sidebar.ColumnMaxWidth);
     }
 
+    [Fact]
+    public void ACollapsedSidebarLeavesNoSplitterGapBehind()
+    {
+        var sidebar = new SidebarViewModel();
+        var changed = new List<string?>();
+        sidebar.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        Assert.Equal(WorkspaceShellViewModel.SplitterWidth, sidebar.SplitterColumn.Value);
+
+        sidebar.ToggleCommand.Execute(null);
+
+        Assert.Equal(0, sidebar.SplitterColumn.Value);
+        Assert.Contains(nameof(SidebarViewModel.SplitterColumn), changed);
+
+        sidebar.ToggleCommand.Execute(null);
+
+        Assert.Equal(WorkspaceShellViewModel.SplitterWidth, sidebar.SplitterColumn.Value);
+    }
+
     /// <summary>
     /// The window's own buttons sit over the top corners. Whoever owns that corner reserves the
     /// room: the sidebar header while its sidebar is open, the toolbar once it has collapsed away.

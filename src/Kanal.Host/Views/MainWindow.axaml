@@ -28,10 +28,10 @@
             <ColumnDefinition Width="{Binding Shell.Left.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Left.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Left.ColumnMaxWidth}" />
-            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
+            <ColumnDefinition Width="{Binding Shell.Left.SplitterColumn}" />
             <ColumnDefinition Width="*"
                               MinWidth="{x:Static vm:WorkspaceShellViewModel.TranscriptReserve}" />
-            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
+            <ColumnDefinition Width="{Binding Shell.Right.SplitterColumn}" />
             <ColumnDefinition Width="{Binding Shell.Right.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Right.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Right.ColumnMaxWidth}" />
