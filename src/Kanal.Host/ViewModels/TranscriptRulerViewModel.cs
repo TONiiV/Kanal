@@ -27,7 +27,7 @@ public partial class RulerTickViewModel : ViewModelBase
     private string _speakerName = "";
 
     [ObservableProperty]
-    private string _speakerColor = "#4C5C68";
+    private string _speakerColor = ThemeColours.SpeakerFallback;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
@@ -193,7 +193,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         tick.SpeakerName = string.Join(", ", speakers.Take(3).Select(t => _resolve(t).Name)) +
             (speakers.Count > 3 ? $", +{speakers.Count - 3}" : "");
         // A mark standing for several people's turns identifies nobody, so it spends no hue.
-        tick.SpeakerColor = speakers.Count == 1 ? _resolve(speakers[0]).Color : "#7C8A93";
+        tick.SpeakerColor = speakers.Count == 1 ? _resolve(speakers[0]).Color : ThemeColours.TickMixed;
     }
 
     private List<Turn> Coalesce()

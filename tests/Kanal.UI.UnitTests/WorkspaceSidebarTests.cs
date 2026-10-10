@@ -297,7 +297,8 @@ public class WorkspaceSidebarTests : IDisposable
         var delete = Opened(ellipsis).Items.OfType<MenuItem>().Single(item => item.Name == "DeleteMeeting");
 
         Assert.NotNull(delete.Icon);
-        var alarm = (ISolidColorBrush)Application.Current!.Resources["Alarm"]!;
+        Assert.True(Application.Current!.TryGetResource("Alarm", Application.Current.ActualThemeVariant, out var found));
+        var alarm = (ISolidColorBrush)found!;
         var foreground = Assert.IsAssignableFrom<ISolidColorBrush>(delete.Foreground);
         Assert.Equal(alarm.Color, foreground.Color);
 

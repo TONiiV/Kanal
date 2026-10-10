@@ -14,8 +14,7 @@ public partial class BubbleViewModel : ViewModelBase
     private string _speakerName = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RuleColor))]
-    private string _speakerColor = "#4C5C68";
+    private string _speakerColor = ThemeColours.SpeakerFallback;
 
     /// <summary>ISO code of the language actually spoken, set upper-case for the column label.</summary>
     [ObservableProperty]
@@ -31,7 +30,6 @@ public partial class BubbleViewModel : ViewModelBase
     private string _sourceText = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TextColor))]
     private bool _isPartial = true;
 
     /// <summary>True in the column whose language was spoken — the text is a transcript, not a translation.</summary>
@@ -40,7 +38,6 @@ public partial class BubbleViewModel : ViewModelBase
 
     /// <summary>True while a non-source column waits for its translation; the body shows a muted ellipsis.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TextColor))]
     private bool _awaitingTranslation;
 
     [ObservableProperty]
@@ -51,20 +48,10 @@ public partial class BubbleViewModel : ViewModelBase
     /// Exactly one bubble per column carries it; see <see cref="ColumnViewModel.GetOrAdd"/>.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RuleColor))]
     private bool _isLive;
 
     [ObservableProperty]
     private bool _isJumpTarget;
 
     public bool HasSource => SourceText.Length > 0;
-
-    /// <summary>Gray while partial (still changing) or awaiting translation, ink once final.</summary>
-    public string TextColor => IsPartial || AwaitingTranslation ? "#7C8A93" : "#111A21";
-
-    /// <summary>
-    /// The rule above the utterance: neutral hairline for history, the speaker's colour for the
-    /// live one. Colour says who, weight says now — the two signals never compete.
-    /// </summary>
-    public string RuleColor => IsLive ? SpeakerColor : "#D5DCE1";
 }
