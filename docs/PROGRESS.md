@@ -15,7 +15,7 @@ No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to
 2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
    `docs/release/macos-alpha-rollout.md` are `v1.0.0-alpha.N`.
 3. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
-   (see 2026-10-07). Its README limitations are rewritten at release time.
+   (see 2026-10-07). The release PR rewrites the README limitations.
 
 Open item: ADR 0056 requires the update check and the minimum supported version in the host before
 the first `v1.0.0` tag. That work is not done. Do not publish a `v1.0.0-alpha.N` release before it
