@@ -87,6 +87,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public Func<string, Task<BundleImportChoice>>? ChooseImportChoice { get; set; }
 
+    public Func<ProjectSettingsViewModel, Task>? ShowProjectSettings { get; set; }
+
     [ObservableProperty]
     private string? _recordingMeetingId;
 
@@ -227,22 +229,35 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return saved;
     }
 
+    // The project list drops its selection mid-rebuild; reloading on that null would close the open meeting.
+    private bool _refreshing;
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();
         var keep = SelectedWorkspace?.Id;
-        Workspaces.Clear();
-        foreach (var workspace in listing.Workspaces)
-            Workspaces.Add(workspace);
+        _refreshing = true;
+        try
+        {
+            Workspaces.Clear();
+            foreach (var workspace in listing.Workspaces)
+                Workspaces.Add(workspace);
 
-        SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
+            SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+
         LoadMeetings(listing.Problems);
     }
 
     partial void OnSelectedWorkspaceChanged(Workspace? value)
     {
         OnPropertyChanged(nameof(HasWorkspace));
-        LoadMeetings([]);
+        if (!_refreshing)
+            LoadMeetings([]);
     }
 
     partial void OnSelectedMeetingChanged(MeetingItemViewModel? value)
@@ -364,6 +379,18 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
         Refresh();
         SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == workspace!.Id);
+    }
+
+    [RelayCommand]
+    private async Task OpenProjectSettingsAsync(Workspace? project)
+    {
+        if (project is null || ShowProjectSettings is null)
+            return;
+
+        var settings = new ProjectSettingsViewModel(_store, project, recording: RecordingMeetingId is not null);
+        await ShowProjectSettings(settings);
+        if (settings.Changed)
+            Refresh();
     }
 
     [RelayCommand(CanExecute = nameof(HasWorkspace))]

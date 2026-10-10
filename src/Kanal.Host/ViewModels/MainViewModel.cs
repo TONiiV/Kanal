@@ -141,7 +141,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
-            (tag, tag, _storedColours.GetValueOrDefault(tag, "#4C5C68")));
+            (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
         Ruler.JumpRequested += MarkJumpTarget;
         BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
@@ -2303,6 +2303,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
             return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);
-        return (canonical, tag, "#4C5C68");
+        return (canonical, tag, ThemeColours.SpeakerFallback);
     }
 }
