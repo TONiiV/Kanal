@@ -17,12 +17,12 @@
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="Background" Value="{DynamicResource Paper}" />
         </Style>
 
         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource BrandWash}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{DynamicResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
         <Style Selector="TextBox#MeetingRowEditor /template/ Border#PART_BorderElement">
@@ -30,7 +30,7 @@
         </Style>
         <Style Selector="TextBox#MeetingRowEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingRowEditor:focus /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
         </Style>
         <Style Selector="Button.grouphead">
@@ -46,11 +46,11 @@
             <Setter Property="RenderTransform" Value="rotate(90deg)" />
         </Style>
         <Style Selector="Path.glyph.danger">
-            <Setter Property="Fill" Value="{StaticResource Alarm}" />
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
         </Style>
     </UserControl.Styles>
 
-    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
+    <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,1,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" Classes="chrome-head" Padding="12,0,8,0">
                 <DockPanel LastChildFill="False">
@@ -71,7 +71,7 @@
                 </DockPanel>
             </Border>
 
-            <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0"
+            <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Rule}" BorderThickness="0,1,0,0"
                     Margin="16,0" Padding="0,10">
                 <Button x:Name="Settings" Classes="ghost icon" Click="OnSettingsClick"
                         HorizontalAlignment="Left"
@@ -84,7 +84,7 @@
             <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
                        Text="{Binding Sidebar.ProblemNote}" TextWrapping="Wrap"
                        Margin="16,0,16,12" FontSize="11.5" LineHeight="17"
-                       Foreground="{StaticResource Alarm}"
+                       Foreground="{DynamicResource Alarm}"
                        IsVisible="{Binding Sidebar.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,18,16,0" ColumnSpacing="8">
@@ -145,7 +145,7 @@
 
             <TextBlock DockPanel.Dock="Top" x:Name="NoMeetings" Text="{Binding Sidebar.EmptyNote}"
                        Margin="16,18,16,0" FontSize="12" TextWrapping="Wrap"
-                       Foreground="{StaticResource Ink3}"
+                       Foreground="{DynamicResource Ink3}"
                        IsVisible="{Binding !Sidebar.Meetings.Count}" />
 
             <ScrollViewer Margin="8,10,8,10">
@@ -160,9 +160,9 @@
                                         <Path Classes="glyph chevron" Classes.open="{Binding IsExpanded}"
                                               Data="{c:Icon chevron-right}" Width="12" Height="12" />
                                         <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" Foreground="{StaticResource Ink2}" />
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource Ink2}" />
                                         <TextBlock Text="{Binding Items.Count}" FontSize="11"
-                                                   VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource Ink3}" />
                                     </StackPanel>
                                 </Button>
                                 <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
@@ -177,31 +177,31 @@
                                                 <TextBlock x:Name="MeetingRowTitle" Text="{Binding Title}" FontSize="12.5"
                                                            TextTrimming="CharacterEllipsis"
                                                            IsVisible="{Binding !IsRenaming}"
-                                                           Foreground="{StaticResource Ink}" />
+                                                           Foreground="{DynamicResource Ink}" />
                                                 <TextBox x:Name="MeetingRowEditor" Text="{Binding Draft}"
                                                          IsVisible="{Binding IsRenaming}"
                                                          FontSize="13" Padding="0" MinHeight="0" Margin="0,0,6,0"
                                                          VerticalContentAlignment="Center"
-                                                         SelectionBrush="{StaticResource Brand}"
-                                                         SelectionForegroundBrush="{StaticResource OnBrand}"
+                                                         SelectionBrush="{DynamicResource Brand}"
+                                                         SelectionForegroundBrush="{DynamicResource OnBrand}"
                                                          BorderThickness="0,0,0,1"
-                                                         BorderBrush="{StaticResource Ink}"
-                                                         Background="Transparent" Foreground="{StaticResource Ink}"
+                                                         BorderBrush="{DynamicResource Ink}"
+                                                         Background="Transparent" Foreground="{DynamicResource Ink}"
                                                          KeyDown="OnRowEditorKeyDown" LostFocus="OnRowEditorLostFocus"
                                                          AutomationProperties.Name="{l:T meeting.rename}" />
                                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                                     <TextBlock Text="{Binding When}" FontSize="11"
-                                                               Foreground="{StaticResource Ink2}" />
+                                                               Foreground="{DynamicResource Ink2}" />
                                                     <TextBlock x:Name="MeetingRowNaming" Text="{l:T title.naming}"
                                                                FontSize="10.5" IsVisible="{Binding IsNaming}"
-                                                               Foreground="{StaticResource Ink2}" />
+                                                               Foreground="{DynamicResource Ink2}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                                                 IsVisible="{Binding IsRecording}">
                                                         <Ellipse Width="5" Height="5" VerticalAlignment="Center"
-                                                                 Fill="{StaticResource Record}" />
+                                                                 Fill="{DynamicResource Record}" />
                                                         <TextBlock x:Name="ActiveMeetingMark" FontSize="10.5"
                                                                    Text="{l:T workspace.recording}"
-                                                                   Foreground="{StaticResource Ink2}" />
+                                                                   Foreground="{DynamicResource Ink2}" />
                                                     </StackPanel>
                                                 </StackPanel>
                                             </StackPanel>
@@ -246,7 +246,7 @@
                                                         </MenuItem>
                                                         <Separator />
                                                         <MenuItem Name="DeleteMeeting" Header="{l:T meeting.delete}"
-                                                                  Foreground="{StaticResource Alarm}"
+                                                                  Foreground="{DynamicResource Alarm}"
                                                                   Command="{Binding DeleteCommand}">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph danger" Data="{c:Icon trash}" Width="13" Height="13" />

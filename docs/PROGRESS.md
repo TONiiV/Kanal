@@ -4,6 +4,24 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-11
+
+### Host colours move to the Light theme dictionary
+
+This is a prefactor for the Appearance feature (#187). The host looks the same as before.
+Headless renders of the main window and of all six settings tabs are pixel-identical.
+
+- `App.axaml` holds every app colour brush in `ThemeDictionaries` under the `Light` key.
+  Every colour reference in the views is a `DynamicResource`. A test scans the views for a
+  `StaticResource` colour key.
+- `SystemAccentColor*` stays in the root dictionary. In a theme dictionary, FluentTheme ignores
+  it and draws its own default blue.
+- `ThemeColours` reads the speaker fallback colour and the mixed-speaker tick colour from the
+  theme resources. The unused `BubbleViewModel.TextColor` and `RuleColor` are gone.
+- `RoomState.Palette` and the flag colours stay as they were. Ticket #189 covers the palette.
+
+---
+
 ## 2026-10-10
 
 ### No gap beside a collapsed sidebar
