@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Builds a release package on this machine: a signed, notarised dmg on a Mac, an msi on Windows.
-# Usage: installers/release.sh <version> [--unsigned]      e.g. installers/release.sh 1.0.0-alpha.1
+# Usage: installers/release.sh <version> [--unsigned]      e.g. installers/release.sh 1.0.0
 # --unsigned is only for the CI smoke build. Gatekeeper refuses an unsigned dmg.
 set -euo pipefail
 
-full="${1:?usage: installers/release.sh <version> [--unsigned], e.g. 1.0.0-alpha.1}"
+full="${1:?usage: installers/release.sh <version> [--unsigned], e.g. 1.0.0}"
 unsigned="${2:-}"
 [[ -z "$unsigned" || "$unsigned" == --unsigned ]] || { echo "unknown option: $unsigned" >&2; exit 1; }
 full="${full#v}"

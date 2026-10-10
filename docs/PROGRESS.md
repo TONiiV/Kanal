@@ -13,15 +13,68 @@ No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to
 1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
    without a date. `ChangelogTests` keeps the two equal.
 2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
-   `docs/release/macos-alpha-rollout.md` are `v1.0.0-alpha.N`.
-3. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   `docs/release/macos-alpha-rollout.md` are plain versions: `v1.0.0`, then `v1.0.1`.
+3. No pre-release or nightly channel: every release is a plain `x.y.z` version (owner decision,
+   2026-10-11).
+4. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
    (see 2026-10-07). The release PR rewrites the README limitations.
 
 Open item: ADR 0056 requires the update check and the minimum supported version in the host before
-the first `v1.0.0` tag. That work is not done. Do not publish a `v1.0.0-alpha.N` release before it
-merges.
+the first `v1.0.0` tag. That work is not done. Do not publish the first release before it merges.
+
+### Host colours move to the Light theme dictionary
+
+This is a prefactor for the Appearance feature (#187). The host looks the same as before.
+Headless renders of the main window and of all six settings tabs are pixel-identical.
+
+- `App.axaml` holds every app colour brush in `ThemeDictionaries` under the `Light` key.
+  Every colour reference in the views is a `DynamicResource`. A test scans the views for a
+  `StaticResource` colour key.
+- `SystemAccentColor*` stays in the root dictionary. In a theme dictionary, FluentTheme ignores
+  it and draws its own default blue.
+- `ThemeColours` reads the speaker fallback colour and the mixed-speaker tick colour from the
+  theme resources. The unused `BubbleViewModel.TextColor` and `RuleColor` are gone.
+- `RoomState.Palette` and the flag colours stay as they were. Ticket #189 covers the palette.
+
+---
 
 ## 2026-10-10
+
+### Project settings
+
+A project (a `Workspace` in the code) now has its own settings window. A gear button on each row
+of the project list opens it. The gear does not change the selected project.
+
+1. `ProjectSettingsWindow` holds three sections: name, project icon, and a danger zone. Name and
+   icon changes apply only on Save. Closing the window discards them.
+2. The icon is one of eight built-in icons (`ProjectIcons.Glyphs`) or an image file. The store
+   copies an image into the project root as `kanal-icon<ext>` and deletes any older copy. It
+   deletes only `kanal-icon<ext>` for the allowed extensions. It refuses a file over 2 MB or with
+   an extension other than png, jpg, jpeg, ico, bmp or webp. It treats a link to the existing
+   copy as the same file. The window explains every refusal in the language of the interface.
+3. `kanal-workspace.json` and the registry row both carry `iconGlyph` and `iconFile`, the same way
+   they carry `name`. A file without these fields reads as the default folder icon. An unknown
+   or unsafe value also reads as the default.
+4. Remove opens `RemoveProjectWindow`. The filled button keeps the project and is the default.
+   "Remove from list" calls `ForgetWorkspace` and keeps every file. "Delete meeting files" calls
+   `DeleteWorkspace`.
+5. `DeleteWorkspace` deletes only what Kanal wrote: the `meetings` folder, `kanal-workspace.json`
+   and `kanal-icon<ext>`. It first reads `kanal-workspace.json` and refuses when the file is
+   missing or holds another `Id`. It removes the root folder only when the folder is then empty.
+   The operator picked that folder, and it can hold other files.
+6. Kanal refuses removal while any meeting is recording. The Remove button is disabled and says why.
+7. `WorkspaceSidebarViewModel.Refresh` no longer reloads the meetings when the project list drops
+   its selection during the rebuild. Before, a rename through Refresh closed the meeting that was open.
+8. `WorkspaceSidebarView` now calls the generated `InitializeComponent`. With
+   `AvaloniaXamlLoader.Load`, the named fields such as `WorkspacePicker` and `MeetingList` stayed
+   null.
+9. The Rename item in the menu of a meeting row did not run its `Click` handler. The item has no
+   `Command` now. The handler starts the rename and moves the cursor to the name field.
+10. `ProjectSettingsViewModel.Save` applies the icon first and renames second. A refused icon
+    leaves the name unchanged.
+11. Operator feedback on the PR: the danger button reads "Remove project" in full. The icon reset
+    is a text button, "Use default icon", in the icon button row. It shows only for an icon that is
+    not the default. The title of `RemoveProjectWindow` is 19 px, larger than the question (15.5 px).
 
 ### No gap beside a collapsed sidebar
 
@@ -770,7 +823,7 @@ serial phases, and records the decisions that shape the first release:
   CHANGELOG date land in the release PR, not here.
 - **The cut line.** Track A (meeting records) ships complete: the five green slices merge and the
   two missing ones — consent before a record is created (#98) and the migration bundle (#100) — are
-  built first. #90, #118 and #94 wait for their tracks.
+  built first. #90, #127 and #94 wait for their tracks.
 - **Hide what has no second state.** The Speakers tab has one speaker to rename until Track B lands;
   the online capture profile records the microphone only until Track D lands. Both are hidden or
   disabled rather than shown and explained.
@@ -1114,6 +1167,40 @@ The binding rule from decision 3 had to land here rather than in slice 2, becaus
 something to bind to: an untouched record (`StartedAt` null) is written into, anything else gets a
 new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
 and start" — not the rule.
+
+### The diarization catalog and its licence gate ([#107](https://github.com/TONiiV/Kanal/issues/107), [PR #127](https://github.com/TONiiV/Kanal/pull/127))
+
+Speaker attribution needs two models. The segmentation model finds where the speaker changes. The embedding model decides whether two segments have the same voice.
+
+`DiarizationModelCatalog` lists pyannote segmentation 3.0 as the segmentation model. It lists four embedding candidates: 3D-Speaker CAM++, 3D-Speaker ERes2Net base, WeSpeaker CN-Celeb ResNet34 and NeMo TitaNet small.
+
+[ADR 0055](adr/0055-speaker-attribution.md) decision 16 sets the default embedding model. Measured DER on Chinese, German and Polish decides it, not parameter count. The catalog therefore offers candidates and does not rank them.
+
+Sizes come from the GitHub releases API. We recomputed every SHA-256 from the downloaded file on 2026-09-08. The four embedding hashes also match the upstream `checksum.txt`.
+
+**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless also have non-commercial licences.
+
+A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. If someone lists Reverb, the catalog throws on first use and the test suite fails.
+
+**Readiness never throws.** `DiarizationModelCatalog.Readiness` reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
+
+The catalog reports only *not downloaded* and *ready*, as [PR #126](https://github.com/TONiiV/Kanal/pull/126) does for the transcription catalog. The disk decides these two states. `DiarizationModelDownload` owns *downloading* and *failed* for one file. This follows [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5. The post-meeting pass needs only "both files on disk".
+
+`DiarizationModelDownload` holds the state of one file. A 404 or a hash mismatch ends in `Failed`, with the message on the object. It never throws. The host has no reason to show a dialog over a running meeting.
+
+Headless tests start a demo meeting with an empty models directory. The transcript arrives. No mode status mentions a speaker model.
+
+[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. The download needs no token. No repository is gated. A test asserts that the downloader receives the URL unchanged.
+
+The embedding release tag is `speaker-recongition-models` upstream. A test pins this spelling. The correct spelling gives a 404 for every embedding URL, and the error shows only at download time.
+
+Three items are open.
+
+1. The segmentation asset is a `.tar.bz2` that holds `model.onnx` and `model.int8.onnx`. The BCL has no bzip2. Unpacking needs a new dependency, so it ships with the slice that loads the model. Until then, `Ready` means that the verified archive is on disk.
+2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`. That issue also covers a race in `DiarizationModelDownload.Cancel`, which can touch a disposed token source.
+3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
+
+No operator can reach these models yet, so this PR adds no CHANGELOG entry.
 
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 

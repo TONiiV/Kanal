@@ -1,11 +1,17 @@
 namespace Kanal.Core.Workspaces;
 
 // Peers, never nested: there is no company-above-project level here (ADR 0051).
+// IconFile is a file name inside RootPath: the icon travels with the folder.
 public sealed record Workspace(
     string Id,
     string Name,
     string RootPath,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? IconGlyph = null,
+    string? IconFile = null)
+{
+    public string? IconPath => IconFile is null ? null : Path.Combine(RootPath, IconFile);
+}
 
 public sealed record MeetingRecord(
     string Id,
@@ -33,6 +39,12 @@ public enum StoreProblemKind
     Unwritable,
 
     UnsupportedVersion,
+
+    TooLarge,
+
+    WrongType,
+
+    NotThisWorkspace,
 }
 
 // Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.

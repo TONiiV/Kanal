@@ -191,11 +191,13 @@ public class MeetingTitleRowTests : IDisposable
         field.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         Dispatcher.UIThread.RunJobs();
 
-        var resources = Application.Current!.Resources;
+        var app = Application.Current!;
+        app.TryGetResource("Brand", app.ActualThemeVariant, out var brand);
+        app.TryGetResource("OnBrand", app.ActualThemeVariant, out var onBrand);
         Assert.True(editor.IsFocused);
         Assert.Equal(LongPolishTitle, editor.SelectedText);
-        Assert.Same(resources["Brand"], editor.SelectionBrush);
-        Assert.Same(resources["OnBrand"], editor.SelectionForegroundBrush);
+        Assert.Same(brand, editor.SelectionBrush);
+        Assert.Same(onBrand, editor.SelectionForegroundBrush);
         Assert.Equal(0, editor.CaretIndex);
 
         window.Close();
