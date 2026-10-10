@@ -198,9 +198,8 @@
       working directory rather than against the .wxs itself, which is how an icon reference ended up
       pointing outside the repository.
     -->
-    <!-- ICE61 warns that AllowSameVersionUpgrades lets the upgrade remove a same-version product. That is the intent. -->
     <Exec WorkingDirectory="$(RepoRoot)"
-          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -ext $(WixUiExtension) -sice ICE61 -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -d LicensePath=&quot;$(WindowsLicense)&quot; -o &quot;$(MsiPath)&quot;" />
+          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -ext $(WixUiExtension) -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -d LicensePath=&quot;$(WindowsLicense)&quot; -o &quot;$(MsiPath)&quot;" />
 
     <Message Importance="high" Text="msi: $(MsiPath)" />
   </Target>
