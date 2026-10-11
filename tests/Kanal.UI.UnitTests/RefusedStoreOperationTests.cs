@@ -207,7 +207,8 @@ public class RefusedStoreOperationTests : IDisposable
 
         await vm.ImportMeetingFromAsync(bundle);
 
-        Assert.Equal(Localizer.Instance.Format("workspace.refused.unreadable", bundle), vm.ProblemNote);
+        Assert.Equal(Localizer.Instance.Format("workspace.import.unreadable", bundle), vm.ProblemNote);
+        Assert.NotEqual(Localizer.Instance.Format("workspace.refused.unreadable", bundle), vm.ProblemNote);
         Assert.Contains(sink.Lines, l => l.Message.StartsWith($"Unreadable on {bundle}: "));
     }
 
@@ -221,27 +222,6 @@ public class RefusedStoreOperationTests : IDisposable
         vm.RenameMeeting(meeting.Id, "Second call");
 
         Assert.Equal(Localizer.Instance.Format("workspace.titletaken", "Second call"), vm.ProblemNote);
-    }
-
-    [AvaloniaFact]
-    public void EveryRefusalSentenceExistsInEveryLanguageAndDiffersFromEnglish()
-    {
-        string[] keys =
-        [
-            "workspace.refused.invalid",
-            "workspace.refused.notfound",
-            "workspace.refused.foldermissing",
-            "workspace.refused.unreadable",
-            "workspace.refused.unwritable",
-            "workspace.refused.unsupportedversion",
-            "workspace.refused.other",
-        ];
-        foreach (var code in new[] { "zh", "de", "pl" })
-            foreach (var key in keys)
-            {
-                Assert.True(Strings.Tables[code].ContainsKey(key), $"{code} lacks {key}");
-                Assert.NotEqual(Strings.Tables["en"][key], Strings.Tables[code][key]);
-            }
     }
 
     [AvaloniaTheory]

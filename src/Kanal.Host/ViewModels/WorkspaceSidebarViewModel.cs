@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -433,7 +432,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem))
+        if (Refused(problem, ImportKey(problem)))
             return;
 
         var asNewRecord = false;
@@ -449,7 +448,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             asNewRecord = true;
         }
 
-        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+        var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
+        if (Refused(imported, ImportKey(imported)))
             return;
 
         ProblemNote = "";
@@ -494,12 +494,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private bool Refused(StoreProblem? problem)
+    private static string? ImportKey(StoreProblem? problem) =>
+        problem?.Kind is StoreProblemKind.Unreadable or StoreProblemKind.Invalid
+            ? "workspace.import.unreadable"
+            : null;
+
+    private bool Refused(StoreProblem? problem, string? key = null)
     {
         if (problem is null)
             return false;
 
-        ProblemNote = StoreRefusal.Report(problem, LogCategory);
+        ProblemNote = StoreRefusal.Report(problem, LogCategory, key);
         return true;
     }
 

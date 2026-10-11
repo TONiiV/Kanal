@@ -37,8 +37,10 @@ generic sentence in the project settings. The operators read Chinese, German and
    means nothing to the operator.
 4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
    another project already uses. The code does not match on the English `Detail`.
-5. The project settings keep one caller rule: `NotFound` for the chosen image gives
-   `workspace.icon.missing`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` and `Invalid`: the operator cannot repair a bundle, so the sentence says to ask
+   for a new export.
 6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
    `workspace.refused.other` replaces it for a kind that has no sentence yet.
 
