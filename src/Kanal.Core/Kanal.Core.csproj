@@ -11,4 +11,8 @@
     <EmbeddedResource Include="Text/TSCharacters.txt" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kanal.Core.UnitTests" />
+  </ItemGroup>
+
 </Project>
