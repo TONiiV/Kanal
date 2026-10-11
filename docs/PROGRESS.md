@@ -6,6 +6,32 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. The issues are de-duplicated with `Distinct()` and logged once
+   per listing.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `RecordWash`) shows when any issue is not a missing folder. The warning
+   colour (`Hold`, `HoldWash`) shows otherwise. No new colour resources.
+5. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls, with a maximum height of 720 DIP.
+6. The cause sentences do not tell the operator to edit files. The path is selectable text.
+7. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
+
 ### The Windows msi shows its dialogs and replaces the installed version
 
 The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
