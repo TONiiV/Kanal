@@ -16,14 +16,33 @@ internal static class RecordFile
 
     public static (T? Value, StoreProblem? Problem) Read<T>(string path) where T : class, IStoredRecord
     {
-        T? value;
+        var (text, unreachable) = ReadText(path);
+        return unreachable is not null ? (null, unreachable) : Parse<T>(text!, path);
+    }
+
+    public static (string? Text, StoreProblem? Problem) ReadText(string path)
+    {
         try
         {
-            value = JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options);
+            return (File.ReadAllText(path), null);
         }
         catch (Exception ex)
         {
             Log.Warning(StoreProblems.LogCategory, $"{path} could not be read.", ex);
+            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, ex.Message));
+        }
+    }
+
+    public static (T? Value, StoreProblem? Problem) Parse<T>(string text, string path) where T : class, IStoredRecord
+    {
+        T? value;
+        try
+        {
+            value = JsonSerializer.Deserialize<T>(text, Options);
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning(StoreProblems.LogCategory, $"{path} could not be parsed.", ex);
             return (null, new StoreProblem(StoreProblemKind.Unreadable, path, ex.Message));
         }
 

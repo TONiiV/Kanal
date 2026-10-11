@@ -255,7 +255,17 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
             return (null, new StoreProblem(
                 StoreProblemKind.RecordMissing, folder, "That meeting folder holds no record."));
 
-        var (stored, trouble) = RecordFile.Read<StoredMeeting>(file);
+        // Only content is damage. A read that fails on access or I/O says nothing about the bytes,
+        // and recovery would rename a healthy record.
+        if (Directory.Exists(file))
+            return (null, new StoreProblem(
+                StoreProblemKind.RecordDamaged, folder, "The meeting record is a folder, not a file."));
+
+        var (text, unreachable) = RecordFile.ReadText(file);
+        if (unreachable is not null)
+            return (null, unreachable with { Subject = folder });
+
+        var (stored, trouble) = RecordFile.Parse<StoredMeeting>(text!, file);
         if (trouble is not null)
             return (null, trouble.Kind == StoreProblemKind.Unreadable
                 ? trouble with { Kind = StoreProblemKind.RecordDamaged, Subject = folder }
@@ -288,7 +298,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         [.. utterances
             .SelectMany(u => u.Translations.Keys.Prepend(u.SrcLang))
             .Where(IsKnownLanguage)
-            .Distinct()];
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
 
     private static bool IsKnownLanguage(string language) =>
         !string.IsNullOrWhiteSpace(language)
