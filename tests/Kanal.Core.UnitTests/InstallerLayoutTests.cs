@@ -59,7 +59,7 @@ public class InstallerLayoutTests
         return new StagedApp(Path.Combine(stageDir, "Kanal.app"), repoRoot);
     }
 
-    static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;
         while (dir is not null && !File.Exists(Path.Combine(dir, "Kanal.slnx")))
