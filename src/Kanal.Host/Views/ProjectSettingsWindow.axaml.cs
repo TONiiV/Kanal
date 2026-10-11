@@ -18,6 +18,8 @@ public partial class ProjectSettingsWindow : Window
         viewModel.ChooseImageFile = ChooseImageAsync;
         viewModel.ConfirmRemoval = ConfirmRemovalAsync;
         viewModel.Finished += Close;
+        if (viewModel.OpenAtIssues)
+            Loaded += (_, _) => IssuesSection.BringIntoView();
     }
 
     private void OnGlyphClick(object? sender, RoutedEventArgs e) => ChooseGlyph.Flyout?.Hide();

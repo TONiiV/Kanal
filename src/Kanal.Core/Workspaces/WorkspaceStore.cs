@@ -13,7 +13,7 @@ public sealed class WorkspaceStore(string registryPath)
     public const string IconFileStem = "kanal-icon";
     public const long MaxIconBytes = 2 * 1024 * 1024;
     public static readonly IReadOnlyList<string> IconExtensions = [".png", ".jpg", ".jpeg", ".ico", ".bmp", ".webp"];
-    private const string MeetingsFolderName = "meetings";
+    public const string MeetingsFolderName = "meetings";
     private const string LogCategory = "workspaces";
     private const string NeedsTitle = "A meeting needs a title.";
     private const string NeedsName = "A workspace needs a name.";

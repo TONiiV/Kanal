@@ -51,6 +51,28 @@
         <Style Selector="ComboBox#WorkspacePicker ComboBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
+        <Style Selector="Border#IssuesBanner">
+            <Setter Property="Background" Value="{DynamicResource HoldWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Hold}" />
+        </Style>
+        <Style Selector="Border#IssuesBanner.alarm">
+            <Setter Property="Background" Value="{DynamicResource RecordWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="Path.glyph#IssuesIcon">
+            <Setter Property="Fill" Value="{DynamicResource Hold}" />
+        </Style>
+        <Style Selector="Path.glyph#ProjectIssueMark">
+            <Setter Property="Fill" Value="{DynamicResource Hold}" />
+        </Style>
+        <Style Selector="Border#IssuesBanner.alarm Path#IssuesIcon">
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="Button.ghost#IssuesDetails">
+            <Setter Property="Foreground" Value="{DynamicResource Brand}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,4" />
+        </Style>
         <Style Selector="Button#ProjectSettings Path.glyph">
             <Setter Property="Fill" Value="{DynamicResource Ink3}" />
         </Style>
@@ -88,6 +110,24 @@
                         AutomationProperties.Name="{l:T settings.tip}">
                     <Path Classes="glyph" Data="{c:Icon settings}" Width="18" Height="18" />
                 </Button>
+            </Border>
+
+            <Border DockPanel.Dock="Bottom" x:Name="IssuesBanner" Classes.alarm="{Binding Sidebar.IssuesAreAlarm}"
+                    IsVisible="{Binding Sidebar.HasIssues}"
+                    Margin="16,0,16,12" Padding="10,3,3,3" BorderThickness="1"
+                    CornerRadius="{StaticResource ControlRadius}"
+                    AutomationProperties.Name="{Binding Sidebar.IssueCountText}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <Path x:Name="IssuesIcon" Classes="glyph" Data="{c:Icon warning}" Width="15" Height="15"
+                          VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" x:Name="IssuesCount" Text="{Binding Sidebar.IssueCountText}"
+                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}" />
+                    <Button Grid.Column="2" x:Name="IssuesDetails" Classes="ghost"
+                            Content="{l:T workspace.issues.details}"
+                            Command="{Binding Sidebar.ShowIssuesCommand}"
+                            AutomationProperties.Name="{l:T workspace.issues.details}" />
+                </Grid>
             </Border>
 
             <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
@@ -135,7 +175,7 @@
                     </ComboBox.SelectionBoxItemTemplate>
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="9">
                                 <Panel Width="15" Height="15" VerticalAlignment="Center">
                                     <Image x:Name="ProjectImage" Width="15" Height="15"
                                            Source="{Binding IconPath, Converter={x:Static c:ProjectIcons.Image}}" />
@@ -145,7 +185,18 @@
                                 </Panel>
                                 <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
-                                <Button Grid.Column="2" x:Name="ProjectSettings" Classes="ghost icon"
+                                <Path Grid.Column="2" x:Name="ProjectIssueMark" Classes="glyph"
+                                      Data="{c:Icon warning}" Width="13" Height="13" VerticalAlignment="Center"
+                                      ToolTip.Tip="{l:T workspace.issues.mark}"
+                                      AutomationProperties.Name="{l:T workspace.issues.mark}">
+                                    <Path.IsVisible>
+                                        <MultiBinding Converter="{x:Static c:ProjectIcons.IssueMark}">
+                                            <Binding Path="Id" />
+                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectsWithIssues" />
+                                        </MultiBinding>
+                                    </Path.IsVisible>
+                                </Path>
+                                <Button Grid.Column="3" x:Name="ProjectSettings" Classes="ghost icon"
                                         Width="24" Height="24" Padding="0" Margin="0,-4,-6,-4"
                                         Click="OnProjectSettingsClick"
                                         ToolTip.Tip="{l:T workspace.settings.tip}"
