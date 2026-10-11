@@ -151,7 +151,10 @@ This is the core part of spec #209 (ticket #211). No UI uses it yet.
 10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
     reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
     element crashed every operation.
-11. None of the three operations deletes or moves a file in a project folder.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
 
 ### Start-up logs why the default project is missing
 
