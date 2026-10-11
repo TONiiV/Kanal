@@ -1,3 +1,5 @@
+using Kanal.Core.Diagnostics;
+
 namespace Kanal.Core.Workspaces;
 
 public sealed class WorkspaceStore
@@ -73,8 +75,9 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(
-                null, StoreProblems.Unwritable(rootPath, "The workspace folder could not be written.", ex));
+            const string failure = "The workspace folder could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({rootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(rootPath, failure, ex));
         }
 
         return registry.Register(workspace);
@@ -161,7 +164,9 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(root, "The workspace files could not be deleted.", ex);
+            const string failure = "The workspace files could not be deleted.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({root})", ex);
+            return StoreProblems.Unwritable(root, failure, ex);
         }
 
         return ForgetWorkspace(id);
@@ -231,6 +236,7 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({current.RootPath})", ex);
             return new WorkspaceResult(null, StoreProblems.Unwritable(current.RootPath, failure, ex));
         }
 
