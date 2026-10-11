@@ -6,12 +6,12 @@
         Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
 
     <StackPanel Margin="26,20,26,18" Spacing="0">
         <TextBlock Text="{l:T workspace.remove.title}" FontSize="19" FontWeight="SemiBold" />
-        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,0" />
+        <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,0" />
 
         <TextBlock x:Name="Heading" Margin="0,16,0,0" FontSize="15.5" LineHeight="23"
                    TextWrapping="Wrap" />
@@ -19,12 +19,12 @@
         <TextBlock Margin="0,12,0,0" FontSize="12.5" FontWeight="SemiBold"
                    Text="{l:T workspace.remove.listonly}" />
         <TextBlock Margin="0,3,0,0" FontSize="12.5" LineHeight="20" TextWrapping="Wrap"
-                   Foreground="{StaticResource Ink2}" Text="{l:T workspace.remove.listonly.body}" />
+                   Foreground="{DynamicResource Ink2}" Text="{l:T workspace.remove.listonly.body}" />
 
         <TextBlock Margin="0,12,0,0" FontSize="12.5" FontWeight="SemiBold"
-                   Foreground="{StaticResource Alarm}" Text="{l:T workspace.remove.deletefiles}" />
+                   Foreground="{DynamicResource Alarm}" Text="{l:T workspace.remove.deletefiles}" />
         <TextBlock Margin="0,3,0,0" FontSize="12.5" LineHeight="20" TextWrapping="Wrap"
-                   Foreground="{StaticResource Ink2}" Text="{l:T workspace.remove.deletefiles.body}" />
+                   Foreground="{DynamicResource Ink2}" Text="{l:T workspace.remove.deletefiles.body}" />
 
         <WrapPanel HorizontalAlignment="Right" Margin="0,20,0,0" ItemSpacing="8" LineSpacing="8">
             <!-- The filled button keeps the project. Neither removal is the button Enter presses. -->
