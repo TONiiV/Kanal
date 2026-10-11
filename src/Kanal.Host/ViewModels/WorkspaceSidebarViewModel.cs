@@ -363,8 +363,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     partial void OnSearchChanged(string value) => Show();
 
+    private string? _recordingProjectId;
+
     partial void OnRecordingMeetingIdChanged(string? value)
     {
+        _recordingProjectId = value is null ? null : RecordOf(value)?.WorkspaceId ?? SelectedWorkspace?.Id;
         foreach (var meeting in Meetings)
             meeting.IsRecording = meeting.Id == value;
     }
@@ -486,7 +489,16 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             return;
 
         var settings = new ProjectSettingsViewModel(
-            _store, project, recording: RecordingMeetingId is not null, IssuesOf(project), openAtIssues);
+            _store, project, recording: RecordingMeetingId is not null, IssuesOf(project), openAtIssues,
+            projectRecording: RecordingMeetingId is not null && _recordingProjectId == project.Id)
+        {
+            ReloadIssues = () =>
+            {
+                Refresh();
+                return IssuesOf(project);
+            },
+            Clock = _clock,
+        };
         await ShowProjectSettings(settings);
         if (settings.Changed)
             Refresh();

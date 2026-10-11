@@ -14,6 +14,12 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each issue in project settings now has a button that repairs it. Kanal rebuilds a damaged
+  meeting record from its transcript, or moves the folder to `kanal-set-aside` when it cannot. A
+  copied meeting folder becomes a separate meeting. A missing project folder gets "Choose folder…"
+  or "Remove from list". Kanal creates a missing meetings folder and removes a damaged row of the
+  project list. Kanal deletes no file. The row shows the result in one line. While a project
+  records a meeting, its issues show no buttons.
 - When the current project has issues, a banner above the settings gear shows how many. A
   damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
   settings at the new Issues section, which gives each issue its cause and its path. In the project

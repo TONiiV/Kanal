@@ -6,6 +6,49 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Resolve buttons in the Issues section (#213, part of spec #209)
+
+Each row of the Issues section in project settings now has its action. Kanal does the repair. The
+operator does not edit files.
+
+1. The causes name the kinds of #210 and #211. A damaged record, a folder without a record, a copied
+   folder and a damaged row of the project list each have their own sentence. The subject of a
+   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed,
+   because no listing reports `Unreadable` for a meeting folder any more.
+2. `ProjectIssueViewModel.Action` selects the action from the kind:
+
+   | Kind | Button | Core call |
+   |---|---|---|
+   | `RecordMissing`, `RecordDamaged` | Resolve | `RecoverMeeting` |
+   | `Misfiled` | Resolve | `ReidentifyMeeting` |
+   | `FolderMissing` (project folder) | Choose folder… / Remove from list | `RelocateWorkspace` / `ForgetWorkspace` |
+   | `FolderMissing` (`meetings`) | Resolve | `CreateMeetingsFolder` |
+   | `RegistryRowDamaged` | Resolve | `DropBrokenRegistryRows` |
+   | `UnsupportedVersion` | none | none |
+
+3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
+   language. The time is the time of the recovery, from the sidebar clock. Kanal cannot know the
+   meeting time before the rebuild.
+4. After each action, `ReloadIssues` calls `Refresh` on the sidebar. The meeting list, the banner and
+   the project marks update. The settings window then merges the new issue list into its rows:
+   - A row with an outcome stays, so the operator can read the outcome.
+   - A row without an outcome that is not in the new list goes away.
+   - A new issue is added at the end.
+5. The outcome shows in one line in the row. A refusal shows its reason in the alarm colour. The
+   reason is mapped from the `StoreProblemKind`. A reason without its own sentence gets the
+   generic sentence, and the log gets the detail.
+6. "Choose folder…" uses a folder picker in the settings window (`ChooseProjectFolder`), owned by
+   that window. "Remove from list" opens the remove dialog with only "Remove from list" and "Keep
+   it" (`RemoveProjectWindow` with `listOnly`). It then follows the existing remove flow: the window
+   closes and the sidebar reloads.
+7. After a relocation, an icon file of the project points to the new folder. Without this, Save
+   refused the old icon path.
+8. Spec decision 14: no action is offered for the project that records. The sidebar keeps the
+   project of `RecordingMeetingId` (`_recordingProjectId`). The project switcher stays open while
+   a meeting records, so this is not always the selected project. A note in the Issues section
+   says why the buttons are missing. "Remove from list" also follows the existing rule: no project
+   leaves the list while any meeting records.
+
 ### Issues banner and Issues section (#212, part of spec #209)
 
 The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
