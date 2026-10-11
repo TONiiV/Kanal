@@ -219,7 +219,7 @@ The MSI is unsigned. First run shows a SmartScreen warning that the operator mus
 > **Amended 2026-10-07.** The version now comes from the tag of a published GitHub Release. The
 > `workflow_dispatch` input and the private-link rule of 2026-09-02 are gone. See the CI section.
 
-The release tag is the source of truth: `v1.0.1-alpha.1` gives `FullVersion` `1.0.1-alpha.1`.
+The release tag is the source of truth: `v1.0.0` gives `FullVersion` `1.0.0`.
 `release.sh` refuses a version whose numeric part differs from `<Version>` in
 `src/Kanal.Host/Kanal.Host.csproj`. The PR smoke build uses `0.0.0-smoke` and skips this check.
 
@@ -227,11 +227,11 @@ To release a new version, follow these steps:
 
 1. Raise `<Version>` and the `CHANGELOG.md` heading in a PR.
 2. Merge the PR.
-3. Tag the same numeric version on a green commit of `main`, for example `v1.0.1-alpha.2`.
+3. Tag the same numeric version on a green commit of `main`, for example `v1.0.1`.
 
 MSI `ProductVersion` constrains the scheme: **major <= 255, minor <= 255, build <= 65535**, and a
 fourth component is silently ignored for upgrade comparisons. Three-component semver stays well
-inside this. Pre-release suffixes (`1.0.1-alpha.1`) are stripped for the MSI and for
+inside this. Pre-release suffixes (`1.0.0-rc.1`; the project publishes none) are stripped for the MSI and for
 `CFBundleShortVersionString` — Apple rejects them there — and kept for the artifact name.
 
 ## CI
@@ -253,7 +253,7 @@ byte-identity invariant) and packaging must not slow it down.
 Both jobs call `installers/release.sh`. The workflow runs no tests. The maintainer tags only a
 commit of `main` whose `ci.yml` run is green.
 
-A Pre-release on a public repository is public, as is an Actions artifact. The alpha accepts this.
+A Pre-release on a public repository is public, as is an Actions artifact. The project accepts this.
 To withdraw a version, delete its release assets.
 
 The maintainer can also build on a Mac with the same script:
@@ -267,7 +267,7 @@ export NOTARY_KEY_PATH=path/to/AuthKey_XXXXXXXX.p8
 export NOTARY_KEY_ID=XXXXXXXX
 export NOTARY_ISSUER_ID=<issuer uuid>
 
-installers/release.sh 1.0.1-alpha.1
+installers/release.sh 1.0.0
 ```
 
 The script writes `artifacts/Kanal-<full>-osx-arm64.dmg` and a `.sha256` file next to it.
