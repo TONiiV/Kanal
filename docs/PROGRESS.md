@@ -6,6 +6,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### The sidebar names each record it cannot read
+
+The sidebar note said only "1 record(s) could not be read". It did not name the record. The
+operator could not find the cause, so the note could not be removed.
+
+- The note now starts with the count. Below the count, it names up to three problems with their
+  paths. More problems give one line that points to the log.
+- Each line tells the operator what to do. A missing project folder names the project and says
+  "connect the drive, or remove the project". A newer schema says "update Kanal". Any other
+  problem says "repair it or move it out of the project folder".
+- Every listed problem goes to the log with its kind, path and English detail.
+- The note has no close button. The cause stays on disk, so the note comes back on the next
+  refresh. A dismissed note would hide a record that no list shows (see the store rule
+  "failures are reported next to whatever could still be read").
+
 ### Host colours move to the Light theme dictionary
 
 This is a prefactor for the Appearance feature (#187). The host looks the same as before.

@@ -311,9 +311,35 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             problems.AddRange(listing.Problems);
         }
 
-        ProblemNote = problems.Count == 0 ? "" : L.Format("workspace.problems", problems.Count);
+        ProblemNote = Describe(problems);
         Show();
     }
+
+    private const int ProblemsShown = 3;
+
+    private string Describe(IReadOnlyList<StoreProblem> problems)
+    {
+        if (problems.Count == 0)
+            return "";
+
+        foreach (var problem in problems)
+            Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+
+        var lines = new List<string> { L.Format("workspace.problems", problems.Count) };
+        lines.AddRange(problems.Take(ProblemsShown).Select(Describe));
+        if (problems.Count > ProblemsShown)
+            lines.Add(L.Format("workspace.problems.more", problems.Count - ProblemsShown));
+        return string.Join("\n", lines);
+    }
+
+    private string Describe(StoreProblem problem) => problem.Kind switch
+    {
+        StoreProblemKind.FolderMissing when Workspaces.FirstOrDefault(w => w.RootPath == problem.Subject) is { } gone =>
+            L.Format("workspace.problems.projectmissing", gone.Name, problem.Subject),
+        StoreProblemKind.FolderMissing => L.Format("workspace.problems.foldermissing", problem.Subject),
+        StoreProblemKind.UnsupportedVersion => L.Format("workspace.problems.newer", problem.Subject),
+        _ => L.Format("workspace.problems.unreadable", problem.Subject),
+    };
 
     private void Show()
     {

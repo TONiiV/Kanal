@@ -105,7 +105,37 @@ public class WorkspaceSidebarTests : IDisposable
         vm.Refresh();
 
         Assert.Equal("Delivery call", Assert.Single(vm.Meetings).Title);
-        Assert.NotEqual("", vm.ProblemNote);
+        Assert.Contains(Path.Combine(meetings, "not-a-meeting"), vm.ProblemNote);
+    }
+
+    [Fact]
+    public void AnotherProjectWhoseFolderIsGoneIsNamedInTheNote()
+    {
+        var store = Store();
+        var gone = store.CreateWorkspace("Lambda", Folder("gone")).Workspace!.RootPath;
+        var vm = Opened(store, "Delivery call");
+        Directory.Delete(gone, recursive: true);
+
+        vm.Refresh();
+
+        Assert.Contains(gone, vm.ProblemNote);
+        Assert.Contains("Lambda", vm.ProblemNote);
+    }
+
+    [Fact]
+    public void ALongListOfProblemsIsCutShortRatherThanFillingTheSidebar()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meetings = Path.Combine(vm.SelectedWorkspace!.RootPath, "meetings");
+        foreach (var name in new[] { "a", "b", "c", "d", "e" })
+            Directory.CreateDirectory(Path.Combine(meetings, name));
+
+        vm.Refresh();
+
+        Assert.Contains(Path.Combine(meetings, "a"), vm.ProblemNote);
+        Assert.DoesNotContain(Path.Combine(meetings, "e"), vm.ProblemNote);
+        Assert.Contains(Kanal.Host.Localization.Localizer.Instance.Format("workspace.problems.more", 2), vm.ProblemNote);
     }
 
     [Fact]
