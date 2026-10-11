@@ -584,6 +584,48 @@ public class WorkspaceStoreRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void ARecordThatCannotBeOpenedIsUnreadableAndNothingIsRenamedOrMoved()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var meeting = Meeting(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        WriteTranscript(folder, Said("u1", "de", 0));
+        var record = Path.Combine(folder, WorkspaceStore.MeetingFileName);
+        var text = File.ReadAllText(record);
+        var before = Contents(workspace.RootPath);
+
+        using (new FileStream(record, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var problem = Assert.Single(Store().ListMeetings(workspace.Id).Problems);
+            Assert.Equal(StoreProblemKind.Unreadable, problem.Kind);
+            Assert.Equal(folder, problem.Subject);
+            Assert.Equal(
+                StoreProblemKind.Unreadable, store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Problem!.Kind);
+            Assert.Equal(StoreProblemKind.Unreadable, store.ReidentifyMeeting(workspace.Id, folder).Problem!.Kind);
+        }
+
+        Assert.Equal(text, File.ReadAllText(record));
+        Assert.False(File.Exists(record + ".damaged"));
+        Assert.False(Directory.Exists(SetAsideOf(workspace)));
+        Assert.Equal(before, Contents(workspace.RootPath));
+        Assert.Equal(meeting.Id, Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Id);
+    }
+
+    [Fact]
+    public void LanguageCodesThatDifferOnlyInCaseAreListedOnceWithTheFirstSpelling()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "de", 0, null, "zh"), Said("u2", "ZH", 1_000, null, "DE"));
+
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
+
+        Assert.Equal(["de", "zh"], record.Languages);
+    }
+
+    [Fact]
     public void RecoveringARecordKeepsEveryFileInTheProject()
     {
         var store = Store();
