@@ -87,6 +87,7 @@ Style note: a style without a class or pseudo-class loses to an App style with o
 ### Meeting problem kinds and recovery in the store (#210, spec #209)
 
 This is core work only. The UI follows in other tickets.
+The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` and `ReidentifyMeeting` to it.
 
 1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
    `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
