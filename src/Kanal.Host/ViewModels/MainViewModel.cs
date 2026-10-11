@@ -271,10 +271,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     // Only the production path: a test that reached for Documents would create a workspace on
     // the developer's own machine.
-    private static WorkspaceStore Bootstrapped()
+    private static WorkspaceStore Bootstrapped() =>
+        OpenStore(SettingsStore.WorkspaceRegistryPath, SettingsStore.DefaultOutputFolder);
+
+    public static WorkspaceStore OpenStore(string registryPath, string defaultFolder)
     {
-        var store = new WorkspaceStore(SettingsStore.WorkspaceRegistryPath);
-        store.EnsureWorkspace("Kanal", SettingsStore.DefaultOutputFolder);
+        var store = new WorkspaceStore(registryPath);
+        if (store.EnsureWorkspace("Kanal", defaultFolder).Problem is { } problem)
+            Log.Warning(WorkspaceLog, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
         return store;
     }
 
@@ -1539,6 +1543,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const string RoomLog = "room";
     private const string RelayLog = "relay";
     private const string AudioLog = "audio";
+    private const string WorkspaceLog = "workspaces";
     private const string AsrLog = "asr";
 
     // A provider's error text is passed through verbatim and can carry a whole rejected payload.
