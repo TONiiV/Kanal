@@ -270,6 +270,11 @@ public sealed class WorkspaceStore(string registryPath)
         if (Occupied(entries, newRootPath, byAnyoneBut: id) is { } taken)
             return taken;
 
+        var current = entries[index];
+        if (!SamePath(current.RootPath!, newRootPath) && Directory.Exists(current.RootPath))
+            return Refused(
+                newRootPath, $"The workspace \"{current.Name}\" is still at {current.RootPath}.");
+
         var relocated = entries[index].ToWorkspace() with { RootPath = newRootPath };
         var marker = Path.Combine(newRootPath, WorkspaceFileName);
         if (File.Exists(marker))
@@ -284,7 +289,10 @@ public sealed class WorkspaceStore(string registryPath)
         try
         {
             if (!File.Exists(marker))
+            {
+                Directory.CreateDirectory(Path.Combine(newRootPath, MeetingsFolderName));
                 WriteWorkspaceFile(relocated);
+            }
             entries[index] = StoredRegistryEntry.From(relocated);
             WriteRegistry(entries);
         }
@@ -322,7 +330,7 @@ public sealed class WorkspaceStore(string registryPath)
         var (entries, problem) = ReadRegistry();
         if (problem is not null)
             return problem;
-        if (entries.RemoveAll(e => e is null || !e.Complete) == 0)
+        if (entries.RemoveAll(e => !e.Complete) == 0)
             return null;
 
         try
@@ -566,7 +574,11 @@ public sealed class WorkspaceStore(string registryPath)
             return ([], null);
 
         var (registry, problem) = Read<StoredRegistry>(registryPath);
-        return problem is not null ? ([], problem) : (registry!.Workspaces!, null);
+        if (problem is not null)
+            return ([], problem);
+
+        // A null element would crash every caller; as an incomplete row it is reported and droppable.
+        return ([.. registry!.Workspaces!.Select(e => e ?? new StoredRegistryEntry(null, null, null, default))], null);
     }
 
     private void WriteRegistry(List<StoredRegistryEntry> entries)

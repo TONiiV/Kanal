@@ -17,8 +17,11 @@ This is the core part of spec #209 (ticket #211). No UI uses it yet.
    `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
 4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
 5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
-6. The old folder may still exist. The operator may choose a new folder on purpose.
-   `RelocateWorkspace` does not check this, and it does not copy meetings.
+6. `RelocateWorkspace` refuses while the folder of the row still exists and differs from the new one.
+   This is the "two folders, one identity" rule of `Register`: the copy is only a copy while the
+   listed folder is there. The refusal is `Invalid`. Nothing is written. `RelocateWorkspace` does not
+   copy meetings.
+   A new folder without a marker also gets an empty `meetings` folder, as `CreateWorkspace` does.
 7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
    when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
    gives `Unwritable`, and the file stays.
@@ -27,7 +30,26 @@ This is the core part of spec #209 (ticket #211). No UI uses it yet.
    A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
 9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
    `Unreadable`. The host does not read this kind yet.
-10. None of the three operations deletes or moves a file in a project folder.
+10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
+    reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
+    element crashed every operation.
+11. None of the three operations deletes or moves a file in a project folder.
+
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
 
 ### The first release is 1.0.0
 
