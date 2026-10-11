@@ -84,6 +84,10 @@ public class ResolveIssuesTests : IDisposable
         File.WriteAllText(Registry, json.ToJsonString());
     }
 
+    // The store resolves links in a root, and on macOS the temp folder under /var is one.
+    private static string CanonicalBeside(Workspace sibling, params string[] parts) =>
+        Path.Combine([Path.GetDirectoryName(sibling.RootPath)!, .. parts]);
+
     private static WorkspaceSidebarViewModel Opened(WorkspaceStore store, Workspace project)
     {
         var vm = new WorkspaceSidebarViewModel(store, clock: () => Now);
@@ -244,11 +248,12 @@ public class ResolveIssuesTests : IDisposable
             await settings.RelocateCommand.ExecuteAsync(issue);
         });
 
+        var stored = CanonicalBeside(kappa, "moved", "gone");
         Assert.DoesNotContain(gone.Id, vm.ProjectIssueStates.Keys);
-        Assert.Equal(target, vm.Workspaces.Single(w => w.Id == gone.Id).RootPath);
+        Assert.Equal(stored, vm.Workspaces.Single(w => w.Id == gone.Id).RootPath);
         var row = Assert.Single(settings.Issues);
         Assert.True(row.IsResolved);
-        Assert.Equal(L.Format("workspace.issues.relocated", target), row.Outcome);
+        Assert.Equal(L.Format("workspace.issues.relocated", stored), row.Outcome);
     }
 
     [Fact]
@@ -272,7 +277,7 @@ public class ResolveIssuesTests : IDisposable
         });
 
         Assert.Equal("", settings.Problem);
-        Assert.Equal(Path.Combine(target, "kanal-icon.png"), settings.ImagePath);
+        Assert.Equal(Path.Combine(CanonicalBeside(kappa, "moved", "gone"), "kanal-icon.png"), settings.ImagePath);
         Assert.Equal("kanal-icon.png", store.ListWorkspaces().Workspaces.Single(w => w.Id == gone.Id).IconFile);
     }
 
