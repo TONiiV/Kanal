@@ -17,6 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example
