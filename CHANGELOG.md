@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example

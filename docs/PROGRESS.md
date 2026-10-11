@@ -6,6 +6,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Speaker palette readable on light and dark sheets
+
+The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. Speaker names are small text, so they need 4.5:1.
+No single colour reaches 4.5:1 on both a light and a dark sheet. The palette therefore serves graphics, and names use a text tone.
+
+- `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
+  The rules, bars, dots and ticks use the palette colour.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names to the light tone through `SpeakerTones.OnLight`.
+  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+- No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
+- A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
+- The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
+- Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
+
 ### Host colours move to the Light theme dictionary
 
 This is a prefactor for the Appearance feature (#187). The host looks the same as before.
