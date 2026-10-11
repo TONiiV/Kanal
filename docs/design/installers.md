@@ -164,6 +164,22 @@ prompt is needed — an operator setting up a laptop before a meeting should not
 Start-menu shortcut, Add/Remove Programs entry, clean uninstall. The several hundred files of a
 self-contained publish are harvested by `Files/@Include` rather than enumerated.
 
+**Dialogs.** The msi uses the `WixUI_Minimal` set from `WixToolset.UI.wixext`, pinned to the same
+version as the `wix` tool (5.0.2). The operator sees a welcome page with the MIT licence, the install,
+and a finish page. A second run of the msi on a computer with Kanal shows Repair and Remove. There is no
+install-directory dialog, because the install is per-user. The licence page reads
+`installers/windows/License.rtf`. `WindowsLicenseRtfTests` compares it with `LICENSE`.
+`PackMsi` adds the extension to the git-ignored `.wix/` cache with `dotnet wix extension add`. That
+command always queries nuget.org, so `PackMsi` runs it only when the cache folder is missing. The
+first build needs network access to fetch the extension once. Later builds work offline.
+
+**Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
+numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
+with the downgrade message. A pre-release and the release of one numeric version replace each other
+in both directions, with no downgrade message, because the suffix is not part of `ProductVersion`.
+This works because WiX 5 generates a new `ProductCode` in every build. Every build keeps the `UpgradeCode`, so Windows treats the old build as an older product. ICE61
+warns about this setting, but only `wix msi validate` runs it. `wix build` does not.
+
 **Pinned to 5.0.2 for licensing, not compatibility.** `dotnet tool install wix` takes the newest
 version, which is 7.0.0, and that fails the build outright:
 
