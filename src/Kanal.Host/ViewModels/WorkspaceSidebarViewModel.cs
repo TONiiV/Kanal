@@ -327,19 +327,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 foreach (var project in projects)
                     found[project.Id] = _store.ListMeetings(project.Id).Problems;
             });
+            if (generation != _scanGeneration)
+                return;
+
+            foreach (var project in projects.Where(p => p.Id != SelectedWorkspace?.Id))
+                _issuesByProject[project.Id] = IssuesOf(project, found.GetValueOrDefault(project.Id, []));
+            PublishIssueStates();
         }
         catch (Exception ex)
         {
-            Log.Warning(LogCategory, $"The scan of the other projects failed: {ex.Message}");
-            return;
+            Log.Warning(LogCategory, $"The scan of the other projects failed: {ex.Message}", ex);
         }
-
-        if (generation != _scanGeneration)
-            return;
-
-        foreach (var project in projects.Where(p => p.Id != SelectedWorkspace?.Id))
-            _issuesByProject[project.Id] = IssuesOf(project, found.GetValueOrDefault(project.Id, []));
-        PublishIssueStates();
     }
 
     private static bool IsFolderOf(StoreProblem problem, Workspace project) =>

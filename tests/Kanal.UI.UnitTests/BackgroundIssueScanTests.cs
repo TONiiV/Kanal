@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.ViewModels;
 
@@ -166,20 +167,120 @@ public class BackgroundIssueScanTests : IDisposable
         Assert.Equal(0, scans.Count);
     }
 
+    private const string FailureWarning = "The scan of the other projects failed";
+
+    private static IReadOnlyList<string> Failures(RecordingSink sink) =>
+        [.. sink.Lines.Where(line => line.Contains(FailureWarning, StringComparison.Ordinal))];
+
     [AvaloniaFact]
-    public void AScanThatFailsLeavesTheBannerAndTheMarksAsTheyWere()
+    public void AScanThatFailsIsLoggedAndLeavesTheMarksOfTheLastScan()
     {
         var store = Store();
         var kappa = Project(store, "Kappa");
         var lambda = Project(store, "Lambda");
         UnfiledFolder(kappa, "a");
         UnfiledFolder(lambda, "b");
+        var scans = new HeldScans();
+        var failing = false;
+        var previous = Log.Sink;
+        var sink = new RecordingSink();
+        Log.Install(sink);
+        try
+        {
+            var vm = new WorkspaceSidebarViewModel(
+                store,
+                offUiThread: work => failing ? Task.FromException(new IOException("share lost")) : scans.Hold(work));
+            scans.Finish(0);
+            Assert.Equal(new[] { kappa.Id, lambda.Id }.Order(), vm.ProjectIssueStates.Keys.Order());
+            Assert.Empty(Failures(sink));
 
-        var vm = new WorkspaceSidebarViewModel(
-            store, offUiThread: _ => Task.FromException(new IOException("share lost")));
-        Dispatcher.UIThread.RunJobs();
+            failing = true;
+            vm.Refresh();
+            Dispatcher.UIThread.RunJobs();
 
-        Assert.Single(vm.Issues);
-        Assert.Equal([kappa.Id], vm.ProjectIssueStates.Keys);
+            Assert.Single(Failures(sink));
+            Assert.Equal(new[] { kappa.Id, lambda.Id }.Order(), vm.ProjectIssueStates.Keys.Order());
+            Assert.Single(vm.Issues);
+        }
+        finally
+        {
+            Log.Install(previous);
+        }
+    }
+
+    [AvaloniaFact]
+    public void AScanThatThrowsAtOnceIsLoggedToo()
+    {
+        var store = Store();
+        var kappa = Project(store, "Kappa");
+        var lambda = Project(store, "Lambda");
+        UnfiledFolder(kappa, "a");
+        UnfiledFolder(lambda, "b");
+        var previous = Log.Sink;
+        var sink = new RecordingSink();
+        Log.Install(sink);
+        try
+        {
+            var vm = new WorkspaceSidebarViewModel(
+                store, offUiThread: _ => throw new IOException("share lost"));
+
+            Assert.Single(Failures(sink));
+            Assert.Single(vm.Issues);
+            Assert.Equal([kappa.Id], vm.ProjectIssueStates.Keys);
+        }
+        finally
+        {
+            Log.Install(previous);
+        }
+    }
+
+    [AvaloniaFact]
+    public void AFaultWhileTheResultIsAppliedIsLoggedToo()
+    {
+        var store = Store();
+        Project(store, "Kappa");
+        var lambda = Project(store, "Lambda");
+        UnfiledFolder(lambda, "b");
+        var scans = new HeldScans();
+        var previous = Log.Sink;
+        var sink = new RecordingSink();
+        Log.Install(sink);
+        try
+        {
+            var vm = new WorkspaceSidebarViewModel(store, offUiThread: scans.Hold);
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(vm.ProjectIssueStates))
+                    throw new InvalidOperationException("a binding failed");
+            };
+
+            scans.Finish(0);
+
+            Assert.Single(Failures(sink));
+        }
+        finally
+        {
+            Log.Install(previous);
+        }
+    }
+
+    private sealed class RecordingSink : ILogSink
+    {
+        private readonly List<string> _lines = [];
+
+        public IReadOnlyList<string> Lines
+        {
+            get
+            {
+                lock (_lines)
+                    return [.. _lines];
+            }
+        }
+
+        public void Write(LogLevel level, string category, string message, Exception? error)
+        {
+            lock (_lines)
+                _lines.Add($"{category}: {message}");
+        }
     }
 }
