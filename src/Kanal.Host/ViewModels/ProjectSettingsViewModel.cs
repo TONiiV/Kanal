@@ -273,10 +273,8 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
             issue.Refused(ReasonFor(problem));
     }
 
-    private static string ReasonFor(StoreProblem problem, string? oldRoot = null)
-    {
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
-        return L[problem.Kind switch
+    private static string ReasonFor(StoreProblem problem, string? oldRoot = null) =>
+        StoreRefusal.Report(problem, LogCategory, problem.Kind switch
         {
             StoreProblemKind.FolderMissing or StoreProblemKind.NotFound => "workspace.issues.refused.missing",
             StoreProblemKind.Unwritable => "workspace.issues.refused.unwritable",
@@ -285,8 +283,7 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
                 "workspace.issues.refused.oldfolder",
             StoreProblemKind.Invalid when oldRoot is not null => "workspace.issues.refused.taken",
             _ => "workspace.issues.refused.other",
-        }];
-    }
+        });
 
     private void Reload()
     {
