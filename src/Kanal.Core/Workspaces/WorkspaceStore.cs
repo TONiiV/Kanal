@@ -32,8 +32,7 @@ public sealed class WorkspaceStore
         {
             if (!entry.Complete)
             {
-                problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, registry.FilePath, "A row of the list is missing fields."));
+                problems.Add(StoreProblems.IncompleteRow(registry.FilePath));
                 continue;
             }
 
@@ -84,8 +83,7 @@ public sealed class WorkspaceStore
     {
         rootPath = StorePaths.Canonical(rootPath);
         if (!Directory.Exists(rootPath))
-            return new WorkspaceResult(null, new StoreProblem(
-                StoreProblemKind.FolderMissing, rootPath, "That folder is not there."));
+            return new WorkspaceResult(null, StoreProblems.FolderMissing(rootPath));
 
         var path = MarkerIn(rootPath);
         if (!File.Exists(path))

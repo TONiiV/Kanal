@@ -25,6 +25,9 @@ writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
 All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
 internal types. `StorePathsTests` tests the path rules directly.
 
+Every `StoreProblem` in `Kanal.Core/Workspaces` now comes from `StoreProblems`. No other class calls
+`new StoreProblem`. `StoreProblemsTests` pins the kind, subject and detail of each fixed problem.
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.

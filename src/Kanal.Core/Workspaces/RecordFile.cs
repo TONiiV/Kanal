@@ -24,22 +24,20 @@ internal static class RecordFile
         catch (Exception ex)
         {
             Log.Warning(StoreProblems.LogCategory, $"{path} could not be read.", ex);
-            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, ex.Message));
+            return (null, StoreProblems.Unreadable(path, ex.Message));
         }
 
         if (value is null)
-            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
+            return (null, StoreProblems.EmptyFile(path));
 
         // Refused, not half-read: the next save would write the dropped fields back as loss.
         if (value.SchemaVersion != SchemaVersion)
-            return (null, new StoreProblem(
-                StoreProblemKind.UnsupportedVersion, path,
-                $"Unsupported workspace schema {value.SchemaVersion}."));
+            return (null, StoreProblems.UnsupportedWorkspaceSchema(path, value.SchemaVersion));
 
         // Well-formed JSON is not a well-formed record: a missing field deserializes to null.
         return value.Complete
             ? (value, null)
-            : (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The record is missing fields."));
+            : (null, StoreProblems.IncompleteRecord(path));
     }
 
     public static void Write<T>(string path, T record) where T : IStoredRecord =>
