@@ -215,6 +215,7 @@ public class ProjectIssuesTests : IDisposable
 
             var issue = Assert.Single(vm.Issues);
             Assert.Equal(L["workspace.issues.projectlistunreadable"], issue.Cause);
+            Assert.True(vm.IssuesAreAlarm);
             Assert.False(vm.ShowIssuesCommand.CanExecute(null));
             Assert.Contains(L["workspace.issues.projectlistunreadable"], vm.ProblemNote);
             Assert.Contains(Registry, vm.ProblemNote);

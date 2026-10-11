@@ -34,12 +34,14 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
     private readonly string _causeKey;
     private readonly string? _projectName;
 
-    private ProjectIssueViewModel(StoreProblem problem, string causeKey, string? projectName, IssueAction action)
+    private ProjectIssueViewModel(
+        StoreProblem problem, string causeKey, string? projectName, IssueAction action, bool alarm = true)
     {
         Problem = problem;
         _causeKey = causeKey;
         _projectName = projectName;
         Action = action;
+        IsAlarm = alarm;
     }
 
     public StoreProblem Problem { get; }
@@ -51,7 +53,7 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
     public string Location =>
         Path.GetFileName(Subject) == WorkspaceStore.MeetingFileName ? Path.GetDirectoryName(Subject)! : Subject;
 
-    public bool IsAlarm => Kind is not (StoreProblemKind.FolderMissing or StoreProblemKind.Unreadable);
+    public bool IsAlarm { get; }
 
     public string Cause => _projectName is null ? L[_causeKey] : L.Format(_causeKey, _projectName);
 
@@ -107,10 +109,11 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
         return problem.Kind switch
         {
             StoreProblemKind.FolderMissing when owner is not null && problem.Subject == owner.RootPath =>
-                new(problem, "workspace.issues.projectmissing", owner.Name, IssueAction.RelocateProject),
+                new(problem, "workspace.issues.projectmissing", owner.Name, IssueAction.RelocateProject, alarm: false),
             StoreProblemKind.FolderMissing when problem.Subject == meetings =>
-                new(problem, "workspace.issues.meetingsmissing", null, IssueAction.CreateMeetingsFolder),
-            StoreProblemKind.FolderMissing => new(problem, "workspace.issues.foldermissing", null, IssueAction.None),
+                new(problem, "workspace.issues.meetingsmissing", null, IssueAction.CreateMeetingsFolder, alarm: false),
+            StoreProblemKind.FolderMissing =>
+                new(problem, "workspace.issues.foldermissing", null, IssueAction.None, alarm: false),
             StoreProblemKind.UnsupportedVersion => new(problem, "workspace.issues.format", null, IssueAction.None),
             StoreProblemKind.RecordDamaged =>
                 new(problem, "workspace.issues.damaged", null, IssueAction.RecoverMeeting),
@@ -119,7 +122,9 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
             StoreProblemKind.Misfiled =>
                 new(problem, "workspace.issues.misfiled", null, IssueAction.ReidentifyMeeting),
             StoreProblemKind.Unreadable when meetings is not null && Path.GetDirectoryName(problem.Subject) == meetings =>
-                new(problem, "workspace.issues.unreachable", null, IssueAction.None),
+                new(problem, "workspace.issues.unreachable", null, IssueAction.None, alarm: false),
+            StoreProblemKind.Unreadable when problem.Subject == meetings =>
+                new(problem, "workspace.issues.other", null, IssueAction.None, alarm: false),
             _ => new(problem, "workspace.issues.other", null, IssueAction.None),
         };
     }
