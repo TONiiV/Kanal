@@ -6,6 +6,29 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Store: relocate a project, create a missing meetings folder, drop a damaged list row
+
+This is the core part of spec #209 (ticket #211). No UI uses it yet.
+
+1. `WorkspaceStore.RelocateWorkspace(id, newRootPath)` points an existing row to a new folder.
+   The store keeps the path canonical, as `CreateWorkspace` does. The name in the list stays.
+2. The new folder must exist. A missing folder gives `FolderMissing`.
+3. A `kanal-workspace.json` in the new folder must hold this project's id. Another id gives
+   `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
+4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
+5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
+6. The old folder may still exist. The operator may choose a new folder on purpose.
+   `RelocateWorkspace` does not check this, and it does not copy meetings.
+7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
+   when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
+   gives `Unwritable`, and the file stays.
+8. `WorkspaceStore.DropBrokenRegistryRows()` removes the rows of `workspaces.json` that miss
+   fields. Every complete row stays unchanged. The call writes nothing when no row is damaged.
+   A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
+9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
+   `Unreadable`. The host does not read this kind yet.
+10. None of the three operations deletes or moves a file in a project folder.
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.

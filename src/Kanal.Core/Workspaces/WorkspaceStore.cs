@@ -38,7 +38,7 @@ public sealed class WorkspaceStore(string registryPath)
             if (!entry.Complete)
             {
                 problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, registryPath, "A row of the list is missing fields."));
+                    StoreProblemKind.RegistryRowDamaged, registryPath, "A row of the list is missing fields."));
                 continue;
             }
 
@@ -237,6 +237,93 @@ public sealed class WorkspaceStore(string registryPath)
             return problem;
         if (entries.RemoveAll(e => e.Id == id) == 0)
             return NoSuchWorkspace(id);
+
+        try
+        {
+            WriteRegistry(entries);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Unwritable(registryPath, "The workspace list could not be written.", ex);
+        }
+    }
+
+    // The marker is written before the list: a refusal or a failed write leaves the old row in place.
+    public WorkspaceResult RelocateWorkspace(string id, string newRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(newRootPath))
+            return Refused(newRootPath, "A workspace needs a folder.");
+
+        newRootPath = CanonicalWorkspacePath(newRootPath);
+        if (!Directory.Exists(newRootPath))
+            return new WorkspaceResult(null, new StoreProblem(
+                StoreProblemKind.FolderMissing, newRootPath, "That folder is not there."));
+
+        var (entries, problem) = ReadRegistry();
+        if (problem is not null)
+            return new WorkspaceResult(null, problem);
+
+        var index = entries.FindIndex(e => e.Id == id && e.Complete);
+        if (index < 0)
+            return new WorkspaceResult(null, NoSuchWorkspace(id));
+        if (Occupied(entries, newRootPath, byAnyoneBut: id) is { } taken)
+            return taken;
+
+        var relocated = entries[index].ToWorkspace() with { RootPath = newRootPath };
+        var marker = Path.Combine(newRootPath, WorkspaceFileName);
+        if (File.Exists(marker))
+        {
+            var (stored, unreadable) = Read<StoredWorkspace>(marker);
+            if (unreadable is not null)
+                return new WorkspaceResult(null, unreadable);
+            if (stored!.Id != id)
+                return Refused(newRootPath, "That folder holds another workspace.", StoreProblemKind.NotThisWorkspace);
+        }
+
+        try
+        {
+            if (!File.Exists(marker))
+                WriteWorkspaceFile(relocated);
+            entries[index] = StoredRegistryEntry.From(relocated);
+            WriteRegistry(entries);
+        }
+        catch (Exception ex)
+        {
+            return new WorkspaceResult(null, Unwritable(newRootPath, "The workspace could not be moved.", ex));
+        }
+
+        return new WorkspaceResult(relocated, null);
+    }
+
+    public StoreProblem? CreateMeetingsFolder(string id)
+    {
+        var (workspace, problem) = Locate(id);
+        if (problem is not null)
+            return problem;
+
+        var meetings = Path.Combine(workspace!.RootPath, MeetingsFolderName);
+        if (Directory.Exists(meetings))
+            return null;
+
+        try
+        {
+            Directory.CreateDirectory(meetings);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Unwritable(meetings, "The meetings folder could not be created.", ex);
+        }
+    }
+
+    public StoreProblem? DropBrokenRegistryRows()
+    {
+        var (entries, problem) = ReadRegistry();
+        if (problem is not null)
+            return problem;
+        if (entries.RemoveAll(e => e is null || !e.Complete) == 0)
+            return null;
 
         try
         {
