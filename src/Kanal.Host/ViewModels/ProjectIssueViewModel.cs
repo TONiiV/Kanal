@@ -118,6 +118,8 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
                 new(problem, "workspace.issues.norecord", null, IssueAction.RecoverMeeting),
             StoreProblemKind.Misfiled =>
                 new(problem, "workspace.issues.misfiled", null, IssueAction.ReidentifyMeeting),
+            StoreProblemKind.Unreadable when meetings is not null && Path.GetDirectoryName(problem.Subject) == meetings =>
+                new(problem, "workspace.issues.unreachable", null, IssueAction.None),
             _ => new(problem, "workspace.issues.other", null, IssueAction.None),
         };
     }

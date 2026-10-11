@@ -13,8 +13,9 @@ operator does not edit files.
 
 1. The causes name the kinds of #210 and #211. A damaged record, a folder without a record, a copied
    folder and a damaged row of the project list each have their own sentence. The subject of a
-   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed,
-   because no listing reports `Unreadable` for a meeting folder any more.
+   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed.
+   An `Unreadable` meeting folder (an I/O error on `meeting.json`) gets the cause
+   `workspace.issues.unreachable` and no button: the record may be healthy.
 2. `ProjectIssueViewModel.Action` selects the action from the kind:
 
    | Kind | Button | Core call |
@@ -25,6 +26,7 @@ operator does not edit files.
    | `FolderMissing` (`meetings`) | Resolve | `CreateMeetingsFolder` |
    | `RegistryRowDamaged` | Resolve | `DropBrokenRegistryRows` |
    | `UnsupportedVersion` | none | none |
+   | `Unreadable` (meeting folder) | none | none |
 
 3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
    language. The time is the rebuilt start time of the meeting, in the operator's time zone.
@@ -98,7 +100,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
    on access or I/O (a sharing violation, no permission, an offline cloud file) gives `Unreadable`, with the
    meeting folder as subject. `RecoverMeeting` and `ReidentifyMeeting` refuse an `Unreadable` folder and
    change nothing, because the record may be healthy.
-2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, titleFor)` rebuilds `meeting.json` from
    `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
 3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
    `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
@@ -109,7 +111,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
      The code `und` (unknown language) is left out.
    - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
    - The start time is the end time minus the span of the utterance times. The created time equals the start time.
-   - The title is `FreeTitle` of the base title.
+   - The title is `FreeTitle` of `titleFor(start time)`. A blank title is refused before anything moves.
 5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
    `.damaged.2`, `.damaged.3` and so on.
 6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid

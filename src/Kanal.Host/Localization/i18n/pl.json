@@ -285,6 +285,7 @@
   "workspace.issues.damaged": "Zapis tego spotkania jest uszkodzony.",
   "workspace.issues.norecord": "Ten folder spotkania nie zawiera zapisu spotkania.",
   "workspace.issues.misfiled": "Ten folder zawiera kopię innego spotkania.",
+  "workspace.issues.unreachable": "Kanal nie może teraz otworzyć tego zapisu spotkania. Sprawdź, czy plik jest dostępny, a potem ponownie przełącz się na ten projekt.",
   "workspace.issues.projectlist": "Wiersz listy projektów jest uszkodzony.",
   "workspace.issues.projectlistunreadable": "Kanal nie może odczytać listy projektów.",
   "workspace.issues.other": "Kanal nie może odczytać tego elementu. Szczegóły są w dzienniku.",

@@ -285,6 +285,7 @@
   "workspace.issues.damaged": "Die Aufzeichnung dieser Besprechung ist beschädigt.",
   "workspace.issues.norecord": "Dieser Besprechungsordner enthält keine Besprechungsaufzeichnung.",
   "workspace.issues.misfiled": "Dieser Ordner enthält eine Kopie einer anderen Besprechung.",
+  "workspace.issues.unreachable": "Kanal kann diese Besprechungsaufzeichnung jetzt nicht öffnen. Prüfen Sie, ob die Datei verfügbar ist, und wechseln Sie dann erneut zu diesem Projekt.",
   "workspace.issues.projectlist": "Eine Zeile der Projektliste ist beschädigt.",
   "workspace.issues.projectlistunreadable": "Kanal kann die Projektliste nicht lesen.",
   "workspace.issues.other": "Kanal kann dieses Element nicht lesen. Einzelheiten stehen im Protokoll.",

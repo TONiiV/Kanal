@@ -285,6 +285,7 @@
   "workspace.issues.damaged": "The record of this meeting is damaged.",
   "workspace.issues.norecord": "This meeting folder holds no meeting record.",
   "workspace.issues.misfiled": "This folder holds a copy of another meeting.",
+  "workspace.issues.unreachable": "Kanal cannot open this meeting record now. Check that the file is available, then switch to this project again.",
   "workspace.issues.projectlist": "A row of the project list is damaged.",
   "workspace.issues.projectlistunreadable": "Kanal cannot read the project list.",
   "workspace.issues.other": "Kanal cannot read this item. Details are in the log.",
