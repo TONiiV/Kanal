@@ -29,7 +29,21 @@ Ticket #190 of the Appearance spec (#187). The operator chose candidate B (satin
   is the 1024 px master.
 - Until #193 lands, the host shows the light silver marks in Dark too.
 
----
+### The first release is 1.0.0
+
+No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
+
+1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
+   without a date. `ChangelogTests` keeps the two equal.
+2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
+   `docs/release/macos-alpha-rollout.md` are plain versions: `v1.0.0`, then `v1.0.1`.
+3. No pre-release or nightly channel: every release is a plain `x.y.z` version (owner decision,
+   2026-10-11).
+4. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   (see 2026-10-07). The release PR rewrites the README limitations.
+
+Open item: ADR 0056 requires the update check and the minimum supported version in the host before
+the first `v1.0.0` tag. That work is not done. Do not publish the first release before it merges.
 
 ### Host colours move to the Light theme dictionary
 
