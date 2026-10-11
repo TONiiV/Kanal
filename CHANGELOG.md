@@ -18,6 +18,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
   Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
   recording starts.
+- If Kanal cannot create the default project at start-up, the log now names the folder and the
+  reason. Before, the log said nothing in some cases, for example when the folder was a file.
 - The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
