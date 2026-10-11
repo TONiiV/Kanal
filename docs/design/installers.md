@@ -182,8 +182,8 @@ To change the artwork:
 2. Run `python design/installer-art/compose.py`.
 3. Commit the two new bitmaps.
 
-`panel-art.png` came from `google/gemini-3.1-flash-image` through OpenRouter. The K mark is pasted from
-`design/kanal-icon.png`, because generated art distorts the logo.
+`panel-art.png` came from `google/gemini-3.1-flash-image` through OpenRouter. `compose.py` pastes the K mark
+from `design/kanal-icon.png`, because generated art distorts the logo.
 
 **Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
 numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
