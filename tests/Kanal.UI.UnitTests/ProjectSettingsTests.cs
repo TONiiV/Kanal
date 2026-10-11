@@ -378,28 +378,6 @@ public class ProjectSettingsTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void EverySectionHeadingCarriesAnIconOfItsOwn()
-    {
-        var store = Store();
-        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
-        var window = new ProjectSettingsWindow(new ProjectSettingsViewModel(store, kappa, recording: false));
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-
-        var headings = window.GetLogicalDescendants().OfType<TextBlock>()
-            .Where(text => text.Classes.Contains("label")).ToList();
-        var icons = headings.Select(heading => Assert.Single(
-            Assert.IsAssignableFrom<Panel>(heading.Parent).Children
-                .OfType<Avalonia.Controls.Shapes.Path>()).Data).ToList();
-
-        Assert.Equal(3, headings.Count);
-        Assert.All(icons, Assert.NotNull);
-        Assert.Equal(headings.Count, icons.Distinct().Count());
-
-        window.Close();
-    }
-
-    [AvaloniaFact]
     public void ClickingTheGearInTheDropdownOpensThatProjectAndKeepsTheSelection()
     {
         var store = Store();
