@@ -59,10 +59,10 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             (root / "design" / "kanal-icon.png").write_bytes(
                 SCRIPT.with_name("kanal-icon.png").read_bytes()
             )
-            (root / "design" / "icon-silver").mkdir()
-            for name in generator.SILVER_SOURCES.values():
-                (root / "design" / "icon-silver" / name).write_bytes(
-                    SCRIPT.with_name("icon-silver").joinpath(name).read_bytes()
+            (root / "design" / "icon").mkdir()
+            for name in generator.TILE_SOURCES.values():
+                (root / "design" / "icon" / name).write_bytes(
+                    SCRIPT.with_name("icon").joinpath(name).read_bytes()
                 )
 
             generator.ROOT = str(root)
@@ -87,25 +87,35 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                 width, height, bit_depth, colour_type = struct.unpack(">IIBB", data[16:26])
                 self.assertEqual((512, 512, 8, 6), (width, height, bit_depth, colour_type))
                 _, _, tile = generator.decode_png(
-                    str(root / "design" / "icon-silver" / generator.SILVER_SOURCES[variant])
+                    str(root / "design" / "icon" / generator.TILE_SOURCES[variant])
                 )
                 expected = generator.png_bytes(
                     512,
                     generator.resize_rgba(
-                        generator.silver_mark_rgba(mark_1024, tile, 1024), 1024, 512
+                        generator.tile_mark_rgba(mark_1024, tile, 1024), 1024, 512
                     ),
                 )
-                self.assertEqual(expected, data, "the splash must be the silver mark on transparency")
+                self.assertEqual(expected, data, "the splash must be the tile-toned mark on transparency")
 
                 _, _, pixels = generator.decode_png(str(assets / name))
                 self.assertEqual(0, pixels[3], "the transparent canvas must have an empty top-left pixel")
-                opaque = [pixels[i : i + 4] for i in range(0, len(pixels), 4) if pixels[i + 3] >= 250]
+                opaque = [
+                    (i // 4, pixels[i : i + 4])
+                    for i in range(0, len(pixels), 4)
+                    if pixels[i + 3] >= 250
+                ]
                 self.assertTrue(opaque)
-                self.assertTrue(
-                    all(max(p[:3]) - min(p[:3]) <= 12 for p in opaque),
-                    "the silver mark must carry no brand colour",
+                neutral = [(n, p) for n, p in opaque if max(p[:3]) - min(p[:3]) <= 12]
+                purple = [(n, p) for n, p in opaque if p[2] - p[0] >= 30 and p[2] - p[1] >= 30]
+                self.assertGreater(len(neutral), len(opaque) // 4, "the upper stroke is neutral")
+                self.assertGreater(len(purple), len(opaque) // 4, "the lower stroke is purple")
+                self.assertGreater(
+                    sum(n // 512 for n, _ in purple) / len(purple),
+                    sum(n // 512 for n, _ in neutral) / len(neutral),
+                    "the purple stroke is the lower one",
                 )
-                brightness[variant] = sum(p[0] for p in opaque) / len(opaque)
+                brightness[variant] = sum(p[0] for _, p in neutral) / len(neutral)
+                opaque = [p for _, p in opaque]
                 tones = {bytes(p[:3]) for p in opaque}
                 for tone in tones:
                     for background in SHEETS[variant]:

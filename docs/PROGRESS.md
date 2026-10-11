@@ -8,11 +8,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### Silver app icon
 
-Ticket #190 of the Appearance spec (#187). The operator chose candidate B (satin) on 2026-10-11.
+Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice-teams) on
+2026-10-11, after first choosing B (satin).
 
-- The host icon is now a silver-grey, textured K with no brand colour. It has a light and a dark
-  version. `design/icon-silver/B-satin-light.png` and `B-satin-dark.png` are the 1024 px sources.
-  The Python script that made them needed numpy and Pillow, so the repository does not keep it.
+- The app icon is a silver satin tile with a textured K. The upper stroke is silver-grey. The lower
+  "reply" stroke is a muted purple. The purple is `#6264A7` satin in Light. In Dark it is mixed
+  30% toward white.
+- `design/icon/kanal-tile-light.png` and `kanal-tile-dark.png` are the 1024 px sources. The Python
+  script that made them needed numpy and Pillow, so the repository does not keep it.
 - `design/kanal-icon.py` derives the host assets from these two PNGs with the Python standard
   library only. `design/kanal-icon.png` still feeds the favicon and the brand logo of the
   mobile caption page. Both pages are unchanged.
@@ -20,15 +23,18 @@ Ticket #190 of the Appearance spec (#187). The operator chose candidate B (satin
   and the dmg use it. It stays readable on a light and on a dark taskbar.
 - The dark version builds `kanal-dark.ico`. Ticket #193 loads it as the window icon in Dark.
 - The splash mark is the K on transparency, not the full tile. It keeps the layout of the old
-  mark. `kanal-splash-mark.png` is dark grey for a light sheet. `kanal-splash-mark-dark.png` is
-  light grey for a dark sheet. The packager copies the stroke shape of `kanal-icon.png` and
-  paints each stroke with the mean tone of the satin tile over its opaque pixels. A test holds
-  every tone at 3:1 contrast or more on the Sheet and Paper colours of its scheme.
+  mark. The packager copies the stroke shape of `kanal-icon.png`. It paints each stroke with the
+  mean colour of that stroke in the tile, weighted by alpha. `kanal-splash-mark.png` is for a
+  light sheet. `kanal-splash-mark-dark.png` is for a dark sheet. A test holds every tone at 3:1
+  contrast or more on the Sheet and Paper colours of its scheme.
+- The splash mark is also the in-app logo. The sidebar, the Version section of the settings and
+  the start hint of the meeting room show it. They change from indigo and apricot to the new mark.
+  Ticket #193 must switch all four `Image` sources with the colour scheme.
 - The small ICO frames use the packager box downsample. The satin grain averages out, so the
   16 px frame stays clean.
-- `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon-silver/B-satin-light.png`
+- `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon/kanal-tile-light.png`
   is the 1024 px master.
-- Until #193 lands, the host shows the light silver marks in Dark too.
+- Until #193 lands, the host shows the light marks in Dark too.
 
 ### The first release is 1.0.0
 

@@ -14,8 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- The Kanal icon is now a silver-grey K with no brand colour. The exe, the installer, the window
-  and the splash use it. The mobile caption page keeps its coloured icon.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example

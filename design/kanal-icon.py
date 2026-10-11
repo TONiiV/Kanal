@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Package the Kanal artwork for every application surface, with the standard library only.
 
-``design/kanal-icon.png`` (coloured) feeds the mobile page; ``design/icon-silver/*.png`` feed the host.
+``design/kanal-icon.png`` (coloured) feeds the mobile page; ``design/icon/*.png`` (tiles) feed the host.
 """
 
 from __future__ import annotations
@@ -250,12 +250,12 @@ def write_favicon_into_pages(uri: str, brand_uri: str, log=print) -> None:
             log(f"  {os.path.relpath(path, ROOT):52s} updated")
 
 
-SILVER_SOURCES = {"light": "B-satin-light.png", "dark": "B-satin-dark.png"}
+TILE_SOURCES = {"light": "kanal-tile-light.png", "dark": "kanal-tile-dark.png"}
 HOST_ICON_NAMES = {"light": "kanal.ico", "dark": "kanal-dark.ico"}
 SPLASH_MARK_NAMES = {"light": "kanal-splash-mark.png", "dark": "kanal-splash-mark-dark.png"}
 
 
-def silver_mark_rgba(mark: bytes, tile: bytes, size: int) -> bytes:
+def tile_mark_rgba(mark: bytes, tile: bytes, size: int) -> bytes:
     classes = bytearray(size * size)
     sums = [[0, 0, 0, 0], [0, 0, 0, 0]]
     for index in range(size * size):
@@ -263,14 +263,15 @@ def silver_mark_rgba(mark: bytes, tile: bytes, size: int) -> bytes:
         # blue > red tells the indigo stroke from the orange one; a recoloured mark breaks this
         stroke = 1 if mark[offset + 2] > mark[offset] else 0
         classes[index] = stroke
-        if mark[offset + 3] >= 250:
+        alpha = mark[offset + 3]
+        if alpha >= 250:
             total = sums[stroke]
-            total[0] += tile[offset]
-            total[1] += tile[offset + 1]
-            total[2] += tile[offset + 2]
-            total[3] += 1
+            total[0] += tile[offset] * alpha
+            total[1] += tile[offset + 1] * alpha
+            total[2] += tile[offset + 2] * alpha
+            total[3] += alpha
     if not all(total[3] for total in sums):
-        raise SystemExit("silver mark: a stroke has no opaque pixel")
+        raise SystemExit("tile mark: a stroke has no opaque pixel")
     tones = [tuple(round(channel / total[3]) for channel in total[:3]) for total in sums]
     result = bytearray(size * size * 4)
     for index in range(size * size):
@@ -298,8 +299,8 @@ def main() -> None:
     print(f"PNG\n  {os.path.relpath(source_png, ROOT):52s} source ({width}x{height})")
 
     tiles: dict[str, bytes] = {}
-    for variant, name in SILVER_SOURCES.items():
-        path = os.path.join(design, "icon-silver", name)
+    for variant, name in TILE_SOURCES.items():
+        path = os.path.join(design, "icon", name)
         tile_width, tile_height, tile = decode_png(path)
         if (tile_width, tile_height) != (1024, 1024):
             raise SystemExit(f"{os.path.relpath(path, ROOT)}: expected a 1024x1024 PNG")
@@ -324,12 +325,12 @@ def main() -> None:
           icns_bytes([(size, rgba("light", size)) for size in sizes]))
 
     mark_1024 = resize_rgba(source_rgba, source_size, 1024)
-    for variant in SILVER_SOURCES:
+    for variant in TILE_SOURCES:
         write(os.path.join(assets, HOST_ICON_NAMES[variant]),
               ico_bytes([(size, rgba(variant, size)) for size in (16, 24, 32, 48, 64, 128, 256)]))
-        silver_mark = silver_mark_rgba(mark_1024, tiles[variant], 1024)
+        tile_mark = tile_mark_rgba(mark_1024, tiles[variant], 1024)
         write(os.path.join(assets, SPLASH_MARK_NAMES[variant]),
-              png_bytes(512, resize_rgba(silver_mark, 1024, 512)))
+              png_bytes(512, resize_rgba(tile_mark, 1024, 512)))
 
     favicon_tile = rounded_beige_icon_rgba(source_rgba, source_size)
     favicon = "data:image/png;base64," + base64.b64encode(
