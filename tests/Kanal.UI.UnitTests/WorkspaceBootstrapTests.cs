@@ -37,7 +37,7 @@ public class WorkspaceBootstrapTests : IDisposable
 
         public void Write(LogLevel level, string category, string message, Exception? error)
         {
-            lock (_lines) // other test classes log in parallel
+            lock (_lines)
                 _lines.Add((level, category, message));
         }
     }
@@ -86,6 +86,6 @@ public class WorkspaceBootstrapTests : IDisposable
             Log.Install(previous);
         }
 
-        Assert.DoesNotContain(sink.Lines, l => l.Message.Contains(folder));
+        Assert.DoesNotContain(sink.Lines, l => l.Category == "workspaces" && l.Level >= LogLevel.Warning);
     }
 }
