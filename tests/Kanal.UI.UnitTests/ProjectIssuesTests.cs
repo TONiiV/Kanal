@@ -501,6 +501,7 @@ public class ProjectIssuesTests : IDisposable
     [Theory]
     [InlineData(728, 1.0, 680)]
     [InlineData(1456, 2.0, 680)]
+    [InlineData(728, 2.0, 316)]
     [InlineData(1040, 1.0, 720)]
     public void TheSettingsWindowNeverGrowsPastTheWorkArea(int workAreaPixels, double scaling, double expected) =>
         Assert.Equal(expected, ProjectSettingsWindow.FittedMaxHeight(720, workAreaPixels, scaling));
