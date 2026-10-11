@@ -1357,6 +1357,7 @@ public class WorkspaceStoreTests : IDisposable
         var store = Store();
         var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
         var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        MovedAway(acme);
 
         var result = store.RelocateWorkspace(acme.Id, other.RootPath);
 
