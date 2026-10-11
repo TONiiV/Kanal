@@ -237,6 +237,7 @@ public class RefusedStoreOperationTests : IDisposable
     [InlineData(StoreProblemKind.UnsupportedVersion, "workspace.refused.unsupportedversion")]
     public void EveryKindOfRefusalHasASentenceAndOnlyTheLogGetsTheDetail(StoreProblemKind kind, string key)
     {
+        Assert.True(Strings.Tables["en"].ContainsKey(key), key);
         using var _ = Speaking("pl");
         using var __ = Listening(out var sink);
         var problem = new StoreProblem(kind, "subject-x", "English detail for the log.");
@@ -246,6 +247,31 @@ public class RefusedStoreOperationTests : IDisposable
         Assert.Equal(Localizer.Instance.Format(key, "subject-x"), text);
         Assert.DoesNotContain("English detail", text);
         Assert.Equal($"{kind} on subject-x: English detail for the log.", Assert.Single(sink.Lines).Message);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("workspace.refused.other")]
+    [InlineData("workspace.import.unreadable")]
+    [InlineData("workspace.icon.missing")]
+    public void EveryCallerChosenSentenceExistsInEnglish(string key)
+    {
+        Assert.True(Strings.Tables["en"].ContainsKey(key), key);
+    }
+
+    [AvaloniaFact]
+    public async Task AnUnreadableFileThatIsNotTheChosenBundleDoesNotSpeakOfTheBundle()
+    {
+        using var _ = Speaking("de");
+        var (store, vm, workspace, meeting) = Opened();
+        var bundle = Path.Combine(Folder("incoming"), "held" + MeetingBundle.Extension);
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        vm.ChooseImportChoice = _ => Task.FromResult(BundleImportChoice.SaveAsNew);
+        var registry = Path.Combine(_root, "workspaces.json");
+        File.WriteAllText(registry, "{ not json");
+
+        await vm.ImportMeetingFromAsync(bundle);
+
+        Assert.Equal(Localizer.Instance.Format("workspace.refused.unreadable", registry), vm.ProblemNote);
     }
 
     [AvaloniaFact]

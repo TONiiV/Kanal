@@ -432,7 +432,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem, ImportKey(problem)))
+        if (Refused(problem, ImportKey(problem, source)))
             return;
 
         var asNewRecord = false;
@@ -449,7 +449,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
-        if (Refused(imported, ImportKey(imported)))
+        if (Refused(imported, ImportKey(imported, source)))
             return;
 
         ProblemNote = "";
@@ -494,8 +494,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private static string? ImportKey(StoreProblem? problem) =>
-        problem?.Kind is StoreProblemKind.Unreadable or StoreProblemKind.Invalid
+    private static string? ImportKey(StoreProblem? problem, string bundlePath) =>
+        problem is { Kind: StoreProblemKind.Unreadable } && problem.Subject == bundlePath
             ? "workspace.import.unreadable"
             : null;
 

@@ -39,8 +39,9 @@ generic sentence in the project settings. The operators read Chinese, German and
    another project already uses. The code does not match on the English `Detail`.
 5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
    `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
-   `Unreadable` and `Invalid`: the operator cannot repair a bundle, so the sentence says to ask
-   for a new export.
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
 6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
    `workspace.refused.other` replaces it for a kind that has no sentence yet.
 
