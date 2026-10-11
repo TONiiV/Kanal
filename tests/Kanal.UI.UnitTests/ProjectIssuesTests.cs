@@ -172,9 +172,10 @@ public class ProjectIssuesTests : IDisposable
         var issue = Assert.Single(vm.Issues);
         Assert.True(vm.IssuesAreAlarm);
         Assert.True(issue.IsAlarm);
-        Assert.Equal(file, issue.Subject);
+        Assert.Equal(StoreProblemKind.RecordDamaged, issue.Kind);
+        Assert.Equal(Path.GetDirectoryName(file), issue.Subject);
         Assert.Equal(Path.GetDirectoryName(file), issue.Location);
-        Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
+        Assert.Equal(L["workspace.issues.damaged"], issue.Cause);
     }
 
     [Fact]
@@ -229,6 +230,51 @@ public class ProjectIssuesTests : IDisposable
         {
             L.Current = before;
         }
+    }
+
+    [Fact]
+    public void AMeetingFolderWithoutARecordIsNamedAsSuch()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var folder = EmptyMeetingFolder(kappa, "a");
+
+        var issue = Assert.Single(Opened(store, kappa).Issues);
+
+        Assert.Equal(StoreProblemKind.RecordMissing, issue.Kind);
+        Assert.Equal(folder, issue.Location);
+        Assert.Equal(L["workspace.issues.norecord"], issue.Cause);
+        Assert.True(issue.IsAlarm);
+    }
+
+    [Fact]
+    public void ACopiedMeetingFolderIsNamedAsACopy()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var meeting = store.CreateMeeting(kappa.Id, "Tooling review").Meeting!;
+        var copy = EmptyMeetingFolder(kappa, "copy");
+        File.Copy(
+            Path.Combine(store.MeetingFolder(kappa.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
+            Path.Combine(copy, WorkspaceStore.MeetingFileName));
+
+        var issue = Assert.Single(Opened(store, kappa).Issues);
+
+        Assert.Equal(StoreProblemKind.Misfiled, issue.Kind);
+        Assert.Equal(copy, issue.Location);
+        Assert.Equal(L["workspace.issues.misfiled"], issue.Cause);
+    }
+
+    [Fact]
+    public void AListWhoseOnlyRowIsDamagedNamesTheRowAndNotTheWholeList()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(Registry, """{ "schemaVersion": 1, "workspaces": [ { "id": "half-a-row" } ] }""");
+
+        var issue = Assert.Single(new WorkspaceSidebarViewModel(Store()).Issues);
+
+        Assert.Equal(StoreProblemKind.RegistryRowDamaged, issue.Kind);
+        Assert.Equal(L["workspace.issues.projectlist"], issue.Cause);
     }
 
     [Fact]
@@ -304,7 +350,7 @@ public class ProjectIssuesTests : IDisposable
             L.Current = "en";
             var vm = Opened(store, kappa);
             var issue = Assert.Single(vm.Issues);
-            Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
+            Assert.Equal(L["workspace.issues.damaged"], issue.Cause);
             var raised = new List<string?>();
             vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
             var rowRaised = new List<string?>();
@@ -313,7 +359,7 @@ public class ProjectIssuesTests : IDisposable
             L.Current = "de";
             Assert.Contains(nameof(issue.Cause), rowRaised);
 
-            Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
+            Assert.Equal(L["workspace.issues.damaged"], issue.Cause);
             Assert.Equal(L["workspace.issues.one"], vm.IssueCountText);
             Assert.Contains(nameof(vm.IssueCountText), raised);
         }
@@ -469,7 +515,7 @@ public class ProjectIssuesTests : IDisposable
         var path = section.GetLogicalDescendants().OfType<SelectableTextBlock>().Single(t => t.Name == "IssuePath");
         Assert.Equal(Path.GetDirectoryName(file), path.Text);
         var cause = section.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "IssueCause");
-        Assert.Equal(L["workspace.issues.unreadable"], cause.Text);
+        Assert.Equal(L["workspace.issues.damaged"], cause.Text);
 
         var page = Assert.IsType<StackPanel>(section.Parent);
         Assert.True(page.Children.IndexOf(section) < page.Children.IndexOf(Named<TextBlock>(window, "DangerLabel")));

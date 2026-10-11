@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
@@ -41,6 +40,8 @@ public sealed class ProjectIssueViewModel : ViewModelBase
 
     public static ProjectIssueViewModel For(StoreProblem problem, Workspace? owner, IssueOrigin origin = IssueOrigin.Project)
     {
+        if (problem.Kind == StoreProblemKind.RegistryRowDamaged)
+            return new(problem, "workspace.issues.projectlist", null);
         if (origin == IssueOrigin.ProjectList)
             return new(problem, "workspace.issues.projectlistunreadable", null);
         if (origin == IssueOrigin.ProjectListRow)
@@ -55,9 +56,9 @@ public sealed class ProjectIssueViewModel : ViewModelBase
                 new(problem, "workspace.issues.meetingsmissing", null),
             StoreProblemKind.FolderMissing => new(problem, "workspace.issues.foldermissing", null),
             StoreProblemKind.UnsupportedVersion => new(problem, "workspace.issues.format", null),
-            StoreProblemKind.Unreadable when meetings is not null && problem.Subject.StartsWith(
-                meetings + Path.DirectorySeparatorChar, StringComparison.Ordinal) =>
-                new(problem, "workspace.issues.unreadable", null),
+            StoreProblemKind.RecordDamaged => new(problem, "workspace.issues.damaged", null),
+            StoreProblemKind.RecordMissing => new(problem, "workspace.issues.norecord", null),
+            StoreProblemKind.Misfiled => new(problem, "workspace.issues.misfiled", null),
             _ => new(problem, "workspace.issues.other", null),
         };
     }
