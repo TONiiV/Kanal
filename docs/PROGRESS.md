@@ -64,6 +64,31 @@ msi shows Repair and Remove. The install stays per-user, with no install-directo
   missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
   first build needs network access once. The extension version equals the `wix` tool version.
 
+### A refused action shows a sentence in the interface language
+
+A refused store action showed the English `Detail` text from Core in the sidebar. It showed a
+generic sentence in the project settings. The operators read Chinese, German and Polish.
+
+1. `StoreRefusal.Report` in `Kanal.Host/Localization` turns a `StoreProblem` into one localized
+   sentence and logs `{Kind} on {Subject}: {Detail}` as a warning. The sidebar and the project
+   settings both call it. Neither view model keeps its own mapping.
+2. Each `StoreProblemKind` has one sentence. The new keys are `workspace.refused.<kind>`. The
+   existing keys keep `TitleTaken`, `TooLarge`, `WrongType` and `NotThisWorkspace`.
+3. Four kinds name the subject: `FolderMissing`, `Unreadable`, `Unwritable` and
+   `UnsupportedVersion`. `Invalid` and `NotFound` do not. Their subject is an id or a glyph that
+   means nothing to the operator.
+4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
+   another project already uses. The code does not match on the English `Detail`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
+6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
+   `workspace.refused.other` replaces it for a kind that has no sentence yet.
+
+The old count note (`workspace.problems`) does not change. Ticket #212 owns it.
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
