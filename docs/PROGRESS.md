@@ -41,6 +41,45 @@ Style note: a style without a class or pseudo-class loses to an App style with o
 `Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
 `Path.glyph#IssuesIcon`.
 
+### Meeting problem kinds and recovery in the store (#210, spec #209)
+
+This is core work only. The UI follows in other tickets.
+
+1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
+   `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+   `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
+3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
+   `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
+4. Rebuild rules:
+   - The id is the folder name.
+   - The languages are the source and translation languages in the transcript, in order of first use.
+     The code `und` (unknown language) is left out.
+   - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
+   - The start time is the end time minus the span of the utterance times. The created time equals the start time.
+   - The title is `FreeTitle` of the base title.
+5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
+   `.damaged.2`, `.damaged.3` and so on.
+6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid
+   id, or when the transcript holds no readable utterance or no language. A name clash gets `-2`, `-3`.
+7. `WorkspaceStore.ReidentifyMeeting(workspaceId, folder)` writes the folder name into a misfiled record.
+   The record gets a unique title from `FreeTitle`, for example "Tooling review 2".
+   It returns a `RecoverResult`, like `RecoverMeeting`.
+   When the folder name is not a valid id (a copy named `<id> - Copy` or `<id> copy`), Kanal moves the
+   folder to `kanal-set-aside` with the same rules as in item 6. The original meeting stays listed.
+8. No operation deletes a file. Tests compare the file contents before and after.
+
+Open items:
+
+1. The creation time of a file is not used, because copies change it.
+2. The start time is later than the real start by the silence before the first utterance.
+3. With `audio.wav`, the end time is the time the recording stopped. The start time is then also
+   later by the silence after the last utterance, and the duration is shorter by the same amount.
+4. A copy that does not keep write times (`cp` without `-p`, some archive tools and sync clients)
+   gives the copy time as end time. The start time is then wrong by the same offset.
+5. `ReidentifyMeeting` has no check for an id that is already listed. A listed id always equals its own
+   folder name, so a second folder cannot hold it.
+
 ### The Windows msi shows its dialogs and replaces the installed version
 
 The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
