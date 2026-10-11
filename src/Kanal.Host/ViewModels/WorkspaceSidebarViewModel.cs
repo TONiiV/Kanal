@@ -499,10 +499,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
-            ? L.Format("workspace.titletaken", problem.Subject)
-            : problem.Detail;
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        ProblemNote = StoreRefusal.Report(problem, LogCategory);
         return true;
     }
 
