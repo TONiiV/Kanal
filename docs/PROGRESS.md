@@ -13,10 +13,12 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
 
 1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
    `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
-   Only content gives `RecordDamaged`: a JSON parse failure, an empty file, or missing fields. A read that fails
+   Only content gives `RecordDamaged`: a JSON parse failure, an empty file, missing fields, or a `meeting.json` that is a folder. A read that fails
    on access or I/O (a sharing violation, no permission, an offline cloud file) gives `Unreadable`, with the
    meeting folder as subject. `RecoverMeeting` and `ReidentifyMeeting` refuse an `Unreadable` folder and
    change nothing, because the record may be healthy.
+   `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
+   `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
 2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
    `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
 3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
