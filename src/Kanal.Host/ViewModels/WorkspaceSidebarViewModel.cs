@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
