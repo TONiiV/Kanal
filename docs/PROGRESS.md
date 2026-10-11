@@ -33,7 +33,44 @@ This is the core part of spec #209 (ticket #211). No UI uses it yet.
 10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
     reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
     element crashed every operation.
-11. None of the three operations deletes or moves a file in a project folder.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
+### `WorkspaceStore` split into small internal classes
+
+This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
+`WorkspaceStore` went from 802 lines to 241 lines. It now validates the workspace operations,
+writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
+
+| Class | Responsibility |
+|---|---|
+| `WorkspaceRegistry` | Reads and writes the workspace list. Finds a workspace. Refuses a second row for one folder or one id. |
+| `MeetingRecords` | Lists, creates, saves, renames and deletes the meeting records of a workspace. Finds a free meeting title. |
+| `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
+| `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
+| `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
+| `StoreProblems` | Builds the shared `StoreProblem` values. Logs each write failure. |
+| `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
+
+All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
+internal types. `StorePathsTests` tests the path rules directly.
 
 ### The Windows msi shows its dialogs and replaces the installed version
 
