@@ -102,7 +102,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return new MeetingResult(null, StoreProblems.LoggedUnwritable(folder, "The meeting could not be written.", ex));
+            const string failure = "The meeting could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return new MeetingResult(null, StoreProblems.Unwritable(folder, failure, ex));
         }
 
         return new MeetingResult(meeting, null);
@@ -151,7 +153,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return StoreProblems.LoggedUnwritable(folder!, "The meeting could not be deleted.", ex);
+            const string failure = "The meeting could not be deleted.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return StoreProblems.Unwritable(folder!, failure, ex);
         }
     }
 

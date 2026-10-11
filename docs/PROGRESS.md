@@ -19,7 +19,7 @@ writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
 | `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
 | `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
 | `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
-| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. `LoggedUnwritable` logs a write failure. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. It never logs. |
 | `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
 
 All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
@@ -27,6 +27,10 @@ internal types. `StorePathsTests` tests the path rules directly.
 
 `MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
 an unwritable path and a bad meeting id.
+
+The caller decides whether to log a problem, not `StoreProblems` (owner decision, 2026-10-11). A
+`StoreProblem` does not carry the exception, so the code that catches the exception logs it, with
+its stack trace, before it returns the problem. `StoreProblems` only builds values.
 
 ### The Windows msi shows its dialogs and replaces the installed version
 

@@ -1,5 +1,3 @@
-using Kanal.Core.Diagnostics;
-
 namespace Kanal.Core.Workspaces;
 
 internal static class StoreProblems
@@ -35,9 +33,6 @@ internal static class StoreProblems
     public static StoreProblem Unwritable(string path, string detail) =>
         new(StoreProblemKind.Unwritable, path, detail);
 
-    public static StoreProblem LoggedUnwritable(string path, string detail, Exception cause)
-    {
-        Log.Warning(LogCategory, $"{detail} ({path})", cause);
-        return Unwritable(path, $"{detail} {cause.Message}");
-    }
+    public static StoreProblem Unwritable(string path, string detail, Exception cause) =>
+        Unwritable(path, $"{detail} {cause.Message}");
 }
