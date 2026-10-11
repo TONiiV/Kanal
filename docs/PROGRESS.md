@@ -41,6 +41,41 @@ Style note: a style without a class or pseudo-class loses to an App style with o
 `Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
 `Path.glyph#IssuesIcon`.
 
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
+### `WorkspaceStore` split into small internal classes
+
+This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
+`WorkspaceStore` went from 802 lines to 241 lines. It now validates the workspace operations,
+writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
+
+| Class | Responsibility |
+|---|---|
+| `WorkspaceRegistry` | Reads and writes the workspace list. Finds a workspace. Refuses a second row for one folder or one id. |
+| `MeetingRecords` | Lists, creates, saves, renames and deletes the meeting records of a workspace. Finds a free meeting title. |
+| `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
+| `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
+| `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
+| `StoreProblems` | Builds the shared `StoreProblem` values. Logs each write failure. |
+| `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
+
+All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
+internal types. `StorePathsTests` tests the path rules directly.
+
 ### The Windows msi shows its dialogs and replaces the installed version
 
 The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
