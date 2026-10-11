@@ -19,14 +19,30 @@ writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
 | `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
 | `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
 | `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
-| `StoreProblems` | Builds the shared `StoreProblem` values. Logs each write failure. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. `LoggedUnwritable` logs a write failure. |
 | `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
 
 All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
 internal types. `StorePathsTests` tests the path rules directly.
 
-Every `StoreProblem` in `Kanal.Core/Workspaces` now comes from `StoreProblems`. No other class calls
-`new StoreProblem`. `StoreProblemsTests` pins the kind, subject and detail of each fixed problem.
+`MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
+an unwritable path and a bad meeting id.
+
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
 
 ### The first release is 1.0.0
 
