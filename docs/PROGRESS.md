@@ -6,6 +6,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
 ### `WorkspaceStore` split into small internal classes
 
 This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
