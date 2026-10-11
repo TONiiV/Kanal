@@ -28,16 +28,18 @@ internal static class RecordFile
         }
 
         if (value is null)
-            return (null, StoreProblems.EmptyFile(path));
+            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
 
         // Refused, not half-read: the next save would write the dropped fields back as loss.
         if (value.SchemaVersion != SchemaVersion)
-            return (null, StoreProblems.UnsupportedWorkspaceSchema(path, value.SchemaVersion));
+            return (null, new StoreProblem(
+                StoreProblemKind.UnsupportedVersion, path,
+                $"Unsupported workspace schema {value.SchemaVersion}."));
 
         // Well-formed JSON is not a well-formed record: a missing field deserializes to null.
         return value.Complete
             ? (value, null)
-            : (null, StoreProblems.IncompleteRecord(path));
+            : (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The record is missing fields."));
     }
 
     public static void Write<T>(string path, T record) where T : IStoredRecord =>

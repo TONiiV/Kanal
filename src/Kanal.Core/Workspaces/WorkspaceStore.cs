@@ -32,7 +32,8 @@ public sealed class WorkspaceStore
         {
             if (!entry.Complete)
             {
-                problems.Add(StoreProblems.IncompleteRow(registry.FilePath));
+                problems.Add(new StoreProblem(
+                    StoreProblemKind.Unreadable, registry.FilePath, "A row of the list is missing fields."));
                 continue;
             }
 
@@ -73,7 +74,7 @@ public sealed class WorkspaceStore
         catch (Exception ex)
         {
             return new WorkspaceResult(
-                null, StoreProblems.Unwritable(rootPath, "The workspace folder could not be written.", ex));
+                null, StoreProblems.LoggedUnwritable(rootPath, "The workspace folder could not be written.", ex));
         }
 
         return registry.Register(workspace);
@@ -83,7 +84,8 @@ public sealed class WorkspaceStore
     {
         rootPath = StorePaths.Canonical(rootPath);
         if (!Directory.Exists(rootPath))
-            return new WorkspaceResult(null, StoreProblems.FolderMissing(rootPath));
+            return new WorkspaceResult(null, new StoreProblem(
+                StoreProblemKind.FolderMissing, rootPath, "That folder is not there."));
 
         var path = MarkerIn(rootPath);
         if (!File.Exists(path))
@@ -159,7 +161,7 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(root, "The workspace files could not be deleted.", ex);
+            return StoreProblems.LoggedUnwritable(root, "The workspace files could not be deleted.", ex);
         }
 
         return ForgetWorkspace(id);
@@ -223,7 +225,7 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, StoreProblems.Unwritable(current.RootPath, failure, ex));
+            return new WorkspaceResult(null, StoreProblems.LoggedUnwritable(current.RootPath, failure, ex));
         }
 
         return new WorkspaceResult(changed, null);

@@ -62,7 +62,7 @@ public static class MeetingBundle
         catch (Exception ex)
         {
             Log.Error(LogCategory, $"The bundle could not be written to {target}.", ex);
-            return StoreProblems.Unwritten(target, ex.Message);
+            return StoreProblems.Unwritable(target, ex.Message);
         }
     }
 
@@ -72,16 +72,17 @@ public static class MeetingBundle
         {
             using var zip = ZipFile.OpenRead(bundlePath);
             if (zip.GetEntry(ManifestFileName) is not { } entry)
-                return (null, StoreProblems.NotABundle(bundlePath));
+                return (null, StoreProblems.Unreadable(bundlePath, "That file is not a Kanal meeting bundle."));
 
             using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
             var stored = JsonSerializer.Deserialize<StoredManifest>(reader.ReadToEnd(), Options);
             if (stored is null || !stored.Complete)
-                return (null, StoreProblems.IncompleteManifest(bundlePath));
+                return (null, StoreProblems.Unreadable(bundlePath, "The bundle's manifest is missing fields."));
 
             // Refused rather than half-read, as everywhere else a stored record is opened.
             return stored.SchemaVersion != WorkspaceStore.SchemaVersion
-                ? (null, StoreProblems.UnsupportedBundleSchema(bundlePath, stored.SchemaVersion))
+                ? (null, new StoreProblem(StoreProblemKind.UnsupportedVersion, bundlePath,
+                    $"Unsupported bundle schema {stored.SchemaVersion}."))
                 : (stored.ToManifest(), null);
         }
         catch (Exception ex)
@@ -143,7 +144,7 @@ public static class MeetingBundle
         catch (Exception ex)
         {
             Log.Error(LogCategory, $"{bundlePath} could not be unpacked into {folder}.", ex);
-            return new MeetingResult(null, StoreProblems.Unwritten(folder, ex.Message));
+            return new MeetingResult(null, StoreProblems.Unwritable(folder, ex.Message));
         }
 
         return store.SaveMeeting(record with

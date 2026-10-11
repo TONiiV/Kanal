@@ -9,11 +9,12 @@ internal static class WorkspaceIcons
     public static StoreProblem? Refusal(string imagePath)
     {
         if (!Extensions.Contains(ExtensionOf(imagePath)))
-            return StoreProblems.WrongIconType(imagePath);
+            return new StoreProblem(StoreProblemKind.WrongType, imagePath,
+                "A project icon must be a PNG, JPEG, ICO, BMP or WebP image.");
         if (!File.Exists(imagePath))
-            return StoreProblems.NoSuchImage(imagePath);
+            return new StoreProblem(StoreProblemKind.NotFound, imagePath, "That image is not there.");
         if (new FileInfo(imagePath).Length > MaxBytes)
-            return StoreProblems.IconTooLarge(imagePath);
+            return new StoreProblem(StoreProblemKind.TooLarge, imagePath, "A project icon must be 2 MB or smaller.");
 
         return null;
     }

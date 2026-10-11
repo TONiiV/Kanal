@@ -18,7 +18,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
 
         var folder = FolderIn(workspace!.RootPath);
         if (!Directory.Exists(folder))
-            return new MeetingListing([], [StoreProblems.MeetingsFolderMissing(folder)]);
+            return new MeetingListing([], [new StoreProblem(
+                StoreProblemKind.FolderMissing, folder, "The meetings folder is not there.")]);
 
         List<string> folders;
         try
@@ -39,7 +40,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
             if (!File.Exists(file) && !Directory.Exists(file))
             {
                 // An interrupted save: the operator watched it being created, so it cannot vanish.
-                problems.Add(StoreProblems.NoRecord(path));
+                problems.Add(new StoreProblem(
+                    StoreProblemKind.Unreadable, path, "That meeting folder holds no record."));
                 continue;
             }
 
@@ -100,7 +102,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return new MeetingResult(null, StoreProblems.Unwritable(folder, "The meeting could not be written.", ex));
+            return new MeetingResult(null, StoreProblems.LoggedUnwritable(folder, "The meeting could not be written.", ex));
         }
 
         return new MeetingResult(meeting, null);
@@ -117,7 +119,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
 
         var wanted = title.Trim();
         return TitlesBesides(workspaceId, meetingId).Contains(wanted)
-            ? new MeetingResult(null, StoreProblems.TitleTaken(wanted))
+            ? new MeetingResult(null, new StoreProblem(
+                StoreProblemKind.TitleTaken, wanted,
+                $"Another meeting in this workspace is already called \"{wanted}\"."))
             : Save(existing! with { Title = wanted });
     }
 
@@ -147,7 +151,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(folder!, "The meeting could not be deleted.", ex);
+            return StoreProblems.LoggedUnwritable(folder!, "The meeting could not be deleted.", ex);
         }
     }
 

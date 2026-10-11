@@ -106,7 +106,7 @@ internal sealed class WorkspaceRegistry(string path)
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(path, "The workspace list could not be written.", ex);
+            return StoreProblems.LoggedUnwritable(path, "The workspace list could not be written.", ex);
         }
     }
 
