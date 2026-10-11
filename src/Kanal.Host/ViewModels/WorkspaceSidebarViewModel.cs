@@ -352,9 +352,13 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         StoreProblemKind.FolderMissing => L.Format("workspace.problems.foldermissing", problem.Subject),
         StoreProblemKind.UnsupportedVersion => L.Format("workspace.problems.format", problem.Subject),
         StoreProblemKind.Unreadable when IsInsideMeetingsFolder(problem.Subject) =>
-            L.Format("workspace.problems.unreadable", problem.Subject),
+            L.Format("workspace.problems.unreadable", MeetingFolderOf(problem.Subject)),
         _ => L.Format("workspace.problems.other", problem.Subject),
     };
+
+    // Moving only a damaged meeting.json leaves an empty meeting folder, which is reported in turn.
+    private static string MeetingFolderOf(string path) =>
+        Path.GetFileName(path) == WorkspaceStore.MeetingFileName ? Path.GetDirectoryName(path)! : path;
 
     private bool IsInsideMeetingsFolder(string path) =>
         SelectedWorkspace is { } workspace

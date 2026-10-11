@@ -19,6 +19,8 @@ operator could not find the cause, so the note could not be removed.
   "repair it or move it out of the project folder". A record format that Kanal cannot read says
   that, and points to the log. Any other problem, for example the project list file, says that
   Kanal cannot read the file and points to the log.
+- For a damaged `meeting.json`, the line names its meeting folder, not the file. If the operator
+  moved only the file, the empty meeting folder would be reported next.
 - The note lists each problem once. A missing folder of the selected project comes from the
   project list and from the meeting list. Kanal removes the duplicate before it counts and logs.
 - The note follows a language switch. The view model keeps the problem list and builds the note

@@ -138,6 +138,22 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [Fact]
+    public void ADamagedMeetingFileNamesTheMeetingFolderThatHasToMove()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var folder = Path.Combine(vm.SelectedWorkspace!.RootPath, "meetings", "damaged");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
+
+        vm.Refresh();
+
+        var l = Kanal.Host.Localization.Localizer.Instance;
+        Assert.Contains(l.Format("workspace.problems.unreadable", folder), vm.ProblemNote);
+        Assert.DoesNotContain(WorkspaceStore.MeetingFileName, vm.ProblemNote);
+    }
+
+    [Fact]
     public void AnUnreadableRowOfTheProjectListIsNotToldToMoveOutOfTheProjectFolder()
     {
         var store = Store();
