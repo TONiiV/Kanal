@@ -15,6 +15,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 3. New glyphs in `Assets/Icons`: `sliders`, `transcript`, `translate`, `summary`. Audio input
    reuses `microphone`; Workspace reuses `folder`.
 
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
 ### `WorkspaceStore` split into small internal classes
 
 This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
@@ -28,11 +44,18 @@ writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
 | `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
 | `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
 | `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
-| `StoreProblems` | Builds the shared `StoreProblem` values. Logs each write failure. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. It never logs. |
 | `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
 
 All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
 internal types. `StorePathsTests` tests the path rules directly.
+
+`MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
+an unwritable path and a bad meeting id.
+
+The caller decides whether to log a problem, not `StoreProblems` (owner decision, 2026-10-11). A
+`StoreProblem` does not carry the exception, so the code that catches the exception logs it, with
+its stack trace, before it returns the problem. `StoreProblems` only builds values.
 
 ### The Windows msi shows its dialogs and replaces the installed version
 
@@ -49,6 +72,31 @@ msi shows Repair and Remove. The install stays per-user, with no install-directo
 - `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
   missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
   first build needs network access once. The extension version equals the `wix` tool version.
+
+### A refused action shows a sentence in the interface language
+
+A refused store action showed the English `Detail` text from Core in the sidebar. It showed a
+generic sentence in the project settings. The operators read Chinese, German and Polish.
+
+1. `StoreRefusal.Report` in `Kanal.Host/Localization` turns a `StoreProblem` into one localized
+   sentence and logs `{Kind} on {Subject}: {Detail}` as a warning. The sidebar and the project
+   settings both call it. Neither view model keeps its own mapping.
+2. Each `StoreProblemKind` has one sentence. The new keys are `workspace.refused.<kind>`. The
+   existing keys keep `TitleTaken`, `TooLarge`, `WrongType` and `NotThisWorkspace`.
+3. Four kinds name the subject: `FolderMissing`, `Unreadable`, `Unwritable` and
+   `UnsupportedVersion`. `Invalid` and `NotFound` do not. Their subject is an id or a glyph that
+   means nothing to the operator.
+4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
+   another project already uses. The code does not match on the English `Detail`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
+6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
+   `workspace.refused.other` replaces it for a kind that has no sentence yet.
+
+The old count note (`workspace.problems`) does not change. Ticket #212 owns it.
 
 ### The first release is 1.0.0
 
