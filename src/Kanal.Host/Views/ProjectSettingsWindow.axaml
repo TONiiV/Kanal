@@ -19,6 +19,9 @@
         <Style Selector="Path.glyph#IssueIcon.alarm">
             <Setter Property="Fill" Value="{DynamicResource Alarm}" />
         </Style>
+        <Style Selector="Path.glyph#IssueIcon.resolved">
+            <Setter Property="Fill" Value="{DynamicResource Ink3}" />
+        </Style>
         <Style Selector="TextBlock#IssueOutcome">
             <Setter Property="Foreground" Value="{DynamicResource Ink2}" />
         </Style>
@@ -108,6 +111,7 @@
                                         Padding="14,12">
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                         <Path x:Name="IssueIcon" Classes="glyph" Classes.alarm="{Binding IsAlarm}"
+                                              Classes.resolved="{Binding IsResolved}"
                                               Data="{c:Icon warning}" Width="14" Height="14"
                                               VerticalAlignment="Top" Margin="0,2,0,0" />
                                         <StackPanel Grid.Column="1">

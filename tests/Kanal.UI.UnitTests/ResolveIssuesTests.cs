@@ -575,6 +575,7 @@ public class ResolveIssuesTests : IDisposable
         Dispatcher.UIThread.RunJobs();
 
         Assert.False(resolve.IsVisible);
+        Assert.Contains("resolved", Named<Avalonia.Controls.Shapes.Path>(window!, "IssueIcon").Classes);
         var outcome = Named<TextBlock>(window!, "IssueOutcome");
         Assert.True(outcome.IsVisible);
         Assert.Equal(
