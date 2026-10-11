@@ -23,6 +23,23 @@ public class StoreProblemsTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_set_aside_logs_its_exception()
+    {
+        var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
+        var workspace = store.CreateWorkspace("W", Directory.CreateDirectory(Path.Combine(_root, "w")).FullName)
+            .Workspace!;
+        var folder = Directory.CreateDirectory(Path.Combine(workspace.RootPath, "meetings", "lost1")).FullName;
+        File.WriteAllText(Path.Combine(workspace.RootPath, "kanal-set-aside"), "in the way");
+
+        var result = store.RecoverMeeting(workspace.Id, folder, "Recovered meeting");
+
+        Assert.Equal(StoreProblemKind.Unwritable, result.Problem!.Kind);
+        var line = Assert.Single(_sink.Lines, l => l.Message.Contains("could not be moved"));
+        Assert.Equal(LogLevel.Warning, line.Level);
+        Assert.NotNull(line.Error);
+    }
+
+    [Fact]
     public void An_unwritable_problem_joins_the_detail_and_the_cause()
     {
         var problem = StoreProblems.Unwritable("p", "It failed.", new IOException("disk full"));

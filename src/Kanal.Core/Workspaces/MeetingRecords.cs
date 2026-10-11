@@ -183,8 +183,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return new RecoverResult(
-                null, null, StoreProblems.Unwritable(path!, "The damaged record could not be renamed.", ex));
+            const string failure = "The damaged record could not be renamed.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({path})", ex);
+            return new RecoverResult(null, null, StoreProblems.Unwritable(path!, failure, ex));
         }
 
         var saved = Save(record);
@@ -372,8 +373,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return new RecoverResult(
-                null, null, StoreProblems.Unwritable(folder, "The meeting folder could not be moved.", ex));
+            const string failure = "The meeting folder could not be moved.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return new RecoverResult(null, null, StoreProblems.Unwritable(folder, failure, ex));
         }
     }
 
