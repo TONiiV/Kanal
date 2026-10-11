@@ -15,7 +15,7 @@
 
 ## 二、建议交付物
 
-首个版本使用 `1.0.1-alpha.1`。产物名称由构建生成，格式如下：
+首个版本使用 `1.0.0`，只发正式版，不带预发布后缀。产物名称由构建生成，格式如下：
 
 ```text
 Kanal-<完整版本>-osx-arm64.dmg
@@ -30,17 +30,17 @@ Kanal-<完整版本>-win-x64.msi.sha256
 >
 > 1. 先在一个 PR 里提升 `<Version>` 和 `CHANGELOG.md` 标题。
 > 2. 合并该 PR。
-> 3. 再对 `main` 上的提交打同一数字版本的 tag，例如 `v1.0.1-alpha.1`。
+> 3. 再对 `main` 上的提交打同一数字版本的 tag，例如 `v1.0.0`。
 
 第一轮只支持 Apple Silicon，以减少架构组合和本地模型原生库带来的风险。如果测试者有 Intel Mac，再增加独立的 `osx-x64` 产物；不要在未经完整原生库验证前合并成 Universal Binary。
 
-GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release 仍然公开可下载。2026-10-07 起接受这一点：alpha 直接通过公开 GitHub Release 分发。
+GitHub 的 **Pre-release 不是私密发布**：公共仓库中的 Pre-release 仍然公开可下载。2026-10-07 起接受这一点：安装包直接通过公开 GitHub Release 分发。
 
 ## 三、发布流水线
 
 ### 3.1 构建
 
-维护者在 GitHub 的 Releases 页面创建 tag（如 `v1.0.1-alpha.1`，数字部分等于 `<Version>`）并点击 Publish。`.github/workflows/release.yml` 随后在 macOS runner 上签名、公证 dmg，在 Windows runner 上打包 msi，并把两者上传到该 Release。两边都调用 `installers/release.sh`，并上传 `.sha256` 文件。
+维护者在 GitHub 的 Releases 页面创建 tag（如 `v1.0.0`，数字部分等于 `<Version>`）并点击 Publish。`.github/workflows/release.yml` 随后在 macOS runner 上签名、公证 dmg，在 Windows runner 上打包 msi，并把两者上传到该 Release。两边都调用 `installers/release.sh`，并上传 `.sha256` 文件。
 
 发布流水线不运行测试。维护者只给 `main` 上 `ci.yml` 已通过的提交打 tag。下面是脚本执行的步骤。
 
@@ -152,6 +152,6 @@ GitHub 运行 tag 所在提交里的 `release.yml`。在本流水线合并之前
 2. 给全部测试者发送“停止使用并删除该版本”的通知。
 3. 若涉及 relay host credential，立即轮换 token；若涉及第三方 API key，撤销对应 key。
 4. 保留原 tag、commit、DMG hash 和公证记录用于调查，不覆盖原产物。
-5. 修复后发布递增版本，例如 `1.0.1-alpha.2`，重新走完整签名、公证和验收流程。
+5. 修复后发布递增版本，例如 `1.0.1`，重新走完整签名、公证和验收流程。
 
 由于桌面安装包无法远程卸载，“下架”只能阻止继续下载；已下载副本必须通过直接通知测试者停止使用。若漏洞可通过后端缓解，可以同时停用/轮换 relay 凭据，但不能把后端停用当作客户端撤回的替代品。
