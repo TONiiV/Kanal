@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Package the supplied Kanal PNG for every application surface.
 
-``design/kanal-icon.png`` is the source of truth. This dependency-free
-packager preserves that artwork, places it on a warm beige rounded tile for app
-icons, and produces deterministic square PNG, ICO, ICNS and favicon
-derivatives. The splash keeps the standalone transparent mark. No SVG asset
-is generated or shipped.
+Two source PNGs hold the artwork. ``design/kanal-icon.png`` is the coloured
+mark: it feeds the favicon and brand logo of the mobile caption page. The
+silver tiles ``design/icon-silver/B-satin-light.png`` and ``B-satin-dark.png``
+feed every desktop host surface: ICO, ICNS and the splash mark. This
+dependency-free packager produces deterministic derivatives of both. No SVG
+asset is generated or shipped.
 """
 
 from __future__ import annotations
@@ -254,6 +255,35 @@ def write_favicon_into_pages(uri: str, brand_uri: str, log=print) -> None:
             log(f"  {os.path.relpath(path, ROOT):52s} updated")
 
 
+SILVER_SOURCES = {"light": "B-satin-light.png", "dark": "B-satin-dark.png"}
+HOST_ICON_NAMES = {"light": "kanal.ico", "dark": "kanal-dark.ico"}
+SPLASH_MARK_NAMES = {"light": "kanal-splash-mark.png", "dark": "kanal-splash-mark-dark.png"}
+
+
+def silver_mark_rgba(mark: bytes, tile: bytes, size: int) -> bytes:
+    """Give the mark shape the flat silver tone of each stroke in the satin tile."""
+    classes = bytearray(size * size)
+    sums = [[0, 0, 0, 0], [0, 0, 0, 0]]
+    for index in range(size * size):
+        offset = index * 4
+        stroke = 1 if mark[offset + 2] > mark[offset] else 0
+        classes[index] = stroke
+        if mark[offset + 3] == 255:
+            total = sums[stroke]
+            total[0] += tile[offset]
+            total[1] += tile[offset + 1]
+            total[2] += tile[offset + 2]
+            total[3] += 1
+    tones = [tuple(round(channel / total[3]) for channel in total[:3]) for total in sums]
+    result = bytearray(size * size * 4)
+    for index in range(size * size):
+        offset = index * 4
+        if mark[offset + 3]:
+            result[offset:offset + 3] = bytes(tones[classes[index]])
+            result[offset + 3] = mark[offset + 3]
+    return bytes(result)
+
+
 def main() -> None:
     design = os.path.join(ROOT, "design")
     assets = os.path.join(ROOT, "src", "Kanal.Host", "Assets")
@@ -268,31 +298,46 @@ def main() -> None:
     source_png = os.path.join(design, "kanal-icon.png")
     width, height, decoded = decode_png(source_png)
     source_size, source_rgba = square_rgba(width, height, decoded)
-    icon_rgba = rounded_beige_icon_rgba(source_rgba, source_size)
     print(f"PNG\n  {os.path.relpath(source_png, ROOT):52s} source ({width}x{height})")
 
-    cache: dict[int, bytes] = {}
-    def rgba(size: int) -> bytes:
-        if size not in cache:
-            cache[size] = resize_rgba(icon_rgba, source_size, size)
-        return cache[size]
+    tiles: dict[str, bytes] = {}
+    for variant, name in SILVER_SOURCES.items():
+        path = os.path.join(design, "icon-silver", name)
+        tile_width, tile_height, tile = decode_png(path)
+        if (tile_width, tile_height) != (1024, 1024):
+            raise SystemExit(f"{os.path.relpath(path, ROOT)}: expected a 1024x1024 PNG")
+        tiles[variant] = tile
+        print(f"  {os.path.relpath(path, ROOT):52s} source")
+
+    cache: dict[tuple[str, int], bytes] = {}
+    def rgba(variant: str, size: int) -> bytes:
+        if (variant, size) not in cache:
+            cache[(variant, size)] = resize_rgba(tiles[variant], 1024, size)
+        return cache[(variant, size)]
 
     entries = [(16, "", 16), (16, "@2x", 32), (32, "", 32), (32, "@2x", 64),
                (128, "", 128), (128, "@2x", 256), (256, "", 256),
                (256, "@2x", 512), (512, "", 512), (512, "@2x", 1024)]
     for nominal, suffix, pixels in entries:
         name = f"icon_{nominal}x{nominal}{suffix}.png"
-        write(os.path.join(iconset, name), png_bytes(pixels, rgba(pixels)))
+        write(os.path.join(iconset, name), png_bytes(pixels, rgba("light", pixels)))
 
     sizes = (16, 32, 64, 128, 256, 512, 1024)
-    write(os.path.join(design, "kanal.icns"), icns_bytes([(size, rgba(size)) for size in sizes]))
-    write(os.path.join(assets, "kanal.ico"),
-          ico_bytes([(size, rgba(size)) for size in (16, 24, 32, 48, 64, 128, 256)]))
-    write(os.path.join(design, "kanal-icon-1024.png"), png_bytes(1024, rgba(1024)))
-    splash_rgba = resize_rgba(source_rgba, source_size, 512)
-    write(os.path.join(assets, "kanal-splash-mark.png"), png_bytes(512, splash_rgba))
+    write(os.path.join(design, "kanal.icns"),
+          icns_bytes([(size, rgba("light", size)) for size in sizes]))
 
-    favicon = "data:image/png;base64," + base64.b64encode(png_bytes(32, rgba(32))).decode()
+    mark_1024 = resize_rgba(source_rgba, source_size, 1024)
+    for variant in SILVER_SOURCES:
+        write(os.path.join(assets, HOST_ICON_NAMES[variant]),
+              ico_bytes([(size, rgba(variant, size)) for size in (16, 24, 32, 48, 64, 128, 256)]))
+        silver_mark = silver_mark_rgba(mark_1024, tiles[variant], 1024)
+        write(os.path.join(assets, SPLASH_MARK_NAMES[variant]),
+              png_bytes(512, resize_rgba(silver_mark, 1024, 512)))
+
+    favicon_tile = rounded_beige_icon_rgba(source_rgba, source_size)
+    favicon = "data:image/png;base64," + base64.b64encode(
+        png_bytes(32, resize_rgba(favicon_tile, source_size, 32))
+    ).decode()
     write(os.path.join(design, "favicon-datauri.txt"), (favicon + "\n").encode())
     brand = "data:image/png;base64," + base64.b64encode(
         png_bytes(96, resize_rgba(source_rgba, source_size, 96))
