@@ -51,6 +51,8 @@ public enum StoreProblemKind
     RecordDamaged,
 
     Misfiled,
+
+    RegistryRowDamaged,
 }
 
 // Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.
