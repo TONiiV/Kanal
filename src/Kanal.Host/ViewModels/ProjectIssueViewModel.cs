@@ -51,7 +51,7 @@ public sealed partial class ProjectIssueViewModel : ViewModelBase
     public string Location =>
         Path.GetFileName(Subject) == WorkspaceStore.MeetingFileName ? Path.GetDirectoryName(Subject)! : Subject;
 
-    public bool IsAlarm => Kind != StoreProblemKind.FolderMissing;
+    public bool IsAlarm => Kind is not (StoreProblemKind.FolderMissing or StoreProblemKind.Unreadable);
 
     public string Cause => _projectName is null ? L[_causeKey] : L.Format(_causeKey, _projectName);
 

@@ -536,13 +536,19 @@ public class ResolveIssuesTests : IDisposable
         var meeting = store.CreateMeeting(kappa.Id, "Delivery call").Meeting!;
         var folder = store.MeetingFolder(kappa.Id, meeting.Id)!;
 
+        WorkspaceSidebarViewModel vm;
         ProjectSettingsViewModel settings;
         using (new FileStream(
             Path.Combine(folder, WorkspaceStore.MeetingFileName), FileMode.Open, FileAccess.Read, FileShare.None))
-            settings = await Settings(Opened(store, kappa), kappa, _ => Task.CompletedTask);
+        {
+            vm = Opened(store, kappa);
+            settings = await Settings(vm, kappa, _ => Task.CompletedTask);
+        }
 
         var issue = Assert.Single(settings.Issues);
         Assert.Equal(StoreProblemKind.Unreadable, issue.Kind);
+        Assert.False(issue.IsAlarm);
+        Assert.False(vm.IssuesAreAlarm);
         Assert.Equal(folder, issue.Location);
         Assert.Equal(L["workspace.issues.unreachable"], issue.Cause);
         Assert.False(issue.ShowsResolve);

@@ -15,7 +15,8 @@ operator does not edit files.
    folder and a damaged row of the project list each have their own sentence. The subject of a
    meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed.
    An `Unreadable` meeting folder (an I/O error on `meeting.json`) gets the cause
-   `workspace.issues.unreachable` and no button: the record may be healthy.
+   `workspace.issues.unreachable` and no button: the record may be healthy. For the same reason it
+   uses the warning colour, not the alarm colour, in the banner and in the drop-down mark.
 2. `ProjectIssueViewModel.Action` selects the action from the kind:
 
    | Kind | Button | Core call |
