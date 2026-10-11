@@ -52,10 +52,10 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <Style Selector="Button#ProjectSettings Path.glyph">
-            <Setter Property="Fill" Value="{StaticResource Ink3}" />
+            <Setter Property="Fill" Value="{DynamicResource Ink3}" />
         </Style>
         <Style Selector="Button#ProjectSettings:pointerover Path.glyph">
-            <Setter Property="Fill" Value="{StaticResource Brand}" />
+            <Setter Property="Fill" Value="{DynamicResource Brand}" />
         </Style>
     </UserControl.Styles>
 

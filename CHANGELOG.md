@@ -10,7 +10,7 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0
 
 The first release. Everything below is what Kanal does on the day it ships.
 
@@ -18,6 +18,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
   Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
   recording starts.
+- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example

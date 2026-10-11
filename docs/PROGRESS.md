@@ -6,6 +6,38 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
+
+### The first release is 1.0.0
+
+No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
+
+1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
+   without a date. `ChangelogTests` keeps the two equal.
+2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
+   `docs/release/macos-alpha-rollout.md` are plain versions: `v1.0.0`, then `v1.0.1`.
+3. No pre-release or nightly channel: every release is a plain `x.y.z` version (owner decision,
+   2026-10-11).
+4. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   (see 2026-10-07). The release PR rewrites the README limitations.
+
+Open item: ADR 0056 requires the update check and the minimum supported version in the host before
+the first `v1.0.0` tag. That work is not done. Do not publish the first release before it merges.
+
 ### Host colours move to the Light theme dictionary
 
 This is a prefactor for the Appearance feature (#187). The host looks the same as before.
@@ -833,7 +865,7 @@ serial phases, and records the decisions that shape the first release:
   CHANGELOG date land in the release PR, not here.
 - **The cut line.** Track A (meeting records) ships complete: the five green slices merge and the
   two missing ones — consent before a record is created (#98) and the migration bundle (#100) — are
-  built first. #90, #118 and #94 wait for their tracks.
+  built first. #90, #127 and #94 wait for their tracks.
 - **Hide what has no second state.** The Speakers tab has one speaker to rename until Track B lands;
   the online capture profile records the microphone only until Track D lands. Both are hidden or
   disabled rather than shown and explained.
@@ -1177,6 +1209,40 @@ The binding rule from decision 3 had to land here rather than in slice 2, becaus
 something to bind to: an untouched record (`StartedAt` null) is written into, anything else gets a
 new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
 and start" — not the rule.
+
+### The diarization catalog and its licence gate ([#107](https://github.com/TONiiV/Kanal/issues/107), [PR #127](https://github.com/TONiiV/Kanal/pull/127))
+
+Speaker attribution needs two models. The segmentation model finds where the speaker changes. The embedding model decides whether two segments have the same voice.
+
+`DiarizationModelCatalog` lists pyannote segmentation 3.0 as the segmentation model. It lists four embedding candidates: 3D-Speaker CAM++, 3D-Speaker ERes2Net base, WeSpeaker CN-Celeb ResNet34 and NeMo TitaNet small.
+
+[ADR 0055](adr/0055-speaker-attribution.md) decision 16 sets the default embedding model. Measured DER on Chinese, German and Polish decides it, not parameter count. The catalog therefore offers candidates and does not rank them.
+
+Sizes come from the GitHub releases API. We recomputed every SHA-256 from the downloaded file on 2026-09-08. The four embedding hashes also match the upstream `checksum.txt`.
+
+**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless also have non-commercial licences.
+
+A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. If someone lists Reverb, the catalog throws on first use and the test suite fails.
+
+**Readiness never throws.** `DiarizationModelCatalog.Readiness` reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
+
+The catalog reports only *not downloaded* and *ready*, as [PR #126](https://github.com/TONiiV/Kanal/pull/126) does for the transcription catalog. The disk decides these two states. `DiarizationModelDownload` owns *downloading* and *failed* for one file. This follows [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5. The post-meeting pass needs only "both files on disk".
+
+`DiarizationModelDownload` holds the state of one file. A 404 or a hash mismatch ends in `Failed`, with the message on the object. It never throws. The host has no reason to show a dialog over a running meeting.
+
+Headless tests start a demo meeting with an empty models directory. The transcript arrives. No mode status mentions a speaker model.
+
+[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. The download needs no token. No repository is gated. A test asserts that the downloader receives the URL unchanged.
+
+The embedding release tag is `speaker-recongition-models` upstream. A test pins this spelling. The correct spelling gives a 404 for every embedding URL, and the error shows only at download time.
+
+Three items are open.
+
+1. The segmentation asset is a `.tar.bz2` that holds `model.onnx` and `model.int8.onnx`. The BCL has no bzip2. Unpacking needs a new dependency, so it ships with the slice that loads the model. Until then, `Ready` means that the verified archive is on disk.
+2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`. That issue also covers a race in `DiarizationModelDownload.Cancel`, which can touch a disposed token source.
+3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
+
+No operator can reach these models yet, so this PR adds no CHANGELOG entry.
 
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
