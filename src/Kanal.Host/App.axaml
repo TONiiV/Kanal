@@ -356,13 +356,13 @@
         </Style>
 
         <Style Selector="Button.danger">
-            <Setter Property="Foreground" Value="{StaticResource Alarm}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Alarm}" />
+            <Setter Property="Foreground" Value="{DynamicResource Alarm}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Alarm}" />
         </Style>
         <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Alarm}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Alarm}" />
-            <Setter Property="TextElement.Foreground" Value="{StaticResource OnBrand}" />
+            <Setter Property="Background" Value="{DynamicResource Alarm}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Alarm}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource OnBrand}" />
         </Style>
 
         <!-- Declared after Button.ghost so a mark keeps its own fill through hover and press. -->
