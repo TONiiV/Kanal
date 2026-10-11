@@ -134,8 +134,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             work();
             return Task.CompletedTask;
         });
-        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
-            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
             (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
@@ -195,6 +193,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
+        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
+            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
