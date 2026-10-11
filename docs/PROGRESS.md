@@ -27,11 +27,14 @@ operator does not edit files.
    | `UnsupportedVersion` | none | none |
 
 3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
-   language. The time is the time of the recovery, from the sidebar clock. Kanal cannot know the
-   meeting time before the rebuild.
+   language. The time is the rebuilt start time of the meeting, in the operator's time zone.
+   `WorkspaceStore.RecoverMeeting` now takes `Func<DateTimeOffset, string> titleFor` in place of a
+   base title. Core calls it after the rebuild with the start time, refuses a blank result, and
+   then applies `FreeTitle`. This changes the API that #210 added.
 4. After each action, `ReloadIssues` calls `Refresh` on the sidebar. The meeting list, the banner and
    the project marks update. The settings window then merges the new issue list into its rows:
-   - A row with an outcome stays, so the operator can read the outcome.
+   - A row with an outcome stays, so the operator can read the outcome. When its issue is not in
+     the new list, the row loses its buttons, and its commands do nothing.
    - A row without an outcome that is not in the new list goes away.
    - A new issue is added at the end.
 5. The outcome shows in one line in the row. A refusal shows its reason in the alarm colour. The
@@ -40,7 +43,7 @@ operator does not edit files.
 6. "Choose folder…" uses a folder picker in the settings window (`ChooseProjectFolder`), owned by
    that window. "Remove from list" opens the remove dialog with only "Remove from list" and "Keep
    it" (`RemoveProjectWindow` with `listOnly`). It then follows the existing remove flow: the window
-   closes and the sidebar reloads.
+   closes and the sidebar reloads. A refused removal also reloads the issue list.
 7. After a relocation, an icon file of the project points to the new folder. Without this, Save
    refused the old icon path.
 8. Spec decision 14: no action is offered for the project that records. The sidebar keeps the

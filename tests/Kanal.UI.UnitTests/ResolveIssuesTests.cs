@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,7 +17,12 @@ public class ResolveIssuesTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 11, 9, 12, 0, TimeSpan.FromHours(2));
 
-    private const string RecoveredTitleTime = "2026-10-11 09:12";
+    private static readonly DateTime MeetingEnded = new(2026, 10, 9, 7, 30, 4, DateTimeKind.Utc);
+
+    private static string LocalMinute(DateTime utc) =>
+        new DateTimeOffset(utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    private static readonly string RecoveredTitleTime = LocalMinute(MeetingEnded.AddSeconds(-4));
 
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "kanal-resolve-" + Guid.NewGuid().ToString("N"));
@@ -55,13 +61,15 @@ public class ResolveIssuesTests : IDisposable
         return path;
     }
 
-    private static string DamagedMeeting(Workspace project, string name)
+    private static string DamagedMeeting(Workspace project, string name, DateTime? ended = null)
     {
         var folder = MeetingFolder(project, name);
-        using (var writer = new TranscriptLogWriter(Path.Combine(folder, TranscriptLog.FileName), _ => { }))
+        var transcript = Path.Combine(folder, TranscriptLog.FileName);
+        using (var writer = new TranscriptLogWriter(transcript, _ => { }))
             writer.Append(new Utterance(
                 "u1", "S1", 0, 4000, "zh", "你好", 1, UtteranceState.Final, false, 1.0,
                 new Dictionary<string, string> { ["de"] = "Hallo" }));
+        File.SetLastWriteTimeUtc(transcript, ended ?? MeetingEnded);
         File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
         return folder;
     }
@@ -137,6 +145,31 @@ public class ResolveIssuesTests : IDisposable
         Assert.False(row.ShowsResolve);
         Assert.Equal(L.Format("workspace.issues.recovered", title), row.Outcome);
         Assert.True(File.Exists(Path.Combine(folder, WorkspaceStore.MeetingFileName + ".damaged")));
+    }
+
+    [Fact]
+    public async Task TwoMeetingsRecoveredInOneMinuteAreTitledByWhenTheyHappened()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var morning = new DateTime(2026, 10, 8, 7, 0, 4, DateTimeKind.Utc);
+        var afternoon = new DateTime(2026, 10, 8, 13, 45, 4, DateTimeKind.Utc);
+        DamagedMeeting(kappa, "7f3a0000000000b1", morning);
+        DamagedMeeting(kappa, "7f3a0000000000b2", afternoon);
+        var vm = Opened(store, kappa);
+
+        await Settings(vm, kappa, settings =>
+        {
+            foreach (var issue in settings.Issues.ToList())
+                settings.ResolveCommand.Execute(issue);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal(
+            new[] { morning, afternoon }
+                .Select(t => L.Format("workspace.issues.recoveredtitle", LocalMinute(t.AddSeconds(-4))))
+                .Order(),
+            vm.Meetings.Select(m => m.Title).Order());
     }
 
     [Fact]
@@ -346,11 +379,15 @@ public class ResolveIssuesTests : IDisposable
             Directory.Move(aside, gone.RootPath);
             settings.ChooseProjectFolder = () => Task.FromResult<string?>(elsewhere);
             await settings.RelocateCommand.ExecuteAsync(settings.Issues.Single());
+            settings.ConfirmListRemoval = _ => Task.FromResult(true);
+            await settings.RemoveFromListCommand.ExecuteAsync(settings.Issues.Single());
         });
 
         var row = Assert.Single(settings.Issues);
         Assert.True(row.IsRefused);
+        Assert.False(row.ShowsRelocate);
         Assert.Equal(L["workspace.issues.refused.oldfolder"], row.Outcome);
+        Assert.Equal(2, store.ListWorkspaces().Workspaces.Count);
         Assert.Equal(gone.RootPath, store.ListWorkspaces().Workspaces.Single(w => w.Id == gone.Id).RootPath);
     }
 
@@ -456,6 +493,24 @@ public class ResolveIssuesTests : IDisposable
     }
 
     [Fact]
+    public async Task TheRecordingProjectOffersNoActionAfterTheOperatorSwitchesAway()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var lambda = store.CreateWorkspace("Lambda", Folder("lambda")).Workspace!;
+        var recorded = store.CreateMeeting(kappa.Id, "Delivery call").Meeting!;
+        MeetingFolder(kappa, "7f3a0000000000c1");
+        var vm = Opened(store, kappa);
+        vm.RecordingMeetingId = recorded.Id;
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == lambda.Id);
+
+        var settings = await Settings(vm, kappa, _ => Task.CompletedTask);
+
+        Assert.False(settings.CanResolve);
+        Assert.False(Assert.Single(settings.Issues).ShowsResolve);
+    }
+
+    [Fact]
     public async Task AnotherProjectCanBeRepairedWhileOneRecords()
     {
         var store = Store();
@@ -508,14 +563,14 @@ public class ResolveIssuesTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void TheEnglishBaseTitleNamesTheRecoveryTime()
+    public void TheEnglishBaseTitleNamesTheMeetingStart()
     {
         var before = L.Current;
         try
         {
             L.Current = "en";
             Assert.Equal(
-                "Recovered meeting 2026-10-11 09:12",
+                $"Recovered meeting {RecoveredTitleTime}",
                 L.Format("workspace.issues.recoveredtitle", RecoveredTitleTime));
         }
         finally

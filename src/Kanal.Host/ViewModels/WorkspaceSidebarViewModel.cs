@@ -497,7 +497,6 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 Refresh();
                 return IssuesOf(project);
             },
-            Clock = _clock,
         };
         await ShowProjectSettings(settings);
         if (settings.Changed)

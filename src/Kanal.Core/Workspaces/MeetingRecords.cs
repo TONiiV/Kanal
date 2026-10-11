@@ -147,11 +147,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
     }
 
-    public RecoverResult Recover(string workspaceId, string folder, string baseTitle)
+    public RecoverResult Recover(string workspaceId, string folder, Func<DateTimeOffset, string> titleFor)
     {
-        if (string.IsNullOrWhiteSpace(baseTitle))
-            return new RecoverResult(null, null, StoreProblems.Invalid(folder, NeedsTitle));
-
         var (path, problem) = MeetingsSubfolder(workspaceId, folder);
         if (problem is not null)
             return new RecoverResult(null, null, problem);
@@ -170,8 +167,12 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         if (languages.Count == 0)
             return SetAside(workspaceId, path!);
 
-        var record = Rebuilt(
-            workspaceId, path!, utterances, languages, FreeTitle(workspaceId, baseTitle, exceptMeetingId: null));
+        var rebuilt = Rebuilt(workspaceId, path!, utterances, languages);
+        var title = titleFor(rebuilt.StartedAt!.Value);
+        if (string.IsNullOrWhiteSpace(title))
+            return new RecoverResult(null, null, StoreProblems.Invalid(path!, NeedsTitle));
+
+        var record = rebuilt with { Title = FreeTitle(workspaceId, title, exceptMeetingId: null) };
         var recordFile = Path.Combine(path!, FileName);
         string? damaged = null;
         try
@@ -296,7 +297,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
 
     private static MeetingRecord Rebuilt(
         string workspaceId, string folder, IReadOnlyList<Utterance> utterances,
-        List<string> languages, string baseTitle)
+        List<string> languages)
     {
         var transcript = Path.Combine(folder, TranscriptLog.FileName);
         var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
@@ -309,7 +310,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         var started = new DateTimeOffset(ended).AddMilliseconds(-spanMs);
 
         return new MeetingRecord(
-            Path.GetFileName(folder), workspaceId, baseTitle.Trim(), started, started,
+            Path.GetFileName(folder), workspaceId, "", started, started,
             new DateTimeOffset(ended), languages, transcript, hasAudio ? audio : null);
     }
 

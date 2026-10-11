@@ -88,8 +88,6 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
 
     public Func<IReadOnlyList<ProjectIssueViewModel>>? ReloadIssues { get; set; }
 
-    public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.Now;
-
     public Func<Task<string?>>? ChooseProjectFolder { get; set; }
 
     public Func<string, Task<bool>>? ConfirmListRemoval { get; set; }
@@ -178,16 +176,13 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanResolve))]
     private void Resolve(ProjectIssueViewModel issue)
     {
-        if (!CanResolve || issue.IsResolved)
+        if (!CanResolve || !Actionable(issue))
             return;
 
         switch (issue.Action)
         {
             case IssueAction.RecoverMeeting:
-                var title = L.Format(
-                    "workspace.issues.recoveredtitle",
-                    Clock().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
-                Show(issue, _store.RecoverMeeting(Project.Id, issue.Subject, title), "workspace.issues.recovered");
+                Show(issue, _store.RecoverMeeting(Project.Id, issue.Subject, RecoveredTitle), "workspace.issues.recovered");
                 break;
             case IssueAction.ReidentifyMeeting:
                 Show(issue, _store.ReidentifyMeeting(Project.Id, issue.Subject), "workspace.issues.reidentified");
@@ -208,7 +203,7 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanResolve))]
     private async Task RelocateAsync(ProjectIssueViewModel issue)
     {
-        if (!CanResolve || issue.Action != IssueAction.RelocateProject
+        if (!CanResolve || !Actionable(issue) || issue.Action != IssueAction.RelocateProject
             || ChooseProjectFolder is null || await ChooseProjectFolder() is not { } folder)
             return;
 
@@ -234,19 +229,26 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRemoveFromList))]
     private async Task RemoveFromListAsync(ProjectIssueViewModel issue)
     {
-        if (!CanRemoveFromList || issue.Action != IssueAction.RelocateProject
+        if (!CanRemoveFromList || !Actionable(issue) || issue.Action != IssueAction.RelocateProject
             || ConfirmListRemoval is null || !await ConfirmListRemoval(Project.Name))
             return;
 
         if (_store.ForgetWorkspace(Project.Id) is { } problem)
         {
             issue.Refused(ReasonFor(problem));
+            Reload();
             return;
         }
 
         Changed = true;
         Finished?.Invoke();
     }
+
+    private static bool Actionable(ProjectIssueViewModel issue) => !issue.IsResolved && issue.ActionsAllowed;
+
+    private static string RecoveredTitle(DateTimeOffset start) => L.Format(
+        "workspace.issues.recoveredtitle",
+        start.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
 
     private ProjectIssueViewModel Offered(ProjectIssueViewModel issue)
     {
@@ -294,8 +296,15 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
 
         var fresh = ReloadIssues();
         for (var i = Issues.Count - 1; i >= 0; i--)
-            if (!Issues[i].HasOutcome && !fresh.Any(f => f.Problem == Issues[i].Problem))
+        {
+            if (fresh.Any(f => f.Problem == Issues[i].Problem))
+                continue;
+            if (Issues[i].HasOutcome)
+                Issues[i].ActionsAllowed = false;
+            else
                 Issues.RemoveAt(i);
+        }
+
         foreach (var issue in fresh.Where(f => !Issues.Any(i => !i.IsResolved && i.Problem == f.Problem)))
             Issues.Add(Offered(issue));
         OnPropertyChanged(nameof(HasIssues));
