@@ -123,6 +123,69 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [Fact]
+    public void TheSelectedProjectWhoseFolderIsGoneIsNamedOnceAndCountedOnce()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var root = vm.SelectedWorkspace!.RootPath;
+        Directory.Delete(root, recursive: true);
+
+        vm.Refresh();
+
+        var l = Kanal.Host.Localization.Localizer.Instance;
+        Assert.Contains(l.Format("workspace.problems", 1), vm.ProblemNote);
+        Assert.Equal(1, vm.ProblemNote.Split(root).Length - 1);
+    }
+
+    [Fact]
+    public void AnUnreadableRowOfTheProjectListIsNotToldToMoveOutOfTheProjectFolder()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var registry = Path.Combine(_root, "workspaces.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(registry))!.AsObject();
+        json.Single(p => p.Key.Equals("workspaces", StringComparison.OrdinalIgnoreCase))
+            .Value!.AsArray().Add(new System.Text.Json.Nodes.JsonObject { ["id"] = "half-a-row" });
+        File.WriteAllText(registry, json.ToJsonString());
+
+        vm.Refresh();
+
+        var l = Kanal.Host.Localization.Localizer.Instance;
+        Assert.Contains(l.Format("workspace.problems.other", registry), vm.ProblemNote);
+        Assert.DoesNotContain(l.Format("workspace.problems.unreadable", registry), vm.ProblemNote);
+    }
+
+    [AvaloniaFact]
+    public void ThePlainNoteFollowsALanguageSwitchButANoteFromAnotherActionIsLeftAlone()
+    {
+        var store = Store();
+        var vm = Opened(store, "Delivery call");
+        var meetings = Path.Combine(vm.SelectedWorkspace!.RootPath, "meetings");
+        Directory.CreateDirectory(Path.Combine(meetings, "not-a-meeting"));
+        var l = Kanal.Host.Localization.Localizer.Instance;
+        var before = l.Current;
+        try
+        {
+            l.Current = "en";
+            vm.Refresh();
+            var subject = Path.Combine(meetings, "not-a-meeting");
+            Assert.Contains(l.Format("workspace.problems", 1), vm.ProblemNote);
+
+            l.Current = "de";
+            Assert.Contains(l.Format("workspace.problems", 1), vm.ProblemNote);
+            Assert.Contains(l.Format("workspace.problems.unreadable", subject), vm.ProblemNote);
+
+            vm.ProblemNote = "left over from an earlier failure";
+            l.Current = "pl";
+            Assert.Equal("left over from an earlier failure", vm.ProblemNote);
+        }
+        finally
+        {
+            l.Current = before;
+        }
+    }
+
+    [Fact]
     public void ALongListOfProblemsIsCutShortRatherThanFillingTheSidebar()
     {
         var store = Store();

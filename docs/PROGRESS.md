@@ -14,8 +14,16 @@ operator could not find the cause, so the note could not be removed.
 - The note now starts with the count. Below the count, it names up to three problems with their
   paths. More problems give one line that points to the log.
 - Each line tells the operator what to do. A missing project folder names the project and says
-  "connect the drive, or remove the project". A newer schema says "update Kanal". Any other
-  problem says "repair it or move it out of the project folder".
+  "connect the drive, or remove the project". A missing `meetings` folder says "restore it, or
+  create an empty folder with this name". An unreadable meeting record or meeting folder says
+  "repair it or move it out of the project folder". A record format that Kanal cannot read says
+  that, and points to the log. Any other problem, for example the project list file, says that
+  Kanal cannot read the file and points to the log.
+- The note lists each problem once. A missing folder of the selected project comes from the
+  project list and from the meeting list. Kanal removes the duplicate before it counts and logs.
+- The note follows a language switch. The view model keeps the problem list and builds the note
+  again from it. It does this only while the note is still the one built from that list. A note
+  from another action stays as it is.
 - Every listed problem goes to the log with its kind, path and English detail.
 - The note has no close button. The cause stays on disk, so the note comes back on the next
   refresh. A dismissed note would hide a record that no list shows (see the store rule
