@@ -98,7 +98,7 @@
 
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,18,16,0" ColumnSpacing="8">
                 <TextBox x:Name="MeetingSearch" Classes="search" Text="{Binding Sidebar.Search}"
-                         Watermark="{l:T workspace.search}"
+                         PlaceholderText="{l:T workspace.search}"
                          AutomationProperties.Name="{l:T workspace.search}">
                     <TextBox.InnerLeftContent>
                         <Path Classes="glyph" Data="{c:Icon search}" Width="15" Height="15" Margin="11,0,0,0" />
