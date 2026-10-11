@@ -417,10 +417,13 @@ public class WorkspaceStoreRecoveryTests : IDisposable
             Path.Combine(original, WorkspaceStore.MeetingFileName),
             Path.Combine(copy, WorkspaceStore.MeetingFileName));
 
-        var record = Meeting(store.ReidentifyMeeting(workspace.Id, copy));
+        var result = store.ReidentifyMeeting(workspace.Id, copy);
 
+        Assert.Null(result.Problem);
+        Assert.Null(result.SetAsidePath);
+        var record = result.Recovered!;
         Assert.Equal("copy-of-it", record.Id);
-        Assert.Equal("Tooling review", record.Title);
+        Assert.Equal("Tooling review 2", record.Title);
         var listing = Store().ListMeetings(workspace.Id);
         Assert.Empty(listing.Problems);
         Assert.Equal(new[] { "copy-of-it", meeting.Id }.Order(), listing.Meetings.Select(m => m.Id).Order());
@@ -443,13 +446,14 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var stored = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
             File.ReadAllText(Path.Combine(copy, WorkspaceStore.MeetingFileName)))!;
         var first = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(originalText)!;
-        foreach (var (key, value) in first.Where(p => p.Key != "id"))
+        foreach (var (key, value) in first.Where(p => p.Key is not ("id" or "title")))
             Assert.Equal(value.GetRawText(), stored[key].GetRawText());
         Assert.Equal("copy-of-it", stored["id"].GetString());
+        Assert.Equal("Tooling review 2", stored["title"].GetString());
     }
 
     [Fact]
-    public void ReidentifyRefusesAFolderNameThatIsNotAnId()
+    public void ReidentifySetsAsideAMisfiledFolderWhoseNameIsNotAnId()
     {
         var store = Store();
         var workspace = NewWorkspace(store);
@@ -457,12 +461,65 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var copy = Folder(workspace, "copy of it");
         var record = Path.Combine(copy, WorkspaceStore.MeetingFileName);
         File.Copy(Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName), record);
-        var text = File.ReadAllText(record);
+        File.WriteAllText(Path.Combine(copy, "note.txt"), "kept");
+        var before = Contents(workspace.RootPath);
 
         var result = store.ReidentifyMeeting(workspace.Id, copy);
 
-        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
-        Assert.Equal(text, File.ReadAllText(record));
+        Assert.Null(result.Problem);
+        Assert.Null(result.Recovered);
+        var target = Path.Combine(SetAsideOf(workspace), "copy of it");
+        Assert.Equal(target, result.SetAsidePath);
+        Assert.False(Directory.Exists(copy));
+        Assert.Equal("kept", File.ReadAllText(Path.Combine(target, "note.txt")));
+        AssertNothingLost(before, Contents(workspace.RootPath));
+        var listing = Store().ListMeetings(workspace.Id);
+        Assert.Empty(listing.Problems);
+        Assert.Equal(meeting.Id, Assert.Single(listing.Meetings).Id);
+    }
+
+    [Fact]
+    public void ARebuiltMeetingLeavesOutTheUnknownLanguage()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "und", 0, null, "de"), Said("u2", "zh", 1_000, null, "und"));
+
+        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+
+        Assert.Equal(["de", "zh"], record.Languages);
+    }
+
+    [Fact]
+    public void AFolderWithOnlyTheUnknownLanguageIsSetAside()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "und", 0));
+
+        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+
+        Assert.Equal(Path.Combine(SetAsideOf(workspace), "lost1"), result.SetAsidePath);
+    }
+
+    [Fact]
+    public void AFailedMoveLeavesTheFolderAndEveryFileWhereTheyWere()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        File.WriteAllText(Path.Combine(folder, "note.txt"), "kept");
+        File.WriteAllText(SetAsideOf(workspace), "in the way");
+        var before = Contents(workspace.RootPath);
+
+        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+
+        Assert.Equal(StoreProblemKind.Unwritable, result.Problem!.Kind);
+        Assert.Null(result.SetAsidePath);
+        Assert.Equal("kept", File.ReadAllText(Path.Combine(folder, "note.txt")));
+        Assert.Equal(before, Contents(workspace.RootPath));
     }
 
     [Fact]

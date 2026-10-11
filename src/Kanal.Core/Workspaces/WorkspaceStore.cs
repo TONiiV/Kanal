@@ -15,6 +15,7 @@ public sealed class WorkspaceStore(string registryPath)
     public const long MaxIconBytes = 2 * 1024 * 1024;
     public static readonly IReadOnlyList<string> IconExtensions = [".png", ".jpg", ".jpeg", ".ico", ".bmp", ".webp"];
     private const string MeetingsFolderName = "meetings";
+    private const string UnknownLanguage = "und";
     private const string SetAsideFolderName = "kanal-set-aside";
     private const string LogCategory = "workspaces";
     private const string NeedsTitle = "A meeting needs a title.";
@@ -431,7 +432,7 @@ public sealed class WorkspaceStore(string registryPath)
             : [];
         var languages = utterances
             .SelectMany(u => u.Translations.Keys.Prepend(u.SrcLang))
-            .Where(language => !string.IsNullOrWhiteSpace(language))
+            .Where(language => !string.IsNullOrWhiteSpace(language) && !string.Equals(language, UnknownLanguage, StringComparison.OrdinalIgnoreCase))
             .Distinct()
             .ToList();
         if (languages.Count == 0)
@@ -458,22 +459,25 @@ public sealed class WorkspaceStore(string registryPath)
         return new RecoverResult(saved.Meeting, null, saved.Problem);
     }
 
-    public MeetingResult ReidentifyMeeting(string workspaceId, string folder)
+    public RecoverResult ReidentifyMeeting(string workspaceId, string folder)
     {
         var (path, problem) = MeetingsSubfolder(workspaceId, folder);
         if (problem is not null)
-            return new MeetingResult(null, problem);
+            return new RecoverResult(null, null, problem);
 
         var (stored, state) = ReadFolder(path!);
         if (state is null)
-            return RefusedMeeting(path!, "That meeting record already belongs to its folder.");
+            return new RecoverResult(null, null, Invalid(path!, "That meeting record already belongs to its folder."));
         if (state.Kind != StoreProblemKind.Misfiled)
-            return new MeetingResult(null, state);
+            return new RecoverResult(null, null, state);
 
         var name = Path.GetFileName(path!);
-        return IsFolderName(name)
-            ? SaveMeeting(stored!.ToRecord(workspaceId, path!) with { Id = name })
-            : RefusedMeeting(path!, NotAnId);
+        if (!IsFolderName(name))
+            return SetAside(workspaceId, path!);
+
+        var title = FreeTitle(workspaceId, stored!.Title!, exceptMeetingId: name);
+        var saved = SaveMeeting(stored.ToRecord(workspaceId, path!) with { Id = name, Title = title });
+        return new RecoverResult(saved.Meeting, null, saved.Problem);
     }
 
     public string? MeetingFolder(string workspaceId, string meetingId) =>
