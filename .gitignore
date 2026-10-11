@@ -26,3 +26,5 @@ design/Kanal.iconset/
 # coverage output (README: Test coverage)
 coverage/
 coverage-report/
+
+.wix/
