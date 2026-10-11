@@ -6,6 +6,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show Kanal colours and the K mark.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and `design/kanal-icon.png`.
+  When the silver icon (#190) lands, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
+
 ### The Windows msi shows its dialogs and replaces the installed version
 
 The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the

@@ -14,7 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
 - Each project in the project list has a gear button. It opens the project settings. There you
