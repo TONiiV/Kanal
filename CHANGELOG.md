@@ -10,7 +10,7 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0
 
 The first release. Everything below is what Kanal does on the day it ships.
 
