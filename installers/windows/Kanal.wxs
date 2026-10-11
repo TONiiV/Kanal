@@ -4,13 +4,13 @@
   runs on Windows - the toolset says so itself on any other host - so this file is exercised by the
   windows-latest CI job and nowhere else.
 
-  Preprocessor variables come from the command line: -d Version=... -d PublishDir=... -d IconPath=...
+  Preprocessor variables come from the command line: -d Version=... -d PublishDir=... -d IconPath=... -d LicensePath=...
 
   Every path here arrives as an absolute value rather than being written relative. Relative paths in
   a .wxs resolve against the wix process's working directory, not against this file, which is a
   quiet way to reference something outside the repository entirely.
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package Name="Kanal"
            Manufacturer="Kanal"
@@ -24,7 +24,11 @@
       new version install alongside the old one instead of replacing it, and the operator ends up
       running whichever copy their shortcut happens to point at.
     -->
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Kanal is already installed. Uninstall it first." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Kanal is already installed. Uninstall it first."
+                  AllowSameVersionUpgrades="yes" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(LicensePath)" />
 
     <MediaTemplate EmbedCab="yes" />
 
