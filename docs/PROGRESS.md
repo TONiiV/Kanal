@@ -22,7 +22,8 @@ Ticket #190 of the Appearance spec (#187). The operator chose candidate B (satin
 - The splash mark is the K on transparency, not the full tile. It keeps the layout of the old
   mark. `kanal-splash-mark.png` is dark grey for a light sheet. `kanal-splash-mark-dark.png` is
   light grey for a dark sheet. The packager copies the stroke shape of `kanal-icon.png` and
-  paints each stroke with the mean tone of the satin tile.
+  paints each stroke with the mean tone of the satin tile over its opaque pixels. A test holds
+  every tone at 3:1 contrast or more on the Sheet and Paper colours of its scheme.
 - The small ICO frames use the packager box downsample. The satin grain averages out, so the
   16 px frame stays clean.
 - `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon-silver/B-satin-light.png`

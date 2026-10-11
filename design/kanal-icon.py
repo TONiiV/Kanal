@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""Package the supplied Kanal PNG for every application surface.
+"""Package the Kanal artwork for every application surface, with the standard library only.
 
-Two source PNGs hold the artwork. ``design/kanal-icon.png`` is the coloured
-mark: it feeds the favicon and brand logo of the mobile caption page. The
-silver tiles ``design/icon-silver/B-satin-light.png`` and ``B-satin-dark.png``
-feed every desktop host surface: ICO, ICNS and the splash mark. This
-dependency-free packager produces deterministic derivatives of both. No SVG
-asset is generated or shipped.
+``design/kanal-icon.png`` (coloured) feeds the mobile page; ``design/icon-silver/*.png`` feed the host.
 """
 
 from __future__ import annotations
@@ -261,19 +256,21 @@ SPLASH_MARK_NAMES = {"light": "kanal-splash-mark.png", "dark": "kanal-splash-mar
 
 
 def silver_mark_rgba(mark: bytes, tile: bytes, size: int) -> bytes:
-    """Give the mark shape the flat silver tone of each stroke in the satin tile."""
     classes = bytearray(size * size)
     sums = [[0, 0, 0, 0], [0, 0, 0, 0]]
     for index in range(size * size):
         offset = index * 4
+        # blue > red tells the indigo stroke from the orange one; a recoloured mark breaks this
         stroke = 1 if mark[offset + 2] > mark[offset] else 0
         classes[index] = stroke
-        if mark[offset + 3] == 255:
+        if mark[offset + 3] >= 250:
             total = sums[stroke]
             total[0] += tile[offset]
             total[1] += tile[offset + 1]
             total[2] += tile[offset + 2]
             total[3] += 1
+    if not all(total[3] for total in sums):
+        raise SystemExit("silver mark: a stroke has no opaque pixel")
     tones = [tuple(round(channel / total[3]) for channel in total[:3]) for total in sums]
     result = bytearray(size * size * 4)
     for index in range(size * size):

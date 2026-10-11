@@ -1,5 +1,5 @@
+using System.Buffers.Binary;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -43,6 +43,10 @@ public class SplashWindowTests
     {
         using var stream = AssetLoader.Open(new Uri($"avares://Kanal.Host/Assets/{name}"));
 
-        Assert.NotNull(new Bitmap(stream));
+        var header = new byte[24];
+        stream.ReadExactly(header);
+
+        Assert.Equal(512, BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(16)));
+        Assert.Equal(512, BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(20)));
     }
 }

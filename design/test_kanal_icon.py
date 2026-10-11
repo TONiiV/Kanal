@@ -15,6 +15,24 @@ SCRIPT = Path(__file__).with_name("kanal-icon.py")
 sys.dont_write_bytecode = True
 
 
+SHEETS = {
+    "light": (bytes.fromhex("F5F0E6"), bytes.fromhex("FFFCF7")),
+    "dark": (bytes.fromhex("222838"), bytes.fromhex("181C28")),
+}
+
+
+def contrast(first: bytes, second: bytes) -> float:
+    def luminance(rgb: bytes) -> float:
+        linear = [
+            c / 255 / 12.92 if c / 255 <= 0.04045 else ((c / 255 + 0.055) / 1.055) ** 2.4
+            for c in rgb
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    high, low = sorted((luminance(first), luminance(second)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
 def load_generator():
     spec = importlib.util.spec_from_file_location("kanal_icon", SCRIPT)
     assert spec and spec.loader
@@ -88,6 +106,13 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                     "the silver mark must carry no brand colour",
                 )
                 brightness[variant] = sum(p[0] for p in opaque) / len(opaque)
+                tones = {bytes(p[:3]) for p in opaque}
+                for tone in tones:
+                    for background in SHEETS[variant]:
+                        self.assertGreaterEqual(
+                            contrast(tone, background), 3.0,
+                            f"{name} tone {tuple(tone)} on #{background.hex().upper()}",
+                        )
             self.assertGreater(brightness["dark"], brightness["light"] + 60)
 
             for variant, name in generator.HOST_ICON_NAMES.items():
