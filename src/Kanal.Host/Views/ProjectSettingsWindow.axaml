@@ -12,6 +12,17 @@
         TextElement.Foreground="{DynamicResource Ink}"
         Background="{DynamicResource Sheet}">
 
+    <Window.Styles>
+        <Style Selector="StackPanel.heading">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="7" />
+        </Style>
+        <Style Selector="Path.heading">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+        </Style>
+    </Window.Styles>
+
     <DockPanel Margin="24,20,24,20">
         <Button DockPanel.Dock="Bottom" x:Name="Save" Classes="accent" Content="{l:T settings.save}"
                 Command="{Binding SaveCommand}" HorizontalAlignment="Right" Margin="0,18,0,0" />
@@ -21,12 +32,18 @@
                    IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <StackPanel>
-            <TextBlock Text="{l:T workspace.name}" Classes="label" />
+            <StackPanel Classes="heading">
+                <Path Classes="glyph heading" Data="{c:Icon pencil}" />
+                <TextBlock Text="{l:T workspace.name}" Classes="label" />
+            </StackPanel>
             <Border Classes="rule" />
             <TextBox x:Name="ProjectName" Text="{Binding Name}"
                      AutomationProperties.Name="{l:T workspace.name.field}" />
 
-            <TextBlock Text="{l:T workspace.icon}" Classes="label" Margin="0,28,0,0" />
+            <StackPanel Classes="heading" Margin="0,28,0,0">
+                <Path Classes="glyph heading" Data="{c:Icon image}" />
+                <TextBlock Text="{l:T workspace.icon}" Classes="label" />
+            </StackPanel>
             <Border Classes="rule" />
             <TextBlock x:Name="IconFileName" Text="{Binding ImageFileName}" FontSize="11.5"
                        Foreground="{DynamicResource Ink3}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"
@@ -73,7 +90,10 @@
                         Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}" />
             </StackPanel>
 
-            <TextBlock Text="{l:T workspace.danger}" Classes="label" Margin="0,28,0,0" />
+            <StackPanel Classes="heading" Margin="0,28,0,0">
+                <Path Classes="glyph heading" Data="{c:Icon warning}" />
+                <TextBlock Text="{l:T workspace.danger}" Classes="label" />
+            </StackPanel>
             <Border Classes="rule" />
             <Border BorderBrush="{DynamicResource Rule}" BorderThickness="1" CornerRadius="8" Padding="14,12">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">

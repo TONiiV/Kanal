@@ -6,6 +6,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Icons on the settings tabs and the project settings headings
+
+1. Each of the six settings tabs shows an icon left of its name. The icon takes the tab colour:
+   Ink3 at rest, Ink2 on hover, Brand when selected.
+2. The project settings window has no tabs (a test keeps it that way). Its three section headings
+   show an icon instead: pencil for the name, image for the project icon, warning for the danger
+   zone. The design asks for an explicit icon on danger operations.
+3. New glyphs in `Assets/Icons`: `sliders`, `transcript`, `translate`, `summary`, `image`,
+   `warning`. Audio input reuses `microphone`; Workspace reuses `folder`.
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.

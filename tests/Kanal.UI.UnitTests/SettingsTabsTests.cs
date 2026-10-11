@@ -116,4 +116,25 @@ public class SettingsTabsTests
 
         window.Close();
     }
+
+    [AvaloniaFact]
+    public void EveryTabCarriesAnIconOfItsOwnBesideItsName()
+    {
+        var window = new SettingsWindow(new SettingsViewModel());
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var tabs = Tabs(window).Items.OfType<TabItem>().ToList();
+        var icons = tabs.Select(tab => Assert.Single(
+            Assert.IsAssignableFrom<Control>(tab.Header).GetLogicalDescendants()
+                .OfType<Avalonia.Controls.Shapes.Path>(),
+            path => path.Data is not null).Data).ToList();
+
+        Assert.Equal(tabs.Count, icons.Distinct().Count());
+        Assert.All(tabs, tab => Assert.Contains(
+            Assert.IsAssignableFrom<Control>(tab.Header).GetLogicalDescendants().OfType<TextBlock>(),
+            text => text.Text == AutomationProperties.GetName(tab)));
+
+        window.Close();
+    }
 }

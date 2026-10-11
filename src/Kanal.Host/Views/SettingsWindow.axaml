@@ -32,6 +32,23 @@
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
+        <Style Selector="StackPanel.tab">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="9" />
+        </Style>
+        <!-- A glyph does not inherit the tab's Foreground, so each tab state repeats its brush here. -->
+        <Style Selector="TabItem Path.tab">
+            <Setter Property="Fill" Value="{DynamicResource Ink3}" />
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+        </Style>
+        <Style Selector="TabItem:pointerover Path.tab">
+            <Setter Property="Fill" Value="{DynamicResource Ink2}" />
+        </Style>
+        <Style Selector="TabItem:selected Path.tab">
+            <Setter Property="Fill" Value="{DynamicResource Brand}" />
+        </Style>
+
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
             <Setter Property="Background" Value="{DynamicResource Brand}" />
         </Style>
@@ -45,8 +62,13 @@
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
         <TabControl TabStripPlacement="Left" Padding="22,0,0,0">
-            <TabItem Header="{l:T settings.tab.general}"
-                     AutomationProperties.Name="{l:T settings.tab.general}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.general}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon sliders}" />
+                        <TextBlock Text="{l:T settings.tab.general}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <!-- The scrollbar takes layout space instead of floating over the content: an
                      overlay bar sat on top of the rightmost controls and section rules. -->
                 <ScrollViewer AllowAutoHide="False">
@@ -93,8 +115,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T settings.tab.audio}"
-                     AutomationProperties.Name="{l:T settings.tab.audio}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.audio}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon microphone}" />
+                        <TextBlock Text="{l:T settings.tab.audio}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <ScrollViewer AllowAutoHide="False">
                     <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="{l:T settings.input.heading}" Classes="label" />
@@ -142,8 +169,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T settings.tab.transcription}"
-                     AutomationProperties.Name="{l:T settings.tab.transcription}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.transcription}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon transcript}" />
+                        <TextBlock Text="{l:T settings.tab.transcription}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <ScrollViewer AllowAutoHide="False">
                     <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="{l:T settings.transcription.heading}" Classes="label" />
@@ -189,8 +221,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T settings.tab.translation}"
-                     AutomationProperties.Name="{l:T settings.tab.translation}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.translation}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon translate}" />
+                        <TextBlock Text="{l:T settings.tab.translation}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <ScrollViewer AllowAutoHide="False">
                     <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="{l:T settings.translation.heading}" Classes="label" />
@@ -245,8 +282,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T settings.tab.summary}"
-                     AutomationProperties.Name="{l:T settings.tab.summary}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.summary}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon summary}" />
+                        <TextBlock Text="{l:T settings.tab.summary}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <StackPanel Margin="0,0,14,0">
                     <TextBlock Text="{l:T settings.summary.heading}" Classes="label" />
                     <Border Classes="rule" />
@@ -255,8 +297,13 @@
                 </StackPanel>
             </TabItem>
 
-            <TabItem Header="{l:T settings.tab.workspace}"
-                     AutomationProperties.Name="{l:T settings.tab.workspace}">
+            <TabItem AutomationProperties.Name="{l:T settings.tab.workspace}">
+                <TabItem.Header>
+                    <StackPanel Classes="tab">
+                        <Path Classes="glyph tab" Data="{c:Icon folder}" />
+                        <TextBlock Text="{l:T settings.tab.workspace}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <ScrollViewer AllowAutoHide="False">
                     <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="{l:T settings.files.heading}" Classes="label" />
