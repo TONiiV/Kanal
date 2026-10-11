@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -20,7 +21,17 @@ public partial class ProjectSettingsWindow : Window
         viewModel.Finished += Close;
         if (viewModel.OpenAtIssues)
             Loaded += (_, _) => IssuesSection.BringIntoView();
+        Opened += (_, _) =>
+        {
+            if (Screens.ScreenFromWindow(this) is { } screen)
+                MaxHeight = FittedMaxHeight(MaxHeight, screen.WorkingArea.Height, screen.Scaling);
+        };
     }
+
+    private const double TitleBarAllowance = 48;
+
+    public static double FittedMaxHeight(double designed, int workAreaPixels, double scaling) =>
+        Math.Min(designed, workAreaPixels / scaling - TitleBarAllowance);
 
     private void OnGlyphClick(object? sender, RoutedEventArgs e) => ChooseGlyph.Flyout?.Hide();
 

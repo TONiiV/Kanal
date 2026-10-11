@@ -5,6 +5,15 @@ using Kanal.Host.Localization;
 
 namespace Kanal.Host.ViewModels;
 
+public enum IssueOrigin
+{
+    Project,
+
+    ProjectListRow,
+
+    ProjectList,
+}
+
 public sealed class ProjectIssueViewModel : ViewModelBase
 {
     private readonly string _causeKey;
@@ -23,13 +32,18 @@ public sealed class ProjectIssueViewModel : ViewModelBase
 
     public string Subject => Problem.Subject;
 
+    public string Location =>
+        Path.GetFileName(Subject) == WorkspaceStore.MeetingFileName ? Path.GetDirectoryName(Subject)! : Subject;
+
     public bool IsAlarm => Kind != StoreProblemKind.FolderMissing;
 
     public string Cause => _projectName is null ? L[_causeKey] : L.Format(_causeKey, _projectName);
 
-    public static ProjectIssueViewModel For(StoreProblem problem, Workspace? owner, bool inProjectList)
+    public static ProjectIssueViewModel For(StoreProblem problem, Workspace? owner, IssueOrigin origin = IssueOrigin.Project)
     {
-        if (inProjectList)
+        if (origin == IssueOrigin.ProjectList)
+            return new(problem, "workspace.issues.projectlistunreadable", null);
+        if (origin == IssueOrigin.ProjectListRow)
             return new(problem, "workspace.issues.projectlist", null);
 
         var meetings = owner is null ? null : Path.Combine(owner.RootPath, WorkspaceStore.MeetingsFolderName);

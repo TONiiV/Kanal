@@ -284,6 +284,7 @@
   "workspace.issues.format": "该记录使用了本版 Kanal 无法读取的格式。",
   "workspace.issues.unreadable": "Kanal 无法读取这条会议记录。",
   "workspace.issues.projectlist": "Kanal 无法读取项目列表中的一行。",
+  "workspace.issues.projectlistunreadable": "Kanal 无法读取项目列表。",
   "workspace.issues.other": "Kanal 无法读取该项。详情见日志。",
   "workspace.importfailed": "该文件无法导入：{0}",
   "workspace.openfolderfailed": "该文件夹无法打开：{0}",

@@ -52,20 +52,17 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <Style Selector="Border#IssuesBanner">
-            <Setter Property="Background" Value="{DynamicResource HoldWash}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Hold}" />
+            <Setter Property="Background" Value="{DynamicResource WarningWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Warning}" />
         </Style>
         <Style Selector="Border#IssuesBanner.alarm">
-            <Setter Property="Background" Value="{DynamicResource RecordWash}" />
+            <Setter Property="Background" Value="{DynamicResource AlarmWash}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Alarm}" />
         </Style>
-        <Style Selector="Path.glyph#IssuesIcon">
-            <Setter Property="Fill" Value="{DynamicResource Hold}" />
+        <Style Selector="Path.glyph#IssuesIcon, Path.glyph#ProjectIssueMark">
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
         </Style>
-        <Style Selector="Path.glyph#ProjectIssueMark">
-            <Setter Property="Fill" Value="{DynamicResource Hold}" />
-        </Style>
-        <Style Selector="Border#IssuesBanner.alarm Path#IssuesIcon">
+        <Style Selector="Border#IssuesBanner.alarm Path.glyph#IssuesIcon, Path.glyph#ProjectIssueMark.alarm">
             <Setter Property="Fill" Value="{DynamicResource Alarm}" />
         </Style>
         <Style Selector="Button.ghost#IssuesDetails">
@@ -192,9 +189,15 @@
                                     <Path.IsVisible>
                                         <MultiBinding Converter="{x:Static c:ProjectIcons.IssueMark}">
                                             <Binding Path="Id" />
-                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectsWithIssues" />
+                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectIssueStates" />
                                         </MultiBinding>
                                     </Path.IsVisible>
+                                    <Classes.alarm>
+                                        <MultiBinding Converter="{x:Static c:ProjectIcons.IssueAlarm}">
+                                            <Binding Path="Id" />
+                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectIssueStates" />
+                                        </MultiBinding>
+                                    </Classes.alarm>
                                 </Path>
                                 <Button Grid.Column="3" x:Name="ProjectSettings" Classes="ghost icon"
                                         Width="24" Height="24" Padding="0" Margin="0,-4,-6,-4"

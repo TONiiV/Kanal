@@ -14,9 +14,9 @@
 
     <Window.Styles>
         <Style Selector="Path.glyph#IssueIcon">
-            <Setter Property="Fill" Value="{DynamicResource Hold}" />
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
         </Style>
-        <Style Selector="Path#IssueIcon.alarm">
+        <Style Selector="Path.glyph#IssueIcon.alarm">
             <Setter Property="Fill" Value="{DynamicResource Alarm}" />
         </Style>
     </Window.Styles>
@@ -104,7 +104,7 @@
                                         <StackPanel Grid.Column="1">
                                             <TextBlock x:Name="IssueCause" Text="{Binding Cause}" FontSize="12.5"
                                                        FontWeight="SemiBold" LineHeight="18" TextWrapping="Wrap" />
-                                            <SelectableTextBlock x:Name="IssuePath" Text="{Binding Subject}"
+                                            <SelectableTextBlock x:Name="IssuePath" Text="{Binding Location}"
                                                                  FontSize="11.5" LineHeight="17" TextWrapping="Wrap"
                                                                  Foreground="{DynamicResource Ink3}" Margin="0,3,0,0"
                                                                  SelectionBrush="{DynamicResource BrandWash}" />

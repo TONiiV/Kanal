@@ -284,6 +284,7 @@
   "workspace.issues.format": "This record uses a format that this version of Kanal cannot read.",
   "workspace.issues.unreadable": "Kanal cannot read this meeting record.",
   "workspace.issues.projectlist": "Kanal cannot read a row of the project list.",
+  "workspace.issues.projectlistunreadable": "Kanal cannot read the project list.",
   "workspace.issues.other": "Kanal cannot read this item. Details are in the log.",
   "workspace.importfailed": "That file could not be brought in: {0}",
   "workspace.openfolderfailed": "That folder could not be opened: {0}",

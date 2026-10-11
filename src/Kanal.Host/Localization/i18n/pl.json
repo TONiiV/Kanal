@@ -284,6 +284,7 @@
   "workspace.issues.format": "Ten zapis używa formatu, którego ta wersja Kanal nie potrafi odczytać.",
   "workspace.issues.unreadable": "Kanal nie może odczytać tego zapisu spotkania.",
   "workspace.issues.projectlist": "Kanal nie może odczytać wiersza listy projektów.",
+  "workspace.issues.projectlistunreadable": "Kanal nie może odczytać listy projektów.",
   "workspace.issues.other": "Kanal nie może odczytać tego elementu. Szczegóły są w dzienniku.",
   "workspace.importfailed": "Nie udało się wczytać tego pliku: {0}",
   "workspace.openfolderfailed": "Nie udało się otworzyć tego folderu: {0}",

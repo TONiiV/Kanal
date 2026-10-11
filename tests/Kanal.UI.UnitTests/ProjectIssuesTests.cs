@@ -117,10 +117,10 @@ public class ProjectIssuesTests : IDisposable
 
         Assert.Equal(
             new[] { gone.Id, lambda.Id }.Order(StringComparer.Ordinal),
-            vm.ProjectsWithIssues.Order(StringComparer.Ordinal));
+            vm.ProjectIssueStates.Keys.Order(StringComparer.Ordinal));
         Assert.False(vm.HasIssues);
-        Assert.False(vm.HasIssuesFor(kappa));
-        Assert.True(vm.HasIssuesFor(lambda));
+        Assert.True(vm.ProjectIssueStates[lambda.Id]);
+        Assert.False(vm.ProjectIssueStates[gone.Id]);
     }
 
     [Fact]
@@ -173,6 +173,7 @@ public class ProjectIssuesTests : IDisposable
         Assert.True(vm.IssuesAreAlarm);
         Assert.True(issue.IsAlarm);
         Assert.Equal(file, issue.Subject);
+        Assert.Equal(Path.GetDirectoryName(file), issue.Location);
         Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
     }
 
@@ -190,19 +191,51 @@ public class ProjectIssuesTests : IDisposable
         var issue = Assert.Single(vm.Issues);
         Assert.Equal(Registry, issue.Subject);
         Assert.Equal(L["workspace.issues.projectlist"], issue.Cause);
-        Assert.Contains(kappa.Id, vm.ProjectsWithIssues);
+        Assert.Equal(Registry, issue.Location);
+        Assert.Contains(kappa.Id, vm.ProjectIssueStates.Keys);
 
         vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == lambda.Id);
         Assert.Equal(Registry, Assert.Single(vm.Issues).Subject);
-        Assert.Contains(lambda.Id, vm.ProjectsWithIssues);
-        Assert.DoesNotContain(kappa.Id, vm.ProjectsWithIssues);
+        Assert.Contains(lambda.Id, vm.ProjectIssueStates.Keys);
+        Assert.DoesNotContain(kappa.Id, vm.ProjectIssueStates.Keys);
+        Assert.Equal("", vm.ProblemNote);
+    }
+
+    [AvaloniaFact]
+    public void AProjectListThatCannotBeReadAtAllIsNamedInTheNoteBecauseNoSettingsCanOpen()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(Registry, "{ not json");
+        var before = L.Current;
+        try
+        {
+            L.Current = "en";
+            var vm = new WorkspaceSidebarViewModel(Store());
+
+            var issue = Assert.Single(vm.Issues);
+            Assert.Equal(L["workspace.issues.projectlistunreadable"], issue.Cause);
+            Assert.False(vm.ShowIssuesCommand.CanExecute(null));
+            Assert.Contains(L["workspace.issues.projectlistunreadable"], vm.ProblemNote);
+            Assert.Contains(Registry, vm.ProblemNote);
+
+            L.Current = "de";
+            Assert.Contains(L["workspace.issues.projectlistunreadable"], vm.ProblemNote);
+
+            vm.ProblemNote = "left over from an earlier failure";
+            L.Current = "pl";
+            Assert.Equal("left over from an earlier failure", vm.ProblemNote);
+        }
+        finally
+        {
+            L.Current = before;
+        }
     }
 
     [Fact]
     public void AnIssueOfAKindThisVersionDoesNotKnowGetsTheGenericCause()
     {
         var issue = ProjectIssueViewModel.For(
-            new StoreProblem((StoreProblemKind)999, "/somewhere", "later kind"), owner: null, inProjectList: false);
+            new StoreProblem((StoreProblemKind)999, "/somewhere", "later kind"), owner: null);
 
         Assert.Equal(L["workspace.issues.other"], issue.Cause);
         Assert.True(issue.IsAlarm);
@@ -274,8 +307,11 @@ public class ProjectIssuesTests : IDisposable
             Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
             var raised = new List<string?>();
             vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+            var rowRaised = new List<string?>();
+            issue.PropertyChanged += (_, e) => rowRaised.Add(e.PropertyName);
 
             L.Current = "de";
+            Assert.Contains(nameof(issue.Cause), rowRaised);
 
             Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
             Assert.Equal(L["workspace.issues.one"], vm.IssueCountText);
@@ -373,7 +409,9 @@ public class ProjectIssuesTests : IDisposable
         var store = Store();
         var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
         var lambda = store.CreateWorkspace("Lambda", Folder("lambda")).Workspace!;
+        var gone = store.CreateWorkspace("Gone", Folder("gone")).Workspace!;
         EmptyMeetingFolder(lambda, "c");
+        Directory.Delete(gone.RootPath, recursive: true);
         var vm = TestViewModels.Hermetic(workspaces: () => store);
         vm.Sidebar.SelectedWorkspace = vm.Sidebar.Workspaces.Single(w => w.Id == kappa.Id);
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
@@ -386,9 +424,13 @@ public class ProjectIssuesTests : IDisposable
         var marks = picker.GetLogicalDescendants().OfType<Control>()
             .Where(c => c.Name == "ProjectIssueMark").ToList();
 
-        Assert.Equal(2, marks.Count);
-        Assert.True(marks.Single(m => ((Workspace)m.DataContext!).Id == lambda.Id).IsVisible);
-        Assert.False(marks.Single(m => ((Workspace)m.DataContext!).Id == kappa.Id).IsVisible);
+        Control Mark(Workspace project) => marks.Single(m => ((Workspace)m.DataContext!).Id == project.Id);
+        Assert.Equal(3, marks.Count);
+        Assert.True(Mark(lambda).IsVisible);
+        Assert.Contains("alarm", Mark(lambda).Classes);
+        Assert.True(Mark(gone).IsVisible);
+        Assert.DoesNotContain("alarm", Mark(gone).Classes);
+        Assert.False(Mark(kappa).IsVisible);
         Assert.All(marks, mark => Assert.False(string.IsNullOrWhiteSpace(
             Avalonia.Automation.AutomationProperties.GetName(mark))));
 
@@ -425,7 +467,7 @@ public class ProjectIssuesTests : IDisposable
         var section = Named<StackPanel>(window, "IssuesSection");
         Assert.True(section.IsVisible);
         var path = section.GetLogicalDescendants().OfType<SelectableTextBlock>().Single(t => t.Name == "IssuePath");
-        Assert.Equal(file, path.Text);
+        Assert.Equal(Path.GetDirectoryName(file), path.Text);
         var cause = section.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "IssueCause");
         Assert.Equal(L["workspace.issues.unreadable"], cause.Text);
 
@@ -455,6 +497,13 @@ public class ProjectIssuesTests : IDisposable
 
         window.Close();
     }
+
+    [Theory]
+    [InlineData(728, 1.0, 680)]
+    [InlineData(1456, 2.0, 680)]
+    [InlineData(1040, 1.0, 720)]
+    public void TheSettingsWindowNeverGrowsPastTheWorkArea(int workAreaPixels, double scaling, double expected) =>
+        Assert.Equal(expected, ProjectSettingsWindow.FittedMaxHeight(720, workAreaPixels, scaling));
 
     private sealed class RecordingSink : ILogSink
     {

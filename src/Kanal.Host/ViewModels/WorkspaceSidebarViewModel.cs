@@ -48,6 +48,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             OnPropertyChanged(nameof(IssueCountText));
             foreach (var issue in Issues)
                 issue.OnLanguageChanged();
+            if (_issueNote.Length > 0 && ProblemNote == _issueNote)
+                ShowUnopenableIssues();
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
             foreach (var group in _groups)
@@ -72,13 +74,13 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         : L.Format("workspace.issues.many", Issues.Count);
 
     [ObservableProperty]
-    private IReadOnlySet<string> _projectsWithIssues = new HashSet<string>();
+    private IReadOnlyDictionary<string, bool> _projectIssueStates = new Dictionary<string, bool>();
 
     private readonly Dictionary<string, IReadOnlyList<ProjectIssueViewModel>> _issuesByProject = [];
 
     private IReadOnlyList<StoreProblem> _projectListProblems = [];
 
-    public bool HasIssuesFor(Workspace project) => ProjectsWithIssues.Contains(project.Id);
+    private string _issueNote = "";
 
     public IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project) =>
         project.Id == SelectedWorkspace?.Id
@@ -284,8 +286,9 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         _issuesByProject.Clear();
         foreach (var workspace in Workspaces.Where(w => w.Id != SelectedWorkspace?.Id))
         {
-            var problems = listing.Problems.Where(p => IsFolderOf(p, workspace))
-                .Concat(_store.ListMeetings(workspace.Id).Problems);
+            // A missing root is not looked up twice: on an offline share each lookup waits for the timeout.
+            var missing = listing.Problems.Where(p => IsFolderOf(p, workspace)).ToList();
+            var problems = missing.Count > 0 ? missing : _store.ListMeetings(workspace.Id).Problems;
             _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
         }
 
@@ -296,7 +299,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         problem.Kind == StoreProblemKind.FolderMissing && problem.Subject == project.RootPath;
 
     private static IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project, IEnumerable<StoreProblem> problems) =>
-        [.. Logged([.. problems.Distinct()]).Select(p => ProjectIssueViewModel.For(p, project, inProjectList: false))];
+        [.. Logged([.. problems.Distinct()]).Select(p => ProjectIssueViewModel.For(p, project))];
 
     private static IReadOnlyList<StoreProblem> Logged(IReadOnlyList<StoreProblem> problems)
     {
@@ -308,19 +311,37 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private void ShowIssues()
     {
         Issues.Clear();
+        var origin = Workspaces.Count == 0 ? IssueOrigin.ProjectList : IssueOrigin.ProjectListRow;
         foreach (var problem in _projectListProblems)
-            Issues.Add(ProjectIssueViewModel.For(problem, SelectedWorkspace, inProjectList: true));
+            Issues.Add(ProjectIssueViewModel.For(problem, SelectedWorkspace, origin));
         if (SelectedWorkspace is { } current)
             foreach (var issue in _issuesByProject.GetValueOrDefault(current.Id, []))
                 Issues.Add(issue);
 
-        var marked = _issuesByProject.Where(pair => pair.Value.Count > 0).Select(pair => pair.Key).ToHashSet();
-        if (SelectedWorkspace is { } workspace && Issues.Count > 0)
-            marked.Add(workspace.Id);
-        ProjectsWithIssues = marked;
+        var states = _issuesByProject.Where(pair => pair.Value.Count > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.Any(issue => issue.IsAlarm));
+        if (SelectedWorkspace is { } workspace)
+        {
+            states.Remove(workspace.Id);
+            if (Issues.Count > 0)
+                states[workspace.Id] = IssuesAreAlarm;
+        }
+
+        ProjectIssueStates = states;
         OnPropertyChanged(nameof(HasIssues));
         OnPropertyChanged(nameof(IssuesAreAlarm));
         OnPropertyChanged(nameof(IssueCountText));
+        ShowUnopenableIssues();
+    }
+
+    // Details opens the settings of a project; with none listed, the note is the only place left.
+    private void ShowUnopenableIssues()
+    {
+        if (SelectedWorkspace is not null || Issues.Count == 0)
+            return;
+
+        _issueNote = string.Join("\n", Issues.Select(issue => $"{issue.Cause} {issue.Location}"));
+        ProblemNote = _issueNote;
     }
 
     partial void OnSelectedWorkspaceChanged(Workspace? value)
@@ -382,8 +403,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
         }
 
-        ShowIssues();
         ProblemNote = "";
+        ShowIssues();
         Show();
     }
 

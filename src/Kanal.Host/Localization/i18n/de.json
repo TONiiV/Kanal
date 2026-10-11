@@ -284,6 +284,7 @@
   "workspace.issues.format": "Diese Aufzeichnung nutzt ein Format, das diese Kanal-Version nicht lesen kann.",
   "workspace.issues.unreadable": "Kanal kann diese Besprechungsaufzeichnung nicht lesen.",
   "workspace.issues.projectlist": "Kanal kann eine Zeile der Projektliste nicht lesen.",
+  "workspace.issues.projectlistunreadable": "Kanal kann die Projektliste nicht lesen.",
   "workspace.issues.other": "Kanal kann dieses Element nicht lesen. Einzelheiten stehen im Protokoll.",
   "workspace.importfailed": "Diese Datei konnte nicht übernommen werden: {0}",
   "workspace.openfolderfailed": "Dieser Ordner konnte nicht geöffnet werden: {0}",
