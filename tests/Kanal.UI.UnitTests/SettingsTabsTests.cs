@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Automation;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -47,8 +48,8 @@ public class SettingsTabsTests
         Assert.Equal(6, items.Count);
         Assert.All(items, tab => Assert.False(
             string.IsNullOrWhiteSpace(AutomationProperties.GetName(tab)),
-            $"a tab has no accessible name: {tab.Header}"));
-        Assert.All(items, tab => Assert.True(tab.Focusable, $"{tab.Header} cannot be reached by keyboard"));
+            $"tab {items.IndexOf(tab)} has no accessible name"));
+        Assert.All(items, tab => Assert.True(tab.Focusable, $"{AutomationProperties.GetName(tab)} cannot be reached by keyboard"));
 
         window.Close();
     }
@@ -134,6 +135,32 @@ public class SettingsTabsTests
         Assert.All(tabs, tab => Assert.Contains(
             Assert.IsAssignableFrom<Control>(tab.Header).GetLogicalDescendants().OfType<TextBlock>(),
             text => text.Text == AutomationProperties.GetName(tab)));
+
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void TheIconAndTheNameOfATabShareOneColourInEveryState(bool selected, bool hovered)
+    {
+        var window = new SettingsWindow(new SettingsViewModel());
+        window.Show();
+
+        var tabs = Tabs(window);
+        var items = tabs.Items.OfType<TabItem>().ToList();
+        var tab = selected ? items[1] : items[0];
+        tabs.SelectedItem = selected ? tab : items[2];
+        ((IPseudoClasses)tab.Classes).Set(":pointerover", hovered);
+        Dispatcher.UIThread.RunJobs();
+
+        var header = Assert.IsAssignableFrom<Control>(tab.Header).GetLogicalDescendants();
+        var icon = Assert.IsAssignableFrom<ISolidColorBrush>(header.OfType<Avalonia.Controls.Shapes.Path>().Single().Fill);
+        var name = Assert.IsAssignableFrom<ISolidColorBrush>(header.OfType<TextBlock>().Single().Foreground);
+
+        Assert.Equal(icon.Color, name.Color);
 
         window.Close();
     }

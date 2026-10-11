@@ -49,6 +49,13 @@
             <Setter Property="Fill" Value="{DynamicResource Brand}" />
         </Style>
 
+        <!-- The Fluent template sets the label brush on PART_LayoutRoot on hover, overriding TabItem.Foreground. -->
+        <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Ink2}" />
+        </Style>
+        <Style Selector="TabItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Brand}" />
+        </Style>
         <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
             <Setter Property="Background" Value="{DynamicResource Brand}" />
         </Style>
