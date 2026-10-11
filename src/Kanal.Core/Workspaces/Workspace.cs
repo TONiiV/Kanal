@@ -45,6 +45,12 @@ public enum StoreProblemKind
     WrongType,
 
     NotThisWorkspace,
+
+    RecordMissing,
+
+    RecordDamaged,
+
+    Misfiled,
 }
 
 // Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.
@@ -61,3 +67,5 @@ public sealed record MeetingListing(
 public sealed record WorkspaceResult(Workspace? Workspace, StoreProblem? Problem);
 
 public sealed record MeetingResult(MeetingRecord? Meeting, StoreProblem? Problem);
+
+public sealed record RecoverResult(MeetingRecord? Recovered, string? SetAsidePath, StoreProblem? Problem);
