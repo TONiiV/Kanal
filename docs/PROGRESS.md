@@ -6,6 +6,22 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
