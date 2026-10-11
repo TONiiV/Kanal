@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- If Kanal cannot read a record, the sidebar note names the file or folder and says what to do.
+  Repair a meeting record or move it out of the project folder, and the note goes away. For a
+  missing folder, the note says how to restore it. For other files, the note points to the log.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example

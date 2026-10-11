@@ -45,6 +45,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 return;
 
             OnPropertyChanged(nameof(EmptyNote));
+            if (_problems.Count > 0 && ProblemNote == _builtNote)
+                ShowProblems();
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
             foreach (var group in _groups)
@@ -311,9 +313,58 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             problems.AddRange(listing.Problems);
         }
 
-        ProblemNote = problems.Count == 0 ? "" : L.Format("workspace.problems", problems.Count);
+        _problems = [.. problems.Distinct()];
+        foreach (var problem in _problems)
+            Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+
+        ShowProblems();
         Show();
     }
+
+    private const int ProblemsShown = 3;
+
+    private IReadOnlyList<StoreProblem> _problems = [];
+
+    private string _builtNote = "";
+
+    private void ShowProblems()
+    {
+        _builtNote = Describe(_problems);
+        ProblemNote = _builtNote;
+    }
+
+    private string Describe(IReadOnlyList<StoreProblem> problems)
+    {
+        if (problems.Count == 0)
+            return "";
+
+        var lines = new List<string> { L.Format("workspace.problems", problems.Count) };
+        lines.AddRange(problems.Take(ProblemsShown).Select(Describe));
+        if (problems.Count > ProblemsShown)
+            lines.Add(L.Format("workspace.problems.more", problems.Count - ProblemsShown));
+        return string.Join("\n", lines);
+    }
+
+    private string Describe(StoreProblem problem) => problem.Kind switch
+    {
+        StoreProblemKind.FolderMissing when Workspaces.FirstOrDefault(w => w.RootPath == problem.Subject) is { } gone =>
+            L.Format("workspace.problems.projectmissing", gone.Name, problem.Subject),
+        StoreProblemKind.FolderMissing => L.Format("workspace.problems.foldermissing", problem.Subject),
+        StoreProblemKind.UnsupportedVersion => L.Format("workspace.problems.format", problem.Subject),
+        StoreProblemKind.Unreadable when IsInsideMeetingsFolder(problem.Subject) =>
+            L.Format("workspace.problems.unreadable", MeetingFolderOf(problem.Subject)),
+        _ => L.Format("workspace.problems.other", problem.Subject),
+    };
+
+    // Moving only a damaged meeting.json leaves an empty meeting folder, which is reported in turn.
+    private static string MeetingFolderOf(string path) =>
+        Path.GetFileName(path) == WorkspaceStore.MeetingFileName ? Path.GetDirectoryName(path)! : path;
+
+    private bool IsInsideMeetingsFolder(string path) =>
+        SelectedWorkspace is { } workspace
+        && path.StartsWith(
+            Path.Combine(workspace.RootPath, WorkspaceStore.MeetingsFolderName) + Path.DirectorySeparatorChar,
+            StringComparison.Ordinal);
 
     private void Show()
     {

@@ -6,6 +6,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### The sidebar names each record it cannot read
+
+The sidebar note said only "1 record(s) could not be read". It did not name the record. The
+operator could not find the cause, so the note could not be removed.
+
+- The note now starts with the count. Below the count, it names up to three problems with their
+  paths. More problems give one line that points to the log.
+- Each line tells the operator what to do. A missing project folder names the project and says
+  "connect the drive, or remove the project". A missing `meetings` folder says "restore it, or
+  create an empty folder with this name". An unreadable meeting record or meeting folder says
+  "repair it or move it out of the project folder". A record format that Kanal cannot read says
+  that, and points to the log. Any other problem, for example the project list file, says that
+  Kanal cannot read the file and points to the log.
+- For a damaged `meeting.json`, the line names its meeting folder, not the file. If the operator
+  moved only the file, the empty meeting folder would be reported next.
+- The note lists each problem once. A missing folder of the selected project comes from the
+  project list and from the meeting list. Kanal removes the duplicate before it counts and logs.
+- The note follows a language switch. The view model keeps the problem list and builds the note
+  again from it. It does this only while the note is still the one built from that list. A note
+  from another action stays as it is.
+- Every listed problem goes to the log with its kind, path and English detail.
+- The note has no close button. The cause stays on disk, so the note comes back on the next
+  refresh. A dismissed note would hide a record that no list shows (see the store rule
+  "failures are reported next to whatever could still be read").
+
 ### The first release is 1.0.0
 
 No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
