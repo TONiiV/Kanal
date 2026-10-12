@@ -4,8 +4,10 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -63,6 +65,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<ModelDownloadManager> _downloads;
     /// <summary>Enumeration source for the device dropdown; the capture pump opens its own.</summary>
     private readonly Func<IAudioCaptureService?> _captureFactory;
+    private readonly Func<ISystemAudioCaptureService?> _systemCaptureFactory;
+    private readonly TimeProvider _signalClock;
+    private Task? _captureTask;
+    private Task? _captureStopping;
+    private string? _activeMicrophoneId;
+    private bool _activeOnline;
+    private SignalState _microphoneSignal;
+    private SignalState _systemSignal;
+    private string? _statusBeforePushFailure;
+    private string? _pushFailureStatus;
     private readonly Func<DateTimeOffset> _utcNow;
     private IAudioDeviceWatcher? _deviceWatcher;
     /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
@@ -87,6 +99,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
+            scanOffUiThread: work => Task.Run(work),
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -113,6 +126,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
+        Func<Action, Task>? scanOffUiThread = null,
+        Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
+        TimeProvider? signalClock = null,
         bool development = false)
     {
         _titler = titler;
@@ -125,17 +141,24 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
-            (tag, tag, _storedColours.GetValueOrDefault(tag, "#4C5C68")));
+            (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
         Ruler.JumpRequested += MarkJumpTarget;
         BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
-        Sidebar = new WorkspaceSidebarViewModel(store);
+        Sidebar = new WorkspaceSidebarViewModel(store, offUiThread: scanOffUiThread);
         Titling = new MeetingTitling(
             () => _titler,
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
         Titling.Changed += OnTitlingChanged;
         Files = new MeetingFilesViewModel(
-            store, () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null));
+            store,
+            () => Sidebar.ChooseFileToImport?.Invoke() ?? Task.FromResult<string?>(null),
+            importMeeting: Sidebar.ImportMeetingFromAsync);
+        Sidebar.MeetingFilesChanged += id =>
+        {
+            if (Sidebar.SelectedMeeting?.Id == id)
+                Files.Refresh();
+        };
         Sidebar.GenerateTitleFor = GenerateTitleForAsync;
         Sidebar.MeetingRenamed += (id, title) =>
         {
@@ -177,6 +200,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _downloads = downloads;
         _resolveKey = resolveKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
+        _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
+        _signalClock = signalClock ?? TimeProvider.System;
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
 
         foreach (var mode in PipelineMode.All.Where(m => development || m.Id != PipelineModeId.Demo))
@@ -193,7 +218,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             "capture.online.name",
             "capture.online.guidance",
             "online-meeting",
-            "capture.online.unavailable")));
+            _systemCaptureFactory() is not null ? null :
+                OperatingSystem.IsMacOS() ? "capture.online.macosversion"
+                : OperatingSystem.IsWindows() ? "capture.online.windowsversion"
+                : "capture.online.unavailable")));
         _selectedCaptureProfile = CaptureProfiles[0];
 
         foreach (var (code, name) in LanguageCatalog.Known)
@@ -239,16 +267,33 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(StopTip));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
             OnPropertyChanged(nameof(CaptureTip));
+            RefreshAudioSourceStatus();
             RefreshPipelineStatus();
         };
+
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnThemeVariantChanged;
+    }
+
+    // ThemeColours hands out hex strings, so a scheme change does not reach them on its own.
+    private void OnThemeVariantChanged(object? sender, EventArgs e)
+    {
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerColor = ResolveSpeaker(bubble.SpeakerTag).Color;
+        Ruler.Reresolve();
+        BrowsedRuler.Reresolve();
     }
 
     // Only the production path: a test that reached for Documents would create a workspace on
     // the developer's own machine.
-    private static WorkspaceStore Bootstrapped()
+    private static WorkspaceStore Bootstrapped() =>
+        OpenStore(SettingsStore.WorkspaceRegistryPath, SettingsStore.DefaultOutputFolder);
+
+    public static WorkspaceStore OpenStore(string registryPath, string defaultFolder)
     {
-        var store = new WorkspaceStore(SettingsStore.WorkspaceRegistryPath);
-        store.EnsureWorkspace("Kanal", SettingsStore.DefaultOutputFolder);
+        var store = new WorkspaceStore(registryPath);
+        if (store.EnsureWorkspace("Kanal", defaultFolder).Problem is { } problem)
+            Log.Warning(WorkspaceLog, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
         return store;
     }
 
@@ -276,16 +321,32 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return; // enumeration can fail transiently mid-unplug; a stale list beats none
         }
 
+        // The active ids, not the selections: clearing a bound ComboBox's items nulls its selection.
+        var lost = IsRunning && !IsStopping && _activeOnline && IsMissing(_activeMicrophoneId, fresh);
+
         var selectedId = SelectedDevice?.Id;
         Devices.Clear();
         foreach (var device in fresh)
             Devices.Add(device);
         SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+
+        if (lost)
+        {
+            Log.Warning(AudioLog,
+                $"capture_fault code=device_unavailable source={OnlineMeetingCapture.MicrophoneSource} reason=device_list_changed");
+            _ = StopAfterAudioFaultAsync(L["capture.device.lost"]);
+        }
     }
+
+    private static bool IsMissing(string? activeId, IReadOnlyList<AudioDeviceInfo> devices) =>
+        activeId is not null && devices.All(d => d.Id != activeId);
 
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged -= OnThemeVariantChanged;
+        _captureCts?.Cancel();
         if (_deviceWatcher is null)
             return;
         _deviceWatcher.DevicesChanged -= OnDevicesChanged;
@@ -462,9 +523,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public AssistantViewModel Assistant { get; } = new();
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
-
-    /// <summary>Filled by the native adapter slice; kept separate from microphone endpoints.</summary>
-    public ObservableCollection<AudioDeviceInfo> ComputerOutputs { get; } = new();
 
     public ObservableCollection<CaptureProfileOption> CaptureProfiles { get; } = new();
 
@@ -681,6 +739,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(NeedsComputerAudio))]
+    [NotifyPropertyChangedFor(nameof(ShowComputerLevel))]
     [NotifyPropertyChangedFor(nameof(CaptureProfileGuidance))]
     [NotifyPropertyChangedFor(nameof(ShowCaptureGuidance))]
     private CaptureProfileOption _selectedCaptureProfile;
@@ -693,15 +752,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void DismissCaptureNote() => CaptureNoteDismissed = true;
 
-    [ObservableProperty]
-    private AudioDeviceInfo? _selectedComputerOutput;
+    public delegate Task<bool?> ConsentPrompt(bool saveAudio, bool emphasiseRemote);
 
-    /// <summary>
-    /// Asks the room before anyone is captured: the pre-tick for "also save the audio file" goes
-    /// in, and what comes back is that answer, or null for a cancelled dialog. Set by the view;
-    /// unwired — headless, tests — reads as a refusal, never as consent.
-    /// </summary>
-    public Func<bool, Task<bool?>>? ConfirmConsent { get; set; }
+    // Unwired (headless, tests) reads as a refusal, never as consent.
+    public ConsentPrompt? ConfirmConsent { get; set; }
 
     private DateTimeOffset? _pendingConsentConfirmedAt;
 
@@ -731,6 +785,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
+    [NotifyPropertyChangedFor(nameof(ShowComputerLevel))]
+    [NotifyPropertyChangedFor(nameof(ShowAudioHintInStatusBar))]
     [NotifyPropertyChangedFor(nameof(IsLiveTranscription))]
     [NotifyPropertyChangedFor(nameof(ShowCaptureNote))]
     [NotifyPropertyChangedFor(nameof(ShowRecord))]
@@ -748,7 +804,28 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowMicLevel))]
     private double _micLevel;
 
+    [ObservableProperty]
+    private double _computerLevel;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAudioSourceStatus))]
+    [NotifyPropertyChangedFor(nameof(ShowAudioHintInStatusBar))]
+    private string _audioSourceStatus = "";
+
+    public bool HasAudioSourceStatus => AudioSourceStatus.Length > 0;
+
+    public bool ShowAudioHintInStatusBar => IsRunning && HasAudioSourceStatus;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
+    private bool _isOpening;
+
+    public bool CanChooseAudio => !IsRunning && !IsOpening;
+
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
+
+    public bool ShowComputerLevel => ShowMicLevel && NeedsComputerAudio;
 
     [ObservableProperty]
     private string _mergeFromTag = "";
@@ -917,6 +994,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(NeedsMicrophone));
         OnPropertyChanged(nameof(ShowMicLevel));
+        OnPropertyChanged(nameof(ShowComputerLevel));
         OnPropertyChanged(nameof(ShowCaptureNote));
         RefreshPipelineStatus();
     }
@@ -1002,12 +1080,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     // Consent is not a precondition of the button: pressing record is how the operator gets the
     // dialog that asks for it (ADR 0054, decision 26).
     private bool CanStart() =>
-        !IsRunning && !IsStopping && !IsStarting && Sidebar.NamingMeetingId is null &&
+        !IsRunning && !IsStopping && !IsOpening && Sidebar.NamingMeetingId is null &&
         (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
 
-    partial void OnIsRunningChanged(bool value) => Sidebar.RoomBusy = IsRunning || IsStarting;
+    // Stop is offered while a model is still loading: pressing it then aborts the load.
+    partial void OnIsRunningChanged(bool value)
+    {
+        Sidebar.RoomBusy = IsRunning || IsStarting;
+        OnPropertyChanged(nameof(CanChooseAudio));
+    }
 
-    partial void OnIsStartingChanged(bool value) => Sidebar.RoomBusy = IsRunning || IsStarting;
+    partial void OnIsStartingChanged(bool value)
+    {
+        Sidebar.RoomBusy = IsRunning || IsStarting;
+    }
 
     private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;
 
@@ -1019,17 +1105,34 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (_session is null)
             return;
 
+        var session = _session;
         var paused = !IsPaused;
-        await _session.SetPausedAsync(paused);
+        await session.SetPausedAsync(paused);
+        if (IsStale(session))
+            return;
+
         IsPaused = paused;
+        if (paused)
+            await StopCaptureAsync();
+        else
+            await StartCaptureAsync(session);
+        if (IsStale(session))
+            return;
+
         Status = paused
             ? L["status.paused"]
             : L.Format("status.live", SelectedMode.Mode.Leaves);
     }
 
+    // A pause or resume that awaited the relay may land after Stop, or after the next Start.
+    private bool IsStale(MeetingSession session) => !IsRunning || IsStopping || !ReferenceEquals(session, _session);
+
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
+        if (IsOpening)
+            return;
+        IsOpening = true;
         try
         {
             await OpenRoomAsync();
@@ -1038,6 +1141,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             if (IsStarting)
                 EndStarting();
+            IsOpening = false;
         }
     }
 
@@ -1053,9 +1157,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var mode = SelectedMode.Mode;
-        if (mode.NeedsMicrophone && !SelectedCaptureProfile.IsAvailable)
+        var profile = SelectedCaptureProfile;
+        var online = mode.NeedsMicrophone && profile.Id == CaptureProfileId.OnlineMeeting;
+        var microphoneId = mode.NeedsMicrophone ? SelectedDevice?.Id : null;
+        if (mode.NeedsMicrophone && !profile.IsAvailable)
         {
-            Status = SelectedCaptureProfile.Unavailable!;
+            Status = profile.Unavailable!;
             return;
         }
         var settings = _loadSettings();
@@ -1083,7 +1190,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             var answer = ConfirmConsent is null
                 ? null
-                : await ConfirmConsent(SavesAudioByDefault(SelectedCaptureProfile.Id, settings));
+                : await ConfirmConsent(SavesAudioByDefault(profile.Id, settings), online);
             if (answer is null)
             {
                 Log.Info(RoomLog, "Start cancelled: the consent dialog was dismissed.");
@@ -1240,14 +1347,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _session = session;
         Assistant.Follow(session.Room);
         _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
-            ? new MeetingAttestation(SelectedCaptureProfile.Profile, confirmedAt)
+            ? new MeetingAttestation(profile.Profile, confirmedAt)
             : null;
+        _activeOnline = online;
+        _activeMicrophoneId = microphoneId;
         IsRunning = true;
         EndStarting();
         IsTranscribing = session.IsTranscribing;
         Log.Info(
             RoomLog,
-            $"Room {config.RoomId} open: mode {mode.Id}, languages {string.Join("/", languages)}, " +
+            $"Room {config.RoomId} open: mode {mode.Id}, capture {(_activeOnline ? "online" : "in-room")}, " +
+            $"languages {string.Join("/", languages)}, " +
             $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}, " +
             $"{Environment.TickCount64 - opening} ms after Start.");
         var runningStatus = mode.Id == PipelineModeId.Demo
@@ -1272,7 +1382,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         StartRecording(
             session,
             RecordingPathFor(
-                mode, SelectedCaptureProfile.Id, settings,
+                mode, profile.Id, settings,
                 record is null ? null : Sidebar.FolderOf(record),
                 _saveAudioThisMeeting));
 
@@ -1294,10 +1404,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         if (mode.NeedsMicrophone)
-        {
-            _captureCts = new CancellationTokenSource();
-            _ = PumpMicrophoneAsync(session, SelectedDevice?.Id, _captureCts.Token);
-        }
+            await StartCaptureAsync(session);
 
         if (ct.IsCancellationRequested)
             await StopAsync();
@@ -1322,8 +1429,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // rethrows what they throw, and anything escaping before the finally would leave
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
-            _captureCts?.Cancel();
-            _captureCts = null;
+            await StopCaptureAsync();
 
             if (_session is not null)
             {
@@ -1344,6 +1450,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsTranscribing = false;
             Sidebar.RecordingMeetingId = null;
             IsPaused = false;
+            _activeOnline = false;
+            _activeMicrophoneId = null;
+            ResetAudioHints();
             _pendingConsentConfirmedAt = null;
             _saveAudioThisMeeting = null;
             Status = _lastRecording.Length > 0
@@ -1451,6 +1560,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const string RoomLog = "room";
     private const string RelayLog = "relay";
     private const string AudioLog = "audio";
+    private const string WorkspaceLog = "workspaces";
+    private const string AsrLog = "asr";
 
     // A provider's error text is passed through verbatim and can carry a whole rejected payload.
     private static string Bounded(string message) =>
@@ -1566,50 +1677,350 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         string? InviteTicket,
         string? Warning);
 
-    private async Task PumpMicrophoneAsync(MeetingSession session, string? deviceId, CancellationToken ct)
+    private static readonly TimeSpan LevelLogInterval = TimeSpan.FromSeconds(5);
+    private async Task StartCaptureAsync(MeetingSession session)
     {
-        var capture = AudioCaptureFactory.TryCreate();
-        if (capture is null)
-        {
-            Dispatcher.UIThread.Post(() => Status = L["status.nobackend"]);
+        if (_captureStopping is { } stopping)
+            await stopping;
+        if (IsStale(session) || IsPaused || _captureCts is not null)
             return;
-        }
 
+        ResetAudioHints();
+        var cts = new CancellationTokenSource();
+        var microphoneId = _activeMicrophoneId;
+        var online = _activeOnline;
+        _captureCts = cts;
+        _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, online, cts.Token));
+    }
+
+    private Task StopCaptureAsync()
+    {
+        if (_captureStopping is { IsCompleted: false } pending)
+            return pending;
+        return _captureStopping = StopCaptureCoreAsync();
+    }
+
+    private async Task StopCaptureCoreAsync()
+    {
+        var cts = _captureCts;
+        var task = _captureTask;
+        _captureCts = null;
+        _captureTask = null;
+        if (cts is null)
+            return;
         try
         {
-            var framesSinceMeter = 0;
-            var frames = 0L;
-            await foreach (var frame in capture.CaptureAsync(deviceId, ct))
+            await cts.CancelAsync();
+            if (task is not null)
+                await task;
+        }
+        finally
+        {
+            cts.Dispose();
+        }
+    }
+
+    private async Task StopAfterAudioFaultAsync(string message)
+    {
+        if (!IsRunning || IsStopping)
+            return;
+        try
+        {
+            await StopAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(RoomLog, "The room did not close cleanly after an audio fault.", ex);
+        }
+        Status = L.Format("status.audiofailed", message);
+    }
+
+    private void ResetAudioHints()
+    {
+        _microphoneSignal = SignalState.Pending;
+        _systemSignal = SignalState.Pending;
+        _statusBeforePushFailure = null;
+        _pushFailureStatus = null;
+        RefreshAudioSourceStatus();
+    }
+
+    private void RefreshAudioSourceStatus()
+    {
+        var lines = new List<string>();
+        if (SignalHint(OnlineMeetingCapture.MicrophoneSource, _microphoneSignal) is { } microphone)
+            lines.Add(microphone);
+        if (SignalHint(OnlineMeetingCapture.SystemSource, _systemSignal) is { } system)
+            lines.Add(system);
+        AudioSourceStatus = string.Join(" ", lines);
+    }
+
+    private static string? SignalHint(string source, SignalState state) => state switch
+    {
+        SignalState.NoSignal or SignalState.SilentSignal => L[$"capture.{source}.silent"],
+        SignalState.WentQuiet => L[$"capture.{source}.quiet"],
+        _ => null,
+    };
+
+    private string DescribeFault(AudioCaptureException fault)
+    {
+        var source = fault.SourceName is OnlineMeetingCapture.MicrophoneSource or OnlineMeetingCapture.SystemSource
+            ? L[$"capture.source.{fault.SourceName}"]
+            : L["capture.source.mixer"];
+        return fault.Fault switch
+        {
+            AudioCaptureFault.ClockStalled =>
+                L.Format("capture.fault.clock_stalled", OnlineMeetingCapture.ClockStallLimit.TotalSeconds),
+            AudioCaptureFault.ConsumerStalled =>
+                L.Format("capture.fault.consumer_stalled", OnlineMeetingCapture.ConsumerStallLimit.TotalSeconds),
+            AudioCaptureFault.SourceFailed => L.Format("capture.fault.source_failed", source, Bounded(fault.Message)),
+            _ => L.Format($"capture.fault.{fault.Code}", source),
+        };
+    }
+
+    private async Task PumpCaptureAsync(MeetingSession session, string? microphoneId,
+        bool online, CancellationToken ct)
+    {
+        var mode = online ? "online" : "in-room";
+        var signals = new CaptureSignals(this, ct);
+        using var meterCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var meter = Task.CompletedTask;
+        try
+        {
+            var microphone = _captureFactory();
+            var system = online ? _systemCaptureFactory() : null;
+            if (microphone is null || (online && system is null))
             {
-                await session.PushAudioAsync(frame, ct);
+                Log.Warning(AudioLog, $"capture_unavailable mode={mode} microphone={microphone is not null} system={system is not null}");
+                Dispatcher.UIThread.Post(() => ReportUnavailable(session, online, microphone is null, ct));
+                return;
+            }
+
+            IAsyncEnumerable<ReadOnlyMemory<byte>> frames;
+            if (system is not null)
+            {
+                var combined = new OnlineMeetingCapture(microphone, system);
+                combined.Diagnostic += signals.OnDiagnostic;
+                frames = combined.CaptureAsync(microphoneId, ct);
+            }
+            else
+            {
+                frames = microphone.CaptureAsync(microphoneId, ct);
+                meter = MeterAsync(signals, meterCts.Token);
+            }
+
+            var count = 0L;
+            var failedPushes = 0L;
+            await foreach (var frame in frames)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (system is null)
+                    signals.Accumulate(frame.Span);
+                try
+                {
+                    await session.PushAudioAsync(frame, ct);
+                    if (failedPushes > 0)
+                    {
+                        Log.Info(AsrLog, $"transcription_push_recovered dropped_frames={failedPushes}");
+                        Dispatcher.UIThread.Post(() => ReportPushRecovered(session, ct));
+                        failedPushes = 0;
+                    }
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    if (failedPushes++ == 0)
+                    {
+                        Log.Error(
+                            AsrLog,
+                            $"transcription_push_failed source=asr mode={mode}; frames are dropped until a push succeeds.",
+                            ex);
+                        var detail = Bounded(ex.Message);
+                        Dispatcher.UIThread.Post(() => ReportPushFailed(session, detail, ct));
+                    }
+                }
 
                 // On the first frame, not before the loop: the device is acquired inside it.
-                if (frames == 0)
-                    Log.Debug(AudioLog, $"Capture running on {deviceId ?? "the default device"}.");
-
-                if (++frames % 500 == 0)
-                    Log.Debug(AudioLog, $"{frames} frames captured.");
-
-                // input level meter ~4×/s — "is the mic alive" must be visible at a glance
-                if (++framesSinceMeter >= 3)
-                {
-                    framesSinceMeter = 0;
-                    var peak = FramePeak(frame.Span);
-                    Dispatcher.UIThread.Post(() => MicLevel = peak);
-                }
+                if (count == 0)
+                    Log.Debug(AudioLog, online
+                        ? "Capture running on the microphone and the computer audio."
+                        : $"Capture running on {(microphoneId is null ? "the default device" : AudioDeviceIds.Hash(microphoneId))}.");
+                if (++count % 500 == 0)
+                    Log.Debug(AudioLog, $"{count} frames captured.");
             }
+
+            if (!ct.IsCancellationRequested)
+                throw new AudioCaptureException(
+                    AudioCaptureFault.SourceEnded,
+                    "The capture stream ended.",
+                    online ? OnlineMeetingCapture.MixerSource : OnlineMeetingCapture.MicrophoneSource);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
         catch (Exception ex)
         {
-            Log.Error(AudioLog, "Capture stopped; the room is live with no audio arriving.", ex);
-            Dispatcher.UIThread.Post(() => Status = L.Format("status.audiofailed", ex.Message));
+            var fault = AudioCaptureException.Classify(
+                ex, online ? OnlineMeetingCapture.MixerSource : OnlineMeetingCapture.MicrophoneSource);
+            Log.Error(
+                AudioLog,
+                $"capture_fault code={fault.Code} source={fault.SourceName} mode={mode}" +
+                (mode == "in-room" ? "; the room is live with no audio arriving." : ""),
+                ex);
+            Dispatcher.UIThread.Post(() => ReportFault(session, online, fault, ct));
         }
         finally
         {
-            Dispatcher.UIThread.Post(() => MicLevel = 0);
+            await meterCts.CancelAsync();
+            await meter;
+            Dispatcher.UIThread.Post(() =>
+            {
+                MicLevel = 0;
+                ComputerLevel = 0;
+            });
+        }
+    }
+
+    private async Task MeterAsync(CaptureSignals signals, CancellationToken ct)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(OnlineMeetingCapture.LevelInterval, _signalClock, ct);
+                signals.Tick();
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void ReportPushFailed(MeetingSession session, string detail, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || IsStale(session))
+            return;
+        _statusBeforePushFailure = Status;
+        _pushFailureStatus = L.Format("status.transcriptionpushfailed", detail);
+        Status = _pushFailureStatus;
+    }
+
+    private void ReportPushRecovered(MeetingSession session, CancellationToken ct)
+    {
+        var (before, shown) = (_statusBeforePushFailure, _pushFailureStatus);
+        (_statusBeforePushFailure, _pushFailureStatus) = (null, null);
+        if (ct.IsCancellationRequested || IsStale(session))
+            return;
+        if (Status == shown && before is not null)
+            Status = before;
+    }
+
+    private void ReportUnavailable(MeetingSession session, bool online, bool noMicrophone, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested)
+            return;
+        var message = noMicrophone ? L["status.nobackend"] : L["capture.online.unavailable"];
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (online)
+        {
+            _ = StopAfterAudioFaultAsync(message);
+        }
+        else
+        {
+            Status = message;
+        }
+    }
+
+    private void ReportFault(MeetingSession session, bool online, AudioCaptureException fault, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested)
+            return;
+        var message = DescribeFault(fault);
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (online)
+        {
+            _ = StopAfterAudioFaultAsync(message);
+        }
+        else
+        {
+            Status = L.Format("status.audiofailed", message);
+        }
+    }
+
+    private sealed class CaptureSignals(MainViewModel owner, CancellationToken ct)
+    {
+        private readonly SignalWatch _microphone = new(owner._signalClock);
+        // In a meeting the far end is legitimately silent until someone in the room has spoken.
+        private readonly SignalWatch _system = new(
+            owner._signalClock, SignalWatch.RemoteStartupGrace);
+        private readonly Dictionary<string, long> _levelsLogged = [];
+        private readonly object _gate = new();
+        private long _received;
+        private double _peak;
+
+        public void Accumulate(ReadOnlySpan<byte> pcm16)
+        {
+            var peak = FramePeak(pcm16);
+            lock (_gate)
+            {
+                _received += pcm16.Length / sizeof(short);
+                _peak = Math.Max(_peak, peak);
+            }
+        }
+
+        public void Tick()
+        {
+            long received;
+            double peak;
+            lock (_gate)
+            {
+                (received, peak) = (_received, _peak);
+                _peak = 0;
+            }
+            Observe(OnlineMeetingCapture.MicrophoneSource, received, peak);
+        }
+
+        public void OnDiagnostic(CaptureDiagnostic diagnostic)
+        {
+            if (diagnostic.Event != "levels")
+            {
+                Log.Info(AudioLog, JsonSerializer.Serialize(diagnostic));
+                return;
+            }
+
+            var now = owner._signalClock.GetTimestamp();
+            if (!_levelsLogged.TryGetValue(diagnostic.Source, out var logged) ||
+                owner._signalClock.GetElapsedTime(logged, now) >= LevelLogInterval)
+            {
+                _levelsLogged[diagnostic.Source] = now;
+                Log.Debug(AudioLog, JsonSerializer.Serialize(diagnostic));
+            }
+            Observe(diagnostic.Source, diagnostic.ReceivedSamples, diagnostic.Peak);
+        }
+
+        public void Observe(string source, long receivedSamples, double peak)
+        {
+            var isSystem = source == OnlineMeetingCapture.SystemSource;
+            var watch = isSystem ? _system : _microphone;
+            if (watch.Observe(receivedSamples, peak, mayConclude: !isSystem || _microphone.HeardSound))
+                Log.Info(AudioLog, $"signal source={source} state={SignalWatch.CodeOf(watch.State)}");
+            var state = watch.State;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ct.IsCancellationRequested)
+                    return;
+                if (isSystem)
+                {
+                    owner.ComputerLevel = peak * 100;
+                    owner._systemSignal = state;
+                }
+                else
+                {
+                    owner.MicLevel = peak * 100;
+                    owner._microphoneSignal = state;
+                }
+                owner.RefreshAudioSourceStatus();
+            });
         }
     }
 
@@ -1619,7 +2030,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var peak = 0;
         foreach (var s in samples)
             peak = Math.Max(peak, Math.Abs((int)s));
-        return peak / (double)short.MaxValue * 100.0;
+        return peak / (double)short.MaxValue;
     }
 
     private void ApplyRename(SpeakerItemViewModel item)
@@ -1683,6 +2094,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Dispatcher.UIThread.Post(() => Status = L.Format("status.transcriptstopped", reason));
             });
             _transcriptLog = log;
+            if (_lastAttestation is { } attestation)
+                log.Attest(new ConsentAttestation(
+                    attestation.CaptureProfile.RecordValue, attestation.ConsentConfirmedAt));
             session.Room.UtteranceUpserted += u =>
             {
                 if (u.State == UtteranceState.Final)
@@ -1842,7 +2256,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (_lastAttestation is { } attestation)
         {
             sb.AppendLine();
-            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.MarkdownValue}");
+            sb.AppendLine($"capture-profile: {attestation.CaptureProfile.RecordValue}");
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();
@@ -1894,7 +2308,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Spoken(string srcLang) =>
         srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
-    private void ApplySpeaker(Speaker speaker)
+    internal void ApplySpeaker(Speaker speaker)
     {
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
@@ -1936,6 +2350,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
             return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);
-        return (canonical, tag, "#4C5C68");
+        return (canonical, tag, ThemeColours.SpeakerFallback);
     }
 }

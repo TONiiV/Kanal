@@ -30,6 +30,42 @@ public class CaptureProfileTests
         Assert.Contains("headphone", vm.CaptureProfileGuidance, StringComparison.OrdinalIgnoreCase);
     }
 
+    [AvaloniaFact]
+    public async Task TheConsentAttestationIsWrittenIntoTheMeetingsTranscript()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "kanal-consent-" + Guid.NewGuid().ToString("N"));
+        var store = new WorkspaceStore(Path.Combine(root, "workspaces.json"));
+        Directory.CreateDirectory(Path.Combine(root, "acme"));
+        var workspace = store.CreateWorkspace("ACME", Path.Combine(root, "acme")).Workspace!;
+        var settings = new AppSettings { RecordAudio = false };
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
+        settings.ActiveGladiaKeyName = "meeting-room";
+        var confirmed = new DateTimeOffset(2026, 9, 4, 12, 30, 0, TimeSpan.Zero);
+        var vm = TestViewModels.Hermetic(settings, utcNow: () => confirmed, workspaces: () => store);
+        vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(loop: true, caps: new AsrCapabilities(
+                Streaming: true,
+                Diarization: true,
+                Translation: true,
+                AutoLanguageDetect: true,
+                Languages: new HashSet<string> { "zh", "de", "pl" },
+                Latency: LatencyClass.Realtime)),
+            Mt = null,
+            CloudTranslation = true,
+        };
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var record = Assert.Single(store.ListMeetings(workspace.Id).Meetings);
+        using var first = System.Text.Json.JsonDocument.Parse(File.ReadLines(record.TranscriptPath!).First());
+        Assert.Equal("in-room", first.RootElement.GetProperty("captureProfile").GetString());
+        Assert.Equal(confirmed, first.RootElement.GetProperty("consentConfirmedAt").GetDateTimeOffset());
+    }
+
     // The gate moved from the toolbar into the dialog record opens (ADR 0054, decisions 24–27):
     // record is offered, and a cancelled dialog is what refuses the meeting.
     [AvaloniaFact]
@@ -40,7 +76,7 @@ public class CaptureProfileTests
         settings.ActiveGladiaKeyName = "meeting-room";
         var vm = TestViewModels.Hermetic(settings);
         vm.SelectedMode = vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
-        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
 
         Assert.True(vm.StartCommand.CanExecute(null));
 
@@ -70,7 +106,7 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         now = now.AddMinutes(7); // a later export must not rewrite when consent was actually given
@@ -83,7 +119,7 @@ public class CaptureProfileTests
         await vm.StopCommand.ExecuteAsync(null);
 
         // Every start asks again: the next meeting is a different room full of people.
-        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
         await vm.StartCommand.ExecuteAsync(null);
         Assert.False(vm.IsRunning);
     }
@@ -127,7 +163,7 @@ public class CaptureProfileTests
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
         var deadline = Environment.TickCount64 + 2_000;

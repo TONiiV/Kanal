@@ -4,7 +4,616 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-13
+
+### Speaker names follow the colour scheme
+
+Ticket #240 of the Appearance spec (#187).
+
+- `SpeakerTones.Name` replaces `SpeakerTones.OnLight`. It is a multi-value converter. It takes the speaker colour and the `ActualThemeVariant` of the name TextBlock.
+- In Dark, a name uses 30% of the dark ink `#F6F1E8`. In Light, it uses 30% of the light ink `#252B3B`.
+- A scheme change repaints the names that are already shown. This includes System following the operating system. The palette names need no view-model code; the fallback colour is re-resolved by `MainViewModel.OnThemeVariantChanged`.
+- The Dark fallback `SpeakerFallbackColor` `#9AA8B3` gives the name tone `#B5BDC3`: 8.93:1 on the dark sheet and 7.72:1 on the dark paper.
+- The design docs list the speaker colours. ADR 0057 names the icon purple `#6A5FB0`.
+
+### Icon follows the colour scheme
+
+Ticket #193 of the Appearance spec (#187).
+
+- `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
+  Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
+  `-dark` files.
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
+  Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
+  Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
+- The icon of the exe, the installer and the macOS bundle stays the light version.
+
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
+## 2026-10-11
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
+
+### Icons on the settings tabs
+
+1. Each of the seven settings tabs shows an icon left of its name. The icon takes the tab colour:
+   Ink3 at rest, Ink2 on hover, Brand when selected.
+2. Section headings get no icon, in Settings and in the project settings window (owner decision,
+   2026-10-11).
+3. New glyphs in `Assets/Icons`: `sliders`, `appearance`, `transcript`, `translate`, `summary`.
+   Audio input reuses `microphone`; Workspace reuses `folder`.
+
+### Silver app icon
+
+Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice-teams) on
+2026-10-11, after first choosing B (satin).
+
+- The app icon is a silver satin tile with a textured K. The upper stroke is silver-grey. The lower
+  "reply" stroke is a muted purple. The purple is `#6A5FB0` satin in Light. In Dark it is mixed
+  30% toward white.
+- `design/icon/kanal-tile-light.png` and `kanal-tile-dark.png` are the 1024 px sources. The Python
+  script that made them needed numpy and Pillow, so the repository does not keep it.
+- `design/kanal-icon.py` derives the host assets from these two PNGs with the Python standard
+  library only. `design/kanal-icon.png` still feeds the favicon and the brand logo of the
+  mobile caption page. Both pages are unchanged.
+- The light version builds `kanal.ico`, `design/kanal.icns` and the iconset. The exe, the msi
+  and the dmg use it. It stays readable on a light and on a dark taskbar.
+- The dark version builds `kanal-dark.ico`. Ticket #193 loads it as the window icon in Dark.
+- The splash mark is the K on transparency, not the full tile. It keeps the layout of the old
+  mark. The packager copies the stroke shape of `kanal-icon.png`. It paints each stroke with the
+  mean colour of that stroke in the tile, weighted by alpha. `kanal-splash-mark.png` is for a
+  light sheet. `kanal-splash-mark-dark.png` is for a dark sheet. A test holds every tone at 3:1
+  contrast or more on the Sheet and Paper colours of its scheme.
+- The splash mark is also the in-app logo. The sidebar, the Version section of the settings and
+  the start hint of the meeting room show it. They change from indigo and apricot to the new mark.
+  Ticket #193 must switch all four `Image` sources with the colour scheme.
+- The small ICO frames use the packager box downsample. The satin grain averages out, so the
+  16 px frame stays clean.
+- `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon/kanal-tile-light.png`
+  is the 1024 px master.
+- Until #193 lands, the host shows the light marks in Dark too.
+
+### Dark colour scheme and the Appearance tab
+
+Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
+
+1. The settings window has an **Appearance** tab, second after General. It shows three cards:
+   System, Light and Dark. Each card draws a small window in XAML. The System card shows a light
+   half and a dark half. A click applies the scheme at once and saves it in `settings.json`.
+2. `App.axaml` has a `Dark` theme dictionary with the same keys as `Light`. A test holds the two
+   key sets equal. The values come from the mobile page dark tokens. For keys that the mobile page
+   lacks, hover and pressed move away from the sheet, and washes mix the colour into the sheet:
+   - `BrandHover` `#CDD3FF` and `BrandPressed` `#E0E4FF` move away from the sheet, as in Light.
+   - `OnBrand` `#181C28` is the dark sheet, so text on a light brand fill stays dark.
+   - `Record` `#EF6A60`, `Hold` `#E3AE3C`, `RecordWash` `#4A2528` and `HoldWash` `#433820` keep
+     their meaning, with values for a dark sheet.
+   - `CloseHover` stays `#C42B1C`. The new `OnCloseHover` is white in both variants.
+   - `SpeakerFallbackColor` `#9AA8B3` gives 6.0:1 on the dark paper. `TickMixedColor` is `#7E8A99`.
+   - `AlarmWash` is the mobile `--alarm-wash` `#1E1416`. `Warning` `#D9A53A` and `WarningWash`
+     `#3A3020` stay apart from `Hold` and `HoldWash`.
+3. `Appearance` sets `Application.RequestedThemeVariant`. For System it reads the platform colour
+   values and follows `ColorValuesChanged` live. The app applies the saved scheme before the
+   splash window opens.
+4. FluentTheme reads `SystemAccentColor*` only from the root dictionary. `Appearance` copies the
+   `AccentRamp*` colours of the current variant into these root keys. The base accent equals
+   `Brand` in both variants. A headless render confirms it: a checked box and the settings tab
+   marker draw `#414B83` in Light and `#B9C2FF` in Dark.
+5. `ThemeColours` still returns hex strings. `MainViewModel` repaints the fallback speaker colour
+   and the ruler ticks when the variant changes.
+6. Contrast tests check `Ink`, `Ink2`, `Ink3`, `Alarm` and `SpeakerFallbackColor` on `Sheet`
+   and `Paper`, and `OnBrand` on `Brand`. Every pair reaches 4.5:1 in both variants.
+7. Both dictionaries also set FluentTheme keys. FluentTheme draws check, radio and switch glyphs
+   in `White`, which gives 1.7:1 on the Dark brand fill. The glyph keys use the `OnBrand` value.
+   A test requires 3:1 against `SystemAccentColor` in both variants.
+8. The disabled `ComboBox` keys keep the FluentTheme values in Light, so Light looks the same.
+   Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
+   every meeting.
+
+Done in #240: the speaker names use the dark text tone in Dark (see 2026-10-13).
+
+### Meeting problem kinds and recovery in the store (#210, spec #209)
+
+This is core work only. The UI follows in other tickets.
+The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` and `ReidentifyMeeting` to it.
+
+1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
+   `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
+   Only content gives `RecordDamaged`: a JSON parse failure, an empty file, missing fields, or a `meeting.json` that is a folder. A read that fails
+   on access or I/O (a sharing violation, no permission, an offline cloud file) gives `Unreadable`, with the
+   meeting folder as subject. `RecoverMeeting` and `ReidentifyMeeting` refuse an `Unreadable` folder and
+   change nothing, because the record may be healthy.
+   `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
+   `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
+   In the Issues list, `ProjectIssueViewModel.For` shows `RecordMissing` and `RecordDamaged` with
+   `workspace.issues.unreadable`. `Misfiled` gets the generic cause until ticket #213 adds its sentence.
+   For these kinds the issue `Subject` is the meeting folder. Only `UnsupportedVersion` keeps `meeting.json`.
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+   `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
+3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
+   `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
+4. Rebuild rules:
+   - The id is the folder name.
+   - The languages are the source and translation languages in the transcript, in order of first use.
+     Codes that differ only in case count once, with the first spelling.
+     The code `und` (unknown language) is left out.
+   - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
+   - The start time is the end time minus the span of the utterance times. The created time equals the start time.
+   - The title is `FreeTitle` of the base title.
+5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
+   `.damaged.2`, `.damaged.3` and so on.
+6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid
+   id, or when the transcript holds no readable utterance or no language. A name clash gets `-2`, `-3`.
+7. `WorkspaceStore.ReidentifyMeeting(workspaceId, folder)` writes the folder name into a misfiled record.
+   The record gets a unique title from `FreeTitle`, for example "Tooling review 2".
+   It returns a `RecoverResult`, like `RecoverMeeting`.
+   When the folder name is not a valid id (a copy named `<id> - Copy` or `<id> copy`), Kanal moves the
+   folder to `kanal-set-aside` with the same rules as in item 6. The original meeting stays listed.
+8. No operation deletes a file. Tests compare the file contents before and after.
+
+Open items:
+
+1. The creation time of a file is not used, because copies change it.
+2. The start time is later than the real start by the silence before the first utterance.
+3. With `audio.wav`, the end time is the time the recording stopped. The start time is then also
+   later by the silence after the last utterance, and the duration is shorter by the same amount.
+4. A copy that does not keep write times (`cp` without `-p`, some archive tools and sync clients)
+   gives the copy time as end time. The start time is then wrong by the same offset.
+5. `ReidentifyMeeting` has no check for an id that is already listed. A listed id always equals its own
+   folder name, so a second folder cannot hold it.
+
+### Speaker palette readable on light and dark sheets
+
+The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. Speaker names are small text, so they need 4.5:1.
+No single colour reaches 4.5:1 on both a light and a dark sheet. The palette therefore serves graphics, and names use a text tone.
+
+- `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
+  The rules, bars, dots and ticks use the palette colour.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
+  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+- No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
+- A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
+- The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
+- Done later: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stayed as they were. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handled the fallbacks. The dark text tone for the host names landed in #240.
+
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. A project whose root is already reported missing is not listed
+   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
+   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
+   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
+   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
+5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
+   issues to "has an alarm issue".
+6. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
+   screen work area less 48 DIP for the title bar.
+7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
+   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
+8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
+   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
+9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
+
+### Store: relocate a project, create a missing meetings folder, drop a damaged list row
+
+This is the core part of spec #209 (ticket #211). No UI uses it yet.
+
+1. `WorkspaceStore.RelocateWorkspace(id, newRootPath)` points an existing row to a new folder.
+   The store keeps the path canonical, as `CreateWorkspace` does. The name in the list stays.
+2. The new folder must exist. A missing folder gives `FolderMissing`.
+3. A `kanal-workspace.json` in the new folder must hold this project's id. Another id gives
+   `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
+4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
+5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
+6. `RelocateWorkspace` refuses while the folder of the row still exists and differs from the new one.
+   This is the "two folders, one identity" rule of `Register`: the copy is only a copy while the
+   listed folder is there. The refusal is `Invalid`. Nothing is written. `RelocateWorkspace` does not
+   copy meetings.
+   A new folder without a marker also gets an empty `meetings` folder, as `CreateWorkspace` does.
+7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
+   when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
+   gives `Unwritable`, and the file stays.
+8. `WorkspaceStore.DropBrokenRegistryRows()` removes the rows of `workspaces.json` that miss
+   fields. Every complete row stays unchanged. The call writes nothing when no row is damaged.
+   A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
+9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
+   `Unreadable`. The host does not read this kind yet.
+10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
+    reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
+    element crashed every operation.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
+
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
+### `WorkspaceStore` split into small internal classes
+
+This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
+`WorkspaceStore` went from 802 lines to 241 lines. It now validates the workspace operations,
+writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
+
+| Class | Responsibility |
+|---|---|
+| `WorkspaceRegistry` | Reads and writes the workspace list. Finds a workspace. Refuses a second row for one folder or one id. |
+| `MeetingRecords` | Lists, creates, saves, renames and deletes the meeting records of a workspace. Finds a free meeting title. |
+| `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
+| `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
+| `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. It never logs. |
+| `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
+
+All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
+internal types. `StorePathsTests` tests the path rules directly.
+
+`MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
+an unwritable path and a bad meeting id.
+
+The caller decides whether to log a problem, not `StoreProblems` (owner decision, 2026-10-11). A
+`StoreProblem` does not carry the exception, so the code that catches the exception logs it, with
+its stack trace, before it returns the problem. `StoreProblems` only builds values.
+
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
+
+### A refused action shows a sentence in the interface language
+
+A refused store action showed the English `Detail` text from Core in the sidebar. It showed a
+generic sentence in the project settings. The operators read Chinese, German and Polish.
+
+1. `StoreRefusal.Report` in `Kanal.Host/Localization` turns a `StoreProblem` into one localized
+   sentence and logs `{Kind} on {Subject}: {Detail}` as a warning. The sidebar and the project
+   settings both call it. Neither view model keeps its own mapping.
+2. Each `StoreProblemKind` has one sentence. The new keys are `workspace.refused.<kind>`. The
+   existing keys keep `TitleTaken`, `TooLarge`, `WrongType` and `NotThisWorkspace`.
+3. Four kinds name the subject: `FolderMissing`, `Unreadable`, `Unwritable` and
+   `UnsupportedVersion`. `Invalid` and `NotFound` do not. Their subject is an id or a glyph that
+   means nothing to the operator.
+4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
+   another project already uses. The code does not match on the English `Detail`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
+6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
+   `workspace.refused.other` replaces it for a kind that has no sentence yet.
+
+The old count note (`workspace.problems`) does not change. Ticket #212 owns it.
+
+### The first release is 1.0.0
+
+No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
+
+1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
+   without a date. `ChangelogTests` keeps the two equal.
+2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
+   `docs/release/macos-alpha-rollout.md` are plain versions: `v1.0.0`, then `v1.0.1`.
+3. No pre-release or nightly channel: every release is a plain `x.y.z` version (owner decision,
+   2026-10-11).
+4. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   (see 2026-10-07). The release PR rewrites the README limitations.
+
+Open item: ADR 0056 requires the update check and the minimum supported version in the host before
+the first `v1.0.0` tag. That work is not done. Do not publish the first release before it merges.
+
+### Host colours move to the Light theme dictionary
+
+This is a prefactor for the Appearance feature (#187). The host looks the same as before.
+Headless renders of the main window and of all six settings tabs are pixel-identical.
+
+- `App.axaml` holds every app colour brush in `ThemeDictionaries` under the `Light` key.
+  Every colour reference in the views is a `DynamicResource`. A test scans the views for a
+  `StaticResource` colour key.
+- `SystemAccentColor*` stays in the root dictionary. In a theme dictionary, FluentTheme ignores
+  it and draws its own default blue.
+- `ThemeColours` reads the speaker fallback colour and the mixed-speaker tick colour from the
+  theme resources. The unused `BubbleViewModel.TextColor` and `RuleColor` are gone.
+- `RoomState.Palette` and the flag colours stay as they were. Ticket #189 covers the palette.
+
+---
+
+## 2026-10-10
+
+### Project settings
+
+A project (a `Workspace` in the code) now has its own settings window. A gear button on each row
+of the project list opens it. The gear does not change the selected project.
+
+1. `ProjectSettingsWindow` holds three sections: name, project icon, and a danger zone. Name and
+   icon changes apply only on Save. Closing the window discards them.
+2. The icon is one of eight built-in icons (`ProjectIcons.Glyphs`) or an image file. The store
+   copies an image into the project root as `kanal-icon<ext>` and deletes any older copy. It
+   deletes only `kanal-icon<ext>` for the allowed extensions. It refuses a file over 2 MB or with
+   an extension other than png, jpg, jpeg, ico, bmp or webp. It treats a link to the existing
+   copy as the same file. The window explains every refusal in the language of the interface.
+3. `kanal-workspace.json` and the registry row both carry `iconGlyph` and `iconFile`, the same way
+   they carry `name`. A file without these fields reads as the default folder icon. An unknown
+   or unsafe value also reads as the default.
+4. Remove opens `RemoveProjectWindow`. The filled button keeps the project and is the default.
+   "Remove from list" calls `ForgetWorkspace` and keeps every file. "Delete meeting files" calls
+   `DeleteWorkspace`.
+5. `DeleteWorkspace` deletes only what Kanal wrote: the `meetings` folder, `kanal-workspace.json`
+   and `kanal-icon<ext>`. It first reads `kanal-workspace.json` and refuses when the file is
+   missing or holds another `Id`. It removes the root folder only when the folder is then empty.
+   The operator picked that folder, and it can hold other files.
+6. Kanal refuses removal while any meeting is recording. The Remove button is disabled and says why.
+7. `WorkspaceSidebarViewModel.Refresh` no longer reloads the meetings when the project list drops
+   its selection during the rebuild. Before, a rename through Refresh closed the meeting that was open.
+8. `WorkspaceSidebarView` now calls the generated `InitializeComponent`. With
+   `AvaloniaXamlLoader.Load`, the named fields such as `WorkspacePicker` and `MeetingList` stayed
+   null.
+9. The Rename item in the menu of a meeting row did not run its `Click` handler. The item has no
+   `Command` now. The handler starts the rename and moves the cursor to the name field.
+10. `ProjectSettingsViewModel.Save` applies the icon first and renames second. A refused icon
+    leaves the name unchanged.
+11. Operator feedback on the PR: the danger button reads "Remove project" in full. The icon reset
+    is a text button, "Use default icon", in the icon button row. It shows only for an icon that is
+    not the default. The title of `RemoveProjectWindow` is 19 px, larger than the question (15.5 px).
+
+### No gap beside a collapsed sidebar
+
+On Windows, a collapsed sidebar left a 5 px light strip at the window edge. The shell grid kept one
+fixed 5 px column for each splitter. A collapsed sidebar hides its splitter, but the column stayed.
+The window background showed in it.
+
+- `SidebarViewModel.SplitterColumn` is 0 while the sidebar is collapsed. `MainWindow.axaml` binds
+  both splitter columns to it. `MinShellWidth` already counted 0 for a collapsed sidebar.
+
+---
+
+## 2026-10-07
+
+### A published GitHub Release builds and attaches the packages
+
+The maintainer starts a release on the GitHub Releases page: create a tag, then Publish. CI builds
+the packages and attaches them to that release.
+
+1. `release.yml` triggers on `release: published`. The `workflow_dispatch` gear and its version
+   input are gone. That gear ran once, on 2026-09-02, and discarded its signed package.
+2. The macOS job imports the Developer ID certificate, signs and notarises the dmg. The Windows job
+   builds the msi, unsigned. Each job uploads its package to the release with `gh release upload`.
+3. Both jobs call `installers/release.sh <tag>`. The script also runs on a developer machine. It
+   refuses a dirty working tree, and on a Mac it stops first if a signing variable is unset or the
+   notary key file is empty.
+4. The PR gear runs the same script with `0.0.0-smoke --unsigned`, with the same path filter. A
+   change that breaks the release script makes a PR red.
+5. `release.yml` uses the concurrency rule of `ci.yml`. A new push cancels the PR's older smoke
+   build. A run for a published release has a unique group and is never cancelled.
+6. For a real release, `release.sh` refuses a version whose numeric part differs from `<Version>` in
+   `Kanal.Host.csproj`. It prints both values. The `--unsigned` smoke build skips this check.
+   To release, the maintainer raises `<Version>` and the `CHANGELOG.md` heading in a PR, then tags
+   the same numeric version.
+7. `release.sh` writes `<package>.sha256` next to each package. The workflow uploads the package
+   and its `.sha256` file. The upload has no `--clobber`: a re-run cannot replace a public asset.
+8. The checkout keeps no token (`persist-credentials: false`). The Package step receives the
+   signing secrets only on a `release` event.
+9. The release workflow runs no tests. The maintainer tags only a commit of `main` with a green
+   `ci.yml` run.
+
+This reverses "Nothing installable leaves CI" (2026-09-02 entry and `docs/design/installers.md`).
+The repository is public, so every release asset is public. The maintainer accepted this on
+2026-10-07. `docs/design/installers.md` and ADR 0056 now carry an amendment note.
+`docs/release/macos-alpha-rollout.md` gives the public GitHub Release as the distribution channel.
+To withdraw a version, delete its release assets.
+
+Open item: the msi `MajorUpgrade` in `installers/windows/Kanal.wxs` has no
+`AllowSameVersionUpgrades`. Two alpha builds of one numeric version do not replace each other. A
+follow-up task covers this.
+
+### CI tests on Windows and macOS, with a coverage report
+
+Before this change, CI ran the .NET suites only on `ubuntu-latest`. Kanal ships on Windows and
+macOS. The tests skip their Windows and macOS branches on Linux, so CI never ran the code paths of
+the two shipped platforms.
+
+1. The `test` job is a matrix: `windows-latest`, `macos-latest` and `ubuntu-latest`. Linux is
+   optional (`continue-on-error`). A red Linux job does not block a merge.
+2. Both suites collect coverage with `coverlet.collector`. File paths are SourceLink URLs, so the
+   reports from the three platforms name the same files.
+3. The `coverage` job merges the reports with ReportGenerator (local tool in
+   `.config/dotnet-tools.json`). It writes the summary table to the run page. The
+   `coverage-report` artifact holds the HTML report. README "Test coverage" gives the local commands.
+4. CI has a `workflow_dispatch` trigger. A run that GitHub refuses to start
+   (`startup_failure`, as on the #158 merge) cannot be re-run. A manual run replaces it.
+5. `release.yml` installed SDK 9.0.x for `net10.0` projects. It built only because the runner
+   image also has SDK 10. It now installs 10.0.x.
+6. A new push to a PR cancels the older run of that PR. Each PR has one concurrency group. A
+   `main` run and a nightly run each get a unique group. GitHub would otherwise replace a waiting
+   run in a shared group, and that `main` commit would get no result.
+7. CI runs every night at 03:00 UTC on `main`. It finds runner-image drift, dependency drift and
+   flaky tests when nobody pushes. GitHub sends the failure mail to the last person who changed
+   the `cron` line. GitHub turns the schedule off after 60 days without repository activity.
+
+Cost: none. GitHub-hosted runners are free for a public repository, macOS and Windows included. A PR
+now waits for the slowest platform job instead of one Linux job.
+
+No coverage threshold. The first merged report on a Windows workstation: 81.2 % lines, 71.1 %
+branches. A threshold is set after CI has produced a few reports from all platforms.
+
+The Windows job depends on the test fixes in #173. Before them, six Core tests failed on Windows.
+
+The first macOS runs found two tests that depended on timing:
+
+1. `DeliversSixteenKilohertzMonoFrames` read 37 120 bytes in a 700 ms window, against a 32 000
+   limit. A diagnostic run (#176) measured the runner's "Apple Virtual Sound Device": 16 288 to
+   16 512 samples/s, so the format is correct. The excess is a backlog: frames wait in the
+   capture channel (up to 64) until the test reader is scheduled, then arrive at once. Under
+   parallel test load a 2 s window still read 83 224 bytes. The test now drops the first 500 ms
+   after the first frame, then counts 2 s against 48 000 to 80 000 bytes. Stereo or
+   un-resampled audio (128 000 or more) still fails.
+2. Five UI tests waited a fixed 400 to 2 500 ms for demo output. The demo emits a partial every
+   350 ms, so its first final arrives after about 1.4 s. On the macOS runner the fixed waits ended
+   too early. The tests now wait for the condition they assert, with a 15 s timeout:
+   `NothingSaidInTheRoomIsWrittenToTheLog`, `TheTranscriptIsOnDiskBeforeTheMeetingEnds`,
+   `ASecondMeetingNeverWritesOverTheFirst`, `BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne`
+   and the export tests.
+
+### A meeting travels as one `.kl` file
+
+The sidebar had two import actions and two export actions. "Import meeting record" copied any file
+into a new meeting and set it as `TranscriptPath`. A PDF or a PPTX then opened as a transcript with
+no lines. The operator read this as a meeting that never finished loading.
+
+1. The bundle extension is `.kl`, not `.kanal-meeting.zip`. The file is still a zip archive.
+2. "Import meeting" accepts only a `.kl` file. The picker filters on `*.kl`. Any other file is
+   refused with `workspace.importonlykl`. "Import migration bundle" is gone: it was the same action.
+3. "Import into this meeting" and the Files tab copy any other file into `attachments/`. They never
+   overwrite, and they never set `TranscriptPath`. A `.kl` file chosen there arrives as a meeting.
+4. "Export this meeting" writes a `.kl` file. The raw transcript copy is gone.
+5. A row import into the meeting on screen refreshes the Files tab (`MeetingFilesChanged`).
+
+This change amends ADR 0054 decisions 20–21 and the PRD v0.4 row "md/json 纪要导出". Those
+decisions kept a Markdown export in the meeting menu and kept json import. The new rule is one
+export format and one import format:
+
+- Every export packs one meeting into a `.kl` file.
+- Meeting import accepts only a `.kl` file.
+- Any other imported file becomes an attachment of the meeting.
+
+Reasons:
+
+1. The user chose one short extension and one export format. One file type now carries a meeting
+   in both directions.
+2. The Markdown transcript stays available. Each `.kl` file holds it as `transcript.md`. A meeting
+   imported from a `.kl` file also keeps `transcript.md` in its folder.
+
+Cost: this reverses the two-part extension choice in the 2026-09-12 entry "单场会议的迁移包". That
+choice let Explorer and Finder open the bundle as an archive with a double-click. A `.kl` file does
+not open that way. It is still a zip archive: rename it to `.zip` to look inside.
+
+Out of scope: `MainViewModel.ExportMarkdownCommand`. No view binds it, and tests still use it.
+`TranscriptPath` is now set only by a recorded meeting and by a `.kl` import.
+
+Follow-up decisions on the same day:
+
+1. **The consent attestation is in `transcript.jsonl`.** ADR 0054 decision 26 put it in the
+   Markdown export, and no view reached that export. `TranscriptLogWriter.Attest` now writes it as
+   the first line: `captureProfile` and `consentConfirmedAt`. `TranscriptLog.Read` skips the line,
+   because it has no utterance id. The `.kl` file carries `transcript.jsonl`, so the attestation
+   travels with the meeting. `CaptureProfile.MarkdownValue` is now `RecordValue`.
+2. **An imported recording is an attachment.** The planned WAV/MP3/M4A import (ticket T06) does not
+   create a meeting record. It copies the recording into the `attachments/` folder of a meeting
+   that the operator selects. The transcription of an attached recording is not decided. T08 and
+   T09 wait for that decision. The specs, tickets, design docs and PRD carry dated notes.
+3. **The `.kl` save dialog has its own title.** It used `export.dialog.title` ("Save transcript").
+   It now uses `meeting.exportbundle.title` ("Export meeting").
+
+## 2026-10-06
+
+### Button text centred vertically
+
+Text on every `Button` and `ToggleButton` sat 2 to 6 px above the centre. `VerticalContentAlignment`
+resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its text at the top.
+
+- `App.axaml` sets `VerticalContentAlignment="Center"` in the base `Button` and `ToggleButton` styles.
+- A headless render of "Save & Close" now shows 14 px of space above and below the capitals, at the
+  36 px minimum height. Before: 10 px above, 18 px below.
+- Out of scope: the mode picker rows. The row without a description keeps the height of its
+  neighbours by design.
+
+### macOS window buttons centred in the header and enlarged
+
+Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
+28 DIP high. The window buttons sat near the top of the 58 DIP header.
+
+- `MacTrafficLights.Apply` makes the title bar view as high as the header, then places each button
+  with `TrafficLightLayout`. The buttons are 1.2 times the native size, 24 DIP apart, centred
+  vertically. They fit inside the 78 DIP that `WindowControlInsets.MacOs` reserves.
+- In full screen the window controls are gone. `WorkspaceShellViewModel.IsFullScreen` sets the
+  reserved insets to 0, so the header content moves to the edge.
+- The host applies the layout on open, activation, resize and window-state change. It skips full
+  screen, where macOS owns the title bar.
+- The code runs on Apple silicon only. Intel Macs keep the native buttons: reading a `CGRect`
+  from `objc_msgSend` there needs `objc_msgSend_stret`.
+
+---
+
 ## 2026-10-05
+
+### Remove the ellipsis button beside the join QR
+
+The toolbar ellipsis menu held only "Export .md". Each meeting's sidebar menu already offers
+export, so the button was a duplicate. Removed it and its `meeting.more.tip` string.
 
 ### Native UI implementation of the approved Swiss design
 
@@ -68,7 +677,7 @@ handover brief that drove it is deleted. Verification record and screenshots:
 ### Obsolete design archive
 
 Moved the rejected liquid-glass proposal, its complete preview/image folder, the historical meeting
-HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/`. Updated
+HTML prototype and the superseded Swiss proposal entry into `docs/design/obsolete/` (since deleted). Updated
 relative links, archived preview asset paths and the design index. Current UI docs and Swiss preview
 remain in place. Conversation K brand/mobile guidance and meeting-workspace business constraints
 remain active references outside the archive.
@@ -89,7 +698,7 @@ native application implementation is still outstanding.
 
 The user rejected the cold glass-card direction and requested Swiss styling consistent with the
 current application icon. Inspected the real splash mark and Conversation K specification, then
-created [the Swiss proposal](design/obsolete/swiss-ui-proposal.md) and a clean, separate
+created [the Swiss proposal](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/swiss-ui-proposal.md) and a clean, separate
 [preview](design/swiss-review/index.html). The preview now uses the actual folded-K PNG, existing
 indigo/apricot brand colors, warm-paper surfaces, a continuous three-column grid, clear type
 hierarchy and fine rules. Frosted texture is limited to popovers. The previous proposal is marked
@@ -122,8 +731,8 @@ Decision confirm/dismiss buttons also share a centered 32-DIP action row with a 
 
 ### Liquid glass UI proposal — awaiting approval
 
-Prepared [Quiet glass](design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
-self-contained [visual review](design/obsolete/liquid-glass-review/index.html) and three rendered boards:
+Prepared [Quiet glass](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-ui-proposal.md) in `codex/new-ui`, with a
+self-contained [visual review](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/liquid-glass-review/index.html) and three rendered boards:
 meeting workspace, components/platform chrome, and settings/dialogs. The proposal follows the
 user's title-bar reference without an in-window File/Edit/View strip, uses neutral plus indigo,
 and applies restrained glass to panels while keeping transcript content opaque. It specifies
@@ -154,6 +763,108 @@ content exception to the proposed neutral/indigo interface palette. Native colum
 its preservation rules are specified as implementation work after design approval.
 
 ---
+
+## 2026-10-03
+
+### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
+
+An end-to-end test on macOS heard the remote side only when the meeting app played to the device Kanal
+tapped; with headphones or any other output Kanal captured silence. Computer audio was captured per
+output device: a device-bound `CATapDescription(excludingProcesses:deviceUID:stream:)` on macOS and
+endpoint loopback on one render endpoint on Windows. Kanal plays no audio, so the output selector only
+ever chose which device to miss.
+
+- **macOS 14.2+:** the tap is `CATapDescription(stereoGlobalTapButExcludeProcesses: [])` — every
+  process on every device. The private aggregate still lists the default output at Start as its clock
+  sub-device: an aggregate with the tap alone ran its IOProc at the same rate on a development
+  machine, but without the capture permission every sample was zero, so dropping the sub-device (and
+  with it the headset-microphone leak) is not adopted unproven. The C ABI lost its device-UID
+  argument. ScreenCaptureKit (macOS 13–14.1) was already device-independent.
+- **Windows:** WASAPI process loopback (`VAD\Process_Loopback`, `EXCLUDE_TARGET_PROCESS_TREE` on
+  Kanal's own pid) through `ActivateAudioInterfaceAsync`, initialized at 44.1 kHz 16-bit stereo
+  because process loopback has no mix format, then the shared downmix/resample path. NAudio exposes
+  `AudioClient` and the activation interfaces but keeps the activation function and enums internal,
+  so the P/Invoke, the `PROPVARIANT` blob and an agile completion handler are hand-written. Requires
+  Windows 10 2004 (build 19041); older builds report Online meeting as unavailable with that reason.
+  Compiles on macOS; **not run on Windows**.
+- **Seam:** `ISystemAudioCaptureService` no longer derives from `IAudioCaptureService`; it is
+  `Backend` plus `CaptureAsync(ct)`, so there is no device id to plumb or enumerate.
+  `OnlineMeetingCapture.CaptureAsync(microphoneId, ct)`; `system` diagnostics carry an empty
+  `Device`.
+- **Host:** the output ComboBox with its view-model list and selection, and the output half of
+  the device-loss check are gone; a device-list change can now only stop an online meeting for its
+  microphone, and computer-audio loss arrives as a capture fault. The meter keeps its label under a
+  new key, `computer.label` (zh 电脑声音). Output-default listeners added for the selector (Core
+  Audio `dOut`, WASAPI render default) are removed with it.
+- **Doctor:** `devices` lists microphones only; `system <seconds>`, `online <seconds> [mic]`.
+- **Audio test removed.** The 10-second *Test audio* button, its command and its three strings are
+  gone. The operator checks both meters after Start; `Kanal.Doctor system|online` stays the local
+  check without a meeting. Capture now always runs inside a session, so the preview branches of the
+  fault and unavailable reports are gone too.
+
+## 2026-10-02
+
+### Online meeting audio: mixer, host wiring and diagnostics ([ADR 0050](adr/0050-native-online-meeting-audio.md) slice 3)
+
+`OnlineMeetingCapture` mixes microphone and computer output onto one 16 kHz timeline; the host
+starts it for the Online meeting profile, and `docs/online-meeting-audio.md` is the diagnosis and
+manual-acceptance guide. Real two-party calls, unplug/replug, Bluetooth switching and the macOS
+signed-bundle permission paths are listed there as not yet verified.
+
+- **Thresholds, and why they are separate.** A transient stall must lose nothing; a sustained one
+  must fail loudly rather than emit seconds of invented silence.
+  - `PlayoutDelay` 100 ms: absorbs callback jitter. NAudio's `WasapiCapture`/`WasapiLoopbackCapture`
+    run with their defaults (polling, 100 ms buffer), so chunks arrive about every 50 ms; the IOProc
+    and loopback are burstier. Negligible next to transcription latency.
+  - Write cursor: a source's chunks continue its previous chunk only while that position is still
+    unread; otherwise the chunk re-anchors to its arrival time, never behind what the mixer already
+    read. Device crystals drift tens of ppm against the host clock; a fixed snap window let a slow
+    clock push whole chunks behind the read position (13–41 % of samples lost in simulation).
+  - `MaxSourceLead` 500 ms: a fast source clock may run ahead at most this far; the newest excess
+    is dropped and counted, unread audio is never overwritten.
+  - `ClockStallLimit` 2 s: the 20 ms mix timer can oversleep under GC, UI or CPU load; on waking
+    the mixer emits every due frame back-to-back, so a stall up to 2 s is caught up with continuous
+    samples. Beyond that the machine slept or is saturated → `clock_stalled`.
+  - `SourceBuffer` 4 s per source: larger than the stall limit plus the playout delay, so a
+    caught-up stall reads intact samples instead of overwritten ones.
+  - `ConsumerStallLimit` 60 s (3 000 frames, about 2 MB): the consumer awaits the transcription
+    push, and Gladia's receive loop holds its send lock across a reconnect's TCP/TLS connect, which
+    only the OS times out (about 21 s per attempt on Windows) on top of 1/2/4 s back-off. A shorter
+    limit stopped meetings on ordinary network trouble; past 60 s the provider has failed by its own
+    rules → `consumer_stalled`. Not dropping instead is deliberate: a sustained stall must fail
+    loudly, never silently shorten the recording.
+  - Mix: each source at −3 dB, then saturation. Halving each source cost a lone talker 6 dB, the
+    common case; two loud sources overlapping clip briefly instead of wrapping.
+  - Silence (`SignalWatch`, shared by host and Doctor): `SoundPeak` 0.003 of full scale (about
+    −50 dBFS, above a loopback's noise floor), `StartupGrace` 8 s (nobody speaks in the first
+    seconds of a call; the 10 s test still concludes), `RemoteStartupGrace` 30 s for the computer
+    output, judged only after the room has spoken (the far end is silent until then, and a loopback
+    delivers nothing while nothing plays), `QuietLimit` 120 s (a 90 s pause in a meeting is
+    ordinary; two minutes of nothing from one side is worth a non-imperative hint).
+- **Transcription push failures** are logged under `asr` as `transcription_push_failed` /
+  `transcription_push_recovered`, never as a device fault; the room stays live in both profiles and
+  frames are dropped until a push succeeds, as Gladia does itself while reconnecting.
+- **Closed fault codes** (`AudioCaptureException.Code`): `permission_denied`, `device_unavailable`,
+  `source_ended`, `source_failed`, `clock_stalled`, `consumer_stalled`, each with its source
+  (`microphone`, `system`, `mixer`). The same code reaches the diagnostic event, the host log line,
+  the localized status text and Doctor's exit code.
+- **Host lifecycle.** Pause now releases the capture devices for both profiles and Resume reopens
+  them, instead of holding the microphone open and discarding its audio; one teardown path serves
+  Pause, Stop, device loss and faults, and a Pause/Resume that lands after Stop or in the next
+  meeting does nothing. Device loss is judged on the ids the meeting started with, never on the
+  dropdown selection, and a failed output enumeration is not a loss. An online fault stops the
+  meeting with a localized reason; an in-room fault keeps the room live as before, now with the
+  localized reason too.
+- **Doctor** `system`/`online` print a per-source summary and exit 0 (sound), 2 (fault, bad
+  arguments, unlisted device) or 3 (silent, naming the source); they write no file and make no
+  network call.
+- **Consent.** Profile, microphone and output are captured before the consent dialog and used for
+  the attestation and the capture; selectors are locked from Start until the room
+  is live.
+- **Follow-ups (macOS, untested on hardware):** the Core Audio tap session reports no error after
+  start, so a dead tapped output pads silence instead of stopping; the private aggregate lists the
+  output device as a sub-device, so a headset's own microphone may be mixed into the computer-audio
+  source. Both are listed under known risks in `docs/online-meeting-audio.md`.
 
 ## 2026-09-23
 
@@ -526,7 +1237,7 @@ serial phases, and records the decisions that shape the first release:
   CHANGELOG date land in the release PR, not here.
 - **The cut line.** Track A (meeting records) ships complete: the five green slices merge and the
   two missing ones — consent before a record is created (#98) and the migration bundle (#100) — are
-  built first. #90, #118 and #94 wait for their tracks.
+  built first. #90, #127 and #94 wait for their tracks.
 - **Hide what has no second state.** The Speakers tab has one speaker to rename until Track B lands;
   the online capture profile records the microphone only until Track D lands. Both are hidden or
   disabled rather than shown and explained.
@@ -871,6 +1582,40 @@ something to bind to: an untouched record (`StartedAt` null) is written into, an
 new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
 and start" — not the rule.
 
+### The diarization catalog and its licence gate ([#107](https://github.com/TONiiV/Kanal/issues/107), [PR #127](https://github.com/TONiiV/Kanal/pull/127))
+
+Speaker attribution needs two models. The segmentation model finds where the speaker changes. The embedding model decides whether two segments have the same voice.
+
+`DiarizationModelCatalog` lists pyannote segmentation 3.0 as the segmentation model. It lists four embedding candidates: 3D-Speaker CAM++, 3D-Speaker ERes2Net base, WeSpeaker CN-Celeb ResNet34 and NeMo TitaNet small.
+
+[ADR 0055](adr/0055-speaker-attribution.md) decision 16 sets the default embedding model. Measured DER on Chinese, German and Polish decides it, not parameter count. The catalog therefore offers candidates and does not rank them.
+
+Sizes come from the GitHub releases API. We recomputed every SHA-256 from the downloaded file on 2026-09-08. The four embedding hashes also match the upstream `checksum.txt`.
+
+**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless also have non-commercial licences.
+
+A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. If someone lists Reverb, the catalog throws on first use and the test suite fails.
+
+**Readiness never throws.** `DiarizationModelCatalog.Readiness` reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
+
+The catalog reports only *not downloaded* and *ready*, as [PR #126](https://github.com/TONiiV/Kanal/pull/126) does for the transcription catalog. The disk decides these two states. `DiarizationModelDownload` owns *downloading* and *failed* for one file. This follows [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5. The post-meeting pass needs only "both files on disk".
+
+`DiarizationModelDownload` holds the state of one file. A 404 or a hash mismatch ends in `Failed`, with the message on the object. It never throws. The host has no reason to show a dialog over a running meeting.
+
+Headless tests start a demo meeting with an empty models directory. The transcript arrives. No mode status mentions a speaker model.
+
+[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. The download needs no token. No repository is gated. A test asserts that the downloader receives the URL unchanged.
+
+The embedding release tag is `speaker-recongition-models` upstream. A test pins this spelling. The correct spelling gives a 404 for every embedding URL, and the error shows only at download time.
+
+Three items are open.
+
+1. The segmentation asset is a `.tar.bz2` that holds `model.onnx` and `model.int8.onnx`. The BCL has no bzip2. Unpacking needs a new dependency, so it ships with the slice that loads the model. Until then, `Ready` means that the verified archive is on disk.
+2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`. That issue also covers a race in `DiarizationModelDownload.Cancel`, which can touch a disposed token source.
+3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
+
+No operator can reach these models yet, so this PR adds no CHANGELOG entry.
+
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
 The transcription-model catalog needs everything the translation catalog already has: a file
@@ -971,7 +1716,7 @@ part of it that was genuinely different — the shape of the meeting over time �
 the transcript's navigation ruler, whose semantic ticks reuse the topic boundaries that panel
 already produces. One model pass, two renderings, no way for the two to disagree.
 
-Superseded by this: `docs/specs/meeting-workspace.md`'s open item "工作空间内活动会议与浏览记录关系",
+Superseded by this: [#64](https://github.com/TONiiV/Kanal/issues/64)'s open item "工作空间内活动会议与浏览记录关系",
 and the acceptance line in `docs/design/meeting-workspace.md` that asks for the two not to be
 confused now has a contract to be checked against.
 
@@ -1069,7 +1814,7 @@ it goes red against a fixed-width mode box.
 ### Auth, feedback, relay hosting and recording import documentation PR
 
 - Product scope confirmed through Q1–Q16: accountless verified-email feedback to private issues, cloud accounts and invitations, a one-time 120-minute Gladia allowance, free local features and BYOK, mainland end-to-end availability, and consented cloud recording import (WAV/MP3/M4A, at most 60 minutes and 500 MB). Payments and paid listening-agent features are deferred.
-- Archived the [52-story specification](specs/auth-feedback-relay-import.md), [11-ticket breakdown](specs/auth-feedback-relay-import-tickets.md), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
+- Archived the [52-story specification](https://github.com/TONiiV/Kanal/issues/161), the 11-ticket breakdown (now GitHub issues #162–#172, listed in the specification), individual tickets, design interview, glossary and ADR-0052 on an isolated documentation branch, as requested. Ticket granularity and testing seams are reviewable in the PR; no new tracker issues are created by this delivery.
 - Reuse existing settings/workspace tasks #67/#68/#69 and mainland gateway work #41. Provider compatibility, VibeVoice measurements, mainland-network tests and production configuration remain implementation/release prerequisites.
 - Documentation validation covers story numbering, per-ticket acceptance criteria, dependency order and local links. No application code or runtime behaviour changed.
 
@@ -1514,7 +2259,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 ### Meeting workspace prototype approved and archived
 
 - `/to-spec` synthesis published as [#64](https://github.com/TONiiV/Kanal/issues/64), labelled
-  `ready-for-agent`. The [local specification](specs/meeting-workspace.md) contains 60 user stories,
+  `ready-for-agent`. The [specification](https://github.com/TONiiV/Kanal/issues/64) contains 60 user stories,
   implementation/testing decisions and explicit unresolved future scope. Its prototype viewing
   instructions were subsequently updated to the design-document location.
   It links the existing speaker, replay, local-ASR and summary work items; no further interview
@@ -1523,7 +2268,7 @@ Deliberate limitations, all for the ticket queue rather than this PR:
 - User confirmed the final B-based UI design. The authoritative specification is
   [Meeting workspace design](design/meeting-workspace.md); it replaces the iterative layout notes
   formerly collected here. Approval covers the visual direction, not completion of production code.
-- At the user's request the approved [HTML prototype](design/obsolete/meeting-ui.prototype.html) now lives
+- At the user's request the approved [HTML prototype](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html) now lives
   beside the design documents and opens directly in a browser. The CMD launcher is removed.
   The earlier archive commit `4c4d3db` remains historical; the temporary viewing worktree is retired.
 - [ADR 0051](adr/0051-peer-meeting-workspaces.md) records the accepted peer-workspace ownership
@@ -1541,6 +2286,84 @@ Deliberate limitations, all for the ticket queue rather than this PR:
   goals and open scope are recorded in [Meeting evidence](design/meeting-evidence.md).
 
 ## 2026-09-04
+
+### Native meeting audio, slice 2: operating-system sources
+
+- Windows enumerates active render endpoints, keeps the multimedia default first, and captures
+  the selected stable endpoint with WASAPI shared loopback. Microphone and loopback now share one
+  float/PCM downmix and resampling path to the existing 16 kHz mono PCM16 contract.
+- macOS 14.2+ uses a private global Core Audio process tap bound to the selected output, a private
+  aggregate device, and an IOProc; teardown stops and destroys the IOProc, aggregate device, then
+  tap. macOS 13–14.1 uses an audio-only ScreenCaptureKit stream anchored to the current display.
+- A small C ABI wraps the Apple APIs in a source-built universal Swift dylib. The managed boundary
+  owns bounded delivery, resampling, cancellation, actionable permission errors, and stale-output
+  rejection.
+- The existing device watcher now observes output topology/default changes as well as microphone
+  changes. Headless tests inject the native boundary and never trigger a real permission prompt.
+- No `CHANGELOG.md` bullet. Nothing in `src/Kanal.Host` consumes `ISystemAudioCaptureService` yet
+  and the online profile still reports `capture.online.unavailable`, so an operator reading the
+  changelog inside the application would be told about a capability they cannot reach. Slice 3
+  carries the bullet.
+
+### Three defects the slice-2 review found
+
+- `emitMonoPcm16` guarded on `bytesPerSample == 2 || bytesPerSample == 4`, then only summed float32
+  and int16 — while still counting the channel. A 32-bit integer tap format therefore produced a
+  full-rate stream of digital silence with no error on any channel: the worst failure shape
+  available, because it looks like a quiet room. Int32 is now scaled like the others, and the
+  int16 branch is the `else` rather than a second condition that can fall through to nothing.
+- The managed bridge bound its resampler to the first sample rate it ever saw
+  (`resampler ??= new LinearResampler(sampleRate, …)`), while `ScreenCaptureKitSession` reassigns
+  its format on every buffer. A rate change would have been resampled by the old ratio,
+  undetectably. The rate is now tracked and the resampler rebuilt when it changes.
+- `StopAsync` awaited the native stop completion with no bound. A session that never called back
+  would have hung the enumerator's `finally` — that is, the operator's Stop, mid-meeting. Stop now
+  gives up after five seconds and leaks the native session rather than freezing the host.
+
+`SystemAudioCaptureFactory.TryCreate` no longer repeats the version cascade that `DescribeSupport`
+already owns; it reads `Support.Backend` and keeps only the guards the platform analyzer needs.
+The app-bundle target copied `$(TargetDir)*`, which matches files and not directories, so the
+bundle it produced was missing `runtimes/` and could not have launched — the point of building it.
+
+### Three managed defects a second review found
+
+- A native session that never reports teardown is deliberately leaked rather than allowed to hang
+  the operator's Stop. It keeps the function pointers it was handed, and a marshalled delegate's
+  thunk dies with the delegate — so `GC.KeepAlive` in the `finally` rooted the callbacks only up to
+  the moment the iterator became unreachable, after which the audio thread could call into freed
+  memory. A leaked session now leaks its callbacks too. The test holds a `WeakReference` to them,
+  forces a collection, and fails if either is gone.
+- `WasapiPcmCapture` chose its conversion on `BitsPerSample` alone, so a device reporting 32-bit
+  **integer** PCM was read as float32: noise around silence, which sounds like a room nobody is
+  speaking in rather than a format the host declined. The encoding is now read as well as the width.
+  This logic predates the refactor, but the refactor pointed the loopback path at it too.
+- `PcmConvert` — the downmix and float conversion both capture paths now share — had no tests at
+  all. It has value assertions now, including the clamp that keeps the loudest moment in the meeting
+  from coming out with the opposite sign.
+
+### One plist, written twice, would have shipped the wrong half
+
+This slice started life with its own `src/Kanal.Host/Info.plist`, because a `dotnet build` artifact
+has no bundle and therefore no way to ask macOS for system audio. The installer work
+([#27](https://github.com/TONiiV/Kanal/pull/27)) landed first and brought a second declaration of
+the same bundle — `installers/macos/Info.plist.template` — and the two disagreed on three things:
+the bundle identifier, the minimum system version, and, fatally, whether
+`NSAudioCaptureUsageDescription` existed at all.
+
+Only the second copy is shipped. So the developer who tested the permission flow would have been
+granted computer audio, and the operator running the notarised dmg would have been refused it with
+no prompt and no error — the same silent-denial shape the microphone string exists to prevent,
+reintroduced by having two files where the system reads one.
+
+The duplicate is gone. `CreateMacAppBundle` now writes the development bundle from the installer's
+template with the same `__VERSION__` substitution the release path uses, and stages the same
+`lproj` strings, so the prompt a developer sees is the prompt the room sees. The identifier
+disagreement resolves to the installer's `io.github.toniiv.kanal`: TCC keys its grants on the
+bundle identifier, and changing it after the first signed build looks to macOS like a different
+application. The minimum system version stays at 12.0 — .NET 10's own runtime is built to load
+there, and `DescribeSupport` already degrades computer audio to an explained refusal below macOS
+13, so raising the floor would lock out microphone-only operators for a capability they were never
+offered.
 
 ### The control bar reads as two groups
 
@@ -2246,7 +3069,7 @@ Four small host-UI fixes from screenshot review, one PR:
 
 The host now ships as a double-clickable install on both platforms, driven by
 `installers/Kanal.Installers.csproj`. Design and rationale in
-[`docs/superpowers/specs/2026-08-01-installers-design.md`](superpowers/specs/2026-08-01-installers-design.md).
+[`docs/design/installers.md`](design/installers.md).
 
 **No Homebrew.** A cask is not an alternative to a dmg but a layer on top of one, and its only real
 advantage — stripping quarantine so an unsigned app opens — is worth nothing once the app is

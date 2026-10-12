@@ -4,7 +4,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
-using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.Host.Views;
@@ -19,7 +18,7 @@ public partial class IconBarView : UserControl
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
-                vm.ConfirmConsent = saveAudio => AskAsync(vm, saveAudio);
+                vm.ConfirmConsent = AskAsync;
         };
         SizeChanged += (_, _) => TransportStatus.IsVisible = Bounds.Width > StatusFloor;
         WatchReach(LeftCluster);
@@ -51,14 +50,11 @@ public partial class IconBarView : UserControl
         }
     }
 
-    private async Task<bool?> AskAsync(MainViewModel vm, bool saveAudio)
+    private async Task<bool?> AskAsync(bool saveAudio, bool emphasiseRemote)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
             return null;
 
-        return await new ConsentWindow(
-            saveAudio,
-            emphasiseRemote: vm.SelectedCaptureProfile.Id == CaptureProfileId.OnlineMeeting)
-            .ShowDialog<bool?>(owner);
+        return await new ConsentWindow(saveAudio, emphasiseRemote).ShowDialog<bool?>(owner);
     }
 }

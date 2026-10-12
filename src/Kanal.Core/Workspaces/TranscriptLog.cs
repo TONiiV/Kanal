@@ -70,6 +70,9 @@ public static class TranscriptLog
     }
 }
 
+// Read skips this line: it has no utterance id.
+public sealed record ConsentAttestation(string CaptureProfile, DateTimeOffset ConsentConfirmedAt);
+
 /// <summary>
 /// Fed from the room's own event, so <see cref="Append"/> must never throw: a full disk costs
 /// the transcript, once, reported once, and never the meeting.
@@ -96,7 +99,13 @@ public sealed class TranscriptLogWriter : IDisposable
 
     public string Path { get; }
 
-    public void Append(Utterance utterance)
+    public void Attest(ConsentAttestation attestation) =>
+        Write(JsonSerializer.Serialize(attestation, TranscriptLog.Options));
+
+    public void Append(Utterance utterance) =>
+        Write(JsonSerializer.Serialize(utterance, TranscriptLog.Options));
+
+    private void Write(string line)
     {
         lock (_gate)
         {
@@ -105,7 +114,7 @@ public sealed class TranscriptLogWriter : IDisposable
 
             try
             {
-                _writer.WriteLine(JsonSerializer.Serialize(utterance, TranscriptLog.Options));
+                _writer.WriteLine(line);
                 _writer.Flush();
             }
             catch (Exception ex)
