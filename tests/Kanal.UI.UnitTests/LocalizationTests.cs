@@ -320,6 +320,7 @@ public class AppLanguageTests
         {
             var saved = new List<string>();
             var vm = new SettingsViewModel(new AppSettings(), () => null, saveAppLanguage: saved.Add);
+            Assert.Empty(saved);
 
             vm.AppLanguage = Localizer.Available.First(l => l.Code == "pl");
 
