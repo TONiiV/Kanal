@@ -118,7 +118,7 @@ public class StartConnectingTests : IDisposable
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
         return vm;
     }
 
@@ -209,7 +209,7 @@ public class StartConnectingTests : IDisposable
         var (store, workspace) = Opened();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var vm = CloudCloud(gate.Task, store, () => new DateTimeOffset(2026, 9, 23, 9, 5, 0, TimeSpan.Zero));
-        vm.ConfirmConsent = _ => Task.FromResult<bool?>(true);
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(true);
 
         var starting = vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(100);
