@@ -57,59 +57,73 @@ operator does not edit files.
    says why the buttons are missing. "Remove from list" also follows the existing rule: no project
    leaves the list while any meeting records.
 
-### Background scan of the other projects (#222, part of spec #209)
+### Silver app icon
 
-The project drop-down marks need the issues of every project. The host used to list all meetings of
-all projects on the UI thread. A slow network share froze the window at app start and after each
-refresh. The scan of the other projects now runs on a background task.
+Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice-teams) on
+2026-10-11, after first choosing B (satin).
 
-1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
-2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
-   scan that project.
-3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
-   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
-   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
-   The UI thread builds the issue rows and the marks when the scan ends.
-4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
-5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
-6. A failed scan is logged. The marks stay as they were.
-7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
-   transcript reads, and tests count its calls.
+- The app icon is a silver satin tile with a textured K. The upper stroke is silver-grey. The lower
+  "reply" stroke is a muted purple. The purple is `#6A5FB0` satin in Light. In Dark it is mixed
+  30% toward white.
+- `design/icon/kanal-tile-light.png` and `kanal-tile-dark.png` are the 1024 px sources. The Python
+  script that made them needed numpy and Pillow, so the repository does not keep it.
+- `design/kanal-icon.py` derives the host assets from these two PNGs with the Python standard
+  library only. `design/kanal-icon.png` still feeds the favicon and the brand logo of the
+  mobile caption page. Both pages are unchanged.
+- The light version builds `kanal.ico`, `design/kanal.icns` and the iconset. The exe, the msi
+  and the dmg use it. It stays readable on a light and on a dark taskbar.
+- The dark version builds `kanal-dark.ico`. Ticket #193 loads it as the window icon in Dark.
+- The splash mark is the K on transparency, not the full tile. It keeps the layout of the old
+  mark. The packager copies the stroke shape of `kanal-icon.png`. It paints each stroke with the
+  mean colour of that stroke in the tile, weighted by alpha. `kanal-splash-mark.png` is for a
+  light sheet. `kanal-splash-mark-dark.png` is for a dark sheet. A test holds every tone at 3:1
+  contrast or more on the Sheet and Paper colours of its scheme.
+- The splash mark is also the in-app logo. The sidebar, the Version section of the settings and
+  the start hint of the meeting room show it. They change from indigo and apricot to the new mark.
+  Ticket #193 must switch all four `Image` sources with the colour scheme.
+- The small ICO frames use the packager box downsample. The satin grain averages out, so the
+  16 px frame stays clean.
+- `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon/kanal-tile-light.png`
+  is the 1024 px master.
+- Until #193 lands, the host shows the light marks in Dark too.
 
-### Issues banner and Issues section (#212, part of spec #209)
+### Dark colour scheme and the Appearance tab
 
-The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
-banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
 
-1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
-   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
-   the generic cause, so the kinds of #210 and #211 fall through safely.
-2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
-   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
-   the current project.
-3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
-   mark in the project drop-down. A project whose root is already reported missing is not listed
-   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
-   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
-4. The banner sits above the settings gear. It shows the count of the current project only. The
-   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
-   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
-   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
-   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
-5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
-   issues to "has an alarm issue".
-6. "Details" opens the project settings of the current project. The window scrolls to the Issues
-   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
-   screen work area less 48 DIP for the title bar.
-7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
-   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
-8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
-   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
-9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+1. The settings window has an **Appearance** tab, second after General. It shows three cards:
+   System, Light and Dark. Each card draws a small window in XAML. The System card shows a light
+   half and a dark half. A click applies the scheme at once and saves it in `settings.json`.
+2. `App.axaml` has a `Dark` theme dictionary with the same keys as `Light`. A test holds the two
+   key sets equal. The values come from the mobile page dark tokens. For keys that the mobile page
+   lacks, hover and pressed move away from the sheet, and washes mix the colour into the sheet:
+   - `BrandHover` `#CDD3FF` and `BrandPressed` `#E0E4FF` move away from the sheet, as in Light.
+   - `OnBrand` `#181C28` is the dark sheet, so text on a light brand fill stays dark.
+   - `Record` `#EF6A60`, `Hold` `#E3AE3C`, `RecordWash` `#4A2528` and `HoldWash` `#433820` keep
+     their meaning, with values for a dark sheet.
+   - `CloseHover` stays `#C42B1C`. The new `OnCloseHover` is white in both variants.
+   - `SpeakerFallbackColor` `#9AA8B3` gives 6.0:1 on the dark paper. `TickMixedColor` is `#7E8A99`.
+   - `AlarmWash` is the mobile `--alarm-wash` `#1E1416`. `Warning` `#D9A53A` and `WarningWash`
+     `#3A3020` stay apart from `Hold` and `HoldWash`.
+3. `Appearance` sets `Application.RequestedThemeVariant`. For System it reads the platform colour
+   values and follows `ColorValuesChanged` live. The app applies the saved scheme before the
+   splash window opens.
+4. FluentTheme reads `SystemAccentColor*` only from the root dictionary. `Appearance` copies the
+   `AccentRamp*` colours of the current variant into these root keys. The base accent equals
+   `Brand` in both variants. A headless render confirms it: a checked box and the settings tab
+   marker draw `#414B83` in Light and `#B9C2FF` in Dark.
+5. `ThemeColours` still returns hex strings. `MainViewModel` repaints the fallback speaker colour
+   and the ruler ticks when the variant changes.
+6. Contrast tests check `Ink`, `Ink2`, `Ink3`, `Alarm` and `SpeakerFallbackColor` on `Sheet`
+   and `Paper`, and `OnBrand` on `Brand`. Every pair reaches 4.5:1 in both variants.
+7. Both dictionaries also set FluentTheme keys. FluentTheme draws check, radio and switch glyphs
+   in `White`, which gives 1.7:1 on the Dark brand fill. The glyph keys use the `OnBrand` value.
+   A test requires 3:1 against `SystemAccentColor` in both variants.
+8. The disabled `ComboBox` keys keep the FluentTheme values in Light, so Light looks the same.
+   Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
+   every meeting.
 
-Style note: a style without a class or pseudo-class loses to an App style with one, for example
-`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
-`Path.glyph#IssuesIcon`.
+Open: the speaker name tone in Dark follows after #200 merges.
 
 ### Meeting problem kinds and recovery in the store (#210, spec #209)
 
@@ -172,6 +186,60 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
 - Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
+
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. A project whose root is already reported missing is not listed
+   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
+   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
+   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
+   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
+5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
+   issues to "has an alarm issue".
+6. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
+   screen work area less 48 DIP for the title bar.
+7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
+   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
+8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
+   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
+9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
 
 ### Store: relocate a project, create a missing meetings folder, drop a damaged list row
 

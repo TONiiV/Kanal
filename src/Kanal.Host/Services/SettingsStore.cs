@@ -10,33 +10,46 @@ namespace Kanal.Host.Services;
 
 public sealed record ApiKeyEntry(string Name, string Provider, string Key);
 
-// Falls back to Info rather than throwing: the stock converter's throw cost the whole file.
-public sealed class LogLevelConverter : JsonConverter<LogLevel>
+public enum ColourScheme
 {
-    public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    Light,
+    Dark,
+    System,
+}
+
+// Falls back rather than throwing: the stock converter's throw cost the whole file.
+public abstract class LenientEnumConverter<T>(T fallback) : JsonConverter<T>
+    where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
     {
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
-                return Enum.TryParse<LogLevel>(reader.GetString(), ignoreCase: true, out var byName)
+                return Enum.TryParse<T>(reader.GetString(), ignoreCase: true, out var byName)
                        && Enum.IsDefined(byName)
                     ? byName
-                    : LogLevel.Info;
+                    : fallback;
             case JsonTokenType.Number:
-                return reader.TryGetInt32(out var ordinal) && Enum.IsDefined((LogLevel)ordinal)
-                    ? (LogLevel)ordinal
-                    : LogLevel.Info;
+                return reader.TryGetInt32(out var ordinal)
+                       && Enum.IsDefined(typeof(T), ordinal)
+                    ? (T)Enum.ToObject(typeof(T), ordinal)
+                    : fallback;
             case JsonTokenType.StartObject or JsonTokenType.StartArray:
-                reader.Skip(); // whatever this is, it is not a level — step over it intact
-                return LogLevel.Info;
+                reader.Skip(); // whatever this is, it is not a value of T — step over it intact
+                return fallback;
             default:
-                return LogLevel.Info;
+                return fallback;
         }
     }
 
-    public override void Write(Utf8JsonWriter writer, LogLevel value, JsonSerializerOptions options) =>
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString());
 }
+
+public sealed class LogLevelConverter() : LenientEnumConverter<LogLevel>(LogLevel.Info);
+
+public sealed class ColourSchemeConverter() : LenientEnumConverter<ColourScheme>(ColourScheme.Light);
 
 public sealed class AppSettings
 {
@@ -74,6 +87,9 @@ public sealed class AppSettings
     /// driving the laptop is often not one of the people being translated for.
     /// </summary>
     public string? AppLanguage { get; set; }
+
+    [JsonConverter(typeof(ColourSchemeConverter))]
+    public ColourScheme ColourScheme { get; set; } = ColourScheme.Light;
 
     [JsonConverter(typeof(LogLevelConverter))]
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
@@ -170,6 +186,13 @@ public static class SettingsStore
     }
 
     private const string LogCategory = "settings";
+
+    public static void SaveColourScheme(ColourScheme scheme)
+    {
+        var settings = Load();
+        settings.ColourScheme = scheme;
+        Save(settings);
+    }
 
     public static void Save(AppSettings settings)
     {

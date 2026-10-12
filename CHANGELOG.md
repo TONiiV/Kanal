@@ -20,6 +20,12 @@ The first release. Everything below is what Kanal does on the day it ships.
   or "Remove from list". Kanal creates a missing meetings folder and removes a damaged row of the
   project list. Kanal deletes no file. The row shows the result in one line. While a project
   records a meeting, its issues show no buttons.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
+  follows the operating system, also during a meeting. Your choice applies at once and stays on
+  this computer. Light is the default, so Kanal looks the same until you change it.
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.

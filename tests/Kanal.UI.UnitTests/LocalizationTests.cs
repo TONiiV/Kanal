@@ -66,6 +66,7 @@ public class LocalizationTests
         ("de", "workspace.glyph.local"),
         ("de", "workspace.glyph.cloud"),
         ("pl", "workspace.glyph.folder"),
+        ("de", "appearance.scheme.system"),
     ];
 
     [Theory]
