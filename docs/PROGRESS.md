@@ -36,6 +36,27 @@ Ticket #206.
   `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
 - "Save & Close" writes the same value. A failed save writes a warning to the log.
 
+## 2026-10-12
+
+### The fast-source-clock capture test no longer times out
+
+`ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
+1 run in 4 under CPU load. The production code is correct. The test harness caused the fault.
+
+1. `SendNumberedChunksAsync` advanced the manual clock without a wait for the drainer. The test
+   moves 180 s of clock time in 1 to 2 s of wall time.
+2. Under load, the drainer fell more than `ConsumerStallLimit` (60 s, 3000 frames) behind the clock.
+   The output channel filled, and the mixer faulted with `consumer_stalled`. This is the correct
+   behaviour for a consumer that stalls.
+3. After the fault, the mixer arms no timer. The next `StepAsync` waited for a timer and timed out.
+4. Now `SendNumberedChunksAsync` waits until the drainer is at most 1 s of frames behind the clock
+   before each step. `Drainer.ReachAsync` waits on a signal from each drained frame, not on a
+   polling loop. `FinishAsync` uses the same wait.
+
+The fix also covers `ASourceClockRunningSlowLosesNoSamplesOverMinutes`, which uses the same
+harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs, 60 of them under
+load.
+
 ## 2026-10-11
 
 ### The Windows installer shows Kanal artwork
@@ -1555,6 +1576,46 @@ Three items are open.
 3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
 
 No operator can reach these models yet, so this PR adds no CHANGELOG entry.
+
+### The transcription catalog, and what a model turned out to be ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+`AsrModelCatalog` lists Nemotron 3.5 ASR Streaming 0.6B in sherpa-onnx transducer format. It has
+three models, one for each chunk size: 560 ms (default), 160 ms (lower latency) and 1120 ms
+(higher accuracy).
+
+The three models differ only in the encoder file. The decoder, the joiner and the token table are
+byte-identical in all three. For this reason, chunk size is a catalog entry and not a setting on
+one model. A new chunk size means a new encoder, which is a new download.
+
+The catalog omits 80 ms and 320 ms. Both are published. No measurement asks for latency below 160 ms.
+The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
+
+We read the sizes and hashes from the HF API on 2026-09-08. The exception is `tokens.txt`: it is
+not an LFS object, so we computed its hash from the downloaded file.
+
+Two facts follow from the four-file format:
+
+**Local file names carry the model id.** All three models publish a file named
+`encoder.int8.onnx`, and one models directory holds them all. `AsrModelFile` therefore keeps the
+local name and the remote name apart. A test checks that local names stay unique across the
+catalog. Without that test, a collision shows up as a model that loads and transcribes badly, not
+as an error.
+
+**Progress is weighted by bytes.** The encoder is 96% of a model. A progress bar that counts files
+would stay at 25% for 600 MB and then jump to done. `ModelDownloadManager` has new overloads that
+take a list of files: `IsDownloaded`, `MissingParts`, `Delete` and `DownloadAsync`. The download
+overload skips files that are already on disk and counts their bytes as done. It forwards progress
+through a synchronous relay, because `Progress<double>` can deliver reports out of order.
+
+Readiness in this slice is what the disk shows: all files present, or not. The states
+*downloading* and *failed* exist only while a download runs, so the view model of the Settings
+*Transcription* section owns them (C-3).
+
+`AppSettings.ActiveTranscriptionModelId` holds the choice. Null keeps transcription on the cloud
+provider, the same as `ActiveTranslationModelId` does for translation. Both catalogs now build the
+HuggingFace URL and the size label with one function each.
+
+The operator cannot reach any of this yet, so there is no CHANGELOG entry.
 
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
