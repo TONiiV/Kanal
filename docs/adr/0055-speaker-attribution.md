@@ -4,6 +4,17 @@
 [`docs/design/meeting-evidence.md`](../design/meeting-evidence.md) 一直悬着的「发言人识别」范围问题。
 运行时选择继承 [ADR 0053](0053-local-transcription-model-and-runtime.md)。
 
+> **修订 2026-10-11（操作员决定）**
+>
+> 1. **重新评估的触发条件已成立。**NVIDIA 在 2026-09-23 发布 [`Nemotron-3-Diarization`](https://huggingface.co/nvidia/Nemotron-3-Diarization)：
+>    OpenMDW-1.1，可商用，最多 8 人。「4 人上限」这条推迟理由不再成立。
+> 2. 它进 B-6 的基准，与本目录的切分 + 嵌入方案并排测 zh/de/pl 的 DER。基准在开发机上用 NeMo 跑，
+>    Python 只用于评测，不进 Kanal 运行时。
+> 3. 它若胜出，新开一片移植运行时：先试 NeMo `streaming_export()` 导出 ONNX，经 ONNX Runtime 进程内运行；
+>    不行再评估 NeMo-Speech.cpp。仍不起 Python 子进程。
+> 4. 实时层不按 NVIDIA 示例给每个说话人开一路 ASR。分离器的逐帧说话人活动按时间映射到单路 ASR 的句子上。
+> 5. **操作员不选分离模型。**B-6 选出一个默认模型，开启本地模式时随之下载。决定 14 相应修改。
+
 ## 背景
 
 房间里只有一支麦克风，而整套 UI 是按「知道谁在说话」设计的。
@@ -109,8 +120,9 @@ pyannote，是**事后**处理。没有一个本地优先的会议工具在做�
 
 ### E. 模型与目录
 
-14. 分离模型进 Settings 的模型目录，复用 #88 的共享下载器与 #90 的目录记录形状（id、显示名、
-    仓库、文件、大小、SHA-256、许可证）。
+14. 分离模型的目录复用 #88 的共享下载器与 #90 的目录记录形状（id、显示名、仓库、文件、大小、
+    SHA-256、许可证）。目录不出现在 Settings 里，操作员不选模型（2026-10-11 修订）。目录同时是 B-6
+    的候选清单；B-6 之后只保留默认模型。
 15. **下载地址不是 HuggingFace 形状。** sherpa-onnx 的模型挂在 GitHub release 上，不走 HF 的
     gated 授权、不需要 token。共享下载器已经能接受完整 URL——[#88](https://github.com/TONiiV/Kanal/pull/88)
     把 `IDownloadableFile.DownloadUrl` 定义成一个地址而不是一段路径，是 `LocalModelInfo` 自己在为
@@ -210,7 +222,8 @@ URL 必须照抄。
 ## 明确排除
 
 - **实时逐帧分离（Streaming Sortformer）。** 见上。重新评估的触发条件是：出现许可证清晰、支持
-  8 说话人的权重，**且**有可在 .NET 中对照验证的参考向量。
+  8 说话人的权重，**且**有可在 .NET 中对照验证的参考向量。前两条已由 `Nemotron-3-Diarization`
+  满足（2026-10-11），它进 B-6 基准；第三条随移植片解决。
 - **重叠语音的逐人拆分。** 见决定 19。
 - **跨会议声纹身份识别（「这是王工」）。** [工作空间规格 #64](https://github.com/TONiiV/Kanal/issues/64)已把「将
   『发言人识别』默认为跨会议声纹身份匹配」列为不做，#13 也在每条路径上把它排除。另有一条本文
