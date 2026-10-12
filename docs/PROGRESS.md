@@ -13,7 +13,7 @@ Ticket #193 of the Appearance spec (#187).
 - `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
   Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
   `-dark` files.
-- `MainWindow` and `SplashWindow` bind `Icon` to `BrandIcon`. The splash, the sidebar header, the
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
   Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
   Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
 - The icon of the exe, the installer and the macOS bundle stays the light version.

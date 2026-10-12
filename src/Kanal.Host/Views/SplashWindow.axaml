@@ -1,7 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Kanal.Host.Views.SplashWindow"
-        Icon="{DynamicResource BrandIcon}"
         Title="Kanal"
         Width="560" Height="460"
         CanResize="False"

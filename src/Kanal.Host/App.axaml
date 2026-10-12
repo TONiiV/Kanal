@@ -154,6 +154,9 @@
     <Application.Styles>
         <FluentTheme />
 
+        <Style Selector=":is(Window)">
+            <Setter Property="Icon" Value="{DynamicResource BrandIcon}" />
+        </Style>
 
         <!-- Ink is set once per window via TextElement.Foreground and inherited from there.
              A global TextBlock.Foreground setter would out-rank the inherited value that

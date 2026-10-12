@@ -33,7 +33,7 @@ public class IconFollowsSchemeTests
         var images = root.GetLogicalDescendants().OfType<Image>().ToList();
         Assert.NotEmpty(images);
         Assert.All(images, image => Assert.Same(mark, image.Source));
-        if (root is SplashWindow window)
+        if (root is Window window)
             Assert.Same(Resource("BrandIcon", variant), window.Icon);
     }
 
@@ -56,7 +56,8 @@ public class IconFollowsSchemeTests
             var splash = new SplashWindow();
             var main = new MainWindow { DataContext = TestViewModels.Hermetic(), Width = 1320, Height = 820 };
             var settings = new SettingsWindow(new SettingsViewModel(new AppSettings(), () => null, saveColourScheme: _ => { }));
-            Window[] windows = [splash, main, settings];
+            var changelog = new ChangelogWindow();
+            Window[] windows = [splash, main, settings, changelog];
             foreach (var window in windows)
                 window.Show();
             Dispatcher.UIThread.RunJobs();
@@ -64,6 +65,8 @@ public class IconFollowsSchemeTests
             AssertBrand(splash, variant);
             AssertBrand(settings, variant);
             Assert.Same(Resource("BrandIcon", variant), main.Icon);
+            Assert.Same(Resource("BrandIcon", variant), settings.Icon);
+            Assert.Same(Resource("BrandIcon", variant), changelog.Icon);
             Assert.Single(main.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single()
                 .GetLogicalDescendants().OfType<Image>().Where(i => ReferenceEquals(i.Source, Resource("BrandMark", variant))));
             Assert.Single(main.GetLogicalDescendants().OfType<MeetingRoomView>().Single()
