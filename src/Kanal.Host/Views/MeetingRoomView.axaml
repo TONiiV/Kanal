@@ -201,7 +201,7 @@
 
         <StackPanel IsVisible="{Binding ShowStartHint}" Margin="28,8,28,10" MaxWidth="440"
                     HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="14">
-            <Image Source="/Assets/kanal-splash-mark.png" Width="92" Height="92"
+            <Image Source="{DynamicResource BrandMark}" Width="92" Height="92"
                    HorizontalAlignment="Left" Margin="-18,0,0,0" AutomationProperties.Name="Kanal" />
             <TextBlock Text="{l:T empty.heading}" Classes="label" />
             <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" />
