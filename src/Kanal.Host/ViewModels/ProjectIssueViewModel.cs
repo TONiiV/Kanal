@@ -55,7 +55,8 @@ public sealed class ProjectIssueViewModel : ViewModelBase
                 new(problem, "workspace.issues.meetingsmissing", null),
             StoreProblemKind.FolderMissing => new(problem, "workspace.issues.foldermissing", null),
             StoreProblemKind.UnsupportedVersion => new(problem, "workspace.issues.format", null),
-            StoreProblemKind.Unreadable when meetings is not null && problem.Subject.StartsWith(
+            StoreProblemKind.Unreadable or StoreProblemKind.RecordMissing or StoreProblemKind.RecordDamaged
+                when meetings is not null && problem.Subject.StartsWith(
                 meetings + Path.DirectorySeparatorChar, StringComparison.Ordinal) =>
                 new(problem, "workspace.issues.unreadable", null),
             _ => new(problem, "workspace.issues.other", null),

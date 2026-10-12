@@ -1,4 +1,5 @@
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Models;
 
 namespace Kanal.Core.Workspaces;
 
@@ -6,6 +7,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
 {
     public const string FileName = "meeting.json";
     public const string MeetingsFolderName = "meetings";
+    private const string SetAsideFolderName = "kanal-set-aside";
+    private const string UnknownLanguage = "und";
     private const string NeedsTitle = "A meeting needs a title.";
 
     public static string FolderIn(string workspaceRoot) => Path.Combine(workspaceRoot, MeetingsFolderName);
@@ -36,24 +39,11 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         var problems = new List<StoreProblem>();
         foreach (var path in folders)
         {
-            var file = Path.Combine(path, FileName);
-            if (!File.Exists(file) && !Directory.Exists(file))
-            {
-                // An interrupted save: the operator watched it being created, so it cannot vanish.
-                problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, path, "That meeting folder holds no record."));
-                continue;
-            }
-
-            var (stored, trouble) = RecordFile.Read<StoredMeeting>(file);
+            var (stored, trouble) = ReadFolder(path);
             if (trouble is not null)
                 problems.Add(trouble);
-            else if (Misfiled(stored!.Id, Path.GetFileName(path)))
-                // A duplicated folder would otherwise list twice under one id, and only one of
-                // the two could ever be renamed or deleted again.
-                problems.Add(StoreProblems.WrongFolder(path));
             else
-                meetings.Add(stored.ToRecord(workspaceId, path));
+                meetings.Add(stored!.ToRecord(workspaceId, path));
         }
 
         return new MeetingListing(meetings, problems);
@@ -159,6 +149,74 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
     }
 
+    public RecoverResult Recover(string workspaceId, string folder, string baseTitle)
+    {
+        if (string.IsNullOrWhiteSpace(baseTitle))
+            return new RecoverResult(null, null, StoreProblems.Invalid(folder, NeedsTitle));
+
+        var (path, problem) = MeetingsSubfolder(workspaceId, folder);
+        if (problem is not null)
+            return new RecoverResult(null, null, problem);
+
+        var (_, state) = ReadFolder(path!);
+        if (state is null)
+            return new RecoverResult(null, null, StoreProblems.Invalid(path!, "That meeting record is not damaged."));
+        if (state.Kind is not (StoreProblemKind.RecordMissing or StoreProblemKind.RecordDamaged))
+            return new RecoverResult(null, null, state);
+
+        var name = Path.GetFileName(path!);
+        var utterances = StorePaths.IsFolderName(name)
+            ? TranscriptLog.Read(Path.Combine(path!, TranscriptLog.FileName))
+            : [];
+        var languages = LanguagesOf(utterances);
+        if (languages.Count == 0)
+            return SetAside(workspaceId, path!);
+
+        var record = Rebuilt(
+            workspaceId, path!, utterances, languages, FreeTitle(workspaceId, baseTitle, exceptMeetingId: null));
+        var recordFile = Path.Combine(path!, FileName);
+        string? damaged = null;
+        try
+        {
+            if (File.Exists(recordFile) || Directory.Exists(recordFile))
+                damaged = MoveAsideDamagedRecord(recordFile);
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The damaged record could not be renamed.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({path})", ex);
+            return new RecoverResult(null, null, StoreProblems.Unwritable(path!, failure, ex));
+        }
+
+        var saved = Save(record);
+        if (saved.Problem is not null && damaged is not null)
+            RestoreDamagedRecord(damaged, recordFile);
+
+        return new RecoverResult(saved.Meeting, null, saved.Problem);
+    }
+
+    public RecoverResult Reidentify(string workspaceId, string folder)
+    {
+        var (path, problem) = MeetingsSubfolder(workspaceId, folder);
+        if (problem is not null)
+            return new RecoverResult(null, null, problem);
+
+        var (stored, state) = ReadFolder(path!);
+        if (state is null)
+            return new RecoverResult(
+                null, null, StoreProblems.Invalid(path!, "That meeting record already belongs to its folder."));
+        if (state.Kind != StoreProblemKind.Misfiled)
+            return new RecoverResult(null, null, state);
+
+        var name = Path.GetFileName(path!);
+        if (!StorePaths.IsFolderName(name))
+            return SetAside(workspaceId, path!);
+
+        var title = FreeTitle(workspaceId, stored!.Title!, exceptMeetingId: name);
+        var saved = Save(stored.ToRecord(workspaceId, path!) with { Id = name, Title = title });
+        return new RecoverResult(saved.Meeting, null, saved.Problem);
+    }
+
     public (string? Folder, StoreProblem? Problem) FolderOf(string workspaceId, string meetingId)
     {
         // An id becomes a folder name, so ".." here would delete the workspace it lives in.
@@ -188,15 +246,137 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         if (!File.Exists(file))
             return (null, StoreProblems.NoSuchMeeting(meetingId));
 
-        var (stored, trouble) = RecordFile.Read<StoredMeeting>(file);
-        if (trouble is not null)
-            return (null, trouble);
+        var (stored, trouble) = ReadFolder(folder!);
+        return trouble is not null ? (null, trouble) : (stored!.ToRecord(workspaceId, folder!), null);
+    }
 
-        // A duplicated folder holds a record naming the original. Renaming through it would save
-        // under that id and retitle the healthy meeting instead of the one that was asked for.
-        return Misfiled(stored!.Id, meetingId)
-            ? (null, StoreProblems.WrongFolder(folder!))
-            : (stored.ToRecord(workspaceId, folder!), null);
+    private static (StoredMeeting? Stored, StoreProblem? Problem) ReadFolder(string folder)
+    {
+        var file = Path.Combine(folder, FileName);
+        if (!File.Exists(file) && !Directory.Exists(file))
+            // An interrupted save: the operator watched it being created, so it cannot vanish.
+            return (null, new StoreProblem(
+                StoreProblemKind.RecordMissing, folder, "That meeting folder holds no record."));
+
+        // Only content is damage. A read that fails on access or I/O says nothing about the bytes,
+        // and recovery would rename a healthy record.
+        if (Directory.Exists(file))
+            return (null, new StoreProblem(
+                StoreProblemKind.RecordDamaged, folder, "The meeting record is a folder, not a file."));
+
+        var (text, unreachable) = RecordFile.ReadText(file);
+        if (unreachable is not null)
+            return (null, unreachable with { Subject = folder });
+
+        var (stored, trouble) = RecordFile.Parse<StoredMeeting>(text!, file);
+        if (trouble is not null)
+            return (null, trouble.Kind == StoreProblemKind.Unreadable
+                ? trouble with { Kind = StoreProblemKind.RecordDamaged, Subject = folder }
+                : trouble);
+
+        // A duplicated folder holds a record naming the original. Listing or renaming through it
+        // would address the healthy meeting instead of the one that was asked for.
+        return Misfiled(stored!.Id, Path.GetFileName(folder))
+            ? (stored, StoreProblems.WrongFolder(folder))
+            : (stored, null);
+    }
+
+    private (string? Folder, StoreProblem? Problem) MeetingsSubfolder(string workspaceId, string folder)
+    {
+        var (workspace, problem) = registry.Locate(workspaceId);
+        if (problem is not null)
+            return (null, problem);
+
+        var meetings = Path.GetFullPath(FolderIn(workspace!.RootPath));
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        if (!StorePaths.SamePath(Path.GetDirectoryName(full) ?? "", meetings))
+            return (null, StoreProblems.Invalid(folder, "That folder is not a meeting folder of this workspace."));
+
+        return Directory.Exists(full)
+            ? (full, null)
+            : (null, new StoreProblem(StoreProblemKind.NotFound, full, "That meeting folder is not there."));
+    }
+
+    private static List<string> LanguagesOf(IReadOnlyList<Utterance> utterances) =>
+        [.. utterances
+            .SelectMany(u => u.Translations.Keys.Prepend(u.SrcLang))
+            .Where(IsKnownLanguage)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    private static bool IsKnownLanguage(string language) =>
+        !string.IsNullOrWhiteSpace(language)
+        && !string.Equals(language, UnknownLanguage, StringComparison.OrdinalIgnoreCase);
+
+    private static MeetingRecord Rebuilt(
+        string workspaceId, string folder, IReadOnlyList<Utterance> utterances,
+        List<string> languages, string baseTitle)
+    {
+        var transcript = Path.Combine(folder, TranscriptLog.FileName);
+        var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
+        var hasAudio = File.Exists(audio);
+        var ended = new[] { transcript, audio }
+            .Where(File.Exists)
+            .Select(File.GetLastWriteTimeUtc)
+            .Max();
+        var spanMs = Math.Max(0, utterances.Max(u => u.TEndMs ?? u.TStartMs) - utterances.Min(u => u.TStartMs));
+        var started = new DateTimeOffset(ended).AddMilliseconds(-spanMs);
+
+        return new MeetingRecord(
+            Path.GetFileName(folder), workspaceId, baseTitle.Trim(), started, started,
+            new DateTimeOffset(ended), languages, transcript, hasAudio ? audio : null);
+    }
+
+    private static string MoveAsideDamagedRecord(string record)
+    {
+        var target = record + ".damaged";
+        for (var n = 2; File.Exists(target) || Directory.Exists(target); n++)
+            target = $"{record}.damaged.{n}";
+
+        if (Directory.Exists(record))
+            Directory.Move(record, target);
+        else
+            File.Move(record, target);
+        return target;
+    }
+
+    private static void RestoreDamagedRecord(string damaged, string record)
+    {
+        try
+        {
+            if (Directory.Exists(damaged))
+                Directory.Move(damaged, record);
+            else
+                File.Move(damaged, record, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(StoreProblems.LogCategory, $"{damaged} could not be renamed back.", ex);
+        }
+    }
+
+    private RecoverResult SetAside(string workspaceId, string folder)
+    {
+        var (workspace, problem) = registry.Locate(workspaceId);
+        if (problem is not null)
+            return new RecoverResult(null, null, problem);
+
+        try
+        {
+            var root = Path.Combine(workspace!.RootPath, SetAsideFolderName);
+            Directory.CreateDirectory(root);
+            var target = Path.Combine(root, Path.GetFileName(folder));
+            for (var n = 2; Directory.Exists(target) || File.Exists(target); n++)
+                target = Path.Combine(root, $"{Path.GetFileName(folder)}-{n}");
+
+            Directory.Move(folder, target);
+            return new RecoverResult(null, target, null);
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The meeting folder could not be moved.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return new RecoverResult(null, null, StoreProblems.Unwritable(folder, failure, ex));
+        }
     }
 
     private static string FolderFor(Workspace workspace, string meetingId) =>
