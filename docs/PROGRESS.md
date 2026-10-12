@@ -4,6 +4,25 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-12
+
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store tries the move again,
+   10 times with 50 ms between attempts. Each failed attempt writes one Warning line.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. Reads did not change.
+
+Open: the comment on #225 adds a probe that reports `Unreadable` for a meeting folder without access.
+That part needs `StoreProblemKind.RecordMissing` from #216, which is not on main yet.
+
 ## 2026-10-11
 
 ### Store: relocate a project, create a missing meetings folder, drop a damaged list row

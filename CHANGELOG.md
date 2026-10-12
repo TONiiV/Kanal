@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Kanal no longer damages a meeting record when the computer stops during a save.
 - If Kanal cannot create the default project at start-up, the log now names the folder and the
   reason. Before, the log said nothing in some cases, for example when the folder was a file.
 - The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again

@@ -1596,4 +1596,59 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, problem!.Kind);
         Assert.Equal("{ not json at all", File.ReadAllText(Registry));
     }
+
+    [Fact]
+    public void AFailedSaveLeavesThePreviousMeetingRecordWhole()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var file = Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName);
+        Directory.CreateDirectory(file + ".tmp");
+
+        var result = store.SaveMeeting(meeting with { Title = "Renamed" });
+
+        Assert.Equal(StoreProblemKind.Unwritable, result.Problem!.Kind);
+        var listing = store.ListMeetings(workspace.Id);
+        Assert.Empty(listing.Problems);
+        Assert.Equal("Tooling review", Assert.Single(listing.Meetings).Title);
+    }
+
+    [Fact]
+    public void LeftOverTemporaryFilesAreNotIssuesAndTheNextWriteReplacesThem()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var leftOvers = new[]
+        {
+            Registry + ".tmp",
+            Path.Combine(workspace.RootPath, WorkspaceStore.WorkspaceFileName) + ".tmp",
+            Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName) + ".tmp",
+        };
+        foreach (var leftOver in leftOvers)
+            File.WriteAllText(leftOver, "{ \"schemaVersion\": 1, \"na");
+
+        Assert.Empty(Store().ListWorkspaces().Problems);
+        Assert.Empty(Store().ListMeetings(workspace.Id).Problems);
+
+        Assert.Null(store.RenameWorkspace(workspace.Id, "ACME tooling").Problem);
+        Assert.Null(store.RenameMeeting(workspace.Id, meeting.Id, "Renamed").Problem);
+
+        Assert.All(leftOvers, leftOver => Assert.False(File.Exists(leftOver)));
+        Assert.Equal("ACME tooling", Assert.Single(Store().ListWorkspaces().Workspaces).Name);
+        Assert.Equal("Renamed", Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Title);
+    }
+
+    [Fact]
+    public void DeletingAWorkspaceRemovesALeftOverTemporaryMarker()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        File.WriteAllText(Path.Combine(workspace.RootPath, WorkspaceStore.WorkspaceFileName) + ".tmp", "{");
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+
+        Assert.False(Directory.Exists(workspace.RootPath));
+    }
 }

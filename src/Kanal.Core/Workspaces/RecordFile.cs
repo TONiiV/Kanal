@@ -42,6 +42,38 @@ internal static class RecordFile
             : (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The record is missing fields."));
     }
 
-    public static void Write<T>(string path, T record) where T : IStoredRecord =>
-        File.WriteAllText(path, JsonSerializer.Serialize(record, Options));
+    public static string TemporaryPathFor(string path) => path + ".tmp";
+
+    public static void Write<T>(string path, T record) where T : IStoredRecord
+    {
+        var temporary = TemporaryPathFor(path);
+        using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            JsonSerializer.Serialize(stream, record, Options);
+            stream.Flush(flushToDisk: true);
+        }
+
+        Replace(temporary, path);
+    }
+
+    private const int ReplaceAttempts = 10;
+    private static readonly TimeSpan ReplaceDelay = TimeSpan.FromMilliseconds(50);
+
+    // Windows refuses to replace a file that a reader holds open; the background scan holds it only briefly.
+    private static void Replace(string temporary, string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temporary, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < ReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warning(StoreProblems.LogCategory, $"{path} is in use. The replace is tried again.", ex);
+                Thread.Sleep(ReplaceDelay);
+            }
+        }
+    }
 }

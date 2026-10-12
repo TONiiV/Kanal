@@ -159,6 +159,7 @@ public sealed class WorkspaceStore
                 Directory.Delete(meetingsFolder, recursive: true);
             WorkspaceIcons.DeleteFiles(root);
             File.Delete(marker);
+            File.Delete(RecordFile.TemporaryPathFor(marker));
             if (!Directory.EnumerateFileSystemEntries(root).Any())
                 Directory.Delete(root);
         }
