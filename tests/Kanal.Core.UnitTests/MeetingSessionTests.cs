@@ -309,7 +309,7 @@ public class MeetingSessionTests
     {
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
-            FastFake(), null, relay, new RoomConfig("t", ["zh"]));
+            FastFake(translation: true), null, relay, new RoomConfig("t", ["zh"]));
 
         session.SetSpeakerColour("S01", RoomState.Palette[3]);
 
