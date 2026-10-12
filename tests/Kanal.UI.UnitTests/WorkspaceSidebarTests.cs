@@ -105,7 +105,7 @@ public class WorkspaceSidebarTests : IDisposable
         vm.Refresh();
 
         Assert.Equal("Delivery call", Assert.Single(vm.Meetings).Title);
-        Assert.NotEqual("", vm.ProblemNote);
+        Assert.Equal(Path.Combine(meetings, "not-a-meeting"), Assert.Single(vm.Issues).Subject);
     }
 
     [Fact]

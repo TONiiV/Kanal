@@ -23,10 +23,17 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
 
     private readonly WorkspaceStore _store;
 
-    public ProjectSettingsViewModel(WorkspaceStore store, Workspace project, bool recording)
+    public ProjectSettingsViewModel(
+        WorkspaceStore store,
+        Workspace project,
+        bool recording,
+        IReadOnlyList<ProjectIssueViewModel>? issues = null,
+        bool openAtIssues = false)
     {
         _store = store;
         Project = project;
+        Issues = issues ?? [];
+        OpenAtIssues = openAtIssues && Issues.Count > 0;
         _name = project.Name;
         _glyph = project.IconGlyph;
         _imagePath = project.IconPath;
@@ -36,6 +43,12 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     public Workspace Project { get; }
 
     public IReadOnlyList<string> Glyphs => ProjectIcons.Glyphs;
+
+    public IReadOnlyList<ProjectIssueViewModel> Issues { get; }
+
+    public bool HasIssues => Issues.Count > 0;
+
+    public bool OpenAtIssues { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
