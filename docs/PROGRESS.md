@@ -4,6 +4,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-13
+
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
 ## 2026-10-11
 
 ### Icons on the settings tabs
