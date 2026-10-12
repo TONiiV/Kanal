@@ -6,6 +6,92 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. A project whose root is already reported missing is not listed
+   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
+   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
+   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
+   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
+5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
+   issues to "has an alarm issue".
+6. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
+   screen work area less 48 DIP for the title bar.
+7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
+   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
+8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
+   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
+9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
+
+### Store: relocate a project, create a missing meetings folder, drop a damaged list row
+
+This is the core part of spec #209 (ticket #211). No UI uses it yet.
+
+1. `WorkspaceStore.RelocateWorkspace(id, newRootPath)` points an existing row to a new folder.
+   The store keeps the path canonical, as `CreateWorkspace` does. The name in the list stays.
+2. The new folder must exist. A missing folder gives `FolderMissing`.
+3. A `kanal-workspace.json` in the new folder must hold this project's id. Another id gives
+   `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
+4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
+5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
+6. `RelocateWorkspace` refuses while the folder of the row still exists and differs from the new one.
+   This is the "two folders, one identity" rule of `Register`: the copy is only a copy while the
+   listed folder is there. The refusal is `Invalid`. Nothing is written. `RelocateWorkspace` does not
+   copy meetings.
+   A new folder without a marker also gets an empty `meetings` folder, as `CreateWorkspace` does.
+7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
+   when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
+   gives `Unwritable`, and the file stays.
+8. `WorkspaceStore.DropBrokenRegistryRows()` removes the rows of `workspaces.json` that miss
+   fields. Every complete row stays unchanged. The call writes nothing when no row is damaged.
+   A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
+9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
+   `Unreadable`. The host does not read this kind yet.
+10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
+    reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
+    element crashed every operation.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
+
 ### Start-up logs why the default project is missing
 
 Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
