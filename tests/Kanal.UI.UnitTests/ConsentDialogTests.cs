@@ -75,7 +75,7 @@ public class ConsentDialogTests : IDisposable
     public async Task CancellingLeavesTheWorkspaceExactlyAsItWas()
     {
         var (vm, store, workspace) = Live();
-        vm.ConfirmConsent = _ => Task.FromResult<bool?>(null);
+        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(null);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -100,7 +100,7 @@ public class ConsentDialogTests : IDisposable
     {
         var now = new DateTimeOffset(2026, 9, 8, 12, 30, 0, TimeSpan.Zero);
         var (vm, store, workspace) = Live(utcNow: () => now);
-        vm.ConfirmConsent = save => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -120,7 +120,7 @@ public class ConsentDialogTests : IDisposable
         var settings = new AppSettings { RecordAudio = true };
         var (vm, _, _) = Live(settings);
         bool? offered = null;
-        vm.ConfirmConsent = save =>
+        vm.ConfirmConsent = (save, _) =>
         {
             offered = save;
             return Task.FromResult<bool?>(false);

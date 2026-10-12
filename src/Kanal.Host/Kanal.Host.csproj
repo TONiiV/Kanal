@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <!-- The version the About section shows and CHANGELOG.md's newest entry names. A test holds
          the two together, so releasing is: add the changelog entry, bump this. -->
-    <Version>1.0.1</Version>
+    <Version>1.0.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Embeds the icon in the exe's Win32 resources. MainWindow.axaml only sets
          the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
@@ -20,6 +20,10 @@
     <!-- The repository's own changelog, shown in the application: one file, so the version an
          operator reads on screen cannot drift from the one a reader sees on GitHub. -->
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="Kanal.Host.CHANGELOG.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kanal.UI.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,4 +46,29 @@
     <ProjectReference Include="..\Kanal.Providers.LocalAsr\Kanal.Providers.LocalAsr.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
+
+  <!-- macOS reads purpose strings only from a bundle's Info.plist; reuse the installer template so they cannot drift. -->
+  <Target Name="CreateMacAppBundle"
+          AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <_MacAppDir>$(TargetDir)Kanal.app/Contents</_MacAppDir>
+      <_MacPlistSource>$(MSBuildThisFileDirectory)../../installers/macos/</_MacPlistSource>
+      <!-- Read as a property: item values split on semicolons, which would mangle the plist. -->
+      <_MacPlist>$([System.IO.File]::ReadAllText('$(_MacPlistSource)Info.plist.template').Replace('__VERSION__', '$(Version)'))</_MacPlist>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MacHostFile Include="$(TargetDir)**/*" Exclude="$(TargetDir)Kanal.app/**/*" />
+      <_MacPlistStrings Include="$(_MacPlistSource)lproj/*.strings" />
+    </ItemGroup>
+    <MakeDir Directories="$(_MacAppDir)/MacOS" />
+    <Copy SourceFiles="@(_MacHostFile)"
+          DestinationFiles="$(_MacAppDir)/MacOS/%(RecursiveDir)%(Filename)%(Extension)"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="$(_MacAppDir)/Info.plist" Lines="$(_MacPlist)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="@(_MacPlistStrings)"
+          DestinationFiles="@(_MacPlistStrings->'$(_MacAppDir)/Resources/%(Filename).lproj/InfoPlist.strings')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

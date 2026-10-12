@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Core.Models;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.UI.UnitTests;
@@ -74,6 +75,36 @@ public class SettingsViewModelDownloadTests
         Assert.False(item.IsDownloading);
         Assert.Equal("", item.Error); // a cancelled download is not a failure
         Assert.False(Directory.Exists(dir) && Directory.EnumerateFiles(dir).Any());
+
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch
+        {
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task CancellingSettingsStateStopsARunningTranscriptionDownload()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N"));
+        var handler = new StalledHandler();
+        var item = new ModelItemViewModel(
+            AsrModelCatalog.Models[0], new ModelDownloadManager(dir, new HttpClient(handler)));
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+        vm.TranscriptionModels.Clear();
+        vm.TranscriptionModels.Add(item);
+
+        var download = item.DownloadCommand.ExecuteAsync(null);
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(item.IsDownloading);
+
+        vm.CancelDownloads();
+
+        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(item.IsDownloading);
+        Assert.Equal("", item.Error);
 
         try
         {

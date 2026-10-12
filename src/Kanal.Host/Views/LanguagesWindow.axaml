@@ -9,12 +9,12 @@
         Width="400" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
 
     <StackPanel Margin="26,20,26,18" Spacing="0">
         <TextBlock Text="{l:T langdlg.heading}" Classes="label" />
-        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,2" />
+        <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Margin="0,7,0,2" />
 
         <ItemsControl ItemsSource="{Binding LanguageOptions}">
             <ItemsControl.ItemTemplate>
@@ -30,7 +30,7 @@
                          row's content stays 32 px or shorter - a taller flag would push the
                          checkbox past the box and reopen the gap, with a green build and, per
                          CLAUDE.md, no layout test to catch it. -->
-                    <Border BorderBrush="{StaticResource RuleFaint}" BorderThickness="0,0,0,1"
+                    <Border BorderBrush="{DynamicResource RuleFaint}" BorderThickness="0,0,0,1"
                             MinHeight="43" Opacity="{Binding RowOpacity}">
                         <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}"
                                   HorizontalAlignment="Stretch" VerticalAlignment="Center"
@@ -40,7 +40,7 @@
                                 <TextBlock Text="{Binding CodeUpper}" FontWeight="Bold" LetterSpacing="1"
                                            FontSize="12.5" VerticalAlignment="Center" Width="30" />
                                 <TextBlock Text="{Binding Label}" FontSize="12.5"
-                                           Foreground="{StaticResource Ink2}" VerticalAlignment="Center" />
+                                           Foreground="{DynamicResource Ink2}" VerticalAlignment="Center" />
                             </StackPanel>
                         </CheckBox>
                     </Border>
@@ -51,7 +51,7 @@
         <!-- The cap, stated where it bites: the rows above are disabled and Add refuses. -->
         <TextBlock Text="{Binding LanguageLimitNotice}" IsVisible="{Binding IsAtLanguageLimit}"
                    Margin="0,13,0,0" TextWrapping="Wrap" FontSize="11.5" LineHeight="18"
-                   Foreground="{StaticResource Ink2}" />
+                   Foreground="{DynamicResource Ink2}" />
 
         <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
             <TextBox Grid.Column="0" Text="{Binding NewLanguageInput}" PlaceholderText="{l:T langdlg.placeholder}"
@@ -65,7 +65,7 @@
         </Grid>
 
         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="11.5" LineHeight="18"
-                   Foreground="{StaticResource Ink3}"
+                   Foreground="{DynamicResource Ink3}"
                    Text="{l:T langdlg.note}" />
 
         <Button Content="{l:T langdlg.done}" Classes="accent" HorizontalAlignment="Right" Margin="0,16,0,0"

@@ -10,10 +10,90 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each settings tab shows an icon next to its name.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
+- Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
+  follows the operating system, also during a meeting. Your choice applies at once and stays on
+  this computer. Light is the default, so Kanal looks the same until you change it.
+- The app language in Settings now saves when you pick it. Kanal shows that language at the next
+  start, also when you close Settings without "Save & Close".
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
+  scheme during a meeting.
+- The window no longer freezes at start when a project is on a slow network share. Kanal now checks
+  the other projects for issues in the background. The warning marks in the project list appear when
+  that check ends.
+- When the current project has issues, a banner above the settings gear shows how many. A
+  damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
+  settings at the new Issues section, which gives each issue its cause and its path. In the project
+  list, a warning mark shows each project with issues. This replaces the note "N records could not
+  be read".
+- If Kanal cannot create the default project at start-up, the log now names the folder and the
+  reason. Before, the log said nothing in some cases, for example when the folder was a file.
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
+- When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete
+  or an import, the message is now in the interface language. Before, the sidebar showed English.
+  The message names the folder or file when that helps. The log keeps the technical detail.
+- Each project in the project list has a gear button. It opens the project settings. There you
+  rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
+  copies the image into the project folder as `kanal-icon` plus the image extension, for example
+  `kanal-icon.png`, so the icon moves with the folder. The project list shows the icon. The
+  settings also remove a project. You choose to remove it from the list only, or to delete its
+  meeting files too. Deleted files do not go to the trash. Other files in the project folder
+  stay. Kanal does not delete files when the folder does not hold this project. Kanal does not
+  remove a project while a meeting is recording.
+- Rename in the menu of a meeting row now puts the cursor in the name field. Before, you had to
+  click the field first.
+- Text in an input box now sits in the vertical centre of the box.
+- You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
+  notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
+- A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
+- The settings button at the bottom of the sidebar now shows an outline gear icon only.
+  The "Settings" label is gone.
+- A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
+  accepts only a `.kl` file and refuses any other file with a message. Any other file that you
+  import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
+  imported as a meeting record opened as an empty transcript. The meeting menu has no Markdown
+  export now: the transcript as Markdown is `transcript.md` inside the `.kl` file. A `.kl` file is
+  a zip archive, so rename it to `.zip` to open it without Kanal.
+- When you confirm consent and start a meeting, Kanal writes the capture profile and the time of
+  the confirmation into the meeting's transcript file. The record travels inside the `.kl` file.
+- The Online meeting capture profile now works. Kanal hears your microphone and computer audio
+  together, with a separate meter for each. You do not pick an output. The meeting app can play to
+  headphones, a Bluetooth headset or the speakers. Kanal tells you when a source stays silent. If
+  the microphone is unplugged, a permission is refused or the machine stalls, the meeting stops
+  and shows the reason in your language. Wear headphones and turn on Do Not Disturb. Kanal captures
+  all computer audio, notifications included. Muting yourself in the meeting app does not mute
+  Kanal. On Windows, this needs Windows 10 version 2004 or later. In both profiles, Pause now
+  closes the devices. The meters drop to zero while paused. Kanal also tells you when the
+  microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
+- The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
+  centre, most visibly on Save & Close and View open-source acknowledgements.
+- On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
+  vertical centre of the header instead of near its top edge. In full screen, the header content
+  moves to the left edge, because the buttons are gone.
+- In Chinese, the delete, export and import dialogs and the line naming the meeting being recorded
+  now put the meeting's name in quotation marks, “支架料号 KX-4402”, instead of the book-title marks
+  《》 used for books and films.
+- The Files tab on the right now has an Open folder button beside Import file. It opens the folder
+  of the meeting the tab is showing in Explorer or Finder, is greyed out until a meeting is chosen,
+  and says so under the list if that folder was moved or deleted outside Kanal.
+- The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
+  transcription · Cloud translation instead; without an API key, that row says one is needed. To
+  test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.
@@ -62,12 +142,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   until Kanal names it from what was said. Two meetings in one workspace cannot be given the same
   name by hand; a name Kanal generates takes the next free number instead of interrupting.
 
-- A meeting can now be packed into a single migration bundle from its three-dot menu and imported
-  into any other workspace — the transcript in both forms, the attachments, and the recording only
-  if the box in the export dialog is ticked, because an hour of audio is about 115 MB and most
-  bundles are sent by mail. Importing a bundle a workspace already holds offers to skip it or to
-  keep it as a second record; nothing is ever overwritten. The .json transcript export is gone —
-  the meeting's folder now holds that data, and Markdown export is unchanged.
+- A `.kl` file holds the transcript in two forms and the attachments. It holds the recording only
+  if you tick the box in the export dialog. An hour of audio is about 115 MB, and most `.kl` files
+  go by mail. If the workspace already holds the meeting, import offers to skip it or to keep it as
+  a second record. Import never overwrites a meeting. The .json transcript export is gone. The
+  meeting's folder now holds that data.
 - Two controls that had nothing to do in this version are off the screen. The right panel is Points
   alone — the live transcription tags every sentence as one speaker, so there was never a second
   person to rename or merge. Online meeting is still listed in the capture picker but cannot be
@@ -154,11 +233,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   window gets; the processing and capture pickers hold the left edge and the join QR the right. What
   the room is doing is spelled out in the status line at the bottom, and the two full-width bands
   that used to push the transcript down are gone. Settings moved to the foot of the workspace
-  sidebar, export to the bar's ellipsis menu, and the room's language flags to the top of the
+  sidebar, and the room's language flags to the top of the
   transcript.
 - Before a live room starts, the operator now chooses in-room or online capture and confirms that
   every participant consented. The host and phones keep live transcription visible even when no
-  audio file is recorded, and Markdown/JSON exports retain the attestation.
+  audio file is recorded.
 - The application icon presents the multicolour Kanal mark on a clean warm-beige rounded tile.
 - A calm vertical startup lockup appears while the meeting host is being prepared, carrying the
   application mark, the lowercase Kanal name and the line “One room. Every language”.
@@ -183,8 +262,7 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The microphone can be tested before the meeting: a level meter, a held peak, and a verdict that
   names the fault (silent, too quiet, clipping, noisy) and where to fix it.
 - The device list notices a microphone being plugged in or unplugged mid-session.
-- Transcripts export as Markdown to a folder you choose; the room's audio is recorded alongside it
-  unless you turn that off.
+- Kanal records the room's audio into the meeting's folder unless you turn that off.
 - Rooms are isolated from each other by a random room-id suffix, with a per-room cache on the
   phone, and clients are told when a room closes or moves — so a restart no longer strands
   everyone until they rescan.

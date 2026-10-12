@@ -131,12 +131,7 @@ internal static class MacCoreAudio
     [DllImport(AudioToolbox)]
     private static extern int AudioQueueSetProperty(IntPtr queue, uint propertyId, ref IntPtr data, uint size);
 
-    /// <summary>
-    /// Registers <paramref name="listener"/> on the system object for hot-plug ('dev#') and
-    /// default-input ('dIn ') changes. Both matter to a device dropdown: plugging or unplugging
-    /// changes the set, and reassigning the default reorders it (<see cref="CoreAudioCapture"/>
-    /// floats the default to the top). The caller keeps the delegate rooted until removal.
-    /// </summary>
+    // The caller keeps the delegate rooted until removal.
     internal static void AddDeviceTopologyListener(AudioObjectPropertyListener listener)
     {
         var registered = new List<uint>(2);
@@ -171,40 +166,7 @@ internal static class MacCoreAudio
     }
 
     /// <summary>Input-capable devices, identified by their persistent UID.</summary>
-    internal static List<AudioDeviceInfo> GetInputDevices()
-    {
-        var devices = new List<AudioDeviceInfo>();
-        var address = new PropertyAddress { Selector = SelectorDevices, Scope = ScopeGlobal, Element = 0 };
-        if (AudioObjectGetPropertyDataSize(SystemObject, ref address, 0, IntPtr.Zero, out var size) != 0 || size == 0)
-            return devices;
-
-        var block = Marshal.AllocHGlobal((int)size);
-        try
-        {
-            if (AudioObjectGetPropertyData(SystemObject, ref address, 0, IntPtr.Zero, ref size, block) != 0)
-                return devices;
-
-            for (var i = 0; i < size / sizeof(uint); i++)
-            {
-                var id = (uint)Marshal.ReadInt32(block, i * sizeof(uint));
-                if (InputChannelCount(id) == 0)
-                    continue;
-
-                var uid = GetStringProperty(id, SelectorDeviceUid);
-                if (string.IsNullOrEmpty(uid))
-                    continue;
-
-                var name = GetStringProperty(id, SelectorName);
-                devices.Add(new AudioDeviceInfo(uid, string.IsNullOrEmpty(name) ? uid : name));
-            }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(block);
-        }
-
-        return devices;
-    }
+    internal static List<AudioDeviceInfo> GetInputDevices() => GetDevicesWithChannels(ScopeInput);
 
     /// <summary>UID of the system default input, or null if there is none.</summary>
     internal static string? GetDefaultInputUid()
@@ -297,7 +259,8 @@ internal static class MacCoreAudio
 
             AudioQueueDispose(queue, true);
             // Falling back to the default device would silently capture the wrong room.
-            throw new InvalidOperationException($"Capture device '{deviceUid}' could not be selected: {Describe(status)}");
+            throw new AudioCaptureException(AudioCaptureFault.DeviceUnavailable,
+                $"Capture device {AudioDeviceIds.Hash(deviceUid)} could not be selected: {Describe(status)}");
         }
         finally
         {
@@ -306,10 +269,44 @@ internal static class MacCoreAudio
         }
     }
 
-    private static int InputChannelCount(uint deviceId)
+    private static List<AudioDeviceInfo> GetDevicesWithChannels(uint scope)
+    {
+        var devices = new List<AudioDeviceInfo>();
+        var address = new PropertyAddress { Selector = SelectorDevices, Scope = ScopeGlobal, Element = 0 };
+        if (AudioObjectGetPropertyDataSize(SystemObject, ref address, 0, IntPtr.Zero, out var size) != 0 || size == 0)
+            return devices;
+
+        var block = Marshal.AllocHGlobal((int)size);
+        try
+        {
+            if (AudioObjectGetPropertyData(SystemObject, ref address, 0, IntPtr.Zero, ref size, block) != 0)
+                return devices;
+
+            for (var i = 0; i < size / sizeof(uint); i++)
+            {
+                var id = (uint)Marshal.ReadInt32(block, i * sizeof(uint));
+                if (ChannelCount(id, scope) == 0)
+                    continue;
+
+                var uid = GetStringProperty(id, SelectorDeviceUid);
+                if (string.IsNullOrEmpty(uid))
+                    continue;
+                var name = GetStringProperty(id, SelectorName);
+                devices.Add(new(uid, string.IsNullOrEmpty(name) ? uid : name));
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(block);
+        }
+
+        return devices;
+    }
+
+    private static int ChannelCount(uint deviceId, uint scope)
     {
         // kAudioDevicePropertyStreamConfiguration hands back an AudioBufferList; sum its channels.
-        var address = new PropertyAddress { Selector = SelectorStreamConfiguration, Scope = ScopeInput, Element = 0 };
+        var address = new PropertyAddress { Selector = SelectorStreamConfiguration, Scope = scope, Element = 0 };
         if (AudioObjectGetPropertyDataSize(deviceId, ref address, 0, IntPtr.Zero, out var size) != 0 || size == 0)
             return 0;
 
