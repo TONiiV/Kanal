@@ -8,7 +8,7 @@
         mc:Ignorable="d" d:DesignWidth="1320" d:DesignHeight="820"
         x:Class="Kanal.Host.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/kanal.ico"
+        Icon="{DynamicResource BrandIcon}"
         Title="Kanal"
         Width="1320" Height="820"
         ExtendClientAreaToDecorationsHint="True"

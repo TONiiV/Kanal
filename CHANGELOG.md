@@ -17,6 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
   meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
