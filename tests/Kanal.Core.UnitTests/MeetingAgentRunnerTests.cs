@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Kanal.Core.Insights;
+using Kanal.Core.Models;
 using Kanal.Core.Providers;
 using Kanal.Core.Room;
 
