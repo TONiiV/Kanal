@@ -2239,7 +2239,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Spoken(string srcLang) =>
         srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
-    private void ApplySpeaker(Speaker speaker)
+    internal void ApplySpeaker(Speaker speaker)
     {
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
