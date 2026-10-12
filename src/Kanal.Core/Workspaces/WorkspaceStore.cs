@@ -225,8 +225,9 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(
-                null, StoreProblems.Unwritable(newRootPath, "The workspace could not be moved.", ex));
+            const string failure = "The workspace could not be moved.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({newRootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(newRootPath, failure, ex));
         }
 
         return new WorkspaceResult(relocated, null);
@@ -249,7 +250,9 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(folder, "The meetings folder could not be created.", ex);
+            const string failure = "The meetings folder could not be created.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return StoreProblems.Unwritable(folder, failure, ex);
         }
     }
 
