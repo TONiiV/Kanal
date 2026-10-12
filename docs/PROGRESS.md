@@ -4,6 +4,38 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-13
+
+### Speaker names follow the colour scheme
+
+Ticket #240 of the Appearance spec (#187).
+
+- `SpeakerTones.Name` replaces `SpeakerTones.OnLight`. It is a multi-value converter. It takes the speaker colour and the `ActualThemeVariant` of the name TextBlock.
+- In Dark, a name uses 30% of the dark ink `#F6F1E8`. In Light, it uses 30% of the light ink `#252B3B`.
+- A scheme change repaints the names that are already shown. This includes System following the operating system. The palette names need no view-model code; the fallback colour is re-resolved by `MainViewModel.OnThemeVariantChanged`.
+- The Dark fallback `SpeakerFallbackColor` `#9AA8B3` gives the name tone `#B5BDC3`: 8.93:1 on the dark sheet and 7.72:1 on the dark paper.
+- The design docs list the speaker colours. ADR 0057 names the icon purple `#6A5FB0`.
+
+### Icon follows the colour scheme
+
+Ticket #193 of the Appearance spec (#187).
+
+- `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
+  Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
+  `-dark` files.
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
+  Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
+  Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
+- The icon of the exe, the installer and the macOS bundle stays the light version.
+
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
 ## 2026-10-12
 
 ### The fast-source-clock capture test no longer times out
@@ -26,6 +58,17 @@ harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs,
 load.
 
 ## 2026-10-11
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
 
 ### Icons on the settings tabs
 
@@ -102,7 +145,7 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
    Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
    every meeting.
 
-Open: the speaker name tone in Dark follows after #200 merges.
+Done in #240: the speaker names use the dark text tone in Dark (see 2026-10-13).
 
 ### Meeting problem kinds and recovery in the store (#210, spec #209)
 
@@ -162,12 +205,12 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
 - `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
-  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names to the light tone through `SpeakerTones.OnLight`.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
   The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
-- Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
+- Done later: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stayed as they were. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handled the fallbacks. The dark text tone for the host names landed in #240.
 
 ### Background scan of the other projects (#222, part of spec #209)
 

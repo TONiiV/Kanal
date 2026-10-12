@@ -66,7 +66,8 @@ public partial class SettingsViewModel : ViewModelBase
         : this(
             SettingsStore.Load(),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
-            saveColourScheme: SettingsStore.SaveColourScheme)
+            saveColourScheme: SettingsStore.SaveColourScheme,
+            saveAppLanguage: SettingsStore.SaveAppLanguage)
     {
     }
 
@@ -87,8 +88,10 @@ public partial class SettingsViewModel : ViewModelBase
         bool? isMacOs = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
         Action<string>? openFolder = null,
-        Action<ColourScheme>? saveColourScheme = null)
+        Action<ColourScheme>? saveColourScheme = null,
+        Action<string>? saveAppLanguage = null)
     {
+        _saveAppLanguage = saveAppLanguage ?? (_ => { });
         _saveColourScheme = saveColourScheme ?? (_ => { });
         _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
@@ -221,10 +224,22 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private AppLanguage? _appLanguage;
 
+    private readonly Action<string> _saveAppLanguage;
+
     partial void OnAppLanguageChanged(AppLanguage? value)
     {
-        if (value is not null)
-            Localizer.Instance.Current = value.Code;
+        if (value is null)
+            return;
+
+        Localizer.Instance.Current = value.Code;
+        try
+        {
+            _saveAppLanguage(value.Code);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The app language could not be saved.", ex);
+        }
     }
 
     public IReadOnlyList<ColourSchemeOption> Schemes { get; } =

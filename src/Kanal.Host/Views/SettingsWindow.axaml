@@ -165,7 +165,7 @@
 
                         <TextBlock Text="{l:T settings.about.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
-                        <Image Source="/Assets/kanal-splash-mark.png" Width="64" Height="64"
+                        <Image Source="{DynamicResource BrandMark}" Width="64" Height="64"
                                HorizontalAlignment="Left" Margin="-10,0,0,8"
                                AutomationProperties.Name="Kanal" />
                         <TextBlock x:Name="Version" Text="{Binding VersionLabel}" FontSize="12.5"
