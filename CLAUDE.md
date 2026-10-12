@@ -5,13 +5,11 @@ through a pluggable ASR/MT chain, and broadcasts **text only** to read-only mobi
 one real scenario: a zh/de/pl meeting with no shared language. See `README.md` for layout and
 `docs/PRD-v0.4.md` for requirements and the roadmap.
 
-```bash
-dotnet build Kanal.slnx
-```
-
-```bash
-dotnet test
-```
+**Build and test run in CI only.** Do not run `dotnet build` or `dotnet test` on the local machine.
+Push the branch and read the CI result (`gh pr checks <n>`). CI runs `dotnet build Kanal.slnx` and both
+test projects on Windows, macOS and Linux. A red test from TDD is also seen in CI: push the failing
+test first, then the fix. The one exception is a filtered `dotnet test`
+run that makes the headless Skia render for UI screenshots.
 
 ## Role: Product Manager
 
@@ -79,7 +77,7 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 ## Working practices
 
-- **TDD.** Write the failing test first, watch it fail, then implement until it passes. Every
+- **TDD.** Write the failing test first, watch it fail in CI, then implement until it passes. Every
   behaviour change lands with tests in the same PR; no PR merges with a red suite. Core and service
   logic lives in `tests/Kanal.Core.UnitTests`; deterministic view-model and application-state logic
   lives in `tests/Kanal.UI.UnitTests` and runs headless with `Avalonia.Headless.XUnit`. Pixel, layout,
