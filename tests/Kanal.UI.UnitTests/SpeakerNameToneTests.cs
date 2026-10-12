@@ -8,6 +8,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Kanal.Host.Services;
+using Kanal.Core.Models;
 using Kanal.Core.Room;
 using Kanal.Host;
 using Kanal.Host.ViewModels;
@@ -25,34 +26,11 @@ public class SpeakerNameToneTests
 
     private static Color Parse(string hex) => Color.Parse(hex);
 
-    private static Color Resource(ThemeVariant variant, string key)
-    {
-        Assert.True(Application.Current!.TryGetResource(key, variant, out var value), $"{key} is missing.");
-        return value is ISolidColorBrush brush ? brush.Color : (Color)value!;
-    }
-
-    private static double Luminance(Color c)
-    {
-        static double Channel(byte v)
-        {
-            var s = v / 255.0;
-            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
-    }
-
-    private static double Contrast(Color a, Color b)
-    {
-        var (hi, lo) = (Math.Max(Luminance(a), Luminance(b)), Math.Min(Luminance(a), Luminance(b)));
-        return (hi + 0.05) / (lo + 0.05);
-    }
-
     private static IEnumerable<string> EveryNameColour()
     {
         foreach (var colour in RoomState.Palette)
             yield return colour;
-        yield return "#" + Resource(ThemeVariant.Dark, "SpeakerFallbackColor").ToString()[3..];
+        yield return "#" + ColourSchemeTests.Brush(ThemeVariant.Dark, "SpeakerFallbackColor").ToString()[3..];
     }
 
     [AvaloniaFact]
@@ -60,10 +38,10 @@ public class SpeakerNameToneTests
     {
         foreach (var surface in new[] { "Sheet", "Paper" })
         {
-            var background = Resource(ThemeVariant.Dark, surface);
+            var background = ColourSchemeTests.Brush(ThemeVariant.Dark, surface);
             foreach (var colour in EveryNameColour())
             {
-                var ratio = Contrast(Parse(SpeakerTone.Text(colour, SpeakerTone.DarkInk)), background);
+                var ratio = ColourSchemeTests.Contrast(Parse(SpeakerTone.Text(colour, SpeakerTone.DarkInk)), background);
                 Assert.True(ratio >= 4.5, $"{colour} on dark {surface} is {ratio:F2}:1, below 4.5:1.");
             }
         }
@@ -74,10 +52,10 @@ public class SpeakerNameToneTests
     {
         foreach (var surface in new[] { "Sheet", "Paper" })
         {
-            var background = Resource(ThemeVariant.Light, surface);
+            var background = ColourSchemeTests.Brush(ThemeVariant.Light, surface);
             foreach (var colour in RoomState.Palette)
             {
-                var ratio = Contrast(Parse(SpeakerTone.Text(colour, SpeakerTone.LightInk)), background);
+                var ratio = ColourSchemeTests.Contrast(Parse(SpeakerTone.Text(colour, SpeakerTone.LightInk)), background);
                 Assert.True(ratio >= 4.5, $"{colour} on light {surface} is {ratio:F2}:1, below 4.5:1.");
             }
         }
@@ -91,12 +69,20 @@ public class SpeakerNameToneTests
         var colours = RoomState.Palette.Take(3).ToArray();
         for (var i = 0; i < colours.Length; i++)
         {
+            vm.ApplySpeaker(new Speaker($"Tag{i}", $"Sprecher{i}", [], colours[i]));
             var bubble = column.GetOrAdd($"u{i}");
+            bubble.SpeakerTag = $"Tag{i}";
             bubble.SpeakerName = $"Sprecher{i}";
             bubble.SpeakerColor = colours[i];
             bubble.Text = "Hallo";
-            vm.Speakers.Add(new SpeakerItemViewModel(_ => { }) { Tag = $"Tag{i}", Color = colours[i] });
         }
+
+        // No speaker model: this bubble takes the theme fallback colour.
+        var unknown = column.GetOrAdd("u9");
+        unknown.SpeakerTag = "Sprecher9";
+        unknown.SpeakerName = "Sprecher9";
+        unknown.SpeakerColor = ThemeColours.SpeakerFallback;
+        unknown.Text = "Hallo";
 
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();
@@ -125,6 +111,7 @@ public class SpeakerNameToneTests
     private static void AssertNames(Window window, MainViewModel vm, string[] speakerColours, string ink)
     {
         var bubbleColours = vm.Columns.Single().Bubbles.Select(b => b.SpeakerColor).ToArray();
+        Assert.Equal(speakerColours, bubbleColours.Take(speakerColours.Length));
         foreach (var (prefix, colours) in new[] { ("Sprecher", bubbleColours), ("Tag", speakerColours) })
         {
             var names = Names(window, prefix).Select(b => ((ISolidColorBrush)b!).Color).ToArray();
@@ -135,9 +122,10 @@ public class SpeakerNameToneTests
     [AvaloniaFact]
     public void ANameFollowsTheSchemeAndRepaintsWhenItChanges()
     {
+        Window? window = null;
         try
         {
-            var (window, vm, colours) = Shown();
+            (window, var vm, var colours) = Shown();
             AssertNames(window, vm, colours, SpeakerTone.LightInk);
 
             Appearance.Apply(ColourScheme.Dark);
@@ -147,10 +135,10 @@ public class SpeakerNameToneTests
             Appearance.Apply(ColourScheme.Light);
             Settle(window);
             AssertNames(window, vm, colours, SpeakerTone.LightInk);
-            window.Close();
         }
         finally
         {
+            window?.Close();
             Restore();
         }
     }
@@ -158,9 +146,10 @@ public class SpeakerNameToneTests
     [AvaloniaFact]
     public void ANameRepaintsWhenSystemFollowsTheOperatingSystem()
     {
+        Window? window = null;
         try
         {
-            var (window, vm, colours) = Shown();
+            (window, var vm, var colours) = Shown();
             Appearance.Apply(ColourScheme.System);
 
             Appearance.SystemChanged(PlatformThemeVariant.Dark);
@@ -170,10 +159,10 @@ public class SpeakerNameToneTests
             Appearance.SystemChanged(PlatformThemeVariant.Light);
             Settle(window);
             AssertNames(window, vm, colours, SpeakerTone.LightInk);
-            window.Close();
         }
         finally
         {
+            window?.Close();
             Restore();
         }
     }
