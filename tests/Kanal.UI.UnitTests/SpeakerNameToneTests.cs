@@ -77,7 +77,6 @@ public class SpeakerNameToneTests
             bubble.Text = "Hallo";
         }
 
-        // No speaker model: this bubble takes the theme fallback colour.
         var unknown = column.GetOrAdd("u9");
         unknown.SpeakerTag = "Sprecher9";
         unknown.SpeakerName = "Sprecher9";

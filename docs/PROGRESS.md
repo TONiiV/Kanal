@@ -12,9 +12,21 @@ Ticket #240 of the Appearance spec (#187).
 
 - `SpeakerTones.Name` replaces `SpeakerTones.OnLight`. It is a multi-value converter. It takes the speaker colour and the `ActualThemeVariant` of the name TextBlock.
 - In Dark, a name uses 30% of the dark ink `#F6F1E8`. In Light, it uses 30% of the light ink `#252B3B`.
-- A scheme change repaints the names that are already shown. This includes System following the operating system. No view-model code runs for it.
+- A scheme change repaints the names that are already shown. This includes System following the operating system. The palette names need no view-model code; the fallback colour is re-resolved by `MainViewModel.OnThemeVariantChanged`.
 - The Dark fallback `SpeakerFallbackColor` `#9AA8B3` gives the name tone `#B5BDC3`: 8.93:1 on the dark sheet and 7.72:1 on the dark paper.
 - The design docs list the speaker colours. ADR 0057 names the icon purple `#6A5FB0`.
+
+### Icon follows the colour scheme
+
+Ticket #193 of the Appearance spec (#187).
+
+- `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
+  Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
+  `-dark` files.
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
+  Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
+  Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
+- The icon of the exe, the installer and the macOS bundle stays the light version.
 
 ### App language saves on pick
 
@@ -25,6 +37,17 @@ Ticket #206.
 - "Save & Close" writes the same value. A failed save writes a warning to the log.
 
 ## 2026-10-11
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
 
 ### Icons on the settings tabs
 
