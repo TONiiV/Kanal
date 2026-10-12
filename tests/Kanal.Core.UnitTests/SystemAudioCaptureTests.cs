@@ -16,8 +16,7 @@ public class SystemAudioCaptureTests
         Assert.True(callback.IsAlive, "the stop completion was collected while native code still held it");
         Assert.True(InvokeAndWait(callback, wait, times: 1));
 
-        Collect();
-        Assert.False(callback.IsAlive, "a completed stop left its completion rooted");
+        Assert.True(CollectedSoon(callback), "a completed stop left its completion rooted");
     }
 
     [Fact]
@@ -27,8 +26,7 @@ public class SystemAudioCaptureTests
         Collect();
 
         Assert.True(InvokeAndWait(callback, wait, times: 2));
-        Collect();
-        Assert.False(callback.IsAlive);
+        Assert.True(CollectedSoon(callback));
     }
 
     [Fact]
@@ -80,6 +78,11 @@ public class SystemAudioCaptureTests
         Assert.Equal("native stop refused", error.Message);
         return handed!;
     }
+
+    // The awaiting task completes before the thread pool clears its state machine, which still
+    // holds the callback; a single collection right after Wait() races that clean-up.
+    private static bool CollectedSoon(WeakReference reference) =>
+        SpinWait.SpinUntil(() => { Collect(); return !reference.IsAlive; }, TimeSpan.FromSeconds(2));
 
     private static void Collect()
     {

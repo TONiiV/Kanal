@@ -1,30 +1,31 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Kanal.Core.Diagnostics;
 
 namespace Kanal.Core.Workspaces;
 
-public sealed class WorkspaceStore(string registryPath)
+public sealed class WorkspaceStore
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = RecordFile.SchemaVersion;
     public const string WorkspaceFileName = "kanal-workspace.json";
-    public const string MeetingFileName = "meeting.json";
+    public const string MeetingFileName = MeetingRecords.FileName;
     public const string AudioFileName = "audio.wav";
-    private const string MeetingsFolderName = "meetings";
-    private const string LogCategory = "workspaces";
-    private const string NeedsTitle = "A meeting needs a title.";
+    public const string MeetingsFolderName = MeetingRecords.MeetingsFolderName;
+    public const string IconFileStem = WorkspaceIcons.FileStem;
+    public const long MaxIconBytes = WorkspaceIcons.MaxBytes;
+    public static readonly IReadOnlyList<string> IconExtensions = WorkspaceIcons.Extensions;
     private const string NeedsName = "A workspace needs a name.";
-    private const string NotAnId = "That is not a meeting id.";
 
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private readonly WorkspaceRegistry registry;
+    private readonly MeetingRecords meetings;
+
+    public WorkspaceStore(string registryPath)
     {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-    };
+        registry = new WorkspaceRegistry(registryPath);
+        meetings = new MeetingRecords(registry);
+    }
 
     public WorkspaceListing ListWorkspaces()
     {
-        var (entries, problem) = ReadRegistry();
+        var (entries, problem) = registry.Read();
         if (problem is not null)
             return new WorkspaceListing([], [problem]);
 
@@ -35,13 +36,13 @@ public sealed class WorkspaceStore(string registryPath)
             if (!entry.Complete)
             {
                 problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, registryPath, "A row of the list is missing fields."));
+                    StoreProblemKind.RegistryRowDamaged, registry.FilePath, "A row of the list is missing fields."));
                 continue;
             }
 
             workspaces.Add(entry.ToWorkspace());
             if (!Directory.Exists(entry.RootPath))
-                problems.Add(Unplugged(entry));
+                problems.Add(StoreProblems.Unplugged(entry));
         }
 
         return new WorkspaceListing(workspaces, problems);
@@ -56,231 +57,206 @@ public sealed class WorkspaceStore(string registryPath)
         if (File.Exists(rootPath))
             return Refused(rootPath, "That path is a file, not a folder.");
 
-        rootPath = CanonicalWorkspacePath(rootPath);
+        rootPath = StorePaths.Canonical(rootPath);
 
         // Adopted under its own name, never overwritten: picking last year's folder means "open this".
-        if (Directory.Exists(rootPath) && File.Exists(Path.Combine(rootPath, WorkspaceFileName)))
+        if (Directory.Exists(rootPath) && File.Exists(MarkerIn(rootPath)))
             return OpenWorkspace(rootPath);
 
         // Checked before anything is written: the marker file below would otherwise be replaced
         // on the way to a refusal, taking the identity of the workspace already living there.
-        var (listed, trouble) = ReadRegistry();
-        if (trouble is not null)
-            return new WorkspaceResult(null, trouble);
-        if (Occupied(listed, rootPath, byAnyoneBut: null) is { } taken)
-            return taken;
+        if (registry.RefuseTaken(rootPath) is { } taken)
+            return new WorkspaceResult(null, taken);
 
-        var workspace = new Workspace(NewId(), name.Trim(), rootPath, DateTimeOffset.UtcNow);
+        var workspace = new Workspace(StorePaths.NewId(), name.Trim(), rootPath, DateTimeOffset.UtcNow);
         try
         {
-            Directory.CreateDirectory(Path.Combine(rootPath, MeetingsFolderName));
-            WriteWorkspaceFile(workspace);
+            Directory.CreateDirectory(MeetingRecords.FolderIn(rootPath));
+            WriteMarker(workspace);
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Unwritable(rootPath, "The workspace folder could not be written.", ex));
+            const string failure = "The workspace folder could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({rootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(rootPath, failure, ex));
         }
 
-        return Register(workspace);
+        return registry.Register(workspace);
     }
 
     public WorkspaceResult OpenWorkspace(string rootPath)
     {
-        rootPath = CanonicalWorkspacePath(rootPath);
+        rootPath = StorePaths.Canonical(rootPath);
         if (!Directory.Exists(rootPath))
             return new WorkspaceResult(null, new StoreProblem(
                 StoreProblemKind.FolderMissing, rootPath, "That folder is not there."));
 
-        var path = Path.Combine(rootPath, WorkspaceFileName);
+        var path = MarkerIn(rootPath);
         if (!File.Exists(path))
             return Refused(rootPath, "That folder does not hold a workspace.");
 
-        var (stored, problem) = Read<StoredWorkspace>(path);
+        var (stored, problem) = RecordFile.Read<StoredWorkspace>(path);
         return problem is not null
             ? new WorkspaceResult(null, problem)
-            : Register(stored!.ToWorkspace(rootPath));
+            : registry.Register(stored!.ToWorkspace(rootPath));
     }
 
-    public WorkspaceResult RenameWorkspace(string id, string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return Refused(registryPath, NeedsName);
+    public WorkspaceResult RenameWorkspace(string id, string name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? Refused(registry.FilePath, NeedsName)
+            : Rewrite(id, "The rename could not be written.", w => w with { Name = name.Trim() });
 
-        var (entries, problem) = ReadRegistry();
+    public WorkspaceResult SetWorkspaceIcon(string id, string glyph) =>
+        StorePaths.IsFolderName(glyph)
+            ? Rewrite(id, "The icon could not be written.", w =>
+            {
+                WorkspaceIcons.DeleteFiles(w.RootPath);
+                return w with { IconGlyph = glyph, IconFile = null };
+            })
+            : Refused(glyph, "That is not an icon name.");
+
+    public WorkspaceResult SetWorkspaceIconFile(string id, string imagePath)
+    {
+        if (WorkspaceIcons.Refusal(imagePath) is { } refusal)
+            return new WorkspaceResult(null, refusal);
+
+        var (_, problem) = registry.Locate(id);
+        if (problem is not null)
+            return new WorkspaceResult(null, problem);
+
+        return Rewrite(id, "The icon could not be copied.", w =>
+            w with { IconGlyph = null, IconFile = WorkspaceIcons.CopyInto(w.RootPath, imagePath) });
+    }
+
+    public WorkspaceResult ResetWorkspaceIcon(string id) =>
+        Rewrite(id, "The icon could not be reset.", w =>
+        {
+            WorkspaceIcons.DeleteFiles(w.RootPath);
+            return w with { IconGlyph = null, IconFile = null };
+        });
+
+    // Only what Kanal wrote: the operator picked this folder, and it may hold anything else.
+    public StoreProblem? DeleteWorkspace(string id)
+    {
+        var (workspace, problem) = registry.Locate(id);
+        if (problem is not null)
+            return problem;
+
+        var root = workspace!.RootPath;
+        var marker = MarkerIn(root);
+        if (!File.Exists(marker))
+            return StoreProblems.NotThisWorkspace(root, "That folder does not hold this workspace.");
+
+        var (stored, unreadable) = RecordFile.Read<StoredWorkspace>(marker);
+        if (unreadable is not null)
+            return unreadable;
+        if (stored!.Id != id)
+            return StoreProblems.NotThisWorkspace(root, "That folder holds another workspace.");
+
+        try
+        {
+            var meetingsFolder = MeetingRecords.FolderIn(root);
+            if (Directory.Exists(meetingsFolder))
+                Directory.Delete(meetingsFolder, recursive: true);
+            WorkspaceIcons.DeleteFiles(root);
+            File.Delete(marker);
+            if (!Directory.EnumerateFileSystemEntries(root).Any())
+                Directory.Delete(root);
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The workspace files could not be deleted.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({root})", ex);
+            return StoreProblems.Unwritable(root, failure, ex);
+        }
+
+        return ForgetWorkspace(id);
+    }
+
+    public StoreProblem? ForgetWorkspace(string id) => registry.Forget(id);
+
+    // The marker is written before the list: a refusal or a failed write leaves the old row in place.
+    public WorkspaceResult RelocateWorkspace(string id, string newRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(newRootPath))
+            return Refused(newRootPath, "A workspace needs a folder.");
+
+        newRootPath = StorePaths.Canonical(newRootPath);
+        if (!Directory.Exists(newRootPath))
+            return new WorkspaceResult(null, new StoreProblem(
+                StoreProblemKind.FolderMissing, newRootPath, "That folder is not there."));
+
+        var (entries, problem) = registry.Read();
         if (problem is not null)
             return new WorkspaceResult(null, problem);
 
         var index = entries.FindIndex(e => e.Id == id && e.Complete);
         if (index < 0)
-            return new WorkspaceResult(null, NoSuchWorkspace(id));
+            return new WorkspaceResult(null, StoreProblems.NoSuchWorkspace(id));
+        if (registry.RefuseTaken(newRootPath, exceptId: id) is { } taken)
+            return new WorkspaceResult(null, taken);
 
-        var renamed = entries[index].ToWorkspace() with { Name = name.Trim() };
-        entries[index] = StoredRegistryEntry.From(renamed);
-        try
+        var current = entries[index];
+        if (!StorePaths.SamePath(current.RootPath!, newRootPath) && Directory.Exists(current.RootPath))
+            return Refused(newRootPath, $"The workspace \"{current.Name}\" is still at {current.RootPath}.");
+
+        var relocated = current.ToWorkspace() with { RootPath = newRootPath };
+        var marker = MarkerIn(newRootPath);
+        if (File.Exists(marker))
         {
-            WriteRegistry(entries);
-            if (Directory.Exists(renamed.RootPath))
-                WriteWorkspaceFile(renamed);
+            var (stored, unreadable) = RecordFile.Read<StoredWorkspace>(marker);
+            if (unreadable is not null)
+                return new WorkspaceResult(null, unreadable);
+            if (stored!.Id != id)
+                return new WorkspaceResult(null, StoreProblems.NotThisWorkspace(
+                    newRootPath, "That folder holds another workspace."));
         }
-        catch (Exception ex)
-        {
-            return new WorkspaceResult(null, Unwritable(renamed.RootPath, "The rename could not be written.", ex));
-        }
-
-        return new WorkspaceResult(renamed, null);
-    }
-
-    // Leaves every file where it is: dropping a row from a list is not deleting a year of meetings.
-    public StoreProblem? ForgetWorkspace(string id)
-    {
-        var (entries, problem) = ReadRegistry();
-        if (problem is not null)
-            return problem;
-        if (entries.RemoveAll(e => e.Id == id) == 0)
-            return NoSuchWorkspace(id);
 
         try
         {
-            WriteRegistry(entries);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            return Unwritable(registryPath, "The workspace list could not be written.", ex);
-        }
-    }
-
-    public MeetingListing ListMeetings(string workspaceId)
-    {
-        var (workspace, problem) = Locate(workspaceId);
-        if (problem is not null)
-            return new MeetingListing([], [problem]);
-
-        var folder = Path.Combine(workspace!.RootPath, MeetingsFolderName);
-        if (!Directory.Exists(folder))
-            return new MeetingListing([], [new StoreProblem(
-                StoreProblemKind.FolderMissing, folder, "The meetings folder is not there.")]);
-
-        List<string> folders;
-        try
-        {
-            folders = [.. Directory.EnumerateDirectories(folder).Order()];
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(LogCategory, $"{folder} could not be listed.", ex);
-            return new MeetingListing([], [new StoreProblem(
-                StoreProblemKind.Unreadable, folder, ex.Message)]);
-        }
-
-        var meetings = new List<MeetingRecord>();
-        var problems = new List<StoreProblem>();
-        foreach (var path in folders)
-        {
-            var file = Path.Combine(path, MeetingFileName);
-            if (!File.Exists(file) && !Directory.Exists(file))
+            if (!File.Exists(marker))
             {
-                // An interrupted save: the operator watched it being created, so it cannot vanish.
-                problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, path, "That meeting folder holds no record."));
-                continue;
+                Directory.CreateDirectory(MeetingRecords.FolderIn(newRootPath));
+                WriteMarker(relocated);
             }
 
-            var (stored, trouble) = Read<StoredMeeting>(file);
-            if (trouble is not null)
-                problems.Add(trouble);
-            else if (Misfiled(stored!.Id, Path.GetFileName(path)))
-                // A duplicated folder would otherwise list twice under one id, and only one of
-                // the two could ever be renamed or deleted again.
-                problems.Add(WrongFolder(path));
-            else
-                meetings.Add(stored.ToRecord(workspaceId, path));
+            entries[index] = StoredRegistryEntry.From(relocated);
+            registry.Write(entries);
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The workspace could not be moved.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({newRootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(newRootPath, failure, ex));
         }
 
-        return new MeetingListing(meetings, problems);
+        return new WorkspaceResult(relocated, null);
     }
 
-    public MeetingResult CreateMeeting(string workspaceId, string title)
+    public StoreProblem? CreateMeetingsFolder(string id)
     {
-        if (string.IsNullOrWhiteSpace(title))
-            return RefusedMeeting(workspaceId, NeedsTitle);
-
-        var (workspace, problem) = Locate(workspaceId);
+        var (workspace, problem) = registry.Locate(id);
         if (problem is not null)
-            return new MeetingResult(null, problem);
+            return problem;
 
-        // The id decides where the bytes go, never the title. Creation stays exempt from the
-        // uniqueness rule the rename paths carry (ADR 0054, decision 11): every record starts as
-        // the same placeholder, and numbering that would survive into the default title.
-        var meeting = new MeetingRecord(
-            NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], null, null);
-        return SaveMeeting(meeting);
-    }
-
-    public MeetingResult SaveMeeting(MeetingRecord meeting)
-    {
-        if (!IsFolderName(meeting.Id))
-            return RefusedMeeting(meeting.Id, NotAnId);
-        if (string.IsNullOrWhiteSpace(meeting.Title))
-            return RefusedMeeting(meeting.Id, NeedsTitle);
-        if (meeting.CreatedAt == default)
-            return RefusedMeeting(meeting.Id, "A meeting needs a creation time.");
-        if (meeting.Languages is null || meeting.Languages.Any(string.IsNullOrWhiteSpace))
-            return RefusedMeeting(meeting.Id, "Meeting languages cannot be missing or blank.");
-        var (workspace, problem) = Locate(meeting.WorkspaceId);
-        if (problem is not null)
-            return new MeetingResult(null, problem);
-
-        var folder = FolderFor(workspace!, meeting.Id);
-        if (!IsArtifactPath(meeting.TranscriptPath, folder) || !IsArtifactPath(meeting.AudioPath, folder))
-            return RefusedMeeting(meeting.Id, "An artefact path must name a file inside its meeting folder.");
+        var folder = MeetingRecords.FolderIn(workspace!.RootPath);
+        if (Directory.Exists(folder))
+            return null;
 
         try
         {
             Directory.CreateDirectory(folder);
-            File.WriteAllText(
-                Path.Combine(folder, MeetingFileName),
-                JsonSerializer.Serialize(StoredMeeting.From(meeting, folder), Options));
+            return null;
         }
         catch (Exception ex)
         {
-            return new MeetingResult(null, Unwritable(folder, "The meeting could not be written.", ex));
+            const string failure = "The meetings folder could not be created.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return StoreProblems.Unwritable(folder, failure, ex);
         }
-
-        return new MeetingResult(meeting, null);
     }
 
-    public MeetingResult RenameMeeting(string workspaceId, string meetingId, string title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-            return RefusedMeeting(meetingId, NeedsTitle);
-
-        var (existing, problem) = ReadMeeting(workspaceId, meetingId);
-        if (problem is not null)
-            return new MeetingResult(null, problem);
-
-        var wanted = title.Trim();
-        return TitlesBesides(workspaceId, meetingId).Contains(wanted)
-            ? new MeetingResult(null, new StoreProblem(
-                StoreProblemKind.TitleTaken, wanted,
-                $"Another meeting in this workspace is already called \"{wanted}\"."))
-            : SaveMeeting(existing! with { Title = wanted });
-    }
-
-    /// <summary>
-    /// The wanted title, or the next free number after it. A model-generated name arrives
-    /// mid-meeting and has nobody to ask, so it is numbered rather than refused.
-    /// </summary>
-    public string FreeTitle(string workspaceId, string title, string? exceptMeetingId)
-    {
-        var taken = TitlesBesides(workspaceId, exceptMeetingId);
-        var wanted = title.Trim();
-        var candidate = wanted;
-        for (var n = 2; taken.Contains(candidate); n++)
-            candidate = $"{wanted} {n}";
-
-        return candidate;
-    }
+    public StoreProblem? DropBrokenRegistryRows() => registry.DropBroken();
 
     /// <summary>
     /// The workspace the host records into, created on the first launch. A meeting with nowhere
@@ -294,389 +270,68 @@ public sealed class WorkspaceStore(string registryPath)
             : CreateWorkspace(name, rootPath);
     }
 
-    // Case- and accent-insensitive: "Tooling review" and "tooling review" are one title on the
-    // sidebar, and the refusal has to read the same way the list does.
-    private HashSet<string> TitlesBesides(string workspaceId, string? meetingId) =>
-        new(
-            ListMeetings(workspaceId).Meetings
-                .Where(m => m.Id != meetingId)
-                .Select(m => m.Title),
-            StringComparer.CurrentCultureIgnoreCase);
+    public MeetingListing ListMeetings(string workspaceId) => meetings.List(workspaceId);
 
-    public StoreProblem? DeleteMeeting(string workspaceId, string meetingId)
-    {
-        var (folder, problem) = FolderOfMeeting(workspaceId, meetingId);
-        if (problem is not null)
-            return problem;
-        if (!Directory.Exists(folder))
-            return NoSuchMeeting(meetingId);
+    public MeetingResult CreateMeeting(string workspaceId, string title) => meetings.Create(workspaceId, title);
 
-        try
-        {
-            Directory.Delete(folder!, recursive: true);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            return Unwritable(folder!, "The meeting could not be deleted.", ex);
-        }
-    }
+    public MeetingResult SaveMeeting(MeetingRecord meeting) => meetings.Save(meeting);
+
+    public MeetingResult RenameMeeting(string workspaceId, string meetingId, string title) =>
+        meetings.Rename(workspaceId, meetingId, title);
+
+    /// <summary>
+    /// The wanted title, or the next free number after it. A model-generated name arrives
+    /// mid-meeting and has nobody to ask, so it is numbered rather than refused.
+    /// </summary>
+    public string FreeTitle(string workspaceId, string title, string? exceptMeetingId) =>
+        meetings.FreeTitle(workspaceId, title, exceptMeetingId);
+
+    public StoreProblem? DeleteMeeting(string workspaceId, string meetingId) =>
+        meetings.Delete(workspaceId, meetingId);
+
+    public RecoverResult RecoverMeeting(string workspaceId, string folder, string baseTitle) =>
+        meetings.Recover(workspaceId, folder, baseTitle);
+
+    public RecoverResult ReidentifyMeeting(string workspaceId, string folder) =>
+        meetings.Reidentify(workspaceId, folder);
 
     public string? MeetingFolder(string workspaceId, string meetingId) =>
-        FolderOfMeeting(workspaceId, meetingId).Folder;
+        meetings.FolderOf(workspaceId, meetingId).Folder;
 
-    private (string? Folder, StoreProblem? Problem) FolderOfMeeting(string workspaceId, string meetingId)
+    private WorkspaceResult Rewrite(string id, string failure, Func<Workspace, Workspace> change)
     {
-        // An id becomes a folder name, so ".." here would delete the workspace it lives in.
-        if (!IsFolderName(meetingId))
-            return (null, Invalid(meetingId, NotAnId));
-
-        var (workspace, problem) = Locate(workspaceId);
-        return problem is null ? (FolderFor(workspace!, meetingId), null) : (null, problem);
-    }
-
-    private (MeetingRecord? Meeting, StoreProblem? Problem) ReadMeeting(string workspaceId, string meetingId)
-    {
-        var (folder, problem) = FolderOfMeeting(workspaceId, meetingId);
-        if (problem is not null)
-            return (null, problem);
-
-        var file = Path.Combine(folder!, MeetingFileName);
-        if (!File.Exists(file))
-            return (null, NoSuchMeeting(meetingId));
-
-        var (stored, trouble) = Read<StoredMeeting>(file);
-        if (trouble is not null)
-            return (null, trouble);
-
-        // A duplicated folder holds a record naming the original. Renaming through it would save
-        // under that id and retitle the healthy meeting instead of the one that was asked for.
-        return Misfiled(stored!.Id, meetingId)
-            ? (null, WrongFolder(folder!))
-            : (stored.ToRecord(workspaceId, folder!), null);
-    }
-
-    private static string FolderFor(Workspace workspace, string meetingId) =>
-        Path.Combine(workspace.RootPath, MeetingsFolderName, meetingId);
-
-    private (Workspace? Workspace, StoreProblem? Problem) Locate(string workspaceId)
-    {
-        var (entries, problem) = ReadRegistry();
-        if (problem is not null)
-            return (null, problem);
-
-        var entry = entries.FirstOrDefault(e => e.Id == workspaceId && e.Complete);
-        if (entry is null)
-            return (null, NoSuchWorkspace(workspaceId));
-
-        return Directory.Exists(entry.RootPath)
-            ? (entry.ToWorkspace(), null)
-            : (null, Unplugged(entry));
-    }
-
-    private (List<StoredRegistryEntry> Entries, StoreProblem? Problem) ReadRegistry()
-    {
-        if (!File.Exists(registryPath) && !Directory.Exists(registryPath))
-            return ([], null);
-
-        var (registry, problem) = Read<StoredRegistry>(registryPath);
-        return problem is not null ? ([], problem) : (registry!.Workspaces!, null);
-    }
-
-    private void WriteRegistry(List<StoredRegistryEntry> entries)
-    {
-        var folder = Path.GetDirectoryName(registryPath);
-        if (!string.IsNullOrEmpty(folder))
-            Directory.CreateDirectory(folder);
-
-        File.WriteAllText(
-            registryPath,
-            JsonSerializer.Serialize(new StoredRegistry(SchemaVersion, entries), Options));
-    }
-
-    private static void WriteWorkspaceFile(Workspace workspace) =>
-        File.WriteAllText(
-            Path.Combine(workspace.RootPath, WorkspaceFileName),
-            JsonSerializer.Serialize(StoredWorkspace.From(workspace), Options));
-
-    private WorkspaceResult Register(Workspace workspace)
-    {
-        var (entries, problem) = ReadRegistry();
+        var (entries, problem) = registry.Read();
         if (problem is not null)
             return new WorkspaceResult(null, problem);
 
-        if (Occupied(entries, workspace.RootPath, byAnyoneBut: workspace.Id) is { } taken)
-            return taken;
+        var index = entries.FindIndex(e => e.Id == id && e.Complete);
+        if (index < 0)
+            return new WorkspaceResult(null, StoreProblems.NoSuchWorkspace(id));
 
-        var index = entries.FindIndex(e => e.Id == workspace.Id);
-        if (index >= 0)
-        {
-            var listed = entries[index];
-
-            // Two folders, one identity: a restored backup, a share mounted twice. Only a copy
-            // while the folder already listed is still there — otherwise it is the same one, moved.
-            if (!SamePath(listed.RootPath!, workspace.RootPath) && Directory.Exists(listed.RootPath))
-                return Refused(
-                    workspace.RootPath,
-                    $"That folder is a copy of the workspace \"{listed.Name}\", " +
-                    $"which is open at {listed.RootPath}.");
-
-            // The list holds the name the operator last gave it. A rename made while the drive was
-            // out could not reach the marker file, and must not be undone by reading it back.
-            workspace = workspace with { Name = listed.Name! };
-            entries[index] = StoredRegistryEntry.From(workspace);
-        }
-        else
-        {
-            entries.Add(StoredRegistryEntry.From(workspace));
-        }
-
+        var current = entries[index].ToWorkspace();
+        Workspace changed;
         try
         {
-            WriteRegistry(entries);
+            changed = change(current);
+            entries[index] = StoredRegistryEntry.From(changed);
+            registry.Write(entries);
+            if (Directory.Exists(changed.RootPath))
+                WriteMarker(changed);
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(null, Unwritable(registryPath, "The workspace list could not be written.", ex));
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({current.RootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(current.RootPath, failure, ex));
         }
 
-        return new WorkspaceResult(workspace, null);
+        return new WorkspaceResult(changed, null);
     }
 
-    private static (T? Value, StoreProblem? Problem) Read<T>(string path) where T : class, IStoredRecord
-    {
-        T? value;
-        try
-        {
-            value = JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(LogCategory, $"{path} could not be read.", ex);
-            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, ex.Message));
-        }
+    private static string MarkerIn(string rootPath) => Path.Combine(rootPath, WorkspaceFileName);
 
-        if (value is null)
-            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The file is empty."));
-
-        // Refused, not half-read: the next save would write the dropped fields back as loss.
-        if (value.SchemaVersion != SchemaVersion)
-            return (null, new StoreProblem(
-                StoreProblemKind.UnsupportedVersion, path,
-                $"Unsupported workspace schema {value.SchemaVersion}."));
-
-        // Well-formed JSON is not a well-formed record: a missing field deserializes to null.
-        return value.Complete
-            ? (value, null)
-            : (null, new StoreProblem(StoreProblemKind.Unreadable, path, "The record is missing fields."));
-    }
-
-    private static string NewId() => Guid.NewGuid().ToString("N")[..16];
-
-    private static bool IsFolderName(string? id) =>
-        !string.IsNullOrEmpty(id) && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
-
-    // A name, never a path: these are resolved against the meeting's own folder.
-    private static bool IsFileName(string? name) =>
-        name is null
-        || (!string.IsNullOrWhiteSpace(name)
-            && !name.Contains('/') && !name.Contains('\\')
-            && name is not ("." or ".."));
-
-    private static bool IsArtifactPath(string? path, string meetingFolder)
-    {
-        if (path is null)
-            return true;
-
-        try
-        {
-            if (!Path.IsPathFullyQualified(path) || !IsFileName(Path.GetFileName(path)))
-                return false;
-
-            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
-            return parent is not null && SamePath(parent, meetingFolder);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    // Linux tells Acme and acme apart; macOS and Windows do not, and neither may this.
-    private static readonly StringComparison NameComparison = OperatingSystem.IsLinux()
-        ? StringComparison.Ordinal
-        : StringComparison.OrdinalIgnoreCase;
-
-    private static bool Misfiled(string? recordId, string folderName) =>
-        !string.Equals(recordId, folderName, NameComparison);
-
-    private static StoreProblem WrongFolder(string path) =>
-        new(StoreProblemKind.Unreadable, path,
-            "That meeting record does not belong to the folder it is in.");
-
-    private static bool SamePath(string a, string b) => string.Equals(a, b, NameComparison);
-
-    // Two spellings of one folder must not become two workspaces, so every link on the way down
-    // is resolved: on macOS /tmp and /var are themselves symlinks, which makes this the usual case.
-    private static string CanonicalWorkspacePath(string path)
-    {
-        var full = path;
-        try
-        {
-            full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-            for (var hops = 0; hops < 40; hops++)
-            {
-                var (resolved, followed) = FollowFirstLink(full);
-                if (!followed)
-                    return resolved;
-
-                full = resolved;
-            }
-        }
-        catch (Exception)
-        {
-            // unreachable or malformed; the folder checks phrase it, and the absolute form stands
-        }
-
-        return full;
-    }
-
-    // Resolving one link can expose another above it, so this returns after the first and the
-    // caller walks again from the top.
-    private static (string Path, bool Followed) FollowFirstLink(string full)
-    {
-        var walked = Path.GetPathRoot(full) ?? string.Empty;
-        var parts = full[walked.Length..]
-            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-
-        for (var i = 0; i < parts.Length; i++)
-        {
-            walked = Path.Combine(walked, parts[i]);
-
-            // A folder about to be created has nothing below it to resolve, and asking would throw.
-            if (!Directory.Exists(walked))
-                break;
-
-            if (new DirectoryInfo(walked).ResolveLinkTarget(returnFinalTarget: true) is not { } target)
-                continue;
-
-            var rest = Path.Combine([.. parts[(i + 1)..]]);
-            return (Path.TrimEndingDirectorySeparator(
-                Path.GetFullPath(Path.Combine(target.FullName, rest))), true);
-        }
-
-        return (full, false);
-    }
-
-    private static StoreProblem NoSuchWorkspace(string id) =>
-        new(StoreProblemKind.NotFound, id, "No such workspace.");
-
-    private static StoreProblem NoSuchMeeting(string id) =>
-        new(StoreProblemKind.NotFound, id, "No such meeting.");
-
-    private static WorkspaceResult? Occupied(
-        List<StoredRegistryEntry> entries, string rootPath, string? byAnyoneBut) =>
-        entries.FirstOrDefault(e => e.Id != byAnyoneBut && SamePath(e.RootPath ?? "", rootPath))
-                is { } already
-            ? Refused(rootPath, $"That folder is already the workspace \"{already.Name}\".")
-            : null;
-
-    private static StoreProblem Unplugged(StoredRegistryEntry entry) =>
-        new(StoreProblemKind.FolderMissing, entry.RootPath!,
-            $"The folder for workspace \"{entry.Name}\" is not there.");
-
-    private static StoreProblem Invalid(string subject, string detail) =>
-        new(StoreProblemKind.Invalid, subject, detail);
+    private static void WriteMarker(Workspace workspace) =>
+        RecordFile.Write(MarkerIn(workspace.RootPath), StoredWorkspace.From(workspace));
 
     private static WorkspaceResult Refused(string subject, string detail) =>
-        new(null, Invalid(subject, detail));
-
-    private static MeetingResult RefusedMeeting(string subject, string detail) =>
-        new(null, Invalid(subject, detail));
-
-    private static StoreProblem Unwritable(string path, string detail, Exception cause)
-    {
-        Log.Warning(LogCategory, $"{detail} ({path})", cause);
-        return new StoreProblem(StoreProblemKind.Unwritable, path, $"{detail} {cause.Message}");
-    }
-
-    private interface IStoredRecord
-    {
-        int SchemaVersion { get; }
-
-        [JsonIgnore]
-        bool Complete { get; }
-    }
-
-    private sealed record StoredRegistry(int SchemaVersion, List<StoredRegistryEntry>? Workspaces)
-        : IStoredRecord
-    {
-        [JsonIgnore]
-        public bool Complete => Workspaces is not null;
-    }
-
-    private sealed record StoredRegistryEntry(
-        string? Id, string? Name, string? RootPath, DateTimeOffset CreatedAt)
-    {
-        internal bool Complete =>
-            IsFolderName(Id)
-            && !string.IsNullOrWhiteSpace(Name)
-            && !string.IsNullOrWhiteSpace(RootPath)
-            && CreatedAt != default;
-
-        internal static StoredRegistryEntry From(Workspace w) =>
-            new(w.Id, w.Name, w.RootPath, w.CreatedAt);
-
-        internal Workspace ToWorkspace() => new(Id!, Name!, RootPath!, CreatedAt);
-    }
-
-    // No path field: the folder it is in is its path, and a stale copy would outrank the truth.
-    private sealed record StoredWorkspace(
-        int SchemaVersion, string? Id, string? Name, DateTimeOffset CreatedAt) : IStoredRecord
-    {
-        [JsonIgnore]
-        public bool Complete =>
-            IsFolderName(Id) && !string.IsNullOrWhiteSpace(Name) && CreatedAt != default;
-
-        internal static StoredWorkspace From(Workspace w) =>
-            new(WorkspaceStore.SchemaVersion, w.Id, w.Name, w.CreatedAt);
-
-        internal Workspace ToWorkspace(string rootPath) => new(Id!, Name!, rootPath, CreatedAt);
-    }
-
-    private sealed record StoredMeeting(
-        int SchemaVersion,
-        string? Id,
-        string? Title,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset? StartedAt,
-        DateTimeOffset? EndedAt,
-        List<string>? Languages,
-        string? TranscriptFileName,
-        string? AudioFileName) : IStoredRecord
-    {
-        [JsonIgnore]
-        public bool Complete =>
-            IsFolderName(Id)
-            && !string.IsNullOrWhiteSpace(Title)
-            && CreatedAt != default
-            && Languages is not null
-            && Languages.All(language => !string.IsNullOrWhiteSpace(language))
-            && IsFileName(TranscriptFileName)
-            && IsFileName(AudioFileName);
-
-        internal static StoredMeeting From(MeetingRecord m, string folder) =>
-            new(WorkspaceStore.SchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
-                [.. m.Languages], FileName(m.TranscriptPath, folder), FileName(m.AudioPath, folder));
-
-        internal MeetingRecord ToRecord(string workspaceId, string folder) =>
-            new(Id!, workspaceId, Title!, CreatedAt, StartedAt, EndedAt,
-                Languages!, ArtifactPath(folder, TranscriptFileName), ArtifactPath(folder, AudioFileName));
-
-        private static string? FileName(string? path, string folder) =>
-            path is null ? null : Path.GetRelativePath(folder, path);
-
-        private static string? ArtifactPath(string folder, string? fileName) =>
-            fileName is null ? null : Path.Combine(folder, fileName);
-    }
+        new(null, StoreProblems.Invalid(subject, detail));
 }

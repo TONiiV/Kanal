@@ -10,10 +10,59 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each settings tab shows an icon next to its name.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
+- Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
+  follows the operating system, also during a meeting. Your choice applies at once and stays on
+  this computer. Light is the default, so Kanal looks the same until you change it.
+- The app language in Settings now saves when you pick it. Kanal shows that language at the next
+  start, also when you close Settings without "Save & Close".
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
+  scheme during a meeting.
+- The window no longer freezes at start when a project is on a slow network share. Kanal now checks
+  the other projects for issues in the background. The warning marks in the project list appear when
+  that check ends.
+- When the current project has issues, a banner above the settings gear shows how many. A
+  damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
+  settings at the new Issues section, which gives each issue its cause and its path. In the project
+  list, a warning mark shows each project with issues. This replaces the note "N records could not
+  be read".
+- If Kanal cannot create the default project at start-up, the log now names the folder and the
+  reason. Before, the log said nothing in some cases, for example when the folder was a file.
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
+- When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete
+  or an import, the message is now in the interface language. Before, the sidebar showed English.
+  The message names the folder or file when that helps. The log keeps the technical detail.
+- Each project in the project list has a gear button. It opens the project settings. There you
+  rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
+  copies the image into the project folder as `kanal-icon` plus the image extension, for example
+  `kanal-icon.png`, so the icon moves with the folder. The project list shows the icon. The
+  settings also remove a project. You choose to remove it from the list only, or to delete its
+  meeting files too. Deleted files do not go to the trash. Other files in the project folder
+  stay. Kanal does not delete files when the folder does not hold this project. Kanal does not
+  remove a project while a meeting is recording.
+- Rename in the menu of a meeting row now puts the cursor in the name field. Before, you had to
+  click the field first.
+- Text in an input box now sits in the vertical centre of the box.
+- You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
+  notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
+- A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
+- The settings button at the bottom of the sidebar now shows an outline gear icon only.
+  The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck

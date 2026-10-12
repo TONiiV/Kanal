@@ -1,6 +1,6 @@
 # Kanal
 
-<img src="design/kanal-icon.png" width="200" alt="Kanal icon">
+<img src="design/icon/kanal-tile-light.png" width="200" alt="Kanal icon">
 
 **One room. Every language.**\
 同一场会议，每个人的语言。
@@ -219,6 +219,23 @@ scope. CI also enforces that the deployable web client and its GitHub Pages copy
 ```bash
 cmp web/index.html docs/index.html
 ```
+
+### Test coverage
+
+CI runs both suites on Windows and macOS, and on Linux as an optional job. The `coverage` job
+merges the reports of all platforms. The run page shows the summary table. The `coverage-report`
+artifact holds the full HTML report, line by line.
+
+To make the same report on your machine:
+
+```bash
+dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet tool restore
+dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:Html -filefilters:"-**/obj/**"
+```
+
+Open `coverage-report/index.html`. Delete `coverage/` before the next run, or old reports merge in.
 
 For pipeline diagnosis:
 

@@ -232,7 +232,7 @@ public class LogSetupTests
             Log.Error("test", "an error line", new InvalidOperationException("the cause"));
             scope.Flush();
 
-            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(ReadWhileOpen));
             Assert.Contains("a debug line", written);
             Assert.Contains("an info line", written);
             Assert.Contains("a warning line", written);
@@ -258,7 +258,7 @@ public class LogSetupTests
             Log.Warning("test", "worth keeping");
             scope.Flush();
 
-            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(ReadWhileOpen));
             Assert.DoesNotContain("chatter nobody asked for", written);
             Assert.Contains("worth keeping", written);
         }
@@ -286,7 +286,7 @@ public class LogSetupTests
 
             Assert.Same(before, NLog.LogManager.Configuration!.FindTargetByName(LogSetup.TargetName));
 
-            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(ReadWhileOpen));
             for (var i = 0; i < 500; i++)
                 Assert.Contains($"before {i:D4}", written);
             Assert.Contains("after the change", written);
@@ -310,7 +310,7 @@ public class LogSetupTests
             Log.Error("test", "and the reason why", new InvalidOperationException("teardown"));
             scope.Flush();
 
-            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(ReadWhileOpen));
             Assert.Contains("and the reason why", written);
             Assert.Contains("teardown", written);
         }
@@ -332,7 +332,7 @@ public class LogSetupTests
             Log.Error("test", "the gateway refused", new InvalidOperationException(body));
             scope.Flush();
 
-            var written = string.Join("\n", Directory.GetFiles(directory).Select(File.ReadAllText));
+            var written = string.Join("\n", Directory.GetFiles(directory).Select(ReadWhileOpen));
             Assert.Contains("the gateway refused", written);
             Assert.Contains("more characters]", written); // said out loud, not silently dropped
             Assert.True(written.Length < 20_000, $"one line wrote {written.Length} characters");
@@ -367,6 +367,14 @@ public class LogSetupTests
             LogSetup.ApplyTo(fresh, new AppSettings());
             Cleanup(fresh);
         }
+    }
+
+    // NLog still holds the file for writing; File.ReadAllText's FileShare.Read is refused on Windows.
+    private static string ReadWhileOpen(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     private static string TempDirectory() =>

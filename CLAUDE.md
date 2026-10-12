@@ -113,6 +113,8 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
   here, and no project sets `GenerateDocumentationFile`, so deleting it cannot break the build. A
   rationale that needs a paragraph belongs in `docs/PROGRESS.md` or `docs/PRD-v0.4.md`, where design
   history is already kept and will actually be maintained — not in the source file.
+- **UI PRs carry before/after screenshots.** A PR that changes how the UI looks adds a "before" and an
+  "after" screenshot to the PR. Take them with the headless Skia render. Post them as a PR comment.
 - **Progress log.** Plans, design changes and status live in [`docs/PROGRESS.md`](docs/PROGRESS.md);
   update it in the same PR as the work it describes.
 - **Changelog.** A PR that adds a feature, fixes a bug or makes something measurably better adds one
@@ -154,5 +156,5 @@ and the behaviour that UI changes must preserve. The hard constraints below appl
 - **PRD-frozen layout:** host ≤ 4 language columns; mobile single column + language dropdown;
   translation on top, source below; partial = muted, final = full ink; no TTS.
 - The host is Avalonia XAML: no CSS, no `clamp()`, no media queries. Fluid type is faked with fixed steps.
-- The host stays light on **explicit brushes** — inheriting FluentTheme's dark variant made control
-  foregrounds invisible.
+- Every host colour comes from **app-owned brushes and colours, one set per variant** (Light and Dark). Never
+  inherit FluentTheme defaults: they made control foregrounds invisible. See ADR 0057.
