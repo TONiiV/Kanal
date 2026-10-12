@@ -98,6 +98,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
+            scanOffUiThread: work => Task.Run(work),
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -124,6 +125,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
+        Func<Action, Task>? scanOffUiThread = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false)
@@ -140,7 +142,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Ruler.JumpRequested += MarkJumpTarget;
         BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
-        Sidebar = new WorkspaceSidebarViewModel(store);
+        Sidebar = new WorkspaceSidebarViewModel(store, offUiThread: scanOffUiThread);
         Titling = new MeetingTitling(
             () => _titler,
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
