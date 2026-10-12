@@ -199,4 +199,25 @@ public class WarmupViewModelTests
         Assert.Equal(0, mt.WarmUpCalls);
         Assert.False(vm.IsRunning);
     }
+
+    [AvaloniaFact]
+    public async Task ALoadedTranscriptionModelIsFollowedByTheTranslationModel()
+    {
+        var asrGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = TestViewModels.Demo();
+        var mt = new GatedWarmupMt(Task.CompletedTask);
+        vm.PlanFilter = plan => plan with { Asr = new WarmableAsr(plan.Asr!, asrGate.Task), Mt = mt };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        Assert.Equal(0, mt.WarmUpCalls);
+
+        asrGate.SetResult();
+        await starting;
+        await PumpAsync(50);
+
+        Assert.Equal(1, mt.WarmUpCalls);
+        Assert.True(vm.IsRunning);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
 }

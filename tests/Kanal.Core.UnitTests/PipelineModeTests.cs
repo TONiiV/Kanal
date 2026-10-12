@@ -296,10 +296,6 @@ public class PipelineModeTests
         Assert.Contains("unknown transcription model “gone”", status.Unavailable);
     }
 
-    /// <summary>
-    /// local · cloud stays blocked: cloud translation today exists only inside the cloud ASR
-    /// session — there is no standalone text MT provider to pair with a local transcriber.
-    /// </summary>
     [Fact]
     public void LocalCloudStatesTheMissingStandaloneCloudTranslator()
     {
