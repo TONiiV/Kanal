@@ -179,6 +179,7 @@ public class LogSetupTests
     {
         var target = Target(new AppSettings(), "/logs");
 
+        Assert.NotNull(target.ArchiveFileName);
         Assert.DoesNotContain("{#}", target.ArchiveFileName.ToString());
     }
 
