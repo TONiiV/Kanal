@@ -162,25 +162,23 @@ its preservation rules are specified as implementation work after design approva
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
 resolves to it yet. Slice C-5 connects it to `PipelinePlanner`.
 
-Measured on the real model (560 ms int8, CPU, 4 threads, Apple M4), fed in 20 ms frames the way the
-capture layer pushes them: load 0.7–1.6 s, real-time factor ≈ 0.09 (28.6 s of zh/de audio in
-2.3 s). The provider runs on CPU only. Polish is not measured on real audio. This Mac has no Polish
-voice to synthesise a test clip.
-
-`Caps.AutoLanguageDetect` is `false`. The model takes the language as input and reports none.
-`TranscriptLanguage.Guess` reads the language back from the text, so the provider does not detect it.
+Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 20 ms frames, as the
+capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
+took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
+voice for a test clip.
 
 Four things the ADR did not anticipate, all found by running the model:
 
-- **The model does not report the language it heard.** The language is an input (a prompt id), and
-  `auto` is the id for decoding without one. sherpa-onnx filters `<de-DE>`-style tokens out of the
-  result, but a patched build that records the raw token sequence showed none in any frame, in
-  `auto`, `de-DE` or `zh-CN` (560 ms int8, seven synthesised de/en/zh utterances), so there is
-  nothing to expose upstream. A room of one language
-  forces that language (with `zh` → `zh-CN`, `ja` → `ja-JP`); any other room decodes with `auto`
-  and `TranscriptLanguage` reads the source language back from the text: script first, then
-  distinctive letters and stopwords among the room's Latin languages. Correct on every test
-  sentence; a short Latin sentence with no signal falls to the room's first Latin language.
+- **The model does not report the language it heard.** The language is an input (a prompt id).
+  `auto` is the id for decoding without one. So `Caps.AutoLanguageDetect` is `false`.
+  sherpa-onnx filters `<de-DE>`-style tokens out of the result. A patched build recorded the raw
+  token sequence and showed no such token in any frame. That test used `auto`, `de-DE` and `zh-CN`
+  on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
+  language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
+  `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
+  script first. Then it checks distinctive letters and stopwords among the room's Latin languages.
+  It was correct on every test sentence. A short Latin sentence with no signal falls to the room's
+  first Latin language.
 - **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
   ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
   second of silence when it is created. Priming again after an endpoint reset made things worse:

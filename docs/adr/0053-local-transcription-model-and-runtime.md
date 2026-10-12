@@ -91,7 +91,7 @@ A model that is not ready never silently changes what the meeting does — the `
 to whatever `IMtProvider` the mode resolved. This is the existing capability route; the orchestrator
 does not change. The rest of `Caps` is
 `Streaming: true`, `Diarization: false`, `AutoLanguageDetect: false`, `Latency: Near`, and a
-`Languages` set taken from the model's own prompt dictionary rather than hand-written.
+`Languages` set of 33 codes. The code lists them by hand, from the model's prompt dictionary.
 The model takes the language as input and reports none, so `AutoLanguageDetect` is `false`.
 `TranscriptLanguage` reads the source language back from the text (see `docs/PROGRESS.md`).
 
@@ -111,7 +111,8 @@ that ships can be argued with rather than discovered in a diff.
 - The OpenMDW-1.1 licence needs a review note in the catalog and a look before any redistribution.
 - A second native dependency (`org.k2fsa.sherpa.onnx`) joins LLamaSharp, with the same
   per-platform-runtime packaging question. Windows + NVIDIA is verified first; CPU and Apple Silicon
-  are investigated and their status recorded rather than assumed.
+  are investigated and their status recorded rather than assumed. The NVIDIA path is deferred:
+  the `win-x64` runtime package ships a CPU-only ONNX Runtime, so the provider runs on CPU.
 - Language conditioning is per stream. A room whose source language is set explicitly should pass
   it; a room that is not should pass `auto`, which the model supports and which matches the
   unconstrained-recognition decision already taken for Gladia.
