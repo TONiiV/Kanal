@@ -160,7 +160,7 @@ public class RoomLoggingTests
         await PumpAsync(100);
         await vm.StopCommand.ExecuteAsync(null);
 
-        Assert.NotEmpty(sink.Lines.Where(l => l.Level == LogLevel.Debug));
+        Assert.Contains(sink.Lines, l => l.Level == LogLevel.Debug);
     }
 
     [AvaloniaFact]
