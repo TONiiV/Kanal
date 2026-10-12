@@ -1,5 +1,3 @@
-using Kanal.Core.Diagnostics;
-
 namespace Kanal.Core.Workspaces;
 
 internal static class StoreProblems
@@ -26,9 +24,15 @@ internal static class StoreProblems
         new(StoreProblemKind.Unreadable, path,
             "That meeting record does not belong to the folder it is in.");
 
-    public static StoreProblem Unwritable(string path, string detail, Exception cause)
-    {
-        Log.Warning(LogCategory, $"{detail} ({path})", cause);
-        return new StoreProblem(StoreProblemKind.Unwritable, path, $"{detail} {cause.Message}");
-    }
+    public static StoreProblem NotAMeetingId(string id) =>
+        new(StoreProblemKind.Invalid, id, "That is not a meeting id.");
+
+    public static StoreProblem Unreadable(string path, string detail) =>
+        new(StoreProblemKind.Unreadable, path, detail);
+
+    public static StoreProblem Unwritable(string path, string detail) =>
+        new(StoreProblemKind.Unwritable, path, detail);
+
+    public static StoreProblem Unwritable(string path, string detail, Exception cause) =>
+        Unwritable(path, $"{detail} {cause.Message}");
 }
