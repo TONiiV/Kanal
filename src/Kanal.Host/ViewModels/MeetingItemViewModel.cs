@@ -11,6 +11,7 @@ public sealed partial class MeetingItemViewModel(
     MeetingRecord record,
     Func<MeetingItemViewModel, string, bool> rename,
     Func<MeetingItemViewModel, Task> generateTitle,
+    Func<MeetingItemViewModel, Task> reidentifySpeakers,
     Func<MeetingItemViewModel, Task> import,
     Func<MeetingItemViewModel, Task> exportBundle,
     Func<MeetingItemViewModel, Task> openFolder,
@@ -76,7 +77,30 @@ public sealed partial class MeetingItemViewModel(
     [RelayCommand(CanExecute = nameof(CanGenerateTitle))]
     private Task GenerateTitle() => generateTitle(this);
 
-    public void OnLanguageChanged() => OnPropertyChanged(nameof(GenerateTitleHeader));
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ReidentifySpeakersCommand))]
+    private bool _canReidentifySpeakers;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReidentifySpeakersHeader))]
+    private string? _reidentifyBlockedBy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReidentifying))]
+    private string _reidentifyNote = "";
+
+    public bool IsReidentifying => ReidentifyNote.Length > 0;
+
+    public string ReidentifySpeakersHeader => Localizer.Instance[ReidentifyBlockedBy ?? "meeting.reidentify"];
+
+    [RelayCommand(CanExecute = nameof(CanReidentifySpeakers))]
+    private Task ReidentifySpeakers() => reidentifySpeakers(this);
+
+    public void OnLanguageChanged()
+    {
+        OnPropertyChanged(nameof(GenerateTitleHeader));
+        OnPropertyChanged(nameof(ReidentifySpeakersHeader));
+    }
 
     [RelayCommand]
     private Task Import() => import(this);

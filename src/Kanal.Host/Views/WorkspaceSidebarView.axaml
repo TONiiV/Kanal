@@ -281,6 +281,9 @@
                                                     <TextBlock x:Name="MeetingRowNaming" Text="{l:T title.naming}"
                                                                FontSize="10.5" IsVisible="{Binding IsNaming}"
                                                                Foreground="{DynamicResource Ink2}" />
+                                                    <TextBlock x:Name="MeetingRowReidentifying" Text="{Binding ReidentifyNote}"
+                                                               FontSize="10.5" IsVisible="{Binding IsReidentifying}"
+                                                               Foreground="{DynamicResource Ink2}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                                                 IsVisible="{Binding IsRecording}">
                                                         <Ellipse Width="5" Height="5" VerticalAlignment="Center"
@@ -308,6 +311,13 @@
                                                                   Command="{Binding GenerateTitleCommand}">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon regenerate}" Width="13" Height="13" />
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Name="ReidentifySpeakers"
+                                                                  Header="{Binding ReidentifySpeakersHeader}"
+                                                                  Command="{Binding ReidentifySpeakersCommand}">
+                                                            <MenuItem.Icon>
+                                                                <Path Classes="glyph" Data="{c:Icon people}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
                                                         </MenuItem>
                                                         <Separator />

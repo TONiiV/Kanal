@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Room;
 using Kanal.Core.Workspaces;
@@ -10,7 +12,10 @@ namespace Kanal.Host.ViewModels;
 public static class StoredTranscript
 {
     public static IReadOnlyList<Utterance> Utterances(MeetingRecord record) =>
-        record.TranscriptPath is { } path ? TranscriptLog.Read(path) : [];
+        record.TranscriptPath is { } path
+            ? SpeakerReidentification.Apply(
+                TranscriptLog.Read(path), SpeakerReidentification.Read(Path.GetDirectoryName(path)!))
+            : [];
 
     public static IReadOnlyList<ColumnViewModel> Of(MeetingRecord record) =>
         Columns(Utterances(record), record.Languages ?? []);

@@ -6,6 +6,28 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
+
+The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherpa-onnx `OfflineSpeakerDiarization` on `audio.wav` and gives each final utterance a new tag.
+
+- **Runtime.** The new project `Kanal.Providers.LocalDiarization` references `org.k2fsa.sherpa.onnx` 1.13.8. This is the package and version of PR #181. `SherpaSpeakerDiarizer` is the only class that touches the native library.
+- **Models.** One default pair, no picker ([#179](https://github.com/TONiiV/Kanal/issues/179)). The first run downloads both files through `ModelDownloadManager` and checks SHA-256.
+  - Segmentation: pyannote segmentation 3.0, MIT, 5,992,913 bytes. The GitHub release has only a `.tar.bz2`, and the BCL has no bzip2. The catalog now takes the plain `model.onnx` from Hugging Face, pinned to commit `9403a69`. This closes open item 1 of the slice-2 entry below.
+  - Embedding: 3D-Speaker CAM++ zh/en advanced, Apache-2.0, 28,281,164 bytes, from the GitHub release. Slice 6 ([#111](https://github.com/TONiiV/Kanal/issues/111)) replaces it after zh/de/pl measurements.
+- **Mapping.** Each utterance takes the diarized speaker with the largest total time overlap. Tags are `D01`, `D02`… in the order that people first speak. An utterance that no turn covers keeps its original tag. The stored view gives each tag a palette colour by first appearance, as before.
+- **Timing.** The ASR clock and the recording both start on the first accepted frame. Both skip a pause. So `TStartMs` is the offset into `audio.wav`. A Gladia reconnect restarts the ASR clock but not the recording. Utterances after a reconnect can map to the wrong turn.
+- **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
+- **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
+- **Speaker count.** `ISpeakerDiarizer` takes a nullable count. The UI passes none, so clustering uses the threshold 0.5. [#110](https://github.com/TONiiV/Kanal/issues/110) adds the operator's count.
+- **Memory.** The run reads the whole recording into one `float[]`: about 230 MB per hour. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+
+Open items:
+
+1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
+2. A `.kl` bundle does not carry `speakers.json`. Its Markdown uses the original tags.
+3. sherpa-onnx marshals model paths as ANSI on Windows. A user folder with non-ASCII characters can stop the model from loading.
+4. Hugging Face and GitHub release downloads can be blocked in mainland China.
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).

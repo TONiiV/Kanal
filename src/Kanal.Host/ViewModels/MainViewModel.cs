@@ -22,6 +22,7 @@ using Kanal.Core.Room;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
+using Kanal.Providers.LocalDiarization;
 using Kanal.Providers.LocalMt;
 using QRCoder;
 
@@ -92,6 +93,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private int _dragSource = -1;
     private IMeetingTitler? _titler;
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
+    private readonly Func<string, string, ISpeakerDiarizer> _makeDiarizer;
     private readonly Func<Action, Task> _offUiThread;
     private string? _titleOnRecord;
 
@@ -129,9 +131,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<Action, Task>? scanOffUiThread = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
-        bool development = false)
+        bool development = false,
+        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
     {
         _titler = titler;
+        _makeDiarizer = diarizerFactory ?? ((segmentation, embedding) =>
+            new SherpaSpeakerDiarizer(segmentation, embedding));
         _offUiThread = offUiThread ?? (work =>
         {
             work();
@@ -160,6 +165,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Files.Refresh();
         };
         Sidebar.GenerateTitleFor = GenerateTitleForAsync;
+        Sidebar.ReidentifySpeakersFor = ReidentifySpeakersAsync;
         Sidebar.MeetingRenamed += (id, title) =>
         {
             if (id == _sessionRecordId && title != Titling.Title)
@@ -481,6 +487,73 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (titler is IAsyncDisposable spent)
                 await spent.DisposeAsync();
             Sidebar.NamingMeetingId = null;
+        }
+    }
+
+    private async Task ReidentifySpeakersAsync(MeetingItemViewModel item)
+    {
+        if (IsRunning || IsStarting || Sidebar.ReidentifyingMeetingId is not null
+            || item.Record is not { TranscriptPath: { } transcript, AudioPath: { } audio })
+            return;
+
+        Sidebar.ReidentifyingMeetingId = item.Id;
+        var downloads = _downloads();
+        var segmentation = DiarizationModelCatalog.DefaultSegmentation;
+        var embedding = DiarizationModelCatalog.DefaultEmbedding;
+        try
+        {
+            foreach (var model in new[] { segmentation, embedding }.Where(m => !downloads.IsDownloaded(m)))
+                await downloads.DownloadAsync(model, ReidentifyProgress(item, "meeting.reidentify.downloading"), CancellationToken.None);
+
+            item.ReidentifyNote = L.Format("meeting.reidentify.working", 0);
+            var speakers = await SpeakerReidentification.RunAsync(
+                _makeDiarizer(downloads.GetPath(segmentation), downloads.GetPath(embedding)),
+                transcript, audio, speakerCount: null,
+                ReidentifyProgress(item, "meeting.reidentify.working"), CancellationToken.None);
+            Status = L.Format("meeting.reidentify.done", speakers);
+            ShowReidentified(item);
+        }
+        catch (Exception ex)
+        {
+            Status = L.Format("meeting.reidentify.failed", ex.Message);
+            Log.Warning(RoomLog, $"Speakers of meeting {item.Id} could not be re-identified.", ex);
+        }
+        finally
+        {
+            Sidebar.ReidentifyingMeetingId = null;
+            item.ReidentifyNote = "";
+        }
+    }
+
+    // Progress<T> posts its callback, so a late one must not bring back a cleared note.
+    private IProgress<double> ReidentifyProgress(MeetingItemViewModel item, string key) =>
+        new Progress<double>(p =>
+        {
+            if (Sidebar.ReidentifyingMeetingId == item.Id)
+                item.ReidentifyNote = L.Format(key, (int)(p * 100));
+        });
+
+    private void ShowReidentified(MeetingItemViewModel item)
+    {
+        if (Sidebar.SelectedMeeting?.Id != item.Id)
+            return;
+        if (IsBrowsingRecord)
+        {
+            RefreshBody();
+            return;
+        }
+
+        // The stopped meeting's own columns are on screen, not the stored ones.
+        var utterances = StoredTranscript.Utterances(item.Record);
+        var colours = StoredTranscript.ColoursByTag(utterances);
+        var tags = utterances.ToDictionary(u => u.Id, u => u.SpeakerTag);
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+        {
+            if (!tags.TryGetValue(bubble.UtteranceId, out var tag))
+                continue;
+            bubble.SpeakerTag = tag;
+            bubble.SpeakerName = tag;
+            bubble.SpeakerColor = colours[tag];
         }
     }
 
