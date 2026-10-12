@@ -24,6 +24,12 @@ public static class ProjectIcons
     public static readonly IValueConverter Label =
         new FuncValueConverter<string?, string>(name => Localizer.Instance["workspace.glyph." + name]);
 
+    public static readonly IMultiValueConverter IssueMark = new FuncMultiValueConverter<object?, bool>(values =>
+        values.ToList() is [string id, IReadOnlyDictionary<string, bool> states] && states.ContainsKey(id));
+
+    public static readonly IMultiValueConverter IssueAlarm = new FuncMultiValueConverter<object?, bool>(values =>
+        values.ToList() is [string id, IReadOnlyDictionary<string, bool> states] && states.GetValueOrDefault(id));
+
     // Read through a closed stream: a bitmap holding the file open would block reset and removal on Windows.
     private static Bitmap? Load(string? path)
     {

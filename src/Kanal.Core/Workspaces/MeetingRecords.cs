@@ -5,7 +5,7 @@ namespace Kanal.Core.Workspaces;
 internal sealed class MeetingRecords(WorkspaceRegistry registry)
 {
     public const string FileName = "meeting.json";
-    private const string MeetingsFolderName = "meetings";
+    public const string MeetingsFolderName = "meetings";
     private const string NeedsTitle = "A meeting needs a title.";
 
     public static string FolderIn(string workspaceRoot) => Path.Combine(workspaceRoot, MeetingsFolderName);

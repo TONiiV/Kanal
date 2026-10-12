@@ -45,6 +45,8 @@ public enum StoreProblemKind
     WrongType,
 
     NotThisWorkspace,
+
+    RegistryRowDamaged,
 }
 
 // Subject, not Path: a NotFound names the id that was asked for, not somewhere on disk.
