@@ -225,8 +225,46 @@ public class ProjectSettingsTests : IDisposable
         });
 
         Assert.Equal(Localizer.Instance["workspace.remove.notthisproject"], settings.Problem);
-        Assert.NotEqual(Localizer.Instance["workspace.settings.failed"], settings.Problem);
         Assert.True(Directory.Exists(Path.Combine(kappa.RootPath, "meetings")));
+    }
+
+    [AvaloniaFact]
+    public async Task ARefusedRenameIsExplainedInTheInterfaceLanguageAndItsDetailGoesToTheLog()
+    {
+        var l = Localizer.Instance;
+        var before = l.Current;
+        var previousSink = Kanal.Core.Diagnostics.Log.Sink;
+        var lines = new List<string>();
+        Kanal.Core.Diagnostics.Log.Install(new LineSink(lines));
+        l.Current = "de";
+        try
+        {
+            var store = Store();
+            var (vm, kappa, _) = TwoProjects(store);
+
+            var settings = await Opened(vm, kappa, settings =>
+            {
+                store.ForgetWorkspace(kappa.Id);
+                settings.Name = "Kappa tooling";
+                settings.SaveCommand.Execute(null);
+                return Task.CompletedTask;
+            });
+
+            Assert.Equal(l["workspace.refused.notfound"], settings.Problem);
+            Assert.DoesNotContain("No such workspace", settings.Problem);
+            Assert.Contains(lines, line => line == $"NotFound on {kappa.Id}: No such workspace.");
+        }
+        finally
+        {
+            l.Current = before;
+            Kanal.Core.Diagnostics.Log.Install(previousSink);
+        }
+    }
+
+    private sealed class LineSink(List<string> lines) : Kanal.Core.Diagnostics.ILogSink
+    {
+        public void Write(Kanal.Core.Diagnostics.LogLevel level, string category, string message, Exception? error) =>
+            lines.Add(message);
     }
 
     [Fact]
