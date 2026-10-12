@@ -165,13 +165,35 @@ public class RefusedStoreOperationTests : IDisposable
         using var _ = Speaking(language);
         using var __ = Listening(out var sink);
         var (store, vm, _, meeting) = Opened();
-        var file = Path.Combine(store.MeetingFolder(meeting.WorkspaceId, meeting.Id)!, WorkspaceStore.MeetingFileName);
-        File.WriteAllText(file, "{ not json");
+        var folder = store.MeetingFolder(meeting.WorkspaceId, meeting.Id)!;
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
 
         vm.RenameMeeting(meeting.Id, "Another title");
 
-        Assert.Equal(Localizer.Instance.Format("workspace.refused.unreadable", file), vm.ProblemNote);
-        Assert.Contains(sink.Lines, l => l.Message.StartsWith($"Unreadable on {file}: "));
+        Assert.Equal(Localizer.Instance.Format("workspace.refused.unreadable", folder), vm.ProblemNote);
+        Assert.Contains(sink.Lines, l => l.Message.StartsWith($"RecordDamaged on {folder}: "));
+    }
+
+    [AvaloniaTheory]
+    [InlineData("zh")]
+    [InlineData("de")]
+    [InlineData("pl")]
+    public void AMisfiledMeetingRecordIsRefusedInTheInterfaceLanguage(string language)
+    {
+        using var _ = Speaking(language);
+        using var __ = Listening(out var sink);
+        var (store, vm, _, meeting) = Opened();
+        var original = store.MeetingFolder(meeting.WorkspaceId, meeting.Id)!;
+        var copy = Path.Combine(Path.GetDirectoryName(original)!, "copy-of-it");
+        Directory.CreateDirectory(copy);
+        File.Copy(
+            Path.Combine(original, WorkspaceStore.MeetingFileName),
+            Path.Combine(copy, WorkspaceStore.MeetingFileName));
+
+        vm.RenameMeeting("copy-of-it", "Another title");
+
+        Assert.Equal(Localizer.Instance.Format("workspace.refused.misfiled", copy), vm.ProblemNote);
+        Assert.Contains(sink.Lines, l => l.Message.StartsWith($"Misfiled on {copy}: "));
     }
 
     [AvaloniaTheory]

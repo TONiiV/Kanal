@@ -38,7 +38,70 @@
         <Style Selector="TabControl WrapPanel">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+
+        <Style Selector="ListBox.cards">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.cards ListBoxItem">
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="CornerRadius" Value="{StaticResource OverlayRadius}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox.cards ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Ink2}" />
+        </Style>
+        <Style Selector="ListBox.cards ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.cards ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Paper}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Ink}" />
+        </Style>
+        <Style Selector="ListBox.cards ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Ink}" />
+        </Style>
+        <Style Selector="ListBox.cards ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.cards ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Paper}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Ink}" />
+        </Style>
     </Window.Styles>
+
+    <Window.Resources>
+        <ControlTemplate x:Key="MiniWindow">
+            <Border Background="{DynamicResource Sheet}" BorderBrush="{DynamicResource Rule}" BorderThickness="1"
+                    CornerRadius="6" ClipToBounds="True">
+                <Grid ColumnDefinitions="36,*" RowDefinitions="16,*">
+                    <Border Grid.ColumnSpan="2" Background="{DynamicResource Paper}"
+                            BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" />
+                    <Ellipse Grid.ColumnSpan="2" Width="7" Height="7" Fill="{DynamicResource Record}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Grid.Row="1" Background="{DynamicResource Paper}"
+                            BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,1,0">
+                        <StackPanel Margin="5,7,5,0" Spacing="4">
+                            <Border Height="7" CornerRadius="2" Background="{DynamicResource BrandWash}" />
+                            <Border Height="3" Margin="2,0,6,0" CornerRadius="1.5" Background="{DynamicResource Ink3}" />
+                            <Border Height="3" Margin="2,0,10,0" CornerRadius="1.5" Background="{DynamicResource Ink3}" />
+                        </StackPanel>
+                    </Border>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="9,8,9,0" Spacing="5">
+                        <Border Height="5" Width="46" CornerRadius="2" Background="{DynamicResource Ink}"
+                                HorizontalAlignment="Left" />
+                        <Border Height="3" CornerRadius="1.5" Background="{DynamicResource Ink2}" />
+                        <Border Height="3" Margin="0,0,18,0" CornerRadius="1.5" Background="{DynamicResource Ink2}" />
+                        <Border Height="12" Width="30" Margin="0,4,0,0" CornerRadius="3"
+                                Background="{DynamicResource Brand}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </ControlTemplate>
+    </Window.Resources>
 
     <DockPanel Margin="24,20,24,20">
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
@@ -89,6 +152,45 @@
                                    Foreground="{DynamicResource Ink3}" Margin="0,0,0,10" />
                         <Button x:Name="Licenses" Content="{l:T settings.licenses.open}"
                                 HorizontalAlignment="Left" Click="OnOpenSourceClick" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{l:T settings.tab.appearance}"
+                     AutomationProperties.Name="{l:T settings.tab.appearance}">
+                <ScrollViewer AllowAutoHide="False">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="{l:T appearance.scheme.heading}" Classes="label" />
+                        <Border Classes="rule" />
+                        <ListBox x:Name="ColourScheme" Classes="cards" ItemsSource="{Binding Schemes}"
+                                 SelectedItem="{Binding Scheme}"
+                                 AutomationProperties.Name="{l:T appearance.scheme.heading}">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ColourSchemeOption">
+                                    <StackPanel Spacing="8">
+                                        <Grid ColumnDefinitions="*,*" Width="132" Height="84">
+                                            <ThemeVariantScope RequestedThemeVariant="{Binding Left}" ClipToBounds="True">
+                                                <ContentControl Template="{StaticResource MiniWindow}" Width="132"
+                                                                HorizontalAlignment="Left" />
+                                            </ThemeVariantScope>
+                                            <ThemeVariantScope Grid.Column="1" RequestedThemeVariant="{Binding Right}"
+                                                               ClipToBounds="True">
+                                                <ContentControl Template="{StaticResource MiniWindow}" Width="132"
+                                                                HorizontalAlignment="Right" />
+                                            </ThemeVariantScope>
+                                        </Grid>
+                                        <TextBlock Text="{Binding Name}" FontSize="12.5" HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Text="{l:T appearance.scheme.note}" FontSize="11.5" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Ink3}" Margin="0,10,0,0" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

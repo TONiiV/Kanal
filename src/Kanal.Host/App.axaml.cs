@@ -20,8 +20,11 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Before the first window, so nothing is built in one language and shown in another.
-            Localizer.Instance.Current = SettingsStore.Load().AppLanguage ?? Localizer.FromSystem();
+            // Before the first window, so nothing is built in one language or scheme and shown in another.
+            var settings = SettingsStore.Load();
+            Localizer.Instance.Current = settings.AppLanguage ?? Localizer.FromSystem();
+            Appearance.Platform = PlatformSettings;
+            Appearance.Apply(settings.ColourScheme);
 
             var splash = new SplashWindow();
             desktop.MainWindow = splash;

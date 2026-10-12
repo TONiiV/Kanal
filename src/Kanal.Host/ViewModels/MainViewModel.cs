@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -98,6 +99,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
+            scanOffUiThread: work => Task.Run(work),
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -124,6 +126,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
+        Func<Action, Task>? scanOffUiThread = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false)
@@ -142,7 +145,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Ruler.JumpRequested += MarkJumpTarget;
         BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
-        Sidebar = new WorkspaceSidebarViewModel(store);
+        Sidebar = new WorkspaceSidebarViewModel(store, offUiThread: scanOffUiThread);
         Titling = new MeetingTitling(
             () => _titler,
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
@@ -267,6 +270,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             RefreshAudioSourceStatus();
             RefreshPipelineStatus();
         };
+
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnThemeVariantChanged;
+    }
+
+    // ThemeColours hands out hex strings, so a scheme change does not reach them on its own.
+    private void OnThemeVariantChanged(object? sender, EventArgs e)
+    {
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerColor = ResolveSpeaker(bubble.SpeakerTag).Color;
+        Ruler.Reresolve();
+        BrowsedRuler.Reresolve();
     }
 
     // Only the production path: a test that reached for Documents would create a workspace on
@@ -329,6 +344,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged -= OnThemeVariantChanged;
         _captureCts?.Cancel();
         if (_deviceWatcher is null)
             return;

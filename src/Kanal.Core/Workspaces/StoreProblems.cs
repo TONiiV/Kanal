@@ -21,7 +21,7 @@ internal static class StoreProblems
             $"The folder for workspace \"{entry.Name}\" is not there.");
 
     public static StoreProblem WrongFolder(string path) =>
-        new(StoreProblemKind.Unreadable, path,
+        new(StoreProblemKind.Misfiled, path,
             "That meeting record does not belong to the folder it is in.");
 
     public static StoreProblem NotAMeetingId(string id) =>
