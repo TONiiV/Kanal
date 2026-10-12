@@ -4,16 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+# a group per PR; main and nightly runs get a unique group, so none is cancelled or replaced
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  repo-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
 
       # repo invariant: the GitHub Pages copy must be byte-identical to web/
       - name: web/ and docs/ pages are byte-identical
@@ -25,14 +29,66 @@ jobs:
           python3 design/kanal-icon.py
           git diff --exit-code
 
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            optional: false
+          - os: macos-latest
+            optional: false
+          - os: ubuntu-latest
+            optional: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - name: Build
         run: dotnet build Kanal.slnx --configuration Release
 
       - name: Core unit tests
-        run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+        run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
 
       - name: UI view-model unit tests
-        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal"
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/**/coverage.cobertura.xml
+
+  coverage:
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage
+
+      - name: Merge the platform reports
+        run: |
+          dotnet tool restore
+          dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"Html;MarkdownSummaryGithub;Badges" -filefilters:"-**/obj/**"
+          cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
 
   gateway:
     runs-on: ubuntu-latest

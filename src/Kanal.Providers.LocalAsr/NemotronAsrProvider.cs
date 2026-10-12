@@ -56,8 +56,7 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
     {
         var room = options.TargetLanguages;
         var forced = room.Count == 1 ? room[0] : null;
-        var stream = _streams(forced is null ? "auto" : PromptLanguage(forced));
-        return Task.FromResult<IAsrSession>(new Session(stream, room, forced));
+        return Task.Run(() => (IAsrSession)new Session(_streams(forced is null ? "auto" : PromptLanguage(forced)), room, forced), ct);
     }
 
     // The model's prompt dictionary has no bare "zh" or "ja"; an unknown key silently decodes as auto.
@@ -218,6 +217,7 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
             }
             finally
             {
+                _audio.Writer.TryComplete();
                 _events.Writer.TryComplete();
             }
         }

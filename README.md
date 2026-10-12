@@ -1,6 +1,6 @@
 # Kanal
 
-<img src="design/kanal-icon.png" width="200" alt="Kanal icon">
+<img src="design/icon/kanal-tile-light.png" width="200" alt="Kanal icon">
 
 **One room. Every language.**\
 同一场会议，每个人的语言。
@@ -20,7 +20,8 @@ The desktop host is built with Avalonia on .NET 10. Speech recognition and trans
 provider interfaces, so cloud and local stages can be combined without changing the room model or
 the mobile client.
 
-> Kanal is under active development. The scripted demo needs no API key and is ready to explore.
+> Kanal is under active development. The scripted demo needs no API key and is ready to explore
+> once `KANAL_ENV=development` is set.
 > Live meetings currently require cloud transcription. Read [Current limitations and
 > roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
 
@@ -80,13 +81,14 @@ Packaged desktop releases are not available yet, so run Kanal from source:
 ```bash
 git clone https://github.com/TONiiV/Kanal.git
 cd Kanal
-dotnet run --project src/Kanal.Host
+KANAL_ENV=development dotnet run --project src/Kanal.Host
 ```
 
 The first screen selects Chinese, German, and Polish by default. Leave **Demo — scripted** selected
 and press **Start**. A repeatable trilingual script runs through the real room orchestrator without
 an API key or microphone. Scan the displayed QR code to try the mobile view; mobile delivery still
-uses the configured caption relay.
+uses the configured caption relay. Demo is offered only when `KANAL_ENV` is `development` (any
+letter case); in Windows PowerShell, run `$env:KANAL_ENV = "development"` first.
 
 For a live room:
 
@@ -103,7 +105,7 @@ and explain what is missing.
 
 | Mode | Transcription | Translation | Speech-pipeline data sent off the host | Current availability |
 |---|---|---|---|---|
-| Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Available without keys |
+| Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Offered only with `KANAL_ENV=development`; no keys needed |
 | Cloud transcription · cloud translation | Gladia live | Gladia live | Audio | Available with a Gladia key |
 | Cloud transcription · local translation | Gladia live | Selected local GGUF model | Audio | Available with a Gladia key and downloaded model |
 | Local transcription · cloud translation | Selected local Nemotron 3.5 model | Standalone cloud MT not implemented | Text only | Unavailable |
@@ -142,6 +144,7 @@ Environment variables override connection defaults:
 | `KANAL_RELAY_URL` | Public HTTPS endpoint of the deployed `kanal-relay` Worker |
 | `KANAL_RELAY_HOST_TOKEN` | This desktop's device credential, obtained once with an activation code; runtime only, never part of a build or QR |
 | `KANAL_WEB_URL` | Base URL of the static mobile client placed in the join QR code |
+| `KANAL_ENV` | `development` adds **Demo — scripted** to the mode list; any other value, or none, leaves it out |
 
 The relay remains disabled rather than silently using a public fallback when either relay variable
 is absent.
@@ -217,6 +220,23 @@ scope. CI also enforces that the deployable web client and its GitHub Pages copy
 cmp web/index.html docs/index.html
 ```
 
+### Test coverage
+
+CI runs both suites on Windows and macOS, and on Linux as an optional job. The `coverage` job
+merges the reports of all platforms. The run page shows the summary table. The `coverage-report`
+artifact holds the full HTML report, line by line.
+
+To make the same report on your machine:
+
+```bash
+dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
+dotnet tool restore
+dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:Html -filefilters:"-**/obj/**"
+```
+
+Open `coverage-report/index.html`. Delete `coverage/` before the next run, or old reports merge in.
+
 For pipeline diagnosis:
 
 ```bash
@@ -230,14 +250,8 @@ dotnet run --project tools/Kanal.Doctor -- gladia mic-check.wav
 ## Contributing
 
 Issues and focused pull requests are welcome. Before changing behavior, read
-[`CLAUDE.md`](CLAUDE.md) for repository invariants and [`.impeccable.md`](.impeccable.md) for the
-interaction and visual constraints.
-
-- Keep one concern per pull request, and include tests for behavior changes.
-- Update [`docs/PROGRESS.md`](docs/PROGRESS.md) with relevant plans or design decisions.
-- Preserve the provider-capability boundary: orchestration must not branch on vendors.
-- Keep `web/index.html` and `docs/index.html` byte-identical.
-- Do not weaken the text-only relay boundary or the non-destructive speaker-merge model.
+[`CLAUDE.md`](CLAUDE.md): it holds the working practices and the repository invariants. For UI work,
+also read [`.impeccable.md`](.impeccable.md).
 
 Open a [GitHub issue](https://github.com/TONiiV/Kanal/issues) for a bug, proposal, or deployment
 question before starting a broad change.
@@ -262,12 +276,7 @@ question before starting a broad change.
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.
 
-The approved next host UI is specified in [Meeting workspace design](docs/design/meeting-workspace.md),
-including the [HTML prototype](docs/design/obsolete/meeting-ui.prototype.html) and implementation checks. Future automatic titles and a listening
-agent are tracked separately in [Meeting intelligence design](docs/design/meeting-intelligence.md).
-These documents describe planned behaviour, not features already available in the desktop host.
-The consolidated [implementation specification](docs/specs/meeting-workspace.md) is published as
-[#64](https://github.com/TONiiV/Kanal/issues/64) with the `ready-for-agent` label.
+Design documents are indexed in [`docs/design/README.md`](docs/design/README.md).
 
 ## License
 

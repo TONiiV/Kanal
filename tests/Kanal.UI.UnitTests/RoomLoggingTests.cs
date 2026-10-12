@@ -45,6 +45,20 @@ public class RoomLoggingTests
         public void Dispose() => undo();
     }
 
+    private static async Task PumpUntilAsync(Func<bool> condition, int timeoutMs = 15_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static async Task PumpAsync(int ms)
     {
         var deadline = Environment.TickCount64 + ms;
@@ -146,7 +160,7 @@ public class RoomLoggingTests
         await PumpAsync(100);
         await vm.StopCommand.ExecuteAsync(null);
 
-        Assert.NotEmpty(sink.Lines.Where(l => l.Level == LogLevel.Debug));
+        Assert.Contains(sink.Lines, l => l.Level == LogLevel.Debug);
     }
 
     [AvaloniaFact]
@@ -157,7 +171,7 @@ public class RoomLoggingTests
         var vm = TestViewModels.Demo(settings);
 
         await vm.StartCommand.ExecuteAsync(null);
-        await PumpAsync(400); // long enough for the scripted demo to produce utterances
+        await PumpUntilAsync(() => vm.Columns.SelectMany(c => c.Bubbles).Any(b => !string.IsNullOrWhiteSpace(b.Text)));
         await vm.StopCommand.ExecuteAsync(null);
 
         var spoken = vm.Columns.SelectMany(c => c.Bubbles).Select(b => b.Text)

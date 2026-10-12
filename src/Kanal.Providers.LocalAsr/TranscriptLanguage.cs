@@ -2,8 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Kanal.Providers.LocalAsr;
 
-// The model takes the language as input and does not report what it heard, so the source language
-// is read back from the text and the room's own languages.
 // ponytail: script + stopword vote; a short Latin sentence with no stopword falls to the first
 // Latin room language. Upgrade path: a dedicated language-identification model.
 public static class TranscriptLanguage

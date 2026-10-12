@@ -153,6 +153,55 @@ public class NemotronAsrProviderTests
     }
 
     [Fact]
+    public async Task AfterARecognizerFailureTheAudioQueueIsClosed()
+    {
+        var provider = new NemotronAsrProvider(_ =>
+            new ScriptedStream(("x", false)) { Throw = new InvalidOperationException("boom") });
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+
+        await session.PushAudioAsync(Chunk);
+        await foreach (var _ in session.Events)
+        {
+        }
+        await session.PushAudioAsync(Chunk);
+
+        var audio = (System.Threading.Channels.Channel<float[]>)session.GetType()
+            .GetField("_audio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(session)!;
+        Assert.False(audio.Reader.TryPeek(out _));
+        Assert.True(audio.Reader.Completion.IsCompleted);
+        await session.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task StartAsyncDoesNotBlockWhileTheStreamLoads()
+    {
+        using var gate = new ManualResetEventSlim();
+        var provider = new NemotronAsrProvider(_ =>
+        {
+            gate.Wait();
+            return new ScriptedStream();
+        });
+
+        var start = provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+
+        Assert.False(start.IsCompleted);
+        gate.Set();
+        await (await start).DisposeAsync();
+    }
+
+    [Fact]
+    public async Task StartAsyncHonoursCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var provider = new NemotronAsrProvider(_ => new ScriptedStream());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => provider.StartAsync(new AsrSessionOptions(16_000, Room), cts.Token));
+    }
+
+    [Fact]
     public void ItTranscribesOnlyAndLeavesTranslationToTheMtProvider()
     {
         var caps = new NemotronAsrProvider(_ => new ScriptedStream()).Caps;

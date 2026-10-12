@@ -13,6 +13,13 @@ public class ModelDownloadManagerTests : IDisposable
 
     private static readonly byte[] Payload = Encoding.UTF8.GetBytes("fake gguf payload KX-4402");
 
+    private sealed class SyncProgress : IProgress<double>
+    {
+        public List<double> Values { get; } = [];
+
+        public void Report(double value) => Values.Add(value);
+    }
+
     private sealed class FakeHandler : HttpMessageHandler
     {
         public Func<HttpRequestMessage, HttpResponseMessage> Respond { get; set; } =
@@ -104,17 +111,15 @@ public class ModelDownloadManagerTests : IDisposable
         var handler = new FakeHandler();
         var manager = Manager(handler);
         var model = TestModel();
-        var progress = new List<double>();
+        var progress = new SyncProgress();
 
         Assert.False(manager.IsDownloaded(model));
-        await manager.DownloadAsync(model, new Progress<double>(progress.Add), CancellationToken.None);
+        await manager.DownloadAsync(model, progress, CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(model));
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model), TestContext.Current.CancellationToken));
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
-        // progress lands via a SynchronizationContext-free Progress<>, give it a beat
-        await Task.Delay(50);
-        Assert.Contains(progress, p => p >= 1.0);
+        Assert.Contains(progress.Values, p => p >= 1.0);
     }
 
     [Fact]
@@ -167,7 +172,7 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
 
         var download = manager.DownloadAsync(model, null, cts.Token);
-        await body.Started.WaitAsync(TimeSpan.FromSeconds(10)); // part file now exists on disk
+        await body.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); // part file now exists on disk
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);
@@ -200,17 +205,17 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
 
         var first = manager.DownloadAsync(model, null, CancellationToken.None);
-        await slowBody.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await slowBody.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // the second download runs to completion while the first still holds its part file
-        await manager.DownloadAsync(model, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        await manager.DownloadAsync(model, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.True(manager.IsDownloaded(model));
 
         resume.SetResult();
-        await first.WaitAsync(TimeSpan.FromSeconds(10)); // must not throw FileNotFoundException
+        await first.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); // must not throw FileNotFoundException
 
         Assert.True(manager.IsDownloaded(model));
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model), TestContext.Current.CancellationToken));
         Assert.Empty(PartFiles());
     }
 
@@ -232,7 +237,7 @@ public class ModelDownloadManagerTests : IDisposable
 
         Assert.True(manager.IsDownloaded(part));
         Assert.Equal(part.DownloadUrl, handler.LastUri!.ToString());
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(part)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(part), TestContext.Current.CancellationToken));
     }
 
     private sealed record TestPart(
@@ -241,8 +246,6 @@ public class ModelDownloadManagerTests : IDisposable
         long SizeBytes,
         string Sha256) : IDownloadableFile;
 
-    /// <summary>Three of four on disk must read as not downloaded, or the operator starts a
-    /// meeting against a model that cannot load.</summary>
     [Fact]
     public async Task AModelOfSeveralPartsIsReadyOnlyWhenEveryPartIsPresent()
     {
@@ -270,16 +273,38 @@ public class ModelDownloadManagerTests : IDisposable
             Part("small.onnx", Payload.Length),
             Part("big.onnx", Payload.Length * 9),
         };
-        var progress = new List<double>();
+        var progress = new SyncProgress();
 
-        await manager.DownloadAsync(parts, new Progress<double>(progress.Add), CancellationToken.None);
+        await manager.DownloadAsync(parts, progress, CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(parts));
-        await Task.Delay(50);
         // one of two files done, but a tenth of the bytes — counting files would say 0.5
-        Assert.Contains(progress, p => Math.Abs(p - 0.1) < 0.001);
-        Assert.DoesNotContain(progress, p => Math.Abs(p - 0.5) < 0.001);
-        Assert.Contains(progress, p => p >= 1.0);
+        Assert.Contains(progress.Values, p => Math.Abs(p - 0.1) < 0.001);
+        Assert.DoesNotContain(progress.Values, p => Math.Abs(p - 0.5) < 0.001);
+        Assert.Contains(progress.Values, p => p >= 1.0);
+    }
+
+    [Fact]
+    public async Task DownloadOfSeveralPartsFetchesOnlyTheMissingOnes()
+    {
+        var handler = new FakeHandler();
+        var manager = Manager(handler);
+        var parts = ThreeParts();
+        await manager.DownloadAsync(parts[0], null, CancellationToken.None);
+        var fetched = new List<string>();
+        handler.Respond = request =>
+        {
+            fetched.Add(request.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Payload) };
+        };
+        var progress = new SyncProgress();
+
+        await manager.DownloadAsync(parts, progress, CancellationToken.None);
+
+        Assert.Equal([parts[1].DownloadUrl, parts[2].DownloadUrl], fetched);
+        Assert.True(manager.IsDownloaded(parts));
+        Assert.All(progress.Values, p => Assert.True(p >= 2.0 / 3 - 0.001));
+        Assert.Contains(progress.Values, p => Math.Abs(p - 2.0 / 3) < 0.001);
     }
 
     [Fact]
@@ -327,8 +352,8 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
         await manager.DownloadAsync(model, null, CancellationToken.None);
 
-        await File.WriteAllTextAsync(manager.GetPath(model) + ".part", "legacy");
-        await File.WriteAllTextAsync(manager.GetPath(model) + ".deadbeef.part", "interrupted");
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".part", "legacy", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".deadbeef.part", "interrupted", TestContext.Current.CancellationToken);
 
         manager.Delete(model);
 
