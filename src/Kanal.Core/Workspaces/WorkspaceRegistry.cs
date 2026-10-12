@@ -1,3 +1,5 @@
+using Kanal.Core.Diagnostics;
+
 namespace Kanal.Core.Workspaces;
 
 internal sealed class WorkspaceRegistry(string path)
@@ -10,7 +12,11 @@ internal sealed class WorkspaceRegistry(string path)
             return ([], null);
 
         var (registry, problem) = RecordFile.Read<StoredRegistry>(path);
-        return problem is not null ? ([], problem) : (registry!.Workspaces!, null);
+        if (problem is not null)
+            return ([], problem);
+
+        // A null element would crash every caller; as an incomplete row it is reported and droppable.
+        return ([.. registry!.Workspaces!.Select(e => e ?? new StoredRegistryEntry(null, null, null, default))], null);
     }
 
     public void Write(List<StoredRegistryEntry> entries)
@@ -37,10 +43,10 @@ internal sealed class WorkspaceRegistry(string path)
             : (null, StoreProblems.Unplugged(entry));
     }
 
-    public StoreProblem? RefuseTaken(string rootPath)
+    public StoreProblem? RefuseTaken(string rootPath, string? exceptId = null)
     {
         var (entries, problem) = Read();
-        return problem ?? Occupied(entries, rootPath, byAnyoneBut: null);
+        return problem ?? Occupied(entries, rootPath, byAnyoneBut: exceptId);
     }
 
     public WorkspaceResult Register(Workspace workspace)
@@ -97,6 +103,15 @@ internal sealed class WorkspaceRegistry(string path)
         return WriteOrProblem(entries);
     }
 
+    public StoreProblem? DropBroken()
+    {
+        var (entries, problem) = Read();
+        if (problem is not null)
+            return problem;
+
+        return entries.RemoveAll(e => !e.Complete) == 0 ? null : WriteOrProblem(entries);
+    }
+
     private StoreProblem? WriteOrProblem(List<StoredRegistryEntry> entries)
     {
         try
@@ -106,7 +121,9 @@ internal sealed class WorkspaceRegistry(string path)
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(path, "The workspace list could not be written.", ex);
+            const string failure = "The workspace list could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({path})", ex);
+            return StoreProblems.Unwritable(path, failure, ex);
         }
     }
 

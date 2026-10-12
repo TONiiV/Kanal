@@ -1,3 +1,5 @@
+using Kanal.Core.Diagnostics;
+
 namespace Kanal.Core.Workspaces;
 
 public sealed class WorkspaceStore
@@ -6,6 +8,7 @@ public sealed class WorkspaceStore
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = MeetingRecords.FileName;
     public const string AudioFileName = "audio.wav";
+    public const string MeetingsFolderName = MeetingRecords.MeetingsFolderName;
     public const string IconFileStem = WorkspaceIcons.FileStem;
     public const long MaxIconBytes = WorkspaceIcons.MaxBytes;
     public static readonly IReadOnlyList<string> IconExtensions = WorkspaceIcons.Extensions;
@@ -33,7 +36,7 @@ public sealed class WorkspaceStore
             if (!entry.Complete)
             {
                 problems.Add(new StoreProblem(
-                    StoreProblemKind.Unreadable, registry.FilePath, "A row of the list is missing fields."));
+                    StoreProblemKind.RegistryRowDamaged, registry.FilePath, "A row of the list is missing fields."));
                 continue;
             }
 
@@ -73,8 +76,9 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return new WorkspaceResult(
-                null, StoreProblems.Unwritable(rootPath, "The workspace folder could not be written.", ex));
+            const string failure = "The workspace folder could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({rootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(rootPath, failure, ex));
         }
 
         return registry.Register(workspace);
@@ -161,13 +165,98 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(root, "The workspace files could not be deleted.", ex);
+            const string failure = "The workspace files could not be deleted.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({root})", ex);
+            return StoreProblems.Unwritable(root, failure, ex);
         }
 
         return ForgetWorkspace(id);
     }
 
     public StoreProblem? ForgetWorkspace(string id) => registry.Forget(id);
+
+    // The marker is written before the list: a refusal or a failed write leaves the old row in place.
+    public WorkspaceResult RelocateWorkspace(string id, string newRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(newRootPath))
+            return Refused(newRootPath, "A workspace needs a folder.");
+
+        newRootPath = StorePaths.Canonical(newRootPath);
+        if (!Directory.Exists(newRootPath))
+            return new WorkspaceResult(null, new StoreProblem(
+                StoreProblemKind.FolderMissing, newRootPath, "That folder is not there."));
+
+        var (entries, problem) = registry.Read();
+        if (problem is not null)
+            return new WorkspaceResult(null, problem);
+
+        var index = entries.FindIndex(e => e.Id == id && e.Complete);
+        if (index < 0)
+            return new WorkspaceResult(null, StoreProblems.NoSuchWorkspace(id));
+        if (registry.RefuseTaken(newRootPath, exceptId: id) is { } taken)
+            return new WorkspaceResult(null, taken);
+
+        var current = entries[index];
+        if (!StorePaths.SamePath(current.RootPath!, newRootPath) && Directory.Exists(current.RootPath))
+            return Refused(newRootPath, $"The workspace \"{current.Name}\" is still at {current.RootPath}.");
+
+        var relocated = current.ToWorkspace() with { RootPath = newRootPath };
+        var marker = MarkerIn(newRootPath);
+        if (File.Exists(marker))
+        {
+            var (stored, unreadable) = RecordFile.Read<StoredWorkspace>(marker);
+            if (unreadable is not null)
+                return new WorkspaceResult(null, unreadable);
+            if (stored!.Id != id)
+                return new WorkspaceResult(null, StoreProblems.NotThisWorkspace(
+                    newRootPath, "That folder holds another workspace."));
+        }
+
+        try
+        {
+            if (!File.Exists(marker))
+            {
+                Directory.CreateDirectory(MeetingRecords.FolderIn(newRootPath));
+                WriteMarker(relocated);
+            }
+
+            entries[index] = StoredRegistryEntry.From(relocated);
+            registry.Write(entries);
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The workspace could not be moved.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({newRootPath})", ex);
+            return new WorkspaceResult(null, StoreProblems.Unwritable(newRootPath, failure, ex));
+        }
+
+        return new WorkspaceResult(relocated, null);
+    }
+
+    public StoreProblem? CreateMeetingsFolder(string id)
+    {
+        var (workspace, problem) = registry.Locate(id);
+        if (problem is not null)
+            return problem;
+
+        var folder = MeetingRecords.FolderIn(workspace!.RootPath);
+        if (Directory.Exists(folder))
+            return null;
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The meetings folder could not be created.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return StoreProblems.Unwritable(folder, failure, ex);
+        }
+    }
+
+    public StoreProblem? DropBrokenRegistryRows() => registry.DropBroken();
 
     /// <summary>
     /// The workspace the host records into, created on the first launch. A meeting with nowhere
@@ -225,6 +314,7 @@ public sealed class WorkspaceStore
         }
         catch (Exception ex)
         {
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({current.RootPath})", ex);
             return new WorkspaceResult(null, StoreProblems.Unwritable(current.RootPath, failure, ex));
         }
 
