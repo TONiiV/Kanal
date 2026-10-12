@@ -36,7 +36,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   be read".
 - If Kanal cannot create the default project at start-up, the log now names the folder and the
   reason. Before, the log said nothing in some cases, for example when the folder was a file.
-- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
 - When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete
