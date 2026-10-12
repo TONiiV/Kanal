@@ -18,6 +18,14 @@ Ticket #193 of the Appearance spec (#187).
   Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
 - The icon of the exe, the installer and the macOS bundle stays the light version.
 
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
 ## 2026-10-11
 
 ### Icons on the settings tabs
