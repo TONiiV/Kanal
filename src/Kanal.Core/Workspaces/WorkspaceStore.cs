@@ -8,6 +8,7 @@ public sealed class WorkspaceStore
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = MeetingRecords.FileName;
     public const string AudioFileName = "audio.wav";
+    public const string MeetingsFolderName = MeetingRecords.MeetingsFolderName;
     public const string IconFileStem = WorkspaceIcons.FileStem;
     public const long MaxIconBytes = WorkspaceIcons.MaxBytes;
     public static readonly IReadOnlyList<string> IconExtensions = WorkspaceIcons.Extensions;
