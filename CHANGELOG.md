@@ -17,6 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- The window no longer freezes at start when a project is on a slow network share. Kanal now checks
+  the other projects for issues in the background. The warning marks in the project list appear when
+  that check ends.
 - When the current project has issues, a banner above the settings gear shows how many. A
   damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
   settings at the new Issues section, which gives each issue its cause and its path. In the project

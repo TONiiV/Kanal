@@ -21,6 +21,25 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
 - Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
 
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
 ### Issues banner and Issues section (#212, part of spec #209)
 
 The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
@@ -35,7 +54,7 @@ banner and in project settings. The issues are read-only. Ticket #213 adds the R
 3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
    mark in the project drop-down. A project whose root is already reported missing is not listed
    again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
-   `Distinct()` and logged once per listing. Ticket #222 moves this scan off the UI thread.
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
 4. The banner sits above the settings gear. It shows the count of the current project only. The
    alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
    colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
