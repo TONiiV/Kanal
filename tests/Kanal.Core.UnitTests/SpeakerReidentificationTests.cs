@@ -140,7 +140,7 @@ public class SpeakerReidentificationTests
     [Fact]
     public async Task SherpaSeparatesFourSpeakersInARealRecording()
     {
-        var folder = Environment.GetEnvironmentVariable("KANAL_DIARIZATION_MODELS");
+        var folder = Environment.GetEnvironmentVariable("KANAL_DIARIZATION_MODELS") ?? Path.Combine(Path.GetTempPath(), "kanal-diar-ci");
         Assert.SkipWhen(string.IsNullOrEmpty(folder),
             "Set KANAL_DIARIZATION_MODELS to a folder; the default models and a test recording download into it.");
 
