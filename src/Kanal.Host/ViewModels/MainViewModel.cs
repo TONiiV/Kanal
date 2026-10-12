@@ -132,6 +132,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         bool development = false)
     {
         _titler = titler;
+        Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSpeakers));
         _offUiThread = offUiThread ?? (work =>
         {
             work();
@@ -520,6 +521,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
+    public bool HasSpeakers => Speakers.Count > 0;
+
     public AssistantViewModel Assistant { get; } = new();
 
     public ObservableCollection<AudioDeviceInfo> Devices { get; } = new();
@@ -826,12 +829,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
     public bool ShowComputerLevel => ShowMicLevel && NeedsComputerAudio;
-
-    [ObservableProperty]
-    private string _mergeFromTag = "";
-
-    [ObservableProperty]
-    private string _mergeIntoTag = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
@@ -1972,16 +1969,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _session.RenameSpeaker(item.Tag, name);
     }
 
-    [RelayCommand]
-    private void MergeSpeakers()
-    {
-        if (_session is null ||
-            string.IsNullOrWhiteSpace(MergeFromTag) || string.IsNullOrWhiteSpace(MergeIntoTag))
-            return;
-        _session.MergeSpeakers(MergeFromTag.Trim(), MergeIntoTag.Trim());
-        MergeFromTag = "";
-        MergeIntoTag = "";
-    }
+    private void ApplyMerge(SpeakerItemViewModel item, string intoTag) =>
+        _session?.MergeSpeakers(item.Tag, intoTag);
+
+    private void ApplyColour(SpeakerItemViewModel item, string colour) =>
+        _session?.SetSpeakerColour(item.Tag, colour);
 
     /// <summary>
     /// Where a meeting's audio is written, or null when it is not being recorded — scripted
@@ -2202,7 +2194,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         return sb.ToString();
     }
 
-    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
+    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename, ApplyMerge, ApplyColour) { Tag = tag };
 
     private void ApplyUtterance(Utterance u)
     {
@@ -2232,6 +2224,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.Text = isSourceColumn ? u.SrcText : translation ?? "…";
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
+
+        RefreshUtteranceCounts();
     }
 
     // "und" is Gladia's answer when it could not place the language; printed raw it reads like an
@@ -2274,6 +2268,28 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         Ruler.Reresolve();
+        RefreshMergeTargets();
+        RefreshUtteranceCounts();
+    }
+
+    private void RefreshUtteranceCounts()
+    {
+        var counts = (Columns.FirstOrDefault()?.Bubbles ?? [])
+            .GroupBy(b => ResolveSpeaker(b.SpeakerTag).Tag)
+            .ToDictionary(g => g.Key, g => g.Count());
+        foreach (var item in Speakers)
+            item.UtteranceCount = counts.GetValueOrDefault(item.Tag);
+    }
+
+    private void RefreshMergeTargets()
+    {
+        string Label(SpeakerItemViewModel o) =>
+            _speakerModels.TryGetValue(o.Tag, out var m) && m.DisplayName is { Length: > 0 } name
+                ? $"{o.Tag} · {name}"
+                : o.Tag;
+
+        foreach (var item in Speakers)
+            item.MergeTargets = Speakers.Where(o => o != item).Select(o => new MergeTarget(o.Tag, Label(o))).ToList();
     }
 
     private (string Tag, string Name, string Color) ResolveSpeaker(string tag)
