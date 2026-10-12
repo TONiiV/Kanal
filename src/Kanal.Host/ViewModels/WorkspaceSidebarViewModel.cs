@@ -45,6 +45,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 return;
 
             OnPropertyChanged(nameof(EmptyNote));
+            OnPropertyChanged(nameof(IssueCountText));
+            foreach (var issue in Issues)
+                issue.OnLanguageChanged();
+            if (_issueNote.Length > 0 && ProblemNote == _issueNote)
+                ShowUnopenableIssues();
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
             foreach (var group in _groups)
@@ -58,9 +63,34 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public ObservableCollection<MeetingGroupViewModel> MeetingGroups { get; } = new();
 
+    public ObservableCollection<ProjectIssueViewModel> Issues { get; } = new();
+
+    public bool HasIssues => Issues.Count > 0;
+
+    public bool IssuesAreAlarm => Issues.Any(issue => issue.IsAlarm);
+
+    public string IssueCountText => Issues.Count == 1
+        ? L["workspace.issues.one"]
+        : L.Format("workspace.issues.many", Issues.Count);
+
+    [ObservableProperty]
+    private IReadOnlyDictionary<string, bool> _projectIssueStates = new Dictionary<string, bool>();
+
+    private readonly Dictionary<string, IReadOnlyList<ProjectIssueViewModel>> _issuesByProject = [];
+
+    private IReadOnlyList<StoreProblem> _projectListProblems = [];
+
+    private string _issueNote = "";
+
+    public IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project) =>
+        project.Id == SelectedWorkspace?.Id
+            ? [.. Issues]
+            : _issuesByProject.GetValueOrDefault(project.Id, []);
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportMeetingRecordCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowIssuesCommand))]
     private Workspace? _selectedWorkspace;
 
     [ObservableProperty]
@@ -250,7 +280,68 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             _refreshing = false;
         }
 
-        LoadMeetings(listing.Problems);
+        _projectListProblems = Logged([.. listing.Problems
+            .Where(p => !listing.Workspaces.Any(w => IsFolderOf(p, w)))
+            .Distinct()]);
+        _issuesByProject.Clear();
+        foreach (var workspace in Workspaces.Where(w => w.Id != SelectedWorkspace?.Id))
+        {
+            // A missing root is not looked up twice: on an offline share each lookup waits for the timeout.
+            var missing = listing.Problems.Where(p => IsFolderOf(p, workspace)).ToList();
+            var problems = missing.Count > 0 ? missing : _store.ListMeetings(workspace.Id).Problems;
+            _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
+        }
+
+        LoadMeetings([.. listing.Problems.Where(p => SelectedWorkspace is { } current && IsFolderOf(p, current))]);
+    }
+
+    private static bool IsFolderOf(StoreProblem problem, Workspace project) =>
+        problem.Kind == StoreProblemKind.FolderMissing && problem.Subject == project.RootPath;
+
+    private static IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project, IEnumerable<StoreProblem> problems) =>
+        [.. Logged([.. problems.Distinct()]).Select(p => ProjectIssueViewModel.For(p, project))];
+
+    private static IReadOnlyList<StoreProblem> Logged(IReadOnlyList<StoreProblem> problems)
+    {
+        foreach (var problem in problems)
+            Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        return problems;
+    }
+
+    private void ShowIssues()
+    {
+        Issues.Clear();
+        var origin = Workspaces.Count == 0 ? IssueOrigin.ProjectList : IssueOrigin.ProjectListRow;
+        foreach (var problem in _projectListProblems)
+            Issues.Add(ProjectIssueViewModel.For(problem, SelectedWorkspace, origin));
+        if (SelectedWorkspace is { } current)
+            foreach (var issue in _issuesByProject.GetValueOrDefault(current.Id, []))
+                Issues.Add(issue);
+
+        var states = _issuesByProject.Where(pair => pair.Value.Count > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.Any(issue => issue.IsAlarm));
+        if (SelectedWorkspace is { } workspace)
+        {
+            states.Remove(workspace.Id);
+            if (Issues.Count > 0)
+                states[workspace.Id] = IssuesAreAlarm;
+        }
+
+        ProjectIssueStates = states;
+        OnPropertyChanged(nameof(HasIssues));
+        OnPropertyChanged(nameof(IssuesAreAlarm));
+        OnPropertyChanged(nameof(IssueCountText));
+        ShowUnopenableIssues();
+    }
+
+    // Details opens the settings of a project; with none listed, the note is the only place left.
+    private void ShowUnopenableIssues()
+    {
+        if (SelectedWorkspace is not null || Issues.Count == 0)
+            return;
+
+        _issueNote = string.Join("\n", Issues.Select(issue => $"{issue.Cause} {issue.Location}"));
+        ProblemNote = _issueNote;
     }
 
     partial void OnSelectedWorkspaceChanged(Workspace? value)
@@ -309,9 +400,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             var listing = _store.ListMeetings(workspace.Id);
             _held.AddRange(listing.Meetings.OrderByDescending(m => m.CreatedAt));
             problems.AddRange(listing.Problems);
+            _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
         }
 
-        ProblemNote = problems.Count == 0 ? "" : L.Format("workspace.problems", problems.Count);
+        ProblemNote = "";
+        ShowIssues();
         Show();
     }
 
@@ -382,12 +475,18 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task OpenProjectSettingsAsync(Workspace? project)
+    private Task OpenProjectSettingsAsync(Workspace? project) => ShowSettingsAsync(project, openAtIssues: false);
+
+    [RelayCommand(CanExecute = nameof(HasWorkspace))]
+    private Task ShowIssuesAsync() => ShowSettingsAsync(SelectedWorkspace, openAtIssues: true);
+
+    private async Task ShowSettingsAsync(Workspace? project, bool openAtIssues)
     {
         if (project is null || ShowProjectSettings is null)
             return;
 
-        var settings = new ProjectSettingsViewModel(_store, project, recording: RecordingMeetingId is not null);
+        var settings = new ProjectSettingsViewModel(
+            _store, project, recording: RecordingMeetingId is not null, IssuesOf(project), openAtIssues);
         await ShowProjectSettings(settings);
         if (settings.Changed)
             Refresh();
@@ -433,7 +532,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem))
+        if (Refused(problem, ImportKey(problem, source)))
             return;
 
         var asNewRecord = false;
@@ -449,7 +548,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             asNewRecord = true;
         }
 
-        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+        var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
+        if (Refused(imported, ImportKey(imported, source)))
             return;
 
         ProblemNote = "";
@@ -494,15 +594,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private bool Refused(StoreProblem? problem)
+    private static string? ImportKey(StoreProblem? problem, string bundlePath) =>
+        problem is { Kind: StoreProblemKind.Unreadable } && problem.Subject == bundlePath
+            ? "workspace.import.unreadable"
+            : null;
+
+    private bool Refused(StoreProblem? problem, string? key = null)
     {
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
-            ? L.Format("workspace.titletaken", problem.Subject)
-            : problem.Detail;
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        ProblemNote = StoreRefusal.Report(problem, LogCategory, key);
         return true;
     }
 

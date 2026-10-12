@@ -5,9 +5,8 @@ namespace Kanal.Core.Workspaces;
 internal sealed class MeetingRecords(WorkspaceRegistry registry)
 {
     public const string FileName = "meeting.json";
-    private const string MeetingsFolderName = "meetings";
+    public const string MeetingsFolderName = "meetings";
     private const string NeedsTitle = "A meeting needs a title.";
-    private const string NotAnId = "That is not a meeting id.";
 
     public static string FolderIn(string workspaceRoot) => Path.Combine(workspaceRoot, MeetingsFolderName);
 
@@ -30,8 +29,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         catch (Exception ex)
         {
             Log.Warning(StoreProblems.LogCategory, $"{folder} could not be listed.", ex);
-            return new MeetingListing([], [new StoreProblem(
-                StoreProblemKind.Unreadable, folder, ex.Message)]);
+            return new MeetingListing([], [StoreProblems.Unreadable(folder, ex.Message)]);
         }
 
         var meetings = new List<MeetingRecord>();
@@ -81,7 +79,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
     public MeetingResult Save(MeetingRecord meeting)
     {
         if (!StorePaths.IsFolderName(meeting.Id))
-            return Refused(meeting.Id, NotAnId);
+            return new MeetingResult(null, StoreProblems.NotAMeetingId(meeting.Id));
         if (string.IsNullOrWhiteSpace(meeting.Title))
             return Refused(meeting.Id, NeedsTitle);
         if (meeting.CreatedAt == default)
@@ -104,7 +102,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return new MeetingResult(null, StoreProblems.Unwritable(folder, "The meeting could not be written.", ex));
+            const string failure = "The meeting could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return new MeetingResult(null, StoreProblems.Unwritable(folder, failure, ex));
         }
 
         return new MeetingResult(meeting, null);
@@ -153,7 +153,9 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(folder!, "The meeting could not be deleted.", ex);
+            const string failure = "The meeting could not be deleted.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({folder})", ex);
+            return StoreProblems.Unwritable(folder!, failure, ex);
         }
     }
 
@@ -161,7 +163,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
     {
         // An id becomes a folder name, so ".." here would delete the workspace it lives in.
         if (!StorePaths.IsFolderName(meetingId))
-            return (null, StoreProblems.Invalid(meetingId, NotAnId));
+            return (null, StoreProblems.NotAMeetingId(meetingId));
 
         var (workspace, problem) = registry.Locate(workspaceId);
         return problem is null ? (FolderFor(workspace!, meetingId), null) : (null, problem);
