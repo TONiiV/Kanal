@@ -17,6 +17,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - The window no longer freezes at start when a project is on a slow network share. Kanal now checks
   the other projects for issues in the background. The warning marks in the project list appear when
   that check ends.
