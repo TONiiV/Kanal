@@ -56,6 +56,47 @@ public class StoreProblemsTests : IDisposable
         Assert.NotNull(line.Error);
     }
 
+    [Fact]
+    public void The_store_logs_a_failed_move_once_with_its_path_and_cause()
+    {
+        var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
+        var old = Path.Combine(_root, "old");
+        Directory.CreateDirectory(old);
+        var id = store.CreateWorkspace("Project", old).Workspace!.Id;
+        Directory.Delete(old, recursive: true);
+        var target = Path.Combine(_root, "new");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "meetings"), "a file where the meetings folder belongs");
+
+        var problem = store.RelocateWorkspace(id, target).Problem;
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem?.Kind);
+        var line = Assert.Single(_sink.Lines, line => line.Message.Contains(_root));
+        Assert.Equal(LogLevel.Warning, line.Level);
+        Assert.Equal($"The workspace could not be moved. ({problem!.Subject})", line.Message);
+        Assert.NotNull(line.Error);
+    }
+
+    [Fact]
+    public void The_store_logs_a_failed_meetings_folder_once_with_its_path_and_cause()
+    {
+        var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
+        var folder = Path.Combine(_root, "project");
+        Directory.CreateDirectory(folder);
+        var id = store.CreateWorkspace("Project", folder).Workspace!.Id;
+        var meetings = Path.Combine(folder, "meetings");
+        Directory.Delete(meetings);
+        File.WriteAllText(meetings, "a file where the meetings folder belongs");
+
+        var problem = store.CreateMeetingsFolder(id);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem?.Kind);
+        var line = Assert.Single(_sink.Lines, line => line.Message.Contains(_root));
+        Assert.Equal(LogLevel.Warning, line.Level);
+        Assert.Equal($"The meetings folder could not be created. ({problem!.Subject})", line.Message);
+        Assert.NotNull(line.Error);
+    }
+
     private sealed record Line(LogLevel Level, string Category, string Message, Exception? Error);
 
     private sealed class RecordingSink : ILogSink
