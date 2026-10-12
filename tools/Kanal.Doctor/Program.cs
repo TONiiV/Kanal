@@ -232,7 +232,7 @@ static async Task<int> AsrCheckAsync(string? wavPath, string? modelsDir)
     var duration = WavDuration(wavPath);
     Console.WriteLine($"### Local ASR on {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
     Console.WriteLine();
-    Console.WriteLine($"- model: `{model.Id}`, CPU, {Math.Clamp(Environment.ProcessorCount / 2, 1, 4)} threads of {Environment.ProcessorCount} logical cores");
+    Console.WriteLine($"- model: `{model.Id}`, CPU, {Environment.ProcessorCount} logical cores");
     Console.WriteLine($"- NVIDIA GPU: {NvidiaGpu()}");
     Console.WriteLine($"- download {(missing.Count > 0 ? $"{download.Elapsed.TotalSeconds:F1} s" : "cached")}, load {load.Elapsed.TotalSeconds:F1} s");
     Console.WriteLine($"- audio {Path.GetFileName(wavPath)}, {duration:F1} s");

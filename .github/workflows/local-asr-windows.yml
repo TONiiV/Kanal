@@ -10,6 +10,13 @@ on:
       - 'tools/Kanal.Doctor/**'
       - 'tests/TestData/**'
       - '.github/workflows/local-asr-windows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/Kanal.Providers.LocalAsr/**'
+      - 'tools/Kanal.Doctor/**'
+      - 'tests/TestData/**'
+      - '.github/workflows/local-asr-windows.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +45,7 @@ jobs:
           key: asr-models-${{ hashFiles('src/Kanal.Providers.LocalAsr/AsrModelCatalog.cs') }}
 
       - name: Real-model transcription
+        if: ${{ !cancelled() }}
         run: |
           dotnet run --configuration Release --project tools/Kanal.Doctor -- \
             asr tests/TestData/tts-zh.wav "$RUNNER_TEMP/kanal-models" | tee report.md
