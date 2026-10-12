@@ -46,6 +46,12 @@ public enum StoreProblemKind
 
     NotThisWorkspace,
 
+    RecordMissing,
+
+    RecordDamaged,
+
+    Misfiled,
+
     RegistryRowDamaged,
 }
 
@@ -63,3 +69,5 @@ public sealed record MeetingListing(
 public sealed record WorkspaceResult(Workspace? Workspace, StoreProblem? Problem);
 
 public sealed record MeetingResult(MeetingRecord? Meeting, StoreProblem? Problem);
+
+public sealed record RecoverResult(MeetingRecord? Recovered, string? SetAsidePath, StoreProblem? Problem);
