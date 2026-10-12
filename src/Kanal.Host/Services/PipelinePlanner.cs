@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Kanal.Core.Insights;
 using Kanal.Core.Meetings;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
@@ -37,7 +38,8 @@ public sealed record PipelinePlan(
     IMtProvider? Mt,
     bool CloudTranslation,
     string? Substitution,
-    IMeetingTitler? Titler);
+    IMeetingTitler? Titler,
+    IMeetingAgent? Agent = null);
 
 /// <summary>
 /// Resolves a mode to a provider pair. This is the only place a mode is inspected — the
@@ -91,7 +93,8 @@ public static class PipelinePlanner
             mt,
             mode.Translation == StageKind.Cloud,
             resolved.Substitution,
-            generator is null ? null : new GeneratedMeetingTitler(generator));
+            generator is null ? null : new GeneratedMeetingTitler(generator),
+            generator is null ? null : new GeneratedMeetingAgent(generator));
     }
 
     private sealed record Resolution(

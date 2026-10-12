@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Kanal.Core.Insights;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Core.Providers.Testing;
 using Kanal.Core.Room;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -56,6 +57,78 @@ public class AssistantPanelTests
 
         vm.Record(Insight("i1", InsightKind.Point, "Delivery", "u1"));
         Assert.False(vm.ShowNothingFoundYet);
+    }
+
+    private sealed class OnePointPerWindow : IMeetingAgent
+    {
+        public string Id => "test-agent";
+
+        public MeetingAgentCapabilities Caps { get; } = new(new HashSet<InsightKind> { InsightKind.Point });
+
+        public Task<IReadOnlyList<MeetingInsight>> ProposeAsync(MeetingAgentWindow window, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<MeetingInsight>>(
+                [new("", InsightKind.Point, "Lieferung", "Termin vor Ende August", [window.Finals[0].Id])]);
+    }
+
+    private static MainViewModel DemoWith(IMeetingAgent? agent)
+    {
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(partialInterval: TimeSpan.FromMilliseconds(5), loop: true),
+            Agent = agent,
+        };
+        return vm;
+    }
+
+    private static async Task PumpUntilAsync(Func<bool> condition)
+    {
+        var deadline = Environment.TickCount64 + 15_000;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task AConnectedAgentsCandidatesAppearInThePanelWhileTheMeetingRuns()
+    {
+        var vm = DemoWith(new OnePointPerWindow());
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.True(vm.Assistant.IsAnalystConnected);
+        await PumpUntilAsync(() => vm.Assistant.Topics.Count > 0);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var topic = Assert.Single(vm.Assistant.Topics);
+        Assert.Equal("Lieferung", topic.Topic);
+        Assert.All(topic.Items, item => Assert.True(item.IsCandidate));
+        Assert.True(vm.Assistant.IsAnalystConnected);
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutAnAgentTheMeetingRunsAndThePanelSaysNoneIsConnected()
+    {
+        var vm = DemoWith(null);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.Assistant.IsAnalystConnected);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public void ANewMeetingStartsWithNoAnalystUntilOneIsConnected()
+    {
+        var vm = Following("u1");
+        vm.IsAnalystConnected = true;
+
+        vm.Forget();
+
+        Assert.False(vm.IsAnalystConnected);
     }
 
     [Fact]

@@ -19,6 +19,14 @@ The human-readable name of a meeting record, distinct from its workspace name. I
 A meeting assistant that follows an ongoing meeting, answers questions and offers suggestions or fact-check findings.
 _Avoid_: ASR provider, translator
 
+**Meeting agent**:
+One replaceable implementation behind the listening agent, such as a local model or a command-line harness. It reads a window of finals and proposes candidates. It never changes the room.
+_Avoid_: Intelligence provider (the inference source a meeting agent may use), analyst
+
+**Candidate**:
+A point, proposal or decision that a meeting agent proposes. It cites the utterances it came from and stays a candidate until a person confirms or dismisses it.
+_Avoid_: Decision (only a confirmed candidate is one), suggestion
+
 **User feedback**:
 A suggestion, bug report or question submitted to the maintainers with a contact email. Submitting feedback does not require a Kanal account.
 _Avoid_: GitHub issue (a separate maintainer tracking item)

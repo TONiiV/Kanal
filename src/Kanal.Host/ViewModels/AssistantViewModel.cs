@@ -35,6 +35,7 @@ public sealed partial class AssistantViewModel : ViewModelBase
     {
         _room = null;
         _insights = null;
+        IsAnalystConnected = false;
         Refresh();
     }
 

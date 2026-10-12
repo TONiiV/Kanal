@@ -6,6 +6,24 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Meeting agent abstraction
+
+Part of #34. ADR 0058 records the design and is proposed, not accepted.
+
+- `IMeetingAgent` reads a window of finals and returns candidate `MeetingInsight`s.
+  `MeetingAgentCapabilities.Kinds` names the kinds it can propose.
+- `MeetingAgentRunner` follows `RoomState.UtteranceUpserted`. It sends 8 finals at once, or what it has
+  after 10 s without a new final. It runs one call at a time on the thread pool.
+- The runner assigns each candidate a new id and the `Candidate` state. A kind outside `Caps.Kinds` is
+  dropped. `MeetingInsights.Record` still refuses a candidate without a source in the room.
+- An agent failure loses one window and writes a warning. Stop cancels the call in flight.
+- `GeneratedMeetingAgent` is the first real agent. It uses the local `ITextGenerator` that translation
+  and titling share. Its output is one `KIND|TOPIC|TEXT|IDS` line per candidate.
+- `PipelinePlan.Agent` is set when a local translation model is chosen and downloaded. Then
+  `AssistantViewModel.IsAnalystConnected` is true and candidates appear in the "Points and decisions" tab.
+- Not built: the Claude Code and Codex adapters. ADR 0058 section E shows where they plug in.
+- Open for the human: the local agent and live translation share one model lock (ADR 0058, F.23).
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).
