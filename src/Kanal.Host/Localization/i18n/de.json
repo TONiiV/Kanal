@@ -358,6 +358,7 @@
   "workspace.refused.notfound": "Kanal findet dieses Projekt oder diese Besprechung nicht. Ein anderes Programm hat den Eintrag möglicherweise entfernt.",
   "workspace.refused.foldermissing": "Dieser Ordner fehlt: {0}. Schließen Sie das Laufwerk an, oder wählen Sie einen anderen Ordner.",
   "workspace.refused.unreadable": "Kanal kann {0} nicht lesen. Reparieren Sie es, oder verschieben Sie es, und versuchen Sie es dann erneut.",
+  "workspace.refused.misfiled": "Die Besprechungsaufzeichnung in {0} gehört zu einem anderen Ordner. Verschieben Sie den Ordner, und versuchen Sie es dann erneut.",
   "workspace.refused.unwritable": "Kanal kann {0} nicht ändern. Schließen Sie Programme, die dessen Dateien verwenden, prüfen Sie Speicherplatz und Ordnerrechte, und versuchen Sie es erneut.",
   "workspace.refused.unsupportedversion": "Diese Kanal-Version kann {0} nicht lesen. Aktualisieren Sie Kanal, und versuchen Sie es erneut.",
   "workspace.refused.other": "Kanal konnte das nicht ausführen. Einzelheiten stehen im Protokoll.",
