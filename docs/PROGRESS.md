@@ -18,11 +18,15 @@ Part of #34. ADR 0058 records the design and is proposed, not accepted.
   dropped. `MeetingInsights.Record` still refuses a candidate without a source in the room.
 - An agent failure loses one window and writes a warning. Stop cancels the call in flight.
 - `GeneratedMeetingAgent` is the first real agent. It uses the local `ITextGenerator` that translation
-  and titling share. Its output is one `KIND|TOPIC|TEXT|IDS` line per candidate.
-- `PipelinePlan.Agent` is set when a local translation model is chosen and downloaded. Then
-  `AssistantViewModel.IsAnalystConnected` is true and candidates appear in the "Points and decisions" tab.
+  and titling share. It numbers the window's lines 1..n and maps the numbers in each
+  `KIND|TOPIC|TEXT|IDS` line back to utterance ids.
+- The local agent is off. `PipelinePlanner` does not set `PipelinePlan.Agent` (PM decision, 2026-10-13).
+  The agent and live translation share one model lock, and an agent call can hold it for 4–35 s.
+  The agent turns on in the PR where translation pre-empts it (ADR 0058, decision 1b).
+- When a plan has an agent, `MainViewModel` starts the runner, `AssistantViewModel.IsAnalystConnected`
+  is true and candidates appear in the "Points and decisions" tab. Tests inject the agent through `PlanFilter`.
+- Stop disposes the runner before the session drains. The last translations then do not wait for an agent call.
 - Not built: the Claude Code and Codex adapters. ADR 0058 section E shows where they plug in.
-- Open for the human: the local agent and live translation share one model lock (ADR 0058, F.23).
 
 ### Speaker names follow the colour scheme
 

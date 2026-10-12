@@ -292,7 +292,7 @@ public class PipelineModeTests
     }
 
     [Fact]
-    public void TheMeetingIsOnlyNamedAndFollowedWhereALocalModelIsAlreadyLoaded()
+    public void TheMeetingIsOnlyNameableWhereALocalModelIsAlreadyLoaded()
     {
         var model = LocalModelCatalog.Models[0];
         var dir = DownloadedModelsDir(model);
@@ -301,7 +301,7 @@ public class PipelineModeTests
         var local = PipelinePlanner.Plan(
             PipelineMode.Of(PipelineModeId.Demo), settings, new ModelDownloadManager(dir), NoKey);
         Assert.NotNull(local.Titler);
-        Assert.NotNull(local.Agent);
+        Assert.Null(local.Agent);
         (local.Mt as IDisposable)?.Dispose();
 
         var (empty, _) = TempDownloads();

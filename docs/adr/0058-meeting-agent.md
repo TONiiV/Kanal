@@ -60,7 +60,8 @@ public interface IMeetingAgent
 10. **失败隔离。** agent 抛出任何异常，运行器写一条 warning，丢掉这个窗口，继续等下一个。
     不重试：重试会让慢 agent 的积压越来越大。转写、翻译和录音不受影响。
 11. **取消。** 停止会议时，运行器取消在途调用，并等它结束。取消后到达的结果被丢弃。
-    运行器先于共享的生成器释放，所以生成器不会在推理中途被释放。
+    运行器在会话排空之前释放。会话排空时最后几句的翻译要等模型，而在途的 agent 调用可能占着模型；
+    先停 agent，这几句才能在 2 秒宽限内译完。运行器因此也先于共享的生成器释放。
 12. **线程。** 候选经 `Dispatcher.UIThread.Post` 回到界面线程。只有当前会议房间的候选被记录。
 
 ### D. 与智能服务的关系，首个实现
@@ -70,9 +71,12 @@ public interface IMeetingAgent
 14. **首个实现是本地模型。** `GeneratedMeetingAgent` 复用翻译和会议标题共用的同一个
     `ITextGenerator`，所以不加载第二份权重。数据不离开本机。
     输出格式是一行一项：`KIND|TOPIC|TEXT|IDS`。不用 JSON：小模型输出的 JSON 常常不完整。
-15. **何时可用。** 操作员选了并下载了本地翻译模型时，`PipelinePlanner` 给出 agent。
-    这包括「本地翻译」模式和带模型的演示模式。Cloud→Cloud 模式没有生成器，页签照旧显示
-    「尚未接入旁听模型」。本 PR 不加设置界面。
+    窗口里的句子编号为 1..n，IDS 写编号，`GeneratedMeetingAgent` 再映射回句子 id。
+    真实 id 是 32 位十六进制 Guid 或 Gladia id，小模型抄不准，而且每个 id 要 15–20 个输出 token。
+15. **默认关闭（PM 决定，2026-10-13）。** `PipelinePlanner` 现在不给出 agent，页签照旧显示
+    「尚未接入旁听模型」。运行器和主机接线保留，测试经 `PlanFilter` 注入 agent。
+    本地 agent 在翻译抢占的 PR（「需要人决定」1b）里开启。那个 PR 带一个测试：翻译不等 agent 推理。
+    开启后的条件：操作员选了并下载了本地翻译模型。本文不加设置界面。
 
 ### E. CLI harness 和 API key 如何接入（本 PR 不实现）
 
@@ -84,7 +88,7 @@ public sealed class CliProcessAgent(string executable, string[] arguments, strin
 {
     // 例：claude -p --output-format text
     // 例：codex exec --sandbox read-only -
-    // 参数在实现时按当时的 CLI 版本核对。
+    // 参数在实现时按当时的 CLI 版本核对。WorkingDirectory 设为一个空的临时目录。
     public string Id => id;
     public MeetingAgentCapabilities Caps { get; } = new(AllKinds) /* + DataLeavesMachine: true */;
 
@@ -97,13 +101,21 @@ public sealed class CliProcessAgent(string executable, string[] arguments, strin
         process.StandardInput.Close();
         var output = await process.StandardOutput.ReadToEndAsync(ct);
         await process.WaitForExitAsync(ct);
+        if (process.ExitCode != 0)                                          // 登录过期等：抛出，运行器记录
+            throw new InvalidOperationException(await process.StandardError.ReadToEndAsync(ct));
         return AgentPrompt.Parse(output);                                   // 同一个行格式解析器
     }
 }
 ```
 
-17. **CLI 只读。** 不给工具权限，或用只读沙箱。转写内容是证据，不是指令：参会者说出的「请运行……」
-    不能变成操作。超时等于取消，取消会结束整个进程树。
+17. **CLI 只读。** 明确关闭工具，或用只读沙箱。转写内容是证据，不是指令：参会者说出的「请运行……」
+    不能变成操作。超时等于取消，取消会结束整个进程树。两个 CLI 都读工作目录里的项目指令和设置，
+    所以工作目录是一个空的临时目录。
+17a. **CLI PR 的待办（评审第 1 轮）。**
+    1. 非零退出码必须抛出。否则过期的登录只返回空列表，运行器什么也不记录。
+    2. 连续失败 N 次后，运行器进入「agent 不可用」状态，`IsAnalystConnected` 变为 false。不改接口。
+    3. 慢 agent 一次取走全部排队的定稿（有上限），否则积压越来越大。
+    4. 主题列表只送最近 20 个。
 18. **常驻进程是同一接口后的优化。** PR #178 提议 Codex 先用 `codex app-server` 常驻。
     常驻省掉每窗口的启动时间，但不改变 `IMeetingAgent`。
 19. **API key provider 是 `ITextGenerator` 的远程实现。** 它套用同一个 `GeneratedMeetingAgent`。
@@ -116,8 +128,11 @@ public sealed class CliProcessAgent(string executable, string[] arguments, strin
 
 22. 默认值是 8 句或 10 秒静默。一场 60 分钟的会大约产生 50–100 次调用。
     订阅类 CLI 有用量上限，所以 CLI agent 可能需要更大的批量；批量是运行器的构造参数。
-23. **已知风险：本地 agent 和实时翻译共用一个模型和一把锁。** agent 调用正在推理时，下一句的
-    翻译要等它结束。去抖让调用多发生在停顿里，但不能保证。见下方「需要人决定」第 1 项。
+23. **已知风险：本地 agent 和实时翻译共用一个模型和一把锁。** 这把锁按先来先到排队，翻译没有优先级。
+    一次 agent 调用约 450–600 个 prefill token，回复 100–200 个 token，最多 512 个。笔记本上 15–40 tok/s，
+    agent 通常占锁 4–13 秒，最坏 13–35 秒。密集发言时每 3–5 秒一句定稿，满 8 句的触发在发言中途，
+    不在停顿里。翻译加 agent 的占用超过 100% 时，翻译积压在整场会里一直增长。
+    所以本地 agent 默认关闭（D.15），等翻译抢占（「需要人决定」1b）。
 
 ## A1–A4 的推荐答案（proposed）
 
@@ -130,16 +145,14 @@ public sealed class CliProcessAgent(string executable, string[] arguments, strin
 
 ## 需要人决定
 
-1. **共享模型的延迟（F.23）。** 选项：
-   a. 接受，并依靠去抖。
-   b. 翻译抢占：翻译请求到达时取消在途的 agent 推理，这个窗口重新排队。**推荐**，单独一个 PR。
-   c. 只在暂停或会后运行本地 agent。
-   d. 本地 agent 默认关闭，等 CLI agent。
+1. **共享模型的延迟（F.23）。已决定（PM，2026-10-13）：** 本 PR 里本地 agent 默认关闭。
+   b. 翻译抢占：翻译请求到达时取消在途的 agent 推理，这个窗口重新排队。单独一个 PR，本地 agent 在那里开启。
+   被拒：a. 接受并依靠去抖（去抖在密集发言时不起作用）；c. 只在暂停或会后运行。
 2. 接受或修改 A1–A4 的推荐答案。
 3. 首个 CLI：Codex（PR #178 的顺序）还是 Claude Code；每窗口一个进程还是常驻进程。推荐 Codex，
    先用每窗口一个进程，量出启动时间再决定常驻。
 4. 批量和静默时长是否进设置。推荐不进：操作员不需要理解这两个数。
-5. 有本地模型时本地 agent 是否默认开启。本 PR 默认开启。
+5. 有本地模型时本地 agent 是否默认开启。已决定：在 1b 之前关闭。
 
 ## 考虑过的方案
 

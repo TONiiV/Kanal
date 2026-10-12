@@ -32,13 +32,14 @@ public class GeneratedMeetingAgentTests
         new GeneratedMeetingAgent(generator).ProposeAsync(Window, TestContext.Current.CancellationToken);
 
     [Fact]
-    public async Task ThePromptCarriesEachFinalWithItsIdTheKnownTopicsAndTheReplyLanguage()
+    public async Task ThePromptNumbersEachFinalAndCarriesTheKnownTopicsAndTheReplyLanguage()
     {
         var generator = new Generator("NONE");
         await Propose(generator);
 
-        Assert.Contains("[u1] pl: Musimy potwierdzić termin dostawy przed końcem sierpnia.", generator.Prompt);
-        Assert.Contains("[u2] zh: 样品下周一寄出。", generator.Prompt);
+        Assert.Contains("[1] pl: Musimy potwierdzić termin dostawy przed końcem sierpnia.", generator.Prompt);
+        Assert.Contains("[2] zh: 样品下周一寄出。", generator.Prompt);
+        Assert.DoesNotContain("u1", generator.Prompt);
         Assert.Contains("Lieferung", generator.Prompt);
         Assert.Contains("\"de\"", generator.Prompt);
     }
@@ -47,8 +48,8 @@ public class GeneratedMeetingAgentTests
     public async Task EachWellFormedLineBecomesOneCandidate()
     {
         var found = await Propose(new Generator(
-            "DECISION | Lieferung | Liefertermin vor Ende August bestätigen | u1\n" +
-            "point|Muster|Muster gehen am Montag raus|u2, u1"));
+            "DECISION | Lieferung | Liefertermin vor Ende August bestätigen | 1\n" +
+            "point|Muster|Muster gehen am Montag raus|2, 1"));
 
         Assert.Equal(2, found.Count);
         Assert.Equal(InsightKind.Decision, found[0].Kind);
@@ -64,15 +65,29 @@ public class GeneratedMeetingAgentTests
     {
         var found = await Propose(new Generator(
             "<think>the delivery date</think>Here are the items:\n" +
-            "PROPOSAL|Lieferung|Expressversand|u1\n" +
-            "IDEA|Lieferung|Something|u1\n" +
+            "PROPOSAL|Lieferung|Expressversand|1\n" +
+            "IDEA|Lieferung|Something|1\n" +
             "POINT|Lieferung|No sources|\n" +
-            "POINT||No topic|u1\n" +
+            "POINT|Lieferung|A line that does not exist|9\n" +
+            "POINT||No topic|1\n" +
             "NONE"));
 
         var only = Assert.Single(found);
         Assert.Equal(InsightKind.Proposal, only.Kind);
         Assert.Equal("Expressversand", only.Text);
+    }
+
+    [Fact]
+    public async Task ABulletedOrNumberedReplyWithBracketedNumbersStillMapsToTheUtterances()
+    {
+        var found = await Propose(new Generator(
+            "- POINT|Muster|Muster gehen am Montag raus|[2]\n" +
+            "1. DECISION|Lieferung|Liefertermin vor Ende August bestätigen|[1], [2]"));
+
+        Assert.Equal(2, found.Count);
+        Assert.Equal(["u2"], found[0].SourceUtteranceIds);
+        Assert.Equal(InsightKind.Decision, found[1].Kind);
+        Assert.Equal(["u1", "u2"], found[1].SourceUtteranceIds);
     }
 
     [Fact]

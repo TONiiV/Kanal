@@ -1446,6 +1446,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _snapshotTimer.Stop();
             _warmupCts?.Cancel(); // a model still loading is abandoned, not waited out
             await StopCaptureAsync();
+            // Before the session drains: its last translations wait on the model an agent call may hold.
+            await StopAgentAsync();
 
             if (_session is not null)
             {
@@ -1494,16 +1496,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         var asr = _asr;
         var mt = _mt;
-        var runner = _agentRunner;
         _asr = null;
         _mt = null;
-        _agentRunner = null;
         // The titler shares the translator's generator, which is freed just below.
         _titler = null;
         // The agent shares that generator too, so its last call has to end before the weights go.
-        await DisposeAnyAsync(runner);
+        await StopAgentAsync();
         await DisposeAnyAsync(mt);
         await DisposeAnyAsync(asr);
+    }
+
+    private async Task StopAgentAsync()
+    {
+        var runner = _agentRunner;
+        _agentRunner = null;
+        if (runner is not null)
+            await runner.DisposeAsync();
     }
 
     private static async Task DisposeAnyAsync(object? provider)

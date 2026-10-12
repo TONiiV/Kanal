@@ -109,6 +109,85 @@ public class AssistantPanelTests
         Assert.True(vm.Assistant.IsAnalystConnected);
     }
 
+    private sealed class GatedTranslator(SemaphoreSlim model) : IMtProvider
+    {
+        public int Requested;
+        public int Cancelled;
+
+        public string Id => "gated-mt";
+
+        public async Task<IReadOnlyDictionary<string, string>> TranslateAsync(
+            string text, string from, IReadOnlyList<string> to, IReadOnlyList<Utterance> context, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Requested);
+            try
+            {
+                await model.WaitAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Increment(ref Cancelled);
+                throw;
+            }
+
+            try
+            {
+                return to.ToDictionary(lang => lang, lang => $"[{lang}] {text}");
+            }
+            finally
+            {
+                model.Release();
+            }
+        }
+    }
+
+    private sealed class ModelHoldingAgent(SemaphoreSlim model) : IMeetingAgent
+    {
+        public volatile bool Holding;
+
+        public string Id => "model-holder";
+
+        public MeetingAgentCapabilities Caps { get; } = new(new HashSet<InsightKind> { InsightKind.Point });
+
+        public async Task<IReadOnlyList<MeetingInsight>> ProposeAsync(MeetingAgentWindow window, CancellationToken ct)
+        {
+            await model.WaitAsync(ct);
+            try
+            {
+                Holding = true;
+                await Task.Delay(Timeout.Infinite, ct);
+                return [];
+            }
+            finally
+            {
+                model.Release();
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task StopEndsTheAgentCallBeforeTheLastTranslationsAreDrained()
+    {
+        var model = new SemaphoreSlim(1, 1);
+        var translator = new GatedTranslator(model);
+        var agent = new ModelHoldingAgent(model);
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(partialInterval: TimeSpan.FromMilliseconds(5), loop: true),
+            Mt = translator,
+            Agent = agent,
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpUntilAsync(() => agent.Holding);
+        var before = Volatile.Read(ref translator.Requested);
+        await PumpUntilAsync(() => Volatile.Read(ref translator.Requested) > before);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, Volatile.Read(ref translator.Cancelled));
+    }
+
     [AvaloniaFact]
     public async Task WithoutAnAgentTheMeetingRunsAndThePanelSaysNoneIsConnected()
     {

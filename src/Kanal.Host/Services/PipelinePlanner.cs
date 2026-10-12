@@ -93,8 +93,7 @@ public static class PipelinePlanner
             mt,
             mode.Translation == StageKind.Cloud,
             resolved.Substitution,
-            generator is null ? null : new GeneratedMeetingTitler(generator),
-            generator is null ? null : new GeneratedMeetingAgent(generator));
+            generator is null ? null : new GeneratedMeetingTitler(generator));
     }
 
     private sealed record Resolution(
