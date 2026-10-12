@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
@@ -6,6 +9,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Kanal.Host;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
@@ -18,7 +22,7 @@ public class SettingsTabsTests
     private static readonly string[] EverySettingThatExisted =
     [
         "AppLanguage", "Version", "Changelog", "Licenses",
-        "ColourScheme",
+        "ColourScheme", "AccentTheme",
         "InputDevice", "InputTest",
         "ApiKeys", "NewKeyName", "NewKeyValue", "AddKey",
         "TranslationModels",
@@ -125,6 +129,66 @@ public class SettingsTabsTests
             ((ColourSchemeOption)card.DataContext!).Name,
             ControlAutomationPeer.CreatePeerForElement(card).GetName()));
 
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void OpeningSettingsKeepsTheSavedSchemeAndThemeAndSavesNothing()
+    {
+        var schemes = new List<ColourScheme>();
+        var themes = new List<string>();
+        try
+        {
+            Appearance.Apply(AccentThemes.Find("iris"));
+            Appearance.Apply(ColourScheme.Dark);
+            var vm = new SettingsViewModel(
+                new AppSettings { ColourScheme = ColourScheme.Dark, AccentTheme = "iris" }, () => null,
+                saveColourScheme: schemes.Add, saveAccentTheme: themes.Add);
+            var window = new SettingsWindow(vm);
+            window.Show();
+            var tabs = Tabs(window);
+            tabs.SelectedItem = tabs.Items.OfType<TabItem>().ElementAt(1);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Empty(schemes);
+            Assert.Empty(themes);
+            Assert.Equal(ColourScheme.Dark, vm.Scheme.Scheme);
+            Assert.Equal("iris", vm.Theme.Theme.Id);
+            Assert.Equal(ColourScheme.Dark, Appearance.Scheme);
+            Assert.Equal(Avalonia.Styling.ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
+            Assert.Equal(AccentThemes.Find("iris").Dark.BrandColour, (Color)Application.Current.Resources["SystemAccentColor"]!);
+            window.Close();
+        }
+        finally
+        {
+            Appearance.Apply(ColourScheme.Light);
+            Appearance.Apply(AccentThemes.Kanal);
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("ColourScheme")]
+    [InlineData("AccentTheme")]
+    public void ACtrlClickOnTheSelectedCardKeepsTheSelection(string list)
+    {
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+        var window = new SettingsWindow(vm);
+        window.Show();
+        var tabs = Tabs(window);
+        tabs.SelectedItem = tabs.Items.OfType<TabItem>().ElementAt(1);
+        Dispatcher.UIThread.RunJobs();
+        var cards = window.GetVisualDescendants().OfType<ListBox>().Single(box => box.Name == list);
+        var selected = cards.GetVisualDescendants().OfType<ListBoxItem>().Single(item => item.IsSelected);
+        var centre = selected.TranslatePoint(new Point(selected.Bounds.Width / 2, selected.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(centre, MouseButton.Left, RawInputModifiers.Control);
+        window.MouseUp(centre, MouseButton.Left, RawInputModifiers.Control);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(cards.SelectedIndex >= 0);
+        Assert.NotNull(vm.Scheme);
+        Assert.NotNull(vm.Theme);
+        vm.ApplyTo(new AppSettings());
         window.Close();
     }
 

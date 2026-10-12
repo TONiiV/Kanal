@@ -114,7 +114,7 @@ public class ChineseOutputNormalizationTests
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
             asr, null, relay, new RoomConfig("t", ["zh", "de"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
         await asr.Feed.SayAsync(Spoken("u1", "zh", "這是一個", isFinal: false));
         await asr.Feed.SayAsync(Spoken("u1", "zh", "這是一個測試,料號 KX-4402。", isFinal: true));
@@ -136,7 +136,7 @@ public class ChineseOutputNormalizationTests
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
             asr, null, relay, new RoomConfig("t", ["zh", "de"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
         await asr.Feed.SayAsync(Spoken(
             "u1", "de", "Die Übertragungssteuerung ist bestätigt.", isFinal: true,
@@ -166,7 +166,7 @@ public class ChineseOutputNormalizationTests
         });
         await using var session = new MeetingSession(
             asr, mt, relay, new RoomConfig("t", ["zh", "de", "pl"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
         await asr.Feed.SayAsync(Spoken(
             "u1", "de", "Die Übertragungssteuerung ist bestätigt.", isFinal: true));
@@ -187,7 +187,7 @@ public class ChineseOutputNormalizationTests
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
             asr, null, relay, new RoomConfig("t", ["zh", "pl"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
         const string polish = "Czy próbki wsporników będą zgodne z normą ISO 7599?";
         await asr.Feed.SayAsync(Spoken("u1", "pl", polish, isFinal: true));
