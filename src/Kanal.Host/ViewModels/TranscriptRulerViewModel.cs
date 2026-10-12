@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Kanal.Core.Models;
 
@@ -38,32 +37,24 @@ public partial class RulerTickViewModel : ViewModelBase
     private string _timeLabel = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FoldBadge))]
-    private int _turns = 1;
-
-    [ObservableProperty]
-    private int _utterances;
+    private double _pitch = TranscriptRulerViewModel.MaxPitch;
 
     [ObservableProperty]
     private bool _isCurrent;
-
-    public string FoldBadge => Turns > 1 ? $"×{Turns}" : "";
 
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
 
 public sealed partial class TranscriptRulerViewModel : ViewModelBase
 {
-    public const int Slots = 72;
-    public const double Pitch = 9;
+    public const double MaxPitch = 9;
+    public const double StripHeight = 648;
     public const double CardHeight = 96;
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
-    private readonly List<Segment> _segments = new();
-    private readonly Dictionary<string, Segment> _anchors = new();
-    private readonly HashSet<string> _seen = new();
+    private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
 
     public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
@@ -84,50 +75,37 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     public void Observe(Utterance u)
     {
+        if (_entries.TryGetValue(u.Id, out var entry))
+        {
+            entry.SpeakerTag = u.SpeakerTag;
+            entry.Tick.Preview = Shorten(u.SrcText);
+            entry.Tick.TimeLabel = Offset(u.TStartMs - _originMs.GetValueOrDefault());
+            Write(entry);
+            return;
+        }
+
+        if (u.State != UtteranceState.Final)
+            return;
+
         _originMs ??= u.TStartMs;
-
-        if (_anchors.TryGetValue(u.Id, out var anchored))
+        var tick = new RulerTickViewModel
         {
-            anchored.Preview = Shorten(u.SrcText);
-            anchored.StartMs = u.TStartMs;
-            if (anchored.Utterances == 1)
-                anchored.SpeakerTag = u.SpeakerTag;
-            Sync();
-            return;
-        }
-
-        // A translation upserts an utterance the room moved on from turns ago; only a first
-        // sighting may open a turn, or every late arrival forks the ruler.
-        if (!_seen.Add(u.Id))
-        {
-            Sync();
-            return;
-        }
-
-        var canonical = _resolve(u.SpeakerTag).Tag;
-        var last = _segments.Count > 0 ? _segments[^1] : null;
-        if (last is not null && _resolve(last.SpeakerTag).Tag == canonical)
-        {
-            last.Utterances++;
-        }
-        else
-        {
-            var segment = new Segment
-            {
-                SpeakerTag = u.SpeakerTag,
-                AnchorId = u.Id,
-                StartMs = u.TStartMs,
-                Preview = Shorten(u.SrcText),
-                Utterances = 1,
-            };
-            _segments.Add(segment);
-            _anchors[u.Id] = segment;
-        }
-
-        Sync();
+            AnchorUtteranceId = u.Id,
+            Preview = Shorten(u.SrcText),
+            TimeLabel = Offset(u.TStartMs - _originMs.Value),
+        };
+        var added = new Entry { SpeakerTag = u.SpeakerTag, Tick = tick };
+        _entries[u.Id] = added;
+        Write(added);
+        Ticks.Add(tick);
+        Layout();
     }
 
-    public void Reresolve() => Sync();
+    public void Reresolve()
+    {
+        foreach (var entry in _entries.Values)
+            Write(entry);
+    }
 
     public void Hover(RulerTickViewModel? tick)
     {
@@ -135,100 +113,35 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         if (tick is null)
             return;
 
-        var centre = Ticks.IndexOf(tick) * Pitch + Pitch / 2 - CardHeight / 2;
-        PreviewTop = Math.Clamp(centre, 0, Slots * Pitch - CardHeight);
+        var centre = Ticks.IndexOf(tick) * tick.Pitch + tick.Pitch / 2 - CardHeight / 2;
+        PreviewTop = Math.Clamp(centre, 0, StripHeight - CardHeight);
     }
 
     public void Jump(RulerTickViewModel tick) => JumpRequested?.Invoke(tick.AnchorUtteranceId);
 
     public void Clear()
     {
-        _segments.Clear();
-        _anchors.Clear();
-        _seen.Clear();
+        _entries.Clear();
         _originMs = null;
         HoveredTick = null;
         Ticks.Clear();
     }
 
-    private void Sync()
+    private void Layout()
     {
-        var turns = Coalesce();
-        var stride = Stride(turns.Count);
-
-        var index = 0;
-        for (var start = 0; start < turns.Count; start += stride, index++)
+        var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
+        foreach (var tick in Ticks)
         {
-            var group = turns.GetRange(start, Math.Min(stride, turns.Count - start));
-            var tick = index < Ticks.Count ? Ticks[index] : Add();
-            Write(tick, group);
-            tick.IsCurrent = start + stride >= turns.Count;
-        }
-
-        while (Ticks.Count > index)
-        {
-            if (ReferenceEquals(HoveredTick, Ticks[^1]))
-                HoveredTick = null;
-            Ticks.RemoveAt(Ticks.Count - 1);
+            tick.Pitch = pitch;
+            tick.IsCurrent = ReferenceEquals(tick, Ticks[^1]);
         }
     }
 
-    private RulerTickViewModel Add()
+    private void Write(Entry entry)
     {
-        var tick = new RulerTickViewModel { Kind = RulerTickKind.Speaker };
-        Ticks.Add(tick);
-        return tick;
-    }
-
-    private void Write(RulerTickViewModel tick, List<Turn> group)
-    {
-        var head = group[0];
-        var speakers = group.Select(t => t.Tag).Distinct().ToList();
-
-        tick.AnchorUtteranceId = head.AnchorId;
-        tick.Preview = head.Preview;
-        tick.TimeLabel = Offset(head.StartMs - (_originMs ?? 0));
-        tick.Turns = group.Count;
-        tick.Utterances = group.Sum(t => t.Utterances);
-        tick.SpeakerName = string.Join(", ", speakers.Take(3).Select(t => _resolve(t).Name)) +
-            (speakers.Count > 3 ? $", +{speakers.Count - 3}" : "");
-        // A mark standing for several people's turns identifies nobody, so it spends no hue.
-        tick.SpeakerColor = speakers.Count == 1 ? _resolve(speakers[0]).Color : ThemeColours.TickMixed;
-    }
-
-    private List<Turn> Coalesce()
-    {
-        var turns = new List<Turn>(_segments.Count);
-        foreach (var segment in _segments)
-        {
-            var tag = _resolve(segment.SpeakerTag).Tag;
-            // Merges are non-destructive, so both tags survive in history; without this the
-            // ruler shows one person handing over to themselves.
-            if (turns.Count > 0 && turns[^1].Tag == tag)
-            {
-                turns[^1].Utterances += segment.Utterances;
-                continue;
-            }
-
-            turns.Add(new Turn
-            {
-                Tag = tag,
-                AnchorId = segment.AnchorId,
-                StartMs = segment.StartMs,
-                Preview = segment.Preview,
-                Utterances = segment.Utterances,
-            });
-        }
-
-        return turns;
-    }
-
-    private static int Stride(int turns)
-    {
-        var stride = 1;
-        while ((turns + stride - 1) / stride > Slots)
-            stride *= 2;
-        return stride;
+        var (_, name, color) = _resolve(entry.SpeakerTag);
+        entry.Tick.SpeakerName = name;
+        entry.Tick.SpeakerColor = color;
     }
 
     private static string Offset(long ms)
@@ -243,21 +156,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         return line.Length <= PreviewLimit ? line : line[..PreviewLimit].TrimEnd() + "…";
     }
 
-    private sealed class Segment
+    private sealed class Entry
     {
         public required string SpeakerTag { get; set; }
-        public required string AnchorId { get; init; }
-        public required long StartMs { get; set; }
-        public required string Preview { get; set; }
-        public required int Utterances { get; set; }
-    }
-
-    private sealed class Turn
-    {
-        public required string Tag { get; init; }
-        public required string AnchorId { get; init; }
-        public required long StartMs { get; init; }
-        public required string Preview { get; init; }
-        public required int Utterances { get; set; }
+        public required RulerTickViewModel Tick { get; init; }
     }
 }

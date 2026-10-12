@@ -126,16 +126,13 @@ public class ColourSchemeTests
         try
         {
             var vm = TestViewModels.Hermetic();
-            for (var i = 0; i < 200; i++)
-            {
-                vm.Ruler.Observe(new Utterance($"u{i}", i % 2 == 0 ? "s1" : "s2", 0, 900, "zh", $"turn {i}", 1,
-                    UtteranceState.Final, false, 1.0, new Dictionary<string, string>()));
-            }
+            vm.Ruler.Observe(new Utterance("u1", "s1", 0, 900, "zh", "turn", 1,
+                UtteranceState.Final, false, 1.0, new Dictionary<string, string>()));
 
             Appearance.Apply(ColourScheme.Dark);
 
-            var mixed = Brush(ThemeVariant.Dark, "TickMixedColor");
-            Assert.All(vm.Ruler.Ticks, tick => Assert.Equal($"#{mixed.R:X2}{mixed.G:X2}{mixed.B:X2}", tick.SpeakerColor));
+            var fallback = Brush(ThemeVariant.Dark, "SpeakerFallbackColor");
+            Assert.Equal($"#{fallback.R:X2}{fallback.G:X2}{fallback.B:X2}", vm.Ruler.Ticks.Single().SpeakerColor);
         }
         finally
         {
