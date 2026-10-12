@@ -24,7 +24,7 @@ internal static class RecordFile
         catch (Exception ex)
         {
             Log.Warning(StoreProblems.LogCategory, $"{path} could not be read.", ex);
-            return (null, new StoreProblem(StoreProblemKind.Unreadable, path, ex.Message));
+            return (null, StoreProblems.Unreadable(path, ex.Message));
         }
 
         if (value is null)

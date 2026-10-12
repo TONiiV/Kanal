@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -433,7 +432,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem))
+        if (Refused(problem, ImportKey(problem, source)))
             return;
 
         var asNewRecord = false;
@@ -449,7 +448,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             asNewRecord = true;
         }
 
-        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+        var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
+        if (Refused(imported, ImportKey(imported, source)))
             return;
 
         ProblemNote = "";
@@ -494,15 +494,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private bool Refused(StoreProblem? problem)
+    private static string? ImportKey(StoreProblem? problem, string bundlePath) =>
+        problem is { Kind: StoreProblemKind.Unreadable } && problem.Subject == bundlePath
+            ? "workspace.import.unreadable"
+            : null;
+
+    private bool Refused(StoreProblem? problem, string? key = null)
     {
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
-            ? L.Format("workspace.titletaken", problem.Subject)
-            : problem.Detail;
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        ProblemNote = StoreRefusal.Report(problem, LogCategory, key);
         return true;
     }
 
