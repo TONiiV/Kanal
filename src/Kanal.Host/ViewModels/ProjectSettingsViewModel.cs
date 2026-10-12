@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Controls;
 using Kanal.Host.Localization;
@@ -150,15 +149,10 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
         if (problem is null)
             return false;
 
-        Problem = L[problem.Kind switch
-        {
-            StoreProblemKind.TooLarge => "workspace.icon.toolarge",
-            StoreProblemKind.WrongType => "workspace.icon.badtype",
-            StoreProblemKind.NotThisWorkspace => "workspace.remove.notthisproject",
-            StoreProblemKind.NotFound when problem.Subject == ImagePath => "workspace.icon.missing",
-            _ => "workspace.settings.failed",
-        }];
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        Problem = StoreRefusal.Report(
+            problem,
+            LogCategory,
+            problem.Kind == StoreProblemKind.NotFound && problem.Subject == ImagePath ? "workspace.icon.missing" : null);
         return true;
     }
 
