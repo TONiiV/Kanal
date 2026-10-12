@@ -1,3 +1,5 @@
+using Kanal.Core.Diagnostics;
+
 namespace Kanal.Core.Workspaces;
 
 internal sealed class WorkspaceRegistry(string path)
@@ -119,7 +121,9 @@ internal sealed class WorkspaceRegistry(string path)
         }
         catch (Exception ex)
         {
-            return StoreProblems.Unwritable(path, "The workspace list could not be written.", ex);
+            const string failure = "The workspace list could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({path})", ex);
+            return StoreProblems.Unwritable(path, failure, ex);
         }
     }
 
