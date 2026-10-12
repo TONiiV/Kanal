@@ -94,7 +94,7 @@ public class DiarizationReadinessTests : IDisposable
 
         Assert.Equal(DiarizationReadiness.NotDownloaded, download.State);
 
-        await download.DownloadAsync();
+        await download.DownloadAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(DiarizationReadiness.Ready, download.State);
         Assert.Equal(1.0, download.Progress);
@@ -107,7 +107,7 @@ public class DiarizationReadinessTests : IDisposable
         var model = TestModel(DiarizationModelRole.Embedding, "test-embedding");
         var download = new DiarizationModelDownload(model, Manager(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
 
-        await download.DownloadAsync();
+        await download.DownloadAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(DiarizationReadiness.Failed, download.State);
         Assert.NotEqual("", download.Error);
@@ -120,7 +120,7 @@ public class DiarizationReadinessTests : IDisposable
         var downloads = Manager();
         var download = new DiarizationModelDownload(model, downloads);
 
-        await download.DownloadAsync();
+        await download.DownloadAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(DiarizationReadiness.Failed, download.State);
         Assert.False(downloads.IsDownloaded(model));
@@ -146,7 +146,7 @@ public class DiarizationReadinessTests : IDisposable
     {
         var model = TestModel(DiarizationModelRole.Embedding, "test-embedding");
         var download = new DiarizationModelDownload(model, Manager());
-        await download.DownloadAsync();
+        await download.DownloadAsync(TestContext.Current.CancellationToken);
 
         download.Delete();
 
@@ -170,7 +170,7 @@ public class DiarizationReadinessTests : IDisposable
         var downloads = new ModelDownloadManager(_dir, new HttpClient(handler));
         var model = TestModel(DiarizationModelRole.Embedding, "test-embedding");
 
-        await new DiarizationModelDownload(model, downloads).DownloadAsync();
+        await new DiarizationModelDownload(model, downloads).DownloadAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
     }
