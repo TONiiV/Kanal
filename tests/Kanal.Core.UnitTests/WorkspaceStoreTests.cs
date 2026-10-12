@@ -207,7 +207,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Equal("Delivery dates", Assert.Single(listing.Meetings).Title);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -445,7 +445,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -477,7 +477,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -490,7 +490,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordMissing, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -534,7 +534,7 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Empty(listing.Meetings);
         // and Delete on it would have resolved to the workspace root
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
         Assert.Equal(StoreProblemKind.Invalid, store.DeleteMeeting(workspace.Id, "..")!.Kind);
         Assert.Null(store.MeetingFolder(workspace.Id, ".."));
         Assert.True(File.Exists(kept));
@@ -640,7 +640,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Equal(meeting.Id, Assert.Single(listing.Meetings).Id);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.Misfiled, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -760,7 +760,7 @@ public class WorkspaceStoreTests : IDisposable
         var result = store.RenameMeeting(workspace.Id, "copy-of-it", "Delivery dates");
 
         Assert.Null(result.Meeting);
-        Assert.Equal(StoreProblemKind.Unreadable, result.Problem!.Kind);
+        Assert.Equal(StoreProblemKind.Misfiled, result.Problem!.Kind);
         Assert.Equal("Tooling review", Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Title);
     }
 
