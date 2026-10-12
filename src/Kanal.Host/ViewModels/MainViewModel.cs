@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -98,6 +99,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
+            scanOffUiThread: work => Task.Run(work),
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -124,6 +126,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
+        Func<Action, Task>? scanOffUiThread = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false)
@@ -138,11 +141,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
-            (tag, tag, _storedColours.GetValueOrDefault(tag, "#4C5C68")));
+            (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
         Ruler.JumpRequested += MarkJumpTarget;
         BrowsedRuler.JumpRequested += MarkJumpTarget;
         var store = (workspaces ?? Bootstrapped)();
-        Sidebar = new WorkspaceSidebarViewModel(store);
+        Sidebar = new WorkspaceSidebarViewModel(store, offUiThread: scanOffUiThread);
         Titling = new MeetingTitling(
             () => _titler,
             free: title => Sidebar.FreeTitle(title, _sessionRecordId ?? Sidebar.SelectedMeeting?.Id));
@@ -267,14 +270,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             RefreshAudioSourceStatus();
             RefreshPipelineStatus();
         };
+
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnThemeVariantChanged;
+    }
+
+    // ThemeColours hands out hex strings, so a scheme change does not reach them on its own.
+    private void OnThemeVariantChanged(object? sender, EventArgs e)
+    {
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerColor = ResolveSpeaker(bubble.SpeakerTag).Color;
+        Ruler.Reresolve();
+        BrowsedRuler.Reresolve();
     }
 
     // Only the production path: a test that reached for Documents would create a workspace on
     // the developer's own machine.
-    private static WorkspaceStore Bootstrapped()
+    private static WorkspaceStore Bootstrapped() =>
+        OpenStore(SettingsStore.WorkspaceRegistryPath, SettingsStore.DefaultOutputFolder);
+
+    public static WorkspaceStore OpenStore(string registryPath, string defaultFolder)
     {
-        var store = new WorkspaceStore(SettingsStore.WorkspaceRegistryPath);
-        store.EnsureWorkspace("Kanal", SettingsStore.DefaultOutputFolder);
+        var store = new WorkspaceStore(registryPath);
+        if (store.EnsureWorkspace("Kanal", defaultFolder).Problem is { } problem)
+            Log.Warning(WorkspaceLog, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
         return store;
     }
 
@@ -325,6 +344,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged -= OnThemeVariantChanged;
         _captureCts?.Cancel();
         if (_deviceWatcher is null)
             return;
@@ -1539,6 +1560,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const string RoomLog = "room";
     private const string RelayLog = "relay";
     private const string AudioLog = "audio";
+    private const string WorkspaceLog = "workspaces";
     private const string AsrLog = "asr";
 
     // A provider's error text is passed through verbatim and can carry a whole rejected payload.
@@ -2217,7 +2239,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Spoken(string srcLang) =>
         srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
-    private void ApplySpeaker(Speaker speaker)
+    internal void ApplySpeaker(Speaker speaker)
     {
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
@@ -2259,6 +2281,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
             return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);
-        return (canonical, tag, "#4C5C68");
+        return (canonical, tag, ThemeColours.SpeakerFallback);
     }
 }

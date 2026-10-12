@@ -75,7 +75,7 @@
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Detail}" FontSize="10.5" LineHeight="15"
                                                        TextWrapping="Wrap"
-                                                       Foreground="{StaticResource Ink3}" />
+                                                       Foreground="{DynamicResource Ink3}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -92,10 +92,10 @@
                                                   HorizontalScrollBarVisibility="Disabled">
                                         <StackPanel Margin="20,17,20,8" Width="424">
                                             <TextBlock Text="{l:T modes.heading}" Classes="label" />
-                                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                                            <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                                                     Margin="0,6,0,12" />
                                             <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"
-                                                       Margin="0,0,0,15" Foreground="{StaticResource Ink2}"
+                                                       Margin="0,0,0,15" Foreground="{DynamicResource Ink2}"
                                                        Text="{l:T modes.intro}" />
                                             <ItemsControl ItemsSource="{Binding Modes}">
                                                 <ItemsControl.ItemTemplate>
@@ -104,26 +104,26 @@
                                                             <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
                                                                   Margin="0,3,9,0" VerticalAlignment="Top"
                                                                   Data="{c:Icon square-filled}"
-                                                                  Fill="{StaticResource Ink}"
+                                                                  Fill="{DynamicResource Ink}"
                                                                   IsVisible="{Binding IsAvailable}" />
                                                             <Path Grid.Column="0" Width="13" Height="13" Stretch="Uniform"
                                                                   Margin="0,3,9,0" VerticalAlignment="Top"
                                                                   Data="{c:Icon square-hollow}"
-                                                                  Fill="{StaticResource Ink3}"
+                                                                  Fill="{DynamicResource Ink3}"
                                                                   IsVisible="{Binding !IsAvailable}" />
                                                             <StackPanel Grid.Column="1" Spacing="3">
                                                                 <TextBlock Text="{Binding Name}" FontSize="12.5"
                                                                            FontWeight="SemiBold" TextWrapping="Wrap" />
                                                                 <TextBlock FontSize="10.5" LetterSpacing="0.4"
                                                                            TextWrapping="Wrap" LineHeight="15"
-                                                                           Foreground="{StaticResource Ink3}">
+                                                                           Foreground="{DynamicResource Ink3}">
                                                                     <Run Text="{Binding Status, Mode=OneWay}" />
                                                                     <Run Text=" · " />
                                                                     <Run Text="{Binding Mode.Leaves, Mode=OneWay}" />
                                                                 </TextBlock>
                                                                 <TextBlock Text="{Binding Help}" TextWrapping="Wrap"
                                                                            FontSize="11.5" LineHeight="17"
-                                                                           Foreground="{StaticResource Ink2}" />
+                                                                           Foreground="{DynamicResource Ink2}" />
                                                             </StackPanel>
                                                         </Grid>
                                                     </DataTemplate>
@@ -156,7 +156,7 @@
                                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
                                 </Style>
                                 <Style Selector="ComboBoxItem:disabled TextBlock">
-                                    <Setter Property="Foreground" Value="{StaticResource Ink3}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink3}" />
                                 </Style>
                             </ComboBox.Styles>
                             <ComboBox.ItemTemplate>
@@ -171,11 +171,11 @@
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
-                                                       TextWrapping="Wrap" Foreground="{StaticResource Ink3}" />
+                                                       TextWrapping="Wrap" Foreground="{DynamicResource Ink3}" />
                                             <TextBlock Text="{Binding Unavailable}" FontSize="10.5" LineHeight="15"
                                                        TextWrapping="Wrap" FontWeight="SemiBold"
                                                        IsVisible="{Binding !IsAvailable}"
-                                                       Foreground="{StaticResource Ink2}" />
+                                                       Foreground="{DynamicResource Ink2}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -243,17 +243,17 @@
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
                                             <ProgressBar Minimum="0" Maximum="100" Value="{Binding MicLevel}" Height="5"
-                                                         Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
+                                                         Foreground="{DynamicResource Brand}" Background="{DynamicResource RuleFaint}"
                                                          AutomationProperties.Name="{l:T input.label}" />
                                         </StackPanel>
                                         <StackPanel Spacing="6" IsVisible="{Binding NeedsComputerAudio}">
                                             <TextBlock Text="{l:T computer.label}" Classes="label" />
                                             <ProgressBar Minimum="0" Maximum="100" Value="{Binding ComputerLevel}" Height="5"
-                                                         Foreground="{StaticResource Brand}" Background="{StaticResource RuleFaint}"
+                                                         Foreground="{DynamicResource Brand}" Background="{DynamicResource RuleFaint}"
                                                          AutomationProperties.Name="{l:T computer.label}" />
                                         </StackPanel>
                                         <TextBlock Text="{Binding AudioSourceStatus}" TextWrapping="Wrap" FontSize="11.5"
-                                                   Foreground="{StaticResource Ink2}" IsVisible="{Binding HasAudioSourceStatus}" />
+                                                   Foreground="{DynamicResource Ink2}" IsVisible="{Binding HasAudioSourceStatus}" />
                                     </StackPanel>
                                 </Flyout>
                             </Button.Flyout>
@@ -268,7 +268,7 @@
                                 <Flyout Placement="BottomEdgeAlignedRight">
                                     <StackPanel Margin="20,17,20,17" Width="236">
                                         <TextBlock Text="{l:T join.label}" Classes="label" />
-                                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
+                                        <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                                                 Margin="0,6,0,12" />
                                         <StackPanel IsVisible="{Binding HasJoinInfo}">
                                             <Image Source="{Binding QrImage}" Width="196" Height="196"
@@ -279,7 +279,7 @@
                                                      Margin="0,10,0,0" />
                                         </StackPanel>
                                         <TextBlock Text="{Binding JoinError}" IsVisible="{Binding HasJoinError}"
-                                                   TextWrapping="Wrap" Foreground="{StaticResource Ink2}"
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource Ink2}"
                                                    FontSize="12" />
                                     </StackPanel>
                                 </Flyout>
@@ -291,15 +291,15 @@
         </Border>
 
         <Border IsVisible="{Binding ShowCaptureNote}"
-                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1"
-                Background="{StaticResource Paper}" Padding="28,9">
+                BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
+                Background="{DynamicResource Paper}" Padding="28,9">
             <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                 <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CaptureProfileGuidance}" FontSize="11.5"
-                               Foreground="{StaticResource Ink2}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource Ink2}" TextWrapping="Wrap"
                                IsVisible="{Binding ShowCaptureGuidance}" />
                     <TextBlock Text="{Binding SelectedCaptureProfile.Unavailable}" FontSize="10.5"
-                               FontWeight="SemiBold" Foreground="{StaticResource Alarm}"
+                               FontWeight="SemiBold" Foreground="{DynamicResource Alarm}"
                                TextWrapping="Wrap" IsVisible="{Binding !SelectedCaptureProfile.IsAvailable}" />
                 </StackPanel>
                 <Button Grid.Column="1" Classes="ghost" Padding="9,4"

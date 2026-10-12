@@ -207,7 +207,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Equal("Delivery dates", Assert.Single(listing.Meetings).Title);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -445,7 +445,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -459,7 +459,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListWorkspaces();
 
         Assert.Empty(listing.Workspaces);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RegistryRowDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -477,7 +477,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -490,7 +490,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Empty(listing.Meetings);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordMissing, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -534,7 +534,7 @@ public class WorkspaceStoreTests : IDisposable
 
         Assert.Empty(listing.Meetings);
         // and Delete on it would have resolved to the workspace root
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RecordDamaged, Assert.Single(listing.Problems).Kind);
         Assert.Equal(StoreProblemKind.Invalid, store.DeleteMeeting(workspace.Id, "..")!.Kind);
         Assert.Null(store.MeetingFolder(workspace.Id, ".."));
         Assert.True(File.Exists(kept));
@@ -640,7 +640,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListMeetings(workspace.Id);
 
         Assert.Equal(meeting.Id, Assert.Single(listing.Meetings).Id);
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.Misfiled, Assert.Single(listing.Problems).Kind);
     }
 
     [Fact]
@@ -760,7 +760,7 @@ public class WorkspaceStoreTests : IDisposable
         var result = store.RenameMeeting(workspace.Id, "copy-of-it", "Delivery dates");
 
         Assert.Null(result.Meeting);
-        Assert.Equal(StoreProblemKind.Unreadable, result.Problem!.Kind);
+        Assert.Equal(StoreProblemKind.Misfiled, result.Problem!.Kind);
         Assert.Equal("Tooling review", Assert.Single(Store().ListMeetings(workspace.Id).Meetings).Title);
     }
 
@@ -782,7 +782,7 @@ public class WorkspaceStoreTests : IDisposable
         var listing = Store().ListWorkspaces();
 
         Assert.Equal([acme.Id, beta.Id], listing.Workspaces.Select(w => w.Id));
-        Assert.Equal(StoreProblemKind.Unreadable, Assert.Single(listing.Problems).Kind);
+        Assert.Equal(StoreProblemKind.RegistryRowDamaged, Assert.Single(listing.Problems).Kind);
     }
 
     /// <summary>A Windows-shaped traversal is still a traversal when it is written on a Unix host.</summary>
@@ -919,5 +919,681 @@ public class WorkspaceStoreTests : IDisposable
         Assert.Null(result.Workspace);
         Assert.NotNull(result.Problem);
         Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    private string Image(string name, int bytes = 64)
+    {
+        var path = Path.Combine(Folder("pictures"), name);
+        File.WriteAllBytes(path, new byte[bytes]);
+        return path;
+    }
+
+    private static string[] IconFiles(string folder) =>
+        [.. Directory.EnumerateFiles(folder, "kanal-icon.*").Select(Path.GetFileName).Order()!];
+
+    [Fact]
+    public void AGlyphIconSurvivesARestartAndAReopen()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        Assert.Equal("people", Created(Store().SetWorkspaceIcon(workspace.Id, "people")).IconGlyph);
+
+        Assert.Equal("people", Assert.Single(Store().ListWorkspaces().Workspaces).IconGlyph);
+        File.Delete(Registry);
+        Assert.Equal("people", Created(Store().OpenWorkspace(folder)).IconGlyph);
+    }
+
+    [Fact]
+    public void AWorkspaceWrittenBeforeIconsExistedHasTheDefaultIcon()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        var read = Assert.Single(Store().ListWorkspaces().Workspaces);
+
+        Assert.Equal(workspace, read);
+        Assert.Null(read.IconGlyph);
+        Assert.Null(read.IconFile);
+        Assert.Null(read.IconPath);
+    }
+
+    [Fact]
+    public void AnImageIconIsCopiedIntoTheWorkspaceFolderAndReplacesTheLastOne()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        var first = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.PNG")));
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        Assert.Equal(Path.Combine(workspace.RootPath, "kanal-icon.png"), first.IconPath);
+
+        var second = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("badge.jpg")));
+
+        Assert.Equal(["kanal-icon.jpg"], IconFiles(folder));
+        Assert.Equal("kanal-icon.jpg", second.IconFile);
+        Assert.Null(second.IconGlyph);
+        Assert.Equal("kanal-icon.jpg", Assert.Single(Store().ListWorkspaces().Workspaces).IconFile);
+        File.Delete(Registry);
+        Assert.Equal("kanal-icon.jpg", Created(Store().OpenWorkspace(folder)).IconFile);
+    }
+
+    [Fact]
+    public void ChoosingTheIconAlreadyInTheFolderAgainKeepsIt()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        var copied = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png"))).IconPath!;
+
+        Created(Store().SetWorkspaceIconFile(workspace.Id, copied));
+
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+    }
+
+    [Theory]
+    [InlineData("logo.gif", 64, StoreProblemKind.WrongType)]
+    [InlineData("logo.svg", 64, StoreProblemKind.WrongType)]
+    [InlineData("logo.png", 2 * 1024 * 1024 + 1, StoreProblemKind.TooLarge)]
+    public void AnImageOfTheWrongKindOrSizeIsRefused(string name, int bytes, StoreProblemKind kind)
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+
+        var result = Store().SetWorkspaceIconFile(workspace.Id, Image(name, bytes));
+
+        Assert.Null(result.Workspace);
+        Assert.Equal(kind, result.Problem!.Kind);
+        Assert.Empty(IconFiles(folder));
+        Assert.Null(Assert.Single(Store().ListWorkspaces().Workspaces).IconFile);
+    }
+
+    [Fact]
+    public void ResettingTheIconDeletesTheCopyAndForgetsBothKinds()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        var reset = Created(Store().ResetWorkspaceIcon(workspace.Id));
+
+        Assert.Null(reset.IconFile);
+        Assert.Null(reset.IconGlyph);
+        Assert.Empty(IconFiles(folder));
+        Assert.Equal(workspace, Assert.Single(Store().ListWorkspaces().Workspaces));
+    }
+
+    [Fact]
+    public void AGlyphReplacesAnImageIconAndItsCopy()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        var glyph = Created(Store().SetWorkspaceIcon(workspace.Id, "microphone"));
+
+        Assert.Null(glyph.IconFile);
+        Assert.Empty(IconFiles(folder));
+    }
+
+    [Fact]
+    public void AGlyphNameThatIsAPathIsRefused()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        Assert.Equal(
+            StoreProblemKind.Invalid,
+            Store().SetWorkspaceIcon(workspace.Id, "../people").Problem!.Kind);
+    }
+
+    [Fact]
+    public void DeletingAWorkspaceTakesOnlyWhatKanalPutThere()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+        var foreign = Path.Combine(folder, "drawing.dwg");
+        File.WriteAllText(foreign, "not Kanal's");
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+
+        Assert.True(File.Exists(foreign));
+        Assert.Equal([foreign], Directory.EnumerateFileSystemEntries(folder));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void DeletingAWorkspaceRemovesTheFolderItEmptied()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void ForgettingAWorkspaceKeepsItsIconAndMeetings()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+
+        Assert.Null(store.ForgetWorkspace(workspace.Id));
+
+        Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        Assert.Equal("kanal-icon.png", Created(Store().OpenWorkspace(folder)).IconFile);
+    }
+
+    [Fact]
+    public void AnImageThatIsNotThereIsRefusedAsNotFound()
+    {
+        var workspace = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+
+        var result = Store().SetWorkspaceIconFile(workspace.Id, Path.Combine(_root, "gone.png"));
+
+        Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
+    }
+
+    [Fact]
+    public void AFileOfTheOperatorNextToTheIconSurvivesAResetAndADelete()
+    {
+        var folder = Folder("acme");
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", folder));
+        Created(store.SetWorkspaceIconFile(workspace.Id, Image("logo.png")));
+        var vector = Path.Combine(folder, "kanal-icon.svg");
+        var bare = Path.Combine(folder, "kanal-icon");
+        File.WriteAllText(vector, "<svg/>");
+        File.WriteAllText(bare, "mine");
+
+        Created(store.ResetWorkspaceIcon(workspace.Id));
+        Assert.True(File.Exists(vector));
+        Assert.True(File.Exists(bare));
+        Assert.False(File.Exists(Path.Combine(folder, "kanal-icon.png")));
+
+        Assert.Null(store.DeleteWorkspace(workspace.Id));
+        Assert.True(File.Exists(vector));
+        Assert.True(File.Exists(bare));
+    }
+
+    [Fact]
+    public void TheIconAlreadyInTheFolderIsRecognisedThroughALink()
+    {
+        var folder = Folder("acme");
+        var workspace = Created(Store().CreateWorkspace("ACME", folder));
+        var copied = Created(Store().SetWorkspaceIconFile(workspace.Id, Image("logo.png"))).IconPath!;
+        var link = Path.Combine(Path.GetTempPath(), "kanal-link-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateSymbolicLink(link, _root);
+        }
+        catch (IOException e) when (OperatingSystem.IsWindows() && (e.HResult & 0xFFFF) == 1314)
+        {
+            using var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "cmd", $"/c mklink /J \"{link}\" \"{_root}\"") { CreateNoWindow = true })!;
+            mklink.WaitForExit();
+            if (mklink.ExitCode != 0)
+                Assert.Skip("Neither a symlink nor a junction could be made.");
+        }
+
+        try
+        {
+            var again = Store().SetWorkspaceIconFile(
+                workspace.Id, Path.Combine(link, "acme", Path.GetFileName(copied)));
+
+            Assert.Null(again.Problem);
+            Assert.Equal(["kanal-icon.png"], IconFiles(folder));
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
+    [Fact]
+    public void DeletingARootThatHoldsAnotherWorkspacesMarkerIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        File.Copy(
+            Path.Combine(other.RootPath, WorkspaceStore.WorkspaceFileName),
+            Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName),
+            overwrite: true);
+
+        var problem = store.DeleteWorkspace(acme.Id);
+
+        Assert.Equal(StoreProblemKind.NotThisWorkspace, problem!.Kind);
+        Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
+        Assert.Equal(2, Store().ListWorkspaces().Workspaces.Count);
+    }
+
+    [Fact]
+    public void DeletingARootWithoutAMarkerIsRefusedButTheListEntryCanStillGo()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        File.Delete(Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName));
+
+        Assert.Equal(StoreProblemKind.NotThisWorkspace, store.DeleteWorkspace(acme.Id)!.Kind);
+        Assert.True(Directory.Exists(Path.Combine(acme.RootPath, "meetings")));
+
+        Assert.Null(store.ForgetWorkspace(acme.Id));
+        Assert.Empty(Store().ListWorkspaces().Workspaces);
+    }
+
+    [Fact]
+    public void DeletingAnUnknownWorkspaceIsReported()
+    {
+        Assert.Equal(StoreProblemKind.NotFound, Store().DeleteWorkspace("nosuchworkspace")!.Kind);
+    }
+
+    private void WriteRegistryWithDamagedRow(Workspace complete)
+    {
+        var row = JsonSerializer.Serialize(new
+        {
+            id = complete.Id,
+            name = complete.Name,
+            rootPath = complete.RootPath,
+            createdAt = complete.CreatedAt,
+        });
+        File.WriteAllText(
+            Registry,
+            $$"""{"schemaVersion":{{WorkspaceStore.SchemaVersion}},"workspaces":[{{row}},{"name":"Broken"},{"id":"x1","rootPath":"/nowhere"}]}""");
+    }
+
+    private string MovedAway(Workspace workspace)
+    {
+        var away = Path.Combine(_root, "away-" + Path.GetFileName(workspace.RootPath));
+        Directory.Move(workspace.RootPath, away);
+        return away;
+    }
+
+    [Fact]
+    public void RelocatingPointsTheRowToTheNewFolderAndKeepsTheName()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        MovedAway(acme);
+        var elsewhere = Folder("elsewhere");
+
+        var moved = Created(store.RelocateWorkspace(acme.Id, elsewhere));
+
+        Assert.Equal(acme.Id, moved.Id);
+        Assert.Equal("ACME", moved.Name);
+        var listed = Assert.Single(Store().ListWorkspaces().Workspaces);
+        Assert.Equal(moved.RootPath, listed.RootPath);
+        Assert.EndsWith("elsewhere", listed.RootPath);
+        Assert.Equal("ACME", listed.Name);
+    }
+
+    [Fact]
+    public void RelocatingStoresTheCanonicalPath()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        MovedAway(acme);
+        var elsewhere = Folder("elsewhere");
+        var link = Path.Combine(_root, "link");
+        Directory.CreateSymbolicLink(link, elsewhere);
+
+        var moved = Created(store.RelocateWorkspace(acme.Id, link + Path.DirectorySeparatorChar));
+
+        Assert.Equal(Created(Store().OpenWorkspace(elsewhere)).RootPath, moved.RootPath);
+        Assert.DoesNotContain("link", moved.RootPath);
+    }
+
+    [Fact]
+    public void RelocatingWritesTheMarkerWhenTheNewFolderHasNone()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        MovedAway(acme);
+        var elsewhere = Folder("elsewhere");
+
+        Created(store.RelocateWorkspace(acme.Id, elsewhere));
+
+        var marker = Path.Combine(elsewhere, WorkspaceStore.WorkspaceFileName);
+        Assert.True(File.Exists(marker));
+        Assert.Equal(acme.Id, Created(Store().OpenWorkspace(elsewhere)).Id);
+        var listing = Store().ListMeetings(acme.Id);
+        Assert.Empty(listing.Meetings);
+        Assert.Empty(listing.Problems);
+    }
+
+    [Fact]
+    public void RelocatingToAFolderWithTheSameProjectMarkerKeepsTheMarkerAndTheMeetings()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var kept = Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        var restored = Path.Combine(_root, "restored");
+        Directory.Move(acme.RootPath, restored);
+        var marker = Path.Combine(restored, WorkspaceStore.WorkspaceFileName);
+        var before = File.ReadAllText(marker);
+
+        var moved = Created(store.RelocateWorkspace(acme.Id, restored));
+
+        Assert.Equal(before, File.ReadAllText(marker));
+        Assert.Equal(kept.Id, Assert.Single(Store().ListMeetings(acme.Id).Meetings).Id);
+        Assert.Equal(moved.RootPath, Assert.Single(Store().ListWorkspaces().Workspaces).RootPath);
+    }
+
+    [Fact]
+    public void RelocatingToAFolderThatIsNotThereIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+
+        var result = store.RelocateWorkspace(acme.Id, Path.Combine(_root, "nowhere"));
+
+        Assert.Equal(StoreProblemKind.FolderMissing, result.Problem!.Kind);
+        Assert.False(Directory.Exists(Path.Combine(_root, "nowhere")));
+        Assert.Equal(acme.RootPath, Assert.Single(Store().ListWorkspaces().Workspaces).RootPath);
+    }
+
+    [Fact]
+    public void RelocatingToABlankPathIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+
+        Assert.Equal(StoreProblemKind.Invalid, store.RelocateWorkspace(acme.Id, " ").Problem!.Kind);
+    }
+
+    [Fact]
+    public void RelocatingToAFolderOfAnotherProjectIsRefusedAndWritesNothing()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        MovedAway(acme);
+        var other = Folder("other");
+        var foreign = JsonSerializer.Serialize(new
+        {
+            schemaVersion = WorkspaceStore.SchemaVersion,
+            id = "someoneelse",
+            name = "Someone else",
+            createdAt = DateTimeOffset.UtcNow,
+        });
+        var marker = Path.Combine(other, WorkspaceStore.WorkspaceFileName);
+        File.WriteAllText(marker, foreign);
+        var listBefore = File.ReadAllText(Registry);
+
+        var result = store.RelocateWorkspace(acme.Id, other);
+
+        Assert.Equal(StoreProblemKind.NotThisWorkspace, result.Problem!.Kind);
+        Assert.Equal(foreign, File.ReadAllText(marker));
+        Assert.Equal(listBefore, File.ReadAllText(Registry));
+    }
+
+    [Fact]
+    public void RelocatingToAFolderWithAnUnreadableMarkerIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        MovedAway(acme);
+        var elsewhere = Folder("elsewhere");
+        var marker = Path.Combine(elsewhere, WorkspaceStore.WorkspaceFileName);
+        File.WriteAllText(marker, "{ not json at all");
+
+        var result = store.RelocateWorkspace(acme.Id, elsewhere);
+
+        Assert.Equal(StoreProblemKind.Unreadable, result.Problem!.Kind);
+        Assert.Equal("{ not json at all", File.ReadAllText(marker));
+        Assert.Equal(acme.RootPath, Assert.Single(Store().ListWorkspaces().Workspaces).RootPath);
+    }
+
+    [Fact]
+    public void RelocatingToTheFolderAnotherRowUsesIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        MovedAway(acme);
+
+        var result = store.RelocateWorkspace(acme.Id, other.RootPath);
+
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        var listed = Store().ListWorkspaces().Workspaces;
+        Assert.Equal(acme.RootPath, listed.Single(w => w.Id == acme.Id).RootPath);
+        Assert.Equal(other.RootPath, listed.Single(w => w.Id == other.Id).RootPath);
+    }
+
+    [Fact]
+    public void RelocatingAnUnknownProjectIsReported()
+    {
+        var result = Store().RelocateWorkspace("nosuchworkspace", Folder("elsewhere"));
+
+        Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
+        Assert.False(File.Exists(Path.Combine(_root, "elsewhere", WorkspaceStore.WorkspaceFileName)));
+    }
+
+    [Fact]
+    public void RelocatingAProjectWhoseOldFolderIsGoneKeepsTheOtherRows()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        var gone = Path.Combine(_root, "gone");
+        Directory.Move(acme.RootPath, gone);
+
+        Created(store.RelocateWorkspace(acme.Id, gone));
+
+        var listing = Store().ListWorkspaces();
+        Assert.Empty(listing.Problems);
+        Assert.Equal(2, listing.Workspaces.Count);
+        Assert.Equal(other.RootPath, listing.Workspaces.Single(w => w.Id == other.Id).RootPath);
+    }
+
+    [Fact]
+    public void RelocatingDeletesNothingInEitherFolder()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        var elsewhere = Folder("elsewhere");
+        File.WriteAllText(Path.Combine(elsewhere, "notes.txt"), "keep");
+        var before = Tree(acme.RootPath);
+        var away = MovedAway(acme);
+
+        Created(store.RelocateWorkspace(acme.Id, elsewhere));
+
+        Assert.Equal(before, Tree(away));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(elsewhere, "notes.txt")));
+    }
+
+    private static string[] Tree(string root) =>
+        [.. Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(root, path)).Order()];
+
+    [Fact]
+    public void RelocatingWhileTheOldFolderIsStillThereIsRefusedAndWritesNothing()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Created(store.CreateMeeting(acme.Id, "Tooling review"));
+        var elsewhere = Folder("elsewhere");
+        var listBefore = File.ReadAllText(Registry);
+
+        var result = store.RelocateWorkspace(acme.Id, elsewhere);
+
+        Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(elsewhere));
+        Assert.Equal(listBefore, File.ReadAllText(Registry));
+        Assert.Single(Store().ListMeetings(acme.Id).Meetings);
+    }
+
+    [Fact]
+    public void RelocatingToTheFolderTheRowAlreadyHoldsChangesNothing()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+
+        var moved = Created(store.RelocateWorkspace(acme.Id, acme.RootPath));
+
+        Assert.Equal(acme.RootPath, moved.RootPath);
+    }
+
+    [Fact]
+    public void ANullRowIsReportedAsDamagedAndDoesNotHideTheRest()
+    {
+        var acme = Created(Store().CreateWorkspace("ACME", Folder("acme")));
+        var row = JsonSerializer.Serialize(new
+        {
+            id = acme.Id,
+            name = acme.Name,
+            rootPath = acme.RootPath,
+            createdAt = acme.CreatedAt,
+        });
+        File.WriteAllText(
+            Registry,
+            $$"""{"schemaVersion":{{WorkspaceStore.SchemaVersion}},"workspaces":[null,{{row}}]}""");
+
+        var listing = Store().ListWorkspaces();
+
+        Assert.Equal(acme.Id, Assert.Single(listing.Workspaces).Id);
+        Assert.Equal(StoreProblemKind.RegistryRowDamaged, Assert.Single(listing.Problems).Kind);
+
+        Assert.Null(Store().DropBrokenRegistryRows());
+
+        var after = Store().ListWorkspaces();
+        Assert.Equal(acme.Id, Assert.Single(after.Workspaces).Id);
+        Assert.Empty(after.Problems);
+    }
+
+    [Fact]
+    public void CreatingTheMeetingsFolderMakesAnEmptyOne()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meetings = Path.Combine(acme.RootPath, "meetings");
+        Directory.Delete(meetings);
+        Assert.Equal(StoreProblemKind.FolderMissing, Assert.Single(store.ListMeetings(acme.Id).Problems).Kind);
+
+        Assert.Null(store.CreateMeetingsFolder(acme.Id));
+
+        Assert.True(Directory.Exists(meetings));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(meetings));
+        var listing = Store().ListMeetings(acme.Id);
+        Assert.Empty(listing.Meetings);
+        Assert.Empty(listing.Problems);
+    }
+
+    [Fact]
+    public void CreatingTheMeetingsFolderLeavesAnExistingOneAlone()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var kept = Created(store.CreateMeeting(acme.Id, "Tooling review"));
+
+        Assert.Null(store.CreateMeetingsFolder(acme.Id));
+
+        Assert.Equal(kept.Id, Assert.Single(Store().ListMeetings(acme.Id).Meetings).Id);
+    }
+
+    [Fact]
+    public void CreatingTheMeetingsFolderWithoutTheProjectFolderIsRefused()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        Directory.Delete(acme.RootPath, recursive: true);
+
+        var problem = store.CreateMeetingsFolder(acme.Id);
+
+        Assert.Equal(StoreProblemKind.FolderMissing, problem!.Kind);
+        Assert.False(Directory.Exists(acme.RootPath));
+    }
+
+    [Fact]
+    public void CreatingTheMeetingsFolderForAnUnknownProjectIsReported()
+    {
+        Assert.Equal(StoreProblemKind.NotFound, Store().CreateMeetingsFolder("nosuchworkspace")!.Kind);
+    }
+
+    [Fact]
+    public void CreatingTheMeetingsFolderOverAFileIsReportedAndTheFileStays()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meetings = Path.Combine(acme.RootPath, "meetings");
+        Directory.Delete(meetings);
+        File.WriteAllText(meetings, "mine");
+
+        var problem = store.CreateMeetingsFolder(acme.Id);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem!.Kind);
+        Assert.Equal("mine", File.ReadAllText(meetings));
+    }
+
+    [Fact]
+    public void DroppingBrokenRowsRemovesOnlyTheRowsThatMissFields()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        WriteRegistryWithDamagedRow(acme);
+        Assert.Equal(2, Store().ListWorkspaces().Problems.Count);
+
+        Assert.Null(store.DropBrokenRegistryRows());
+
+        var listing = Store().ListWorkspaces();
+        Assert.Empty(listing.Problems);
+        var kept = Assert.Single(listing.Workspaces);
+        Assert.Equal(acme, kept);
+        Assert.True(File.Exists(Path.Combine(acme.RootPath, WorkspaceStore.WorkspaceFileName)));
+    }
+
+    [Fact]
+    public void DroppingBrokenRowsKeepsEveryCompleteRowUnchanged()
+    {
+        var store = Store();
+        var acme = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var other = Created(store.CreateWorkspace("Other", Folder("other")));
+        Created(store.SetWorkspaceIcon(other.Id, "folder"));
+        var before = Store().ListWorkspaces().Workspaces;
+
+        Assert.Null(store.DropBrokenRegistryRows());
+
+        Assert.Equal(before, Store().ListWorkspaces().Workspaces);
+        Assert.Contains(acme.Id, before.Select(w => w.Id));
+    }
+
+    [Fact]
+    public void DroppingBrokenRowsWithNoneBrokenDoesNotRewriteTheList()
+    {
+        var store = Store();
+        Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var stamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Registry, stamp);
+
+        Assert.Null(store.DropBrokenRegistryRows());
+
+        Assert.Equal(stamp, File.GetLastWriteTimeUtc(Registry));
+    }
+
+    [Fact]
+    public void DroppingBrokenRowsWithoutAListIsNothingToDo()
+    {
+        Assert.Null(Store().DropBrokenRegistryRows());
+        Assert.False(File.Exists(Registry));
+    }
+
+    [Fact]
+    public void DroppingBrokenRowsRefusesAListThatCannotBeParsedAndLeavesItAlone()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(Registry, "{ not json at all");
+
+        var problem = Store().DropBrokenRegistryRows();
+
+        Assert.Equal(StoreProblemKind.Unreadable, problem!.Kind);
+        Assert.Equal("{ not json at all", File.ReadAllText(Registry));
     }
 }

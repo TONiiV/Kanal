@@ -117,7 +117,7 @@ public class ModelDownloadManagerTests : IDisposable
         await manager.DownloadAsync(model, progress, CancellationToken.None);
 
         Assert.True(manager.IsDownloaded(model));
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model), TestContext.Current.CancellationToken));
         Assert.Equal(model.DownloadUrl, handler.LastUri!.ToString());
         Assert.Contains(progress.Values, p => p >= 1.0);
     }
@@ -172,7 +172,7 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
 
         var download = manager.DownloadAsync(model, null, cts.Token);
-        await body.Started.WaitAsync(TimeSpan.FromSeconds(10)); // part file now exists on disk
+        await body.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); // part file now exists on disk
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);
@@ -205,17 +205,17 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
 
         var first = manager.DownloadAsync(model, null, CancellationToken.None);
-        await slowBody.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await slowBody.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // the second download runs to completion while the first still holds its part file
-        await manager.DownloadAsync(model, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        await manager.DownloadAsync(model, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.True(manager.IsDownloaded(model));
 
         resume.SetResult();
-        await first.WaitAsync(TimeSpan.FromSeconds(10)); // must not throw FileNotFoundException
+        await first.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); // must not throw FileNotFoundException
 
         Assert.True(manager.IsDownloaded(model));
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(model), TestContext.Current.CancellationToken));
         Assert.Empty(PartFiles());
     }
 
@@ -237,7 +237,7 @@ public class ModelDownloadManagerTests : IDisposable
 
         Assert.True(manager.IsDownloaded(part));
         Assert.Equal(part.DownloadUrl, handler.LastUri!.ToString());
-        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(part)));
+        Assert.Equal(Payload, await File.ReadAllBytesAsync(manager.GetPath(part), TestContext.Current.CancellationToken));
     }
 
     private sealed record TestPart(
@@ -352,8 +352,8 @@ public class ModelDownloadManagerTests : IDisposable
         var model = TestModel();
         await manager.DownloadAsync(model, null, CancellationToken.None);
 
-        await File.WriteAllTextAsync(manager.GetPath(model) + ".part", "legacy");
-        await File.WriteAllTextAsync(manager.GetPath(model) + ".deadbeef.part", "interrupted");
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".part", "legacy", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(manager.GetPath(model) + ".deadbeef.part", "interrupted", TestContext.Current.CancellationToken);
 
         manager.Delete(model);
 
