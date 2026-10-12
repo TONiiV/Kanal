@@ -12,7 +12,7 @@ Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice
 2026-10-11, after first choosing B (satin).
 
 - The app icon is a silver satin tile with a textured K. The upper stroke is silver-grey. The lower
-  "reply" stroke is a muted purple. The purple is `#6264A7` satin in Light. In Dark it is mixed
+  "reply" stroke is a muted purple. The purple is `#6A5FB0` satin in Light. In Dark it is mixed
   30% toward white.
 - `design/icon/kanal-tile-light.png` and `kanal-tile-dark.png` are the 1024 px sources. The Python
   script that made them needed numpy and Pillow, so the repository does not keep it.
