@@ -83,6 +83,7 @@
   "join.label": "DOŁĄCZ",
   "join.unavailable": "Kod QR nie został wygenerowany, ponieważ przekaźnik mobilny jest niedostępny. {0}",
   "merge.label": "SCAL",
+  "merge.button": "Scal",
   "merge.into": "scal z…",
   "speaker.placeholder": "nazwa wyświetlana",
   "speaker.apply.tip": "Zastosuj nazwę (lub naciśnij Enter)",

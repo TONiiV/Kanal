@@ -229,12 +229,16 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                                <ComboBox x:Name="MergeInto" ItemsSource="{Binding MergeTargets}"
-                                                          SelectedItem="{Binding SelectedMergeTarget}"
-                                                          IsVisible="{Binding CanMerge}"
-                                                          PlaceholderText="{l:T merge.into}"
-                                                          HorizontalAlignment="Stretch"
-                                                          AutomationProperties.Name="{l:T merge.label}" />
+                                                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanMerge}">
+                                                    <ComboBox x:Name="MergeInto" ItemsSource="{Binding MergeTargets}"
+                                                              SelectedItem="{Binding SelectedMergeTarget}"
+                                                              PlaceholderText="{l:T merge.into}"
+                                                              HorizontalAlignment="Stretch"
+                                                              AutomationProperties.Name="{l:T merge.label}" />
+                                                    <Button x:Name="MergeSpeaker" Grid.Column="1" Margin="7,0,0,0"
+                                                            Content="{l:T merge.button}"
+                                                            Command="{Binding MergeCommand}" />
+                                                </Grid>
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>

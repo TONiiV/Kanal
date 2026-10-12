@@ -118,6 +118,39 @@ public class SpeakerManagementTests
     }
 
     [AvaloniaFact]
+    public void MergeStaysDisabledUntilATargetIsChosen()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.ApplySpeaker(Person("S01"));
+        vm.ApplySpeaker(Person("S02"));
+        var row = vm.Speakers[0];
+
+        Assert.False(row.MergeCommand.CanExecute(null));
+
+        row.SelectedMergeTarget = row.MergeTargets.Single();
+
+        Assert.True(row.MergeCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void ATypedNameSurvivesAColourChangeButNotARenameFromElsewhere()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.ApplySpeaker(new Speaker("S01", "Weber", [], RoomState.Palette[0]));
+        var row = vm.Speakers[0];
+
+        row.Name = "Marek";
+        vm.ApplySpeaker(new Speaker("S01", "Weber", [], RoomState.Palette[4]));
+
+        Assert.Equal("Marek", row.Name);
+        Assert.Equal(RoomState.Palette[4], row.Color);
+
+        vm.ApplySpeaker(new Speaker("S01", "Herr Weber", [], RoomState.Palette[4]));
+
+        Assert.Equal("Herr Weber", row.Name);
+    }
+
+    [AvaloniaFact]
     public async Task MergingIntoAnotherSpeakerFoldsTheRowIntoItsTarget()
     {
         var vm = TestViewModels.Hermetic();
@@ -128,6 +161,13 @@ public class SpeakerManagementTests
         var from = vm.Speakers[1];
         var into = vm.Speakers[0];
         from.SelectedMergeTarget = from.MergeTargets.Single(t => t.Tag == into.Tag);
+        Dispatcher.UIThread.RunJobs();
+        await Task.Delay(300);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(from, vm.Speakers);
+        Assert.Empty(into.MergedFromLabel);
+
+        from.MergeCommand.Execute(null);
 
         await WaitForAsync(() => vm.Speakers.All(s => s.Tag != from.Tag) &&
                                  into.MergedFromLabel.Contains(from.Tag));

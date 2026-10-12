@@ -305,6 +305,19 @@ public class MeetingSessionTests
     }
 
     [Fact]
+    public async Task ASpeakerColourChangeIsPublishedToThePhones()
+    {
+        var relay = new RecordingRelay();
+        await using var session = new MeetingSession(
+            FastFake(), null, relay, new RoomConfig("t", ["zh"]));
+
+        session.SetSpeakerColour("S01", RoomState.Palette[3]);
+
+        await WaitUntilAsync(() => relay.OfType<SpeakerUpsert>().Count == 1);
+        Assert.Equal(RoomState.Palette[3], relay.OfType<SpeakerUpsert>().Single().Speaker.Color);
+    }
+
+    [Fact]
     public async Task ResumingRecordsAgain()
     {
         var relay = new RecordingRelay();

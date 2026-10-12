@@ -83,6 +83,7 @@
   "join.label": "BEITRETEN",
   "join.unavailable": "Der QR-Code wurde nicht erzeugt, weil das mobile Relay nicht verfügbar ist. {0}",
   "merge.label": "ZUSAMMENFÜHREN",
+  "merge.button": "Zusammenführen",
   "merge.into": "zusammenführen mit…",
   "speaker.placeholder": "Anzeigename",
   "speaker.apply.tip": "Namen übernehmen (oder Eingabetaste)",

@@ -2235,6 +2235,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     internal void ApplySpeaker(Speaker speaker)
     {
+        var storedName = _speakerModels.TryGetValue(speaker.Tag, out var previous) ? previous.DisplayName : null;
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
         foreach (var merged in speaker.MergedFrom)
@@ -2247,6 +2248,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var item = Speakers.FirstOrDefault(s => s.Tag == speaker.Tag);
+        var isNew = item is null;
         if (item is null)
         {
             item = CreateSpeakerItem(speaker.Tag);
@@ -2254,7 +2256,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         item.Color = speaker.Color;
-        item.Name = speaker.DisplayName ?? "";
+        if (isNew || storedName != speaker.DisplayName)
+            item.Name = speaker.DisplayName ?? "";
         item.MergedFromLabel = speaker.MergedFrom.Count > 0
             ? $"⊇ {string.Join(", ", speaker.MergedFrom)}"
             : "";

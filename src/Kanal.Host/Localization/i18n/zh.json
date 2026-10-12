@@ -83,6 +83,7 @@
   "join.label": "入会",
   "join.unavailable": "二维码未生成：手机中继不可用。{0}",
   "merge.label": "合并",
+  "merge.button": "合并",
   "merge.into": "合并到…",
   "speaker.placeholder": "显示名称",
   "speaker.apply.tip": "应用名称（或按回车）",

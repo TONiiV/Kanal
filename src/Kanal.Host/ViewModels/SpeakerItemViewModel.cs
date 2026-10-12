@@ -62,6 +62,7 @@ public partial class SpeakerItemViewModel : ViewModelBase
     private IReadOnlyList<MergeTarget> _mergeTargets = [];
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(MergeCommand))]
     private MergeTarget? _selectedMergeTarget;
 
     public bool CanMerge => MergeTargets.Count > 0;
@@ -72,11 +73,10 @@ public partial class SpeakerItemViewModel : ViewModelBase
             choice.IsSelected = string.Equals(choice.Value, value, StringComparison.OrdinalIgnoreCase);
     }
 
-    partial void OnSelectedMergeTargetChanged(MergeTarget? value)
-    {
-        if (value is not null)
-            _applyMerge(this, value.Tag);
-    }
+    [RelayCommand(CanExecute = nameof(CanMergeSelected))]
+    private void Merge() => _applyMerge(this, SelectedMergeTarget!.Tag);
+
+    private bool CanMergeSelected() => SelectedMergeTarget is not null;
 
     [RelayCommand]
     private void Rename() => _applyRename(this);
