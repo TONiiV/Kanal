@@ -314,6 +314,46 @@ public class AppLanguageTests
         }
     }
 
+    [AvaloniaFact]
+    public void ChoosingALanguageSavesItAtOnce()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var saved = new List<string>();
+            var vm = new SettingsViewModel(new AppSettings(), () => null, saveAppLanguage: saved.Add);
+            Assert.Empty(saved);
+
+            vm.AppLanguage = Localizer.Available.First(l => l.Code == "pl");
+
+            Assert.Equal(["pl"], saved);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    [AvaloniaFact]
+    public void AFailedLanguageSaveDoesNotStopTheSwitch()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var vm = new SettingsViewModel(
+                new AppSettings(), () => null,
+                saveAppLanguage: _ => throw new IOException("disk full"));
+
+            vm.AppLanguage = Localizer.Available.First(l => l.Code == "de");
+
+            Assert.Equal("de", Localizer.Instance.Current);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
     /// <summary>Choosing it in the dialog takes effect at once, not on the next launch.</summary>
     [AvaloniaFact]
     public void ChoosingALanguageAppliesImmediately()

@@ -25,6 +25,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- The app language in Settings now saves when you pick it. Kanal shows that language at the next
+  start, also when you close Settings without "Save & Close".
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
@@ -38,7 +40,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   be read".
 - If Kanal cannot create the default project at start-up, the log now names the folder and the
   reason. Before, the log said nothing in some cases, for example when the folder was a file.
-- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
 - When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete

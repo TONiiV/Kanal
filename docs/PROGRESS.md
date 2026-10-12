@@ -27,9 +27,28 @@ Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
 6. A headless render of each theme in both variants shows that a checked box and the settings
    tab marker use the `Brand` of the theme.
 
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
 ---
 
 ## 2026-10-11
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
 
 ### Icons on the settings tabs
 
