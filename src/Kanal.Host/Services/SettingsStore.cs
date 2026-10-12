@@ -194,6 +194,13 @@ public static class SettingsStore
         Save(settings);
     }
 
+    public static void SaveAppLanguage(string code)
+    {
+        var settings = Load();
+        settings.AppLanguage = code;
+        Save(settings);
+    }
+
     public static void Save(AppSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
