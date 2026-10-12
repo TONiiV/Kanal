@@ -91,7 +91,7 @@
                     </Button>
                     <StackPanel DockPanel.Dock="Left" x:Name="WorkspaceTitle" Margin="6,0,0,0"
                                 Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Image Source="/Assets/kanal-splash-mark.png" Width="43" Height="43" Stretch="Uniform"
+                        <Image Source="{DynamicResource BrandMark}" Width="43" Height="43" Stretch="Uniform"
                                AutomationProperties.Name="Kanal" />
                         <TextBlock x:Name="Wordmark" Text="KANAL" FontSize="15" FontWeight="Bold"
                                    LetterSpacing="1.2" VerticalAlignment="Center" />

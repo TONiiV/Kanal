@@ -296,7 +296,7 @@ public class ColourSchemeTests
         Assert.Equal(ColourScheme.Light, settings.ColourScheme);
     }
 
-    private static Color Brush(ThemeVariant variant, string key)
+    internal static Color Brush(ThemeVariant variant, string key)
     {
         Assert.True(Application.Current!.TryGetResource(key, variant, out var value), $"{key} is missing for {variant}.");
         return value switch
@@ -307,7 +307,7 @@ public class ColourSchemeTests
         };
     }
 
-    private static double Luminance(Color c)
+    internal static double Luminance(Color c)
     {
         static double Channel(byte v)
         {
@@ -318,7 +318,7 @@ public class ColourSchemeTests
         return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
     }
 
-    private static double Contrast(Color a, Color b)
+    internal static double Contrast(Color a, Color b)
     {
         var (hi, lo) = (Math.Max(Luminance(a), Luminance(b)), Math.Min(Luminance(a), Luminance(b)));
         return (hi + 0.05) / (lo + 0.05);

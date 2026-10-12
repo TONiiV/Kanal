@@ -15,6 +15,8 @@
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
+                    <Bitmap x:Key="BrandMark">/Assets/kanal-splash-mark.png</Bitmap>
+                    <WindowIcon x:Key="BrandIcon">/Assets/kanal.ico</WindowIcon>
                     <!-- Brand controls and speaker identity use separate semantic resources. -->
                     <SolidColorBrush x:Key="Sheet" Color="#FFFCF7" />
                     <SolidColorBrush x:Key="Paper" Color="#F5F0E6" />
@@ -74,6 +76,8 @@
 
                 <!-- The mobile caption page's dark tokens (web/index.html). -->
                 <ResourceDictionary x:Key="Dark">
+                    <Bitmap x:Key="BrandMark">/Assets/kanal-splash-mark-dark.png</Bitmap>
+                    <WindowIcon x:Key="BrandIcon">/Assets/kanal-dark.ico</WindowIcon>
                     <SolidColorBrush x:Key="Sheet" Color="#181C28" />
                     <SolidColorBrush x:Key="Paper" Color="#222838" />
                     <SolidColorBrush x:Key="Ink" Color="#F6F1E8" />
@@ -150,6 +154,9 @@
     <Application.Styles>
         <FluentTheme />
 
+        <Style Selector=":is(Window)">
+            <Setter Property="Icon" Value="{DynamicResource BrandIcon}" />
+        </Style>
 
         <!-- Ink is set once per window via TextElement.Foreground and inherited from there.
              A global TextBlock.Foreground setter would out-rank the inherited value that

@@ -18,6 +18,9 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
   meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
@@ -30,6 +33,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
+  scheme during a meeting.
 - The window no longer freezes at start when a project is on a slow network share. Kanal now checks
   the other projects for issues in the background. The warning marks in the project list appear when
   that check ends.
