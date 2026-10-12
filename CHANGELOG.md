@@ -20,6 +20,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   or "Remove from list". Kanal creates a missing meetings folder and removes a damaged row of the
   project list. Kanal deletes no file. The row shows the result in one line. While a project
   records a meeting, its issues show no buttons.
+- Each settings tab shows an icon next to its name.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
   meeting room uses the same mark. The mobile caption page keeps its coloured icon.
