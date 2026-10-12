@@ -383,7 +383,8 @@ public class OnlineMeetingCaptureTests
                     if (_frames >= frames) return;
                     progress = _progress.Task;
                 }
-                Assert.False(Task.IsCompleted, $"the capture ended after {Frames} of {frames} frames");
+                Assert.False(Task.IsCompleted, $"the capture ended after {Frames} of {frames} frames: " +
+                    $"{(Task.Exception?.GetBaseException() as AudioCaptureException)?.Code ?? "no fault"}");
                 try { await Task.WhenAny(progress, Task).WaitAsync(Patience); }
                 catch (TimeoutException) { Assert.Fail($"drained {Frames} of {frames} frames"); }
             }
