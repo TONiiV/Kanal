@@ -75,6 +75,8 @@ Conversation K 继续提供品牌资产生成规则；meeting-workspace 继续�
 | Hold / HoldWash | `#C08A12` / `#F2E6C6` | 暂停/继续及浅黄圆底 |
 | Rule | `#CEC9C0` | 内容分隔；不独立承担控件可识别性 |
 | BrandWash | `#EBEDF6` | 选中行、轻量反馈 |
+| Alarm / AlarmWash | `#8B2F2F` / `#EEDDD9` | 错误文字、危险操作；问题横幅的警报状态（记录损坏） |
+| Warning / WarningWash | `#9A6B00` / `#F2E6C6` | 问题横幅与项目下拉标记的提醒状态（仅文件夹缺失）；不与暂停黄混用 |
 
 主界面是稳定的暖纸面。此前要求的液态玻璃质感仅保留在菜单、设备选择等弹层：
 约 94% 不透明度、16 DIP 轻磨砂、1 DIP 细边线和极轻阴影；现有弹层圆角 12 DIP。正文不透出背景纹理。
