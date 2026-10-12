@@ -14,7 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Kanal no longer damages a meeting record when the computer stops during a save.
+- Kanal no longer damages a meeting record when the computer stops during a save. A meeting folder
+  that Kanal cannot open now shows as unreadable, not as a meeting without a record.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
   meeting room uses the same mark. The mobile caption page keeps its coloured icon.

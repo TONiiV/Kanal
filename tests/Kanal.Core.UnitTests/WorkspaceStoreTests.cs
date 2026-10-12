@@ -595,6 +595,43 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void AMeetingFolderThatCannotBeAccessedIsUnreadableNotMissing()
+    {
+        var store = Store();
+        var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
+        var meeting = Created(store.CreateMeeting(workspace.Id, "Tooling review"));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+
+        if (OperatingSystem.IsWindows())
+            return; // no mode bits to take away; the guard under test is platform-independent
+
+        File.SetUnixFileMode(folder, UnixFileMode.None);
+        try
+        {
+            if (Directory.EnumerateFileSystemEntries(folder).Any())
+                return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        try
+        {
+            var listing = Store().ListMeetings(workspace.Id);
+
+            Assert.Empty(listing.Meetings);
+            var problem = Assert.Single(listing.Problems);
+            Assert.Equal(StoreProblemKind.Unreadable, problem.Kind);
+            Assert.Equal(folder, problem.Subject);
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
     public void AWorkspaceThatMovedIsOpenedRatherThanMistakenForACopy()
     {
         var was = Folder("acme");

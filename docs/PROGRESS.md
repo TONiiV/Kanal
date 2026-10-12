@@ -19,10 +19,10 @@ This is ticket #225 of spec #209.
    The last failure goes to the caller, which logs it and reports `Unwritable`.
 6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
    `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
-7. Reads did not change.
-
-Open: the comment on #225 adds a probe that reports `Unreadable` for a meeting folder without access.
-That part needs `StoreProblemKind.RecordMissing` from #216, which is not on main yet.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
 
 ## 2026-10-11
 
