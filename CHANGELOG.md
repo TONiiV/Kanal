@@ -30,6 +30,10 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- The Appearance tab has five accent themes: Kanal indigo, Grove, Ocean, Iris and Graphite. A
+  theme changes the colour of buttons, selected items, checked boxes and the settings tab marker.
+  Reading surfaces, text, recording state and speaker colours stay the same. Your choice applies
+  at once and stays on this computer. Kanal indigo is the default.
 - The app language in Settings now saves when you pick it. Kanal shows that language at the next
   start, also when you close Settings without "Save & Close".
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
