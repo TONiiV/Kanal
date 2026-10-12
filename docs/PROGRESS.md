@@ -4,6 +4,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-13
+
+### Accent themes
+
+Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
+
+1. The Appearance tab shows five theme cards after the colour scheme cards. Each card shows two
+   orbs: the light and the dark `Brand` of the theme. A click applies the theme at once. The id
+   goes to `settings.json`. An unknown id gives Kanal indigo.
+2. `AccentThemes` holds the five themes. A theme sets `Brand`, `BrandHover`, `BrandPressed`,
+   `BrandWash`, `OnBrand` and the seven `AccentRamp*` colours, in Light and in Dark.
+3. `Appearance.Apply(AccentTheme)` writes these keys into both theme dictionaries. It also writes
+   the twelve glyph keys of check box, radio button and switch, because they repeat `OnBrand`.
+   Then it copies the ramp of the current variant into the root `SystemAccentColor*` keys.
+4. Tests run every theme in both variants. `OnBrand` on `Brand` and `BrandHover` reaches 4.5:1.
+   `Brand` reaches 4.5:1 on `Sheet` and 3:1 on `Paper`. The check glyphs reach 3:1 on
+   `SystemAccentColor`. The glyph test now lists the indeterminate pointer-over and pressed keys.
+5. A test compares every theme dictionary key before and after a theme change. Only the brand
+   family may change. The theme never touches `Sheet`, `Paper`, `Ink*`, `Rule*`, `BrandAccent`,
+   record, hold, alarm, warning, speaker and close-button colours.
+6. A headless render of each theme in both variants shows that a checked box and the settings
+   tab marker use the `Brand` of the theme.
+
+---
+
 ## 2026-10-11
 
 ### Icons on the settings tabs

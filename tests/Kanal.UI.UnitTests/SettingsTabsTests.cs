@@ -18,7 +18,7 @@ public class SettingsTabsTests
     private static readonly string[] EverySettingThatExisted =
     [
         "AppLanguage", "Version", "Changelog", "Licenses",
-        "ColourScheme",
+        "ColourScheme", "AccentTheme",
         "InputDevice", "InputTest",
         "ApiKeys", "NewKeyName", "NewKeyValue", "AddKey",
         "TranslationModels",
