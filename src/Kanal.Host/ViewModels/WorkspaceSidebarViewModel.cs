@@ -30,13 +30,20 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private readonly List<MeetingRecord> _held = [];
     private readonly Func<DateTimeOffset> _clock;
     private readonly MeetingGroupViewModel[] _groups;
+    private readonly Func<Action, Task> _offUiThread;
 
     public WorkspaceSidebarViewModel(
-        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null)
+        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null,
+        Func<Action, Task>? offUiThread = null)
     {
         _store = store;
         _openFolder = openFolder ?? SystemFolders.Open;
         _clock = clock ?? (() => DateTimeOffset.Now);
+        _offUiThread = offUiThread ?? (work =>
+        {
+            work();
+            return Task.CompletedTask;
+        });
         _groups = [.. Enum.GetValues<MeetingAge>().Select(age => new MeetingGroupViewModel(age, Choose))];
         Refresh();
         Localizer.Instance.PropertyChanged += (_, e) =>
@@ -283,16 +290,54 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         _projectListProblems = Logged([.. listing.Problems
             .Where(p => !listing.Workspaces.Any(w => IsFolderOf(p, w)))
             .Distinct()]);
+        var earlier = _issuesByProject.ToDictionary(pair => pair.Key, pair => pair.Value);
         _issuesByProject.Clear();
+        var generation = ++_scanGeneration;
+        var toScan = new List<Workspace>();
         foreach (var workspace in Workspaces.Where(w => w.Id != SelectedWorkspace?.Id))
         {
             // A missing root is not looked up twice: on an offline share each lookup waits for the timeout.
             var missing = listing.Problems.Where(p => IsFolderOf(p, workspace)).ToList();
-            var problems = missing.Count > 0 ? missing : _store.ListMeetings(workspace.Id).Problems;
-            _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
+            if (missing.Count > 0)
+                _issuesByProject[workspace.Id] = IssuesOf(workspace, missing);
+            else
+            {
+                toScan.Add(workspace);
+                if (earlier.TryGetValue(workspace.Id, out var shown))
+                    _issuesByProject[workspace.Id] = shown;
+            }
         }
 
         LoadMeetings([.. listing.Problems.Where(p => SelectedWorkspace is { } current && IsFolderOf(p, current))]);
+        _ = ScanOthersAsync(toScan, generation);
+    }
+
+    private int _scanGeneration;
+
+    private async Task ScanOthersAsync(IReadOnlyList<Workspace> projects, int generation)
+    {
+        if (projects.Count == 0)
+            return;
+
+        var found = new Dictionary<string, IReadOnlyList<StoreProblem>>();
+        try
+        {
+            await _offUiThread(() =>
+            {
+                foreach (var project in projects)
+                    found[project.Id] = _store.ListMeetings(project.Id).Problems;
+            });
+            if (generation != _scanGeneration)
+                return;
+
+            foreach (var project in projects.Where(p => p.Id != SelectedWorkspace?.Id))
+                _issuesByProject[project.Id] = IssuesOf(project, found.GetValueOrDefault(project.Id, []));
+            PublishIssueStates();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogCategory, $"The scan of the other projects failed: {ex.Message}", ex);
+        }
     }
 
     private static bool IsFolderOf(StoreProblem problem, Workspace project) =>
@@ -318,6 +363,15 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             foreach (var issue in _issuesByProject.GetValueOrDefault(current.Id, []))
                 Issues.Add(issue);
 
+        PublishIssueStates();
+        OnPropertyChanged(nameof(HasIssues));
+        OnPropertyChanged(nameof(IssuesAreAlarm));
+        OnPropertyChanged(nameof(IssueCountText));
+        ShowUnopenableIssues();
+    }
+
+    private void PublishIssueStates()
+    {
         var states = _issuesByProject.Where(pair => pair.Value.Count > 0)
             .ToDictionary(pair => pair.Key, pair => pair.Value.Any(issue => issue.IsAlarm));
         if (SelectedWorkspace is { } workspace)
@@ -328,10 +382,6 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         ProjectIssueStates = states;
-        OnPropertyChanged(nameof(HasIssues));
-        OnPropertyChanged(nameof(IssuesAreAlarm));
-        OnPropertyChanged(nameof(IssueCountText));
-        ShowUnopenableIssues();
     }
 
     // Details opens the settings of a project; with none listed, the note is the only place left.
