@@ -172,8 +172,22 @@ public class ProjectIssuesTests : IDisposable
         var issue = Assert.Single(vm.Issues);
         Assert.True(vm.IssuesAreAlarm);
         Assert.True(issue.IsAlarm);
-        Assert.Equal(file, issue.Subject);
+        Assert.Equal(Path.GetDirectoryName(file), issue.Subject);
         Assert.Equal(Path.GetDirectoryName(file), issue.Location);
+        Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
+    }
+
+    [Fact]
+    public void AMeetingFolderWithoutARecordGetsTheMeetingRecordCause()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var folder = EmptyMeetingFolder(kappa, "norecord");
+
+        var issue = Assert.Single(Opened(store, kappa).Issues);
+
+        Assert.Equal(StoreProblemKind.RecordMissing, issue.Kind);
+        Assert.Equal(folder, issue.Location);
         Assert.Equal(L["workspace.issues.unreadable"], issue.Cause);
     }
 
