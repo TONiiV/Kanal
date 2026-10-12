@@ -9,11 +9,12 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 ### The Windows installer shows Kanal artwork
 
 The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
-maintenance pages show Kanal colours and the K mark.
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
 
 - `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
-- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and `design/kanal-icon.png`.
-  When the silver icon (#190) lands, run the script again.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
 - `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
 
 ### Silver app icon

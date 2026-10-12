@@ -178,12 +178,13 @@ pages. `Banner.bmp` (493×58) is the top banner of the other pages. WixUI draws 
 bitmap right of x=164, so that part stays white. `WindowsInstallerBitmapTests` checks both sizes.
 To change the artwork:
 
-1. Replace `design/installer-art/panel-art.png` or `design/kanal-icon.png`.
+1. Replace `design/installer-art/panel-art.png` or `design/icon/kanal-tile-light.png`.
 2. Run `python design/installer-art/compose.py`.
 3. Commit the two new bitmaps.
 
-`panel-art.png` came from `google/gemini-3.1-flash-image` through OpenRouter. `compose.py` pastes the K mark
-from `design/kanal-icon.png`, because generated art distorts the logo.
+`panel-art.png` came from `google/gemini-3.1-flash-image` through OpenRouter, in indigo and apricot.
+`compose.py` maps these colours to the silver, charcoal and purple of the app icon tile. It pastes
+the tile from `design/icon/kanal-tile-light.png`, because generated art distorts the logo.
 
 **Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
 numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
