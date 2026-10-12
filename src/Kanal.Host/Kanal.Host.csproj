@@ -11,6 +11,8 @@
          the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
          Ignored by non-Windows builds, so it needs no OS condition. -->
     <ApplicationIcon>Assets\kanal.ico</ApplicationIcon>
+    <!-- AVLN3001: the dialogs take constructor arguments and are built in code, never by the runtime XAML loader. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
