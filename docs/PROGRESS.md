@@ -22,6 +22,8 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
      their meaning, with values for a dark sheet.
    - `CloseHover` stays `#C42B1C`. The new `OnCloseHover` is white in both variants.
    - `SpeakerFallbackColor` `#9AA8B3` gives 6.0:1 on the dark paper. `TickMixedColor` is `#7E8A99`.
+   - `AlarmWash` is the mobile `--alarm-wash` `#1E1416`. `Warning` `#D9A53A` and `WarningWash`
+     `#3A3020` stay apart from `Hold` and `HoldWash`.
 3. `Appearance` sets `Application.RequestedThemeVariant`. For System it reads the platform colour
    values and follows `ColorValuesChanged` live. The app applies the saved scheme before the
    splash window opens.
@@ -42,6 +44,115 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
 
 Open: the speaker name tone in Dark follows after #200 merges.
 
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. A project whose root is already reported missing is not listed
+   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
+   `Distinct()` and logged once per listing. Ticket #222 moves this scan off the UI thread.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
+   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
+   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
+   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
+5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
+   issues to "has an alarm issue".
+6. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
+   screen work area less 48 DIP for the title bar.
+7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
+   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
+8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
+   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
+9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
+
+### Store: relocate a project, create a missing meetings folder, drop a damaged list row
+
+This is the core part of spec #209 (ticket #211). No UI uses it yet.
+
+1. `WorkspaceStore.RelocateWorkspace(id, newRootPath)` points an existing row to a new folder.
+   The store keeps the path canonical, as `CreateWorkspace` does. The name in the list stays.
+2. The new folder must exist. A missing folder gives `FolderMissing`.
+3. A `kanal-workspace.json` in the new folder must hold this project's id. Another id gives
+   `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
+4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
+5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
+6. `RelocateWorkspace` refuses while the folder of the row still exists and differs from the new one.
+   This is the "two folders, one identity" rule of `Register`: the copy is only a copy while the
+   listed folder is there. The refusal is `Invalid`. Nothing is written. `RelocateWorkspace` does not
+   copy meetings.
+   A new folder without a marker also gets an empty `meetings` folder, as `CreateWorkspace` does.
+7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
+   when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
+   gives `Unwritable`, and the file stays.
+8. `WorkspaceStore.DropBrokenRegistryRows()` removes the rows of `workspaces.json` that miss
+   fields. Every complete row stays unchanged. The call writes nothing when no row is damaged.
+   A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
+9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
+   `Unreadable`. The host does not read this kind yet.
+10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
+    reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
+    element crashed every operation.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
+
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
+### `WorkspaceStore` split into small internal classes
+
+This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
+`WorkspaceStore` went from 802 lines to 241 lines. It now validates the workspace operations,
+writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
+
+| Class | Responsibility |
+|---|---|
+| `WorkspaceRegistry` | Reads and writes the workspace list. Finds a workspace. Refuses a second row for one folder or one id. |
+| `MeetingRecords` | Lists, creates, saves, renames and deletes the meeting records of a workspace. Finds a free meeting title. |
+| `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
+| `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
+| `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. It never logs. |
+| `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
+
+All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
+internal types. `StorePathsTests` tests the path rules directly.
+
+`MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
+an unwritable path and a bad meeting id.
+
+The caller decides whether to log a problem, not `StoreProblems` (owner decision, 2026-10-11). A
+`StoreProblem` does not carry the exception, so the code that catches the exception logs it, with
+its stack trace, before it returns the problem. `StoreProblems` only builds values.
+
 ### The Windows msi shows its dialogs and replaces the installed version
 
 The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
@@ -57,6 +168,31 @@ msi shows Repair and Remove. The install stays per-user, with no install-directo
 - `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
   missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
   first build needs network access once. The extension version equals the `wix` tool version.
+
+### A refused action shows a sentence in the interface language
+
+A refused store action showed the English `Detail` text from Core in the sidebar. It showed a
+generic sentence in the project settings. The operators read Chinese, German and Polish.
+
+1. `StoreRefusal.Report` in `Kanal.Host/Localization` turns a `StoreProblem` into one localized
+   sentence and logs `{Kind} on {Subject}: {Detail}` as a warning. The sidebar and the project
+   settings both call it. Neither view model keeps its own mapping.
+2. Each `StoreProblemKind` has one sentence. The new keys are `workspace.refused.<kind>`. The
+   existing keys keep `TitleTaken`, `TooLarge`, `WrongType` and `NotThisWorkspace`.
+3. Four kinds name the subject: `FolderMissing`, `Unreadable`, `Unwritable` and
+   `UnsupportedVersion`. `Invalid` and `NotFound` do not. Their subject is an id or a glyph that
+   means nothing to the operator.
+4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
+   another project already uses. The code does not match on the English `Detail`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
+6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
+   `workspace.refused.other` replaces it for a kind that has no sentence yet.
+
+The old count note (`workspace.problems`) does not change. Ticket #212 owns it.
 
 ### The first release is 1.0.0
 

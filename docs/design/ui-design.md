@@ -71,7 +71,8 @@ Conversation K 继续提供品牌资产生成规则；meeting-workspace 继续�
 | Ink3 | `#686D79` | `#A1A8BA` | 说明文字、不可用状态 |
 | Rule | `#CEC9C0` | `#485165` | 内容分隔；不独立承担控件可识别性 |
 | RuleFaint | `#E9E3D9` | `#303748` | 进度条底、深色下不可用下拉框的底色 |
-| Alarm | `#8B2F2F` | `#E28A83` | 错误与危险操作 |
+| Alarm / AlarmWash | `#8B2F2F` / `#EEDDD9` | `#E28A83` / `#1E1416` | 错误文字、危险操作；问题横幅的警报状态（记录损坏） |
+| Warning / WarningWash | `#9A6B00` / `#F2E6C6` | `#D9A53A` / `#3A3020` | 问题横幅与项目下拉标记的提醒状态（仅文件夹缺失）；不与暂停黄混用 |
 | Record / RecordWash | `#C42B22` / `#F2CFCC` | `#EF6A60` / `#4A2528` | 录制圆点、结束方块及圆底 |
 | Hold / HoldWash | `#C08A12` / `#F2E6C6` | `#E3AE3C` / `#433820` | 暂停/继续及圆底 |
 | CloseHover / OnCloseHover | `#C42B1C` / `#FFFFFF` | `#C42B1C` / `#FFFFFF` | 窗口关闭按钮悬停底色与图标 |

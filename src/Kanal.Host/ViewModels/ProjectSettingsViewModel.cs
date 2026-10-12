@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Kanal.Core.Diagnostics;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Controls;
 using Kanal.Host.Localization;
@@ -24,10 +23,17 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
 
     private readonly WorkspaceStore _store;
 
-    public ProjectSettingsViewModel(WorkspaceStore store, Workspace project, bool recording)
+    public ProjectSettingsViewModel(
+        WorkspaceStore store,
+        Workspace project,
+        bool recording,
+        IReadOnlyList<ProjectIssueViewModel>? issues = null,
+        bool openAtIssues = false)
     {
         _store = store;
         Project = project;
+        Issues = issues ?? [];
+        OpenAtIssues = openAtIssues && Issues.Count > 0;
         _name = project.Name;
         _glyph = project.IconGlyph;
         _imagePath = project.IconPath;
@@ -37,6 +43,12 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     public Workspace Project { get; }
 
     public IReadOnlyList<string> Glyphs => ProjectIcons.Glyphs;
+
+    public IReadOnlyList<ProjectIssueViewModel> Issues { get; }
+
+    public bool HasIssues => Issues.Count > 0;
+
+    public bool OpenAtIssues { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
@@ -150,15 +162,10 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
         if (problem is null)
             return false;
 
-        Problem = L[problem.Kind switch
-        {
-            StoreProblemKind.TooLarge => "workspace.icon.toolarge",
-            StoreProblemKind.WrongType => "workspace.icon.badtype",
-            StoreProblemKind.NotThisWorkspace => "workspace.remove.notthisproject",
-            StoreProblemKind.NotFound when problem.Subject == ImagePath => "workspace.icon.missing",
-            _ => "workspace.settings.failed",
-        }];
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        Problem = StoreRefusal.Report(
+            problem,
+            LogCategory,
+            problem.Kind == StoreProblemKind.NotFound && problem.Subject == ImagePath ? "workspace.icon.missing" : null);
         return true;
     }
 

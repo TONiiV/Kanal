@@ -17,9 +17,19 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- When the current project has issues, a banner above the settings gear shows how many. A
+  damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
+  settings at the new Issues section, which gives each issue its cause and its path. In the project
+  list, a warning mark shows each project with issues. This replaces the note "N records could not
+  be read".
+- If Kanal cannot create the default project at start-up, the log now names the folder and the
+  reason. Before, the log said nothing in some cases, for example when the folder was a file.
 - The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
+- When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete
+  or an import, the message is now in the interface language. Before, the sidebar showed English.
+  The message names the folder or file when that helps. The log keeps the technical detail.
 - Each project in the project list has a gear button. It opens the project settings. There you
   rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
   copies the image into the project folder as `kanal-icon` plus the image extension, for example

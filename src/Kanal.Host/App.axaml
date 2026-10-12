@@ -24,6 +24,9 @@
                     <SolidColorBrush x:Key="Rule" Color="#CEC9C0" />
                     <SolidColorBrush x:Key="RuleFaint" Color="#E9E3D9" />
                     <SolidColorBrush x:Key="Alarm" Color="#8B2F2F" />
+                    <SolidColorBrush x:Key="AlarmWash" Color="#EEDDD9" />
+                    <SolidColorBrush x:Key="Warning" Color="#9A6B00" />
+                    <SolidColorBrush x:Key="WarningWash" Color="#F2E6C6" />
                     <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
                     <SolidColorBrush x:Key="OnCloseHover" Color="#FFFFFF" />
                     <!-- Off the speaker palette on purpose: a transport mark must never read as a person. -->
@@ -79,6 +82,9 @@
                     <SolidColorBrush x:Key="Rule" Color="#485165" />
                     <SolidColorBrush x:Key="RuleFaint" Color="#303748" />
                     <SolidColorBrush x:Key="Alarm" Color="#E28A83" />
+                    <SolidColorBrush x:Key="AlarmWash" Color="#1E1416" />
+                    <SolidColorBrush x:Key="Warning" Color="#D9A53A" />
+                    <SolidColorBrush x:Key="WarningWash" Color="#3A3020" />
                     <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
                     <SolidColorBrush x:Key="OnCloseHover" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="Record" Color="#EF6A60" />

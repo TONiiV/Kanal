@@ -62,6 +62,7 @@ public class LocalizationTests
         ("de", "mode.cloudcloud.short"),
         ("pl", "mode.demo.short"),
         ("de", "workspace.name"),
+        ("de", "workspace.issues.details"),
         ("de", "workspace.glyph.local"),
         ("de", "workspace.glyph.cloud"),
         ("pl", "workspace.glyph.folder"),

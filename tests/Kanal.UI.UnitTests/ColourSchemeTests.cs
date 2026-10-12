@@ -218,6 +218,9 @@ public class ColourSchemeTests
             }
 
             data.Add(variant, "Ink", "BrandWash", 4.5);
+            data.Add(variant, "Alarm", "AlarmWash", 4.5);
+            data.Add(variant, "Warning", "WarningWash", 3.0);
+            data.Add(variant, "Warning", "Sheet", 4.5);
             data.Add(variant, "Brand", "Sheet", 4.5);
             data.Add(variant, "Brand", "BrandWash", 4.5);
             data.Add(variant, "OnBrand", "Brand", 4.5);
