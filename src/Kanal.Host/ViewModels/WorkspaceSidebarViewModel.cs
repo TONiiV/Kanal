@@ -13,7 +13,7 @@ using Kanal.Host.Services;
 
 namespace Kanal.Host.ViewModels;
 
-// Two members, and never a third: see WorkspaceSidebarViewModel.ImportBundleAsync.
+// Two members, and never a third: see WorkspaceSidebarViewModel.ImportMeetingFromAsync.
 public enum BundleImportChoice
 {
     Skip,
@@ -30,13 +30,20 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private readonly List<MeetingRecord> _held = [];
     private readonly Func<DateTimeOffset> _clock;
     private readonly MeetingGroupViewModel[] _groups;
+    private readonly Func<Action, Task> _offUiThread;
 
     public WorkspaceSidebarViewModel(
-        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null)
+        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null,
+        Func<Action, Task>? offUiThread = null)
     {
         _store = store;
         _openFolder = openFolder ?? SystemFolders.Open;
         _clock = clock ?? (() => DateTimeOffset.Now);
+        _offUiThread = offUiThread ?? (work =>
+        {
+            work();
+            return Task.CompletedTask;
+        });
         _groups = [.. Enum.GetValues<MeetingAge>().Select(age => new MeetingGroupViewModel(age, Choose))];
         Refresh();
         Localizer.Instance.PropertyChanged += (_, e) =>
@@ -45,6 +52,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 return;
 
             OnPropertyChanged(nameof(EmptyNote));
+            OnPropertyChanged(nameof(IssueCountText));
+            foreach (var issue in Issues)
+                issue.OnLanguageChanged();
+            if (_issueNote.Length > 0 && ProblemNote == _issueNote)
+                ShowUnopenableIssues();
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
             foreach (var group in _groups)
@@ -58,10 +70,34 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public ObservableCollection<MeetingGroupViewModel> MeetingGroups { get; } = new();
 
+    public ObservableCollection<ProjectIssueViewModel> Issues { get; } = new();
+
+    public bool HasIssues => Issues.Count > 0;
+
+    public bool IssuesAreAlarm => Issues.Any(issue => issue.IsAlarm);
+
+    public string IssueCountText => Issues.Count == 1
+        ? L["workspace.issues.one"]
+        : L.Format("workspace.issues.many", Issues.Count);
+
+    [ObservableProperty]
+    private IReadOnlyDictionary<string, bool> _projectIssueStates = new Dictionary<string, bool>();
+
+    private readonly Dictionary<string, IReadOnlyList<ProjectIssueViewModel>> _issuesByProject = [];
+
+    private IReadOnlyList<StoreProblem> _projectListProblems = [];
+
+    private string _issueNote = "";
+
+    public IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project) =>
+        project.Id == SelectedWorkspace?.Id
+            ? [.. Issues]
+            : _issuesByProject.GetValueOrDefault(project.Id, []);
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportMeetingRecordCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ImportBundleCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowIssuesCommand))]
     private Workspace? _selectedWorkspace;
 
     [ObservableProperty]
@@ -77,6 +113,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public Func<Task<string?>>? ChooseFileToImport { get; set; }
 
+    public Func<Task<string?>>? ChooseMeetingFile { get; set; }
+
     public Func<string, Task<string?>>? ChooseExportPath { get; set; }
 
     public Func<MeetingItemViewModel, Task<bool>>? ConfirmDeleteMeeting { get; set; }
@@ -85,6 +123,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public Func<MeetingItemViewModel, Task<bool?>>? ConfirmExportBundle { get; set; }
 
     public Func<string, Task<BundleImportChoice>>? ChooseImportChoice { get; set; }
+
+    public Func<ProjectSettingsViewModel, Task>? ShowProjectSettings { get; set; }
 
     [ObservableProperty]
     private string? _recordingMeetingId;
@@ -102,6 +142,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public Func<MeetingItemViewModel, Task>? GenerateTitleFor { get; set; }
 
     public event Action<string, string>? MeetingRenamed;
+
+    public event Action<string>? MeetingFilesChanged;
 
     public bool HasWorkspace => SelectedWorkspace is not null;
 
@@ -224,22 +266,139 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return saved;
     }
 
+    // The project list drops its selection mid-rebuild; reloading on that null would close the open meeting.
+    private bool _refreshing;
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();
         var keep = SelectedWorkspace?.Id;
-        Workspaces.Clear();
-        foreach (var workspace in listing.Workspaces)
-            Workspaces.Add(workspace);
+        _refreshing = true;
+        try
+        {
+            Workspaces.Clear();
+            foreach (var workspace in listing.Workspaces)
+                Workspaces.Add(workspace);
 
-        SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
-        LoadMeetings(listing.Problems);
+            SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+
+        _projectListProblems = Logged([.. listing.Problems
+            .Where(p => !listing.Workspaces.Any(w => IsFolderOf(p, w)))
+            .Distinct()]);
+        var earlier = _issuesByProject.ToDictionary(pair => pair.Key, pair => pair.Value);
+        _issuesByProject.Clear();
+        var generation = ++_scanGeneration;
+        var toScan = new List<Workspace>();
+        foreach (var workspace in Workspaces.Where(w => w.Id != SelectedWorkspace?.Id))
+        {
+            // A missing root is not looked up twice: on an offline share each lookup waits for the timeout.
+            var missing = listing.Problems.Where(p => IsFolderOf(p, workspace)).ToList();
+            if (missing.Count > 0)
+                _issuesByProject[workspace.Id] = IssuesOf(workspace, missing);
+            else
+            {
+                toScan.Add(workspace);
+                if (earlier.TryGetValue(workspace.Id, out var shown))
+                    _issuesByProject[workspace.Id] = shown;
+            }
+        }
+
+        LoadMeetings([.. listing.Problems.Where(p => SelectedWorkspace is { } current && IsFolderOf(p, current))]);
+        _ = ScanOthersAsync(toScan, generation);
+    }
+
+    private int _scanGeneration;
+
+    private async Task ScanOthersAsync(IReadOnlyList<Workspace> projects, int generation)
+    {
+        if (projects.Count == 0)
+            return;
+
+        var found = new Dictionary<string, IReadOnlyList<StoreProblem>>();
+        try
+        {
+            await _offUiThread(() =>
+            {
+                foreach (var project in projects)
+                    found[project.Id] = _store.ListMeetings(project.Id).Problems;
+            });
+            if (generation != _scanGeneration)
+                return;
+
+            foreach (var project in projects.Where(p => p.Id != SelectedWorkspace?.Id))
+                _issuesByProject[project.Id] = IssuesOf(project, found.GetValueOrDefault(project.Id, []));
+            PublishIssueStates();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogCategory, $"The scan of the other projects failed: {ex.Message}", ex);
+        }
+    }
+
+    private static bool IsFolderOf(StoreProblem problem, Workspace project) =>
+        problem.Kind == StoreProblemKind.FolderMissing && problem.Subject == project.RootPath;
+
+    private static IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project, IEnumerable<StoreProblem> problems) =>
+        [.. Logged([.. problems.Distinct()]).Select(p => ProjectIssueViewModel.For(p, project))];
+
+    private static IReadOnlyList<StoreProblem> Logged(IReadOnlyList<StoreProblem> problems)
+    {
+        foreach (var problem in problems)
+            Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        return problems;
+    }
+
+    private void ShowIssues()
+    {
+        Issues.Clear();
+        var origin = Workspaces.Count == 0 ? IssueOrigin.ProjectList : IssueOrigin.ProjectListRow;
+        foreach (var problem in _projectListProblems)
+            Issues.Add(ProjectIssueViewModel.For(problem, SelectedWorkspace, origin));
+        if (SelectedWorkspace is { } current)
+            foreach (var issue in _issuesByProject.GetValueOrDefault(current.Id, []))
+                Issues.Add(issue);
+
+        PublishIssueStates();
+        OnPropertyChanged(nameof(HasIssues));
+        OnPropertyChanged(nameof(IssuesAreAlarm));
+        OnPropertyChanged(nameof(IssueCountText));
+        ShowUnopenableIssues();
+    }
+
+    private void PublishIssueStates()
+    {
+        var states = _issuesByProject.Where(pair => pair.Value.Count > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.Any(issue => issue.IsAlarm));
+        if (SelectedWorkspace is { } workspace)
+        {
+            states.Remove(workspace.Id);
+            if (Issues.Count > 0)
+                states[workspace.Id] = IssuesAreAlarm;
+        }
+
+        ProjectIssueStates = states;
+    }
+
+    // Details opens the settings of a project; with none listed, the note is the only place left.
+    private void ShowUnopenableIssues()
+    {
+        if (SelectedWorkspace is not null || Issues.Count == 0)
+            return;
+
+        _issueNote = string.Join("\n", Issues.Select(issue => $"{issue.Cause} {issue.Location}"));
+        ProblemNote = _issueNote;
     }
 
     partial void OnSelectedWorkspaceChanged(Workspace? value)
     {
         OnPropertyChanged(nameof(HasWorkspace));
-        LoadMeetings([]);
+        if (!_refreshing)
+            LoadMeetings([]);
     }
 
     partial void OnSelectedMeetingChanged(MeetingItemViewModel? value)
@@ -291,9 +450,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             var listing = _store.ListMeetings(workspace.Id);
             _held.AddRange(listing.Meetings.OrderByDescending(m => m.CreatedAt));
             problems.AddRange(listing.Problems);
+            _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
         }
 
-        ProblemNote = problems.Count == 0 ? "" : L.Format("workspace.problems", problems.Count);
+        ProblemNote = "";
+        ShowIssues();
         Show();
     }
 
@@ -305,7 +466,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         foreach (var record in _held.Where(Matches))
             Meetings.Add(ShowNamingState(new MeetingItemViewModel(
                 record, RenameFromRow, GenerateTitleAsync,
-                ImportIntoAsync, ExportAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
+                ImportIntoAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
             }));
@@ -363,18 +524,29 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == workspace!.Id);
     }
 
+    [RelayCommand]
+    private Task OpenProjectSettingsAsync(Workspace? project) => ShowSettingsAsync(project, openAtIssues: false);
+
+    [RelayCommand(CanExecute = nameof(HasWorkspace))]
+    private Task ShowIssuesAsync() => ShowSettingsAsync(SelectedWorkspace, openAtIssues: true);
+
+    private async Task ShowSettingsAsync(Workspace? project, bool openAtIssues)
+    {
+        if (project is null || ShowProjectSettings is null)
+            return;
+
+        var settings = new ProjectSettingsViewModel(
+            _store, project, recording: RecordingMeetingId is not null, IssuesOf(project), openAtIssues);
+        await ShowProjectSettings(settings);
+        if (settings.Changed)
+            Refresh();
+    }
+
     [RelayCommand(CanExecute = nameof(HasWorkspace))]
     private async Task ImportMeetingRecordAsync()
     {
-        if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
-            return;
-
-        var (meeting, problem) = _store.CreateMeeting(
-            SelectedWorkspace!.Id, Path.GetFileNameWithoutExtension(source));
-        if (Refused(problem))
-            return;
-
-        await CopyIntoAsync(meeting!, source);
+        if (ChooseMeetingFile is not null && await ChooseMeetingFile() is { } source)
+            await ImportMeetingFromAsync(source);
     }
 
     private bool RenameFromRow(MeetingItemViewModel item, string title) =>
@@ -388,41 +560,29 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
             return;
 
-        await CopyIntoAsync(item.Record, source);
-    }
-
-    private Task CopyIntoAsync(MeetingRecord meeting, string source)
-    {
-        var folder = _store.MeetingFolder(meeting.WorkspaceId, meeting.Id);
-        if (folder is null)
-            return Task.CompletedTask;
-
-        var target = Path.Combine(folder, Path.GetFileName(source));
-        try
+        if (MeetingBundle.Holds(source))
         {
-            Directory.CreateDirectory(folder);
-            File.Copy(source, target, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            ProblemNote = L.Format("workspace.importfailed", ex.Message);
-            Log.Error(LogCategory, $"{source} could not be brought into {folder}.", ex);
-            return Task.CompletedTask;
+            await ImportMeetingFromAsync(source);
+            return;
         }
 
-        Refused(_store.SaveMeeting(meeting with { TranscriptPath = target }).Problem);
-        LoadMeetings([]);
-        return Task.CompletedTask;
-    }
-
-    [RelayCommand(CanExecute = nameof(HasWorkspace))]
-    private async Task ImportBundleAsync()
-    {
-        if (ChooseFileToImport is null || await ChooseFileToImport() is not { } source)
+        if (FolderOf(item.Record) is not { } folder)
             return;
 
+        ProblemNote = MeetingFilesViewModel.Attach(folder, source) ?? "";
+        MeetingFilesChanged?.Invoke(item.Id);
+    }
+
+    public async Task ImportMeetingFromAsync(string source)
+    {
+        if (!MeetingBundle.Holds(source))
+        {
+            ProblemNote = L["workspace.importonlykl"];
+            return;
+        }
+
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem))
+        if (Refused(problem, ImportKey(problem, source)))
             return;
 
         var asNewRecord = false;
@@ -438,7 +598,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             asNewRecord = true;
         }
 
-        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+        var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
+        if (Refused(imported, ImportKey(imported, source)))
             return;
 
         ProblemNote = "";
@@ -463,24 +624,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private Task OpenFolderAsync(MeetingItemViewModel item)
     {
-        if (_store.MeetingFolder(item.Record.WorkspaceId, item.Record.Id) is not { } folder
-            || !Directory.Exists(folder))
-        {
-            ProblemNote = L["workspace.folderunavailable"];
-            return Task.CompletedTask;
-        }
-
-        try
-        {
-            _openFolder(folder);
-            ProblemNote = "";
-        }
-        catch (Exception ex)
-        {
-            ProblemNote = L.Format("workspace.openfolderfailed", ex.Message);
-            Log.Warning(LogCategory, $"{folder} could not be opened.", ex);
-        }
-
+        ProblemNote = SystemFolders.OpenMeetingFolder(FolderOf(item.Record), _openFolder);
         return Task.CompletedTask;
     }
 
@@ -500,38 +644,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private async Task ExportAsync(MeetingItemViewModel item)
-    {
-        if (item.Record.TranscriptPath is not { } transcript || !File.Exists(transcript))
-        {
-            ProblemNote = L["workspace.nothingtoexport"];
-            return;
-        }
+    private static string? ImportKey(StoreProblem? problem, string bundlePath) =>
+        problem is { Kind: StoreProblemKind.Unreadable } && problem.Subject == bundlePath
+            ? "workspace.import.unreadable"
+            : null;
 
-        if (ChooseExportPath is null || await ChooseExportPath(Path.GetFileName(transcript)) is not { } target)
-            return;
-
-        try
-        {
-            File.Copy(transcript, target, overwrite: true);
-            ProblemNote = "";
-        }
-        catch (Exception ex)
-        {
-            ProblemNote = L.Format("workspace.exportfailed", ex.Message);
-            Log.Error(LogCategory, $"{transcript} could not be written to {target}.", ex);
-        }
-    }
-
-    private bool Refused(StoreProblem? problem)
+    private bool Refused(StoreProblem? problem, string? key = null)
     {
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
-            ? L.Format("workspace.titletaken", problem.Subject)
-            : problem.Detail;
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        ProblemNote = StoreRefusal.Report(problem, LogCategory, key);
         return true;
     }
 

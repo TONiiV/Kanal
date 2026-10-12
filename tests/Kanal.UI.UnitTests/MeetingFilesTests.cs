@@ -76,7 +76,7 @@ public class MeetingFilesTests : IDisposable
     }
 
     [Fact]
-    public void WithNoMeetingChosenThereIsNothingToShowAndNothingToImport()
+    public void WithNoMeetingChosenThereIsNothingToShowImportOrOpen()
     {
         var (store, _) = Opened();
         var files = new MeetingFilesViewModel(store, () => Task.FromResult<string?>(null));
@@ -84,6 +84,7 @@ public class MeetingFilesTests : IDisposable
         Assert.True(files.IsEmpty);
         Assert.False(files.HasMeeting);
         Assert.False(files.ImportCommand.CanExecute(null));
+        Assert.False(files.OpenFolderCommand.CanExecute(null));
         Assert.Equal(Kanal.Host.Localization.Localizer.Instance["files.nomeeting"], files.EmptyNote);
     }
 
@@ -141,6 +142,75 @@ public class MeetingFilesTests : IDisposable
             Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments")));
     }
 
+    [Fact]
+    public void OpenFolderHandsTheOpenerTheFolderOfTheMeetingOnShow()
+    {
+        var (store, workspace) = Opened("Delivery call", "Tooling review");
+        string? opened = null;
+        var files = new MeetingFilesViewModel(
+            store, () => Task.FromResult<string?>(null), openFolder: path => opened = path);
+        files.Show(Meeting(store, workspace, "Delivery call"));
+        var shown = Meeting(store, workspace, "Tooling review");
+        files.Show(shown);
+
+        files.OpenFolderCommand.Execute(null);
+
+        Assert.Equal(store.MeetingFolder(workspace.Id, shown.Id), opened);
+        Assert.Equal("", files.ProblemNote);
+    }
+
+    [Fact]
+    public void AFolderDeletedOutsideKanalIsReportedInTheTabRatherThanRecreated()
+    {
+        var (store, workspace) = Opened("Delivery call");
+        var meeting = Meeting(store, workspace, "Delivery call");
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        string? opened = null;
+        var files = new MeetingFilesViewModel(
+            store, () => Task.FromResult<string?>(null), openFolder: path => opened = path);
+        files.Show(meeting);
+        Directory.Delete(folder, recursive: true);
+
+        files.OpenFolderCommand.Execute(null);
+
+        Assert.Null(opened);
+        Assert.Equal(
+            Kanal.Host.Localization.Localizer.Instance["workspace.folderunavailable"], files.ProblemNote);
+        Assert.False(Directory.Exists(folder));
+    }
+
+    [Fact]
+    public void AMissingFolderNoteDoesNotFollowTheOperatorToTheNextMeeting()
+    {
+        var (store, workspace) = Opened("Delivery call", "Tooling review");
+        var gone = Meeting(store, workspace, "Delivery call");
+        var files = new MeetingFilesViewModel(
+            store, () => Task.FromResult<string?>(null), openFolder: _ => { });
+        files.Show(gone);
+        Directory.Delete(store.MeetingFolder(workspace.Id, gone.Id)!, recursive: true);
+        files.OpenFolderCommand.Execute(null);
+        Assert.NotEqual("", files.ProblemNote);
+
+        files.Show(Meeting(store, workspace, "Tooling review"));
+
+        Assert.Equal("", files.ProblemNote);
+    }
+
+    [Fact]
+    public async Task AFailedImportNoteDoesNotFollowTheOperatorToTheNextMeeting()
+    {
+        var (store, workspace) = Opened("Delivery call", "Tooling review");
+        var missing = Path.Combine(_root, "never-written.pdf");
+        var files = new MeetingFilesViewModel(store, () => Task.FromResult<string?>(missing));
+        files.Show(Meeting(store, workspace, "Delivery call"));
+        await files.ImportCommand.ExecuteAsync(null);
+        Assert.NotEqual("", files.ProblemNote);
+
+        files.Show(Meeting(store, workspace, "Tooling review"));
+
+        Assert.Equal("", files.ProblemNote);
+    }
+
     [AvaloniaFact]
     public void SwitchingMeetingSwitchesWhatTheFileTabShows()
     {
@@ -177,5 +247,38 @@ public class MeetingFilesTests : IDisposable
         var meeting = Meeting(store, workspace, "Delivery call");
         Assert.True(File.Exists(Path.Combine(
             store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments", "KX-4402.pdf")));
+    }
+
+    [AvaloniaFact]
+    public void AKlFileChosenInTheFileTabArrivesAsAMeetingNotAnAttachment()
+    {
+        var (store, workspace) = Opened("Delivery call");
+        var meeting = Meeting(store, workspace, "Delivery call");
+        var bundle = Path.Combine(Folder("outbox"), "delivery" + MeetingBundle.Extension);
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        var vm = TestViewModels.Hermetic(workspaces: () => store);
+        vm.Sidebar.ChooseFileToImport = () => Task.FromResult<string?>(bundle);
+        vm.Sidebar.ChooseImportChoice = _ => Task.FromResult(BundleImportChoice.SaveAsNew);
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        vm.Files.ImportCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(2, vm.Sidebar.Meetings.Count);
+        Assert.DoesNotContain("attachments/", Names(vm.Files));
+    }
+
+    [AvaloniaFact]
+    public void ImportingIntoTheShownMeetingFromItsRowUpdatesTheFileTab()
+    {
+        var (store, _) = Opened("Delivery call");
+        var vm = TestViewModels.Hermetic(workspaces: () => store);
+        vm.Sidebar.ChooseFileToImport = () => Task.FromResult<string?>(Dropped("KX-4402.pdf", "drawing"));
+        vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single();
+
+        vm.Sidebar.SelectedMeeting.ImportCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains("KX-4402.pdf", Names(vm.Files));
     }
 }

@@ -44,6 +44,7 @@ public partial class SidebarViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(Column))]
     [NotifyPropertyChangedFor(nameof(CanExpand))]
     [NotifyPropertyChangedFor(nameof(ColumnMinWidth))]
+    [NotifyPropertyChangedFor(nameof(SplitterColumn))]
     private bool _collapsed;
 
     public bool CanExpand => Collapsed;
@@ -53,6 +54,10 @@ public partial class SidebarViewModel : ViewModelBase
     public double ColumnMinWidth => Collapsed ? 0 : MinWidth;
 
     public double ColumnMaxWidth => MaxWidth;
+
+    // Pixel, not Auto: the splitter template measures 1 px wider, and MinShellWidth cannot count an Auto column.
+    // Zero while collapsed: a hidden splitter keeps its column, and the window background shows in it.
+    public GridLength SplitterColumn => new(Collapsed ? 0 : WorkspaceShellViewModel.SplitterWidth);
 
     [RelayCommand]
     private void Toggle() => Collapsed = !Collapsed;

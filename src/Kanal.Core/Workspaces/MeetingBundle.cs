@@ -17,9 +17,7 @@ public sealed record MeetingManifest(
 /// <summary>One meeting, one file, plantable in any workspace (ADR 0054, decisions 22–23).</summary>
 public static class MeetingBundle
 {
-    // Two extensions, not one: the second says what it holds, and the first keeps every operating
-    // system's archive tool willing to open it without a Kanal build on the machine.
-    public const string Extension = ".kanal-meeting.zip";
+    public const string Extension = ".kl";
     public const string ManifestFileName = "manifest.json";
     public const string TranscriptFileName = "transcript.md";
     private const string AttachmentsPrefix = "attachments/";
@@ -31,11 +29,14 @@ public static class MeetingBundle
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
+    public static bool Holds(string path) =>
+        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
+
     public static StoreProblem? Write(
         WorkspaceStore store, MeetingRecord meeting, bool includeAudio, string target)
     {
         if (store.MeetingFolder(meeting.WorkspaceId, meeting.Id) is not { } folder)
-            return new StoreProblem(StoreProblemKind.NotFound, meeting.Id, "No such meeting.");
+            return StoreProblems.NoSuchMeeting(meeting.Id);
 
         var transcript = Path.Combine(folder, TranscriptLog.FileName);
         var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
@@ -61,7 +62,7 @@ public static class MeetingBundle
         catch (Exception ex)
         {
             Log.Error(LogCategory, $"The bundle could not be written to {target}.", ex);
-            return new StoreProblem(StoreProblemKind.Unwritable, target, ex.Message);
+            return StoreProblems.Unwritable(target, ex.Message);
         }
     }
 
@@ -71,12 +72,12 @@ public static class MeetingBundle
         {
             using var zip = ZipFile.OpenRead(bundlePath);
             if (zip.GetEntry(ManifestFileName) is not { } entry)
-                return (null, Unreadable(bundlePath, "That file is not a Kanal meeting bundle."));
+                return (null, StoreProblems.Unreadable(bundlePath, "That file is not a Kanal meeting bundle."));
 
             using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
             var stored = JsonSerializer.Deserialize<StoredManifest>(reader.ReadToEnd(), Options);
             if (stored is null || !stored.Complete)
-                return (null, Unreadable(bundlePath, "The bundle's manifest is missing fields."));
+                return (null, StoreProblems.Unreadable(bundlePath, "The bundle's manifest is missing fields."));
 
             // Refused rather than half-read, as everywhere else a stored record is opened.
             return stored.SchemaVersion != WorkspaceStore.SchemaVersion
@@ -87,7 +88,7 @@ public static class MeetingBundle
         catch (Exception ex)
         {
             Log.Warning(LogCategory, $"{bundlePath} could not be read as a bundle.", ex);
-            return (null, Unreadable(bundlePath, ex.Message));
+            return (null, StoreProblems.Unreadable(bundlePath, ex.Message));
         }
     }
 
@@ -127,8 +128,7 @@ public static class MeetingBundle
         }
 
         if (store.MeetingFolder(workspaceId, record.Id) is not { } folder)
-            return new MeetingResult(null, new StoreProblem(
-                StoreProblemKind.Invalid, record.Id, "That is not a meeting id."));
+            return new MeetingResult(null, StoreProblems.NotAMeetingId(record.Id));
 
         try
         {
@@ -144,8 +144,7 @@ public static class MeetingBundle
         catch (Exception ex)
         {
             Log.Error(LogCategory, $"{bundlePath} could not be unpacked into {folder}.", ex);
-            return new MeetingResult(null, new StoreProblem(
-                StoreProblemKind.Unwritable, folder, ex.Message));
+            return new MeetingResult(null, StoreProblems.Unwritable(folder, ex.Message));
         }
 
         return store.SaveMeeting(record with
@@ -218,9 +217,6 @@ public static class MeetingBundle
 
         return sb.ToString();
     }
-
-    private static StoreProblem Unreadable(string subject, string detail) =>
-        new(StoreProblemKind.Unreadable, subject, detail);
 
     private sealed record StoredManifest(
         int SchemaVersion,

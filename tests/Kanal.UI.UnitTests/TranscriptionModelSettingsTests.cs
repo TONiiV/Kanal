@@ -54,6 +54,41 @@ public class TranscriptionModelSettingsTests
     }
 
     [Fact]
+    public void SelectingTheDefaultModelStoresNullSoTheDefaultFollowsTheCatalog()
+    {
+        var vm = new SettingsViewModel(
+            new AppSettings { ActiveTranscriptionModelId = AsrModelCatalog.Models[^1].Id }, () => null);
+        foreach (var m in vm.TranscriptionModels)
+            m.IsActive = m.ModelId == AsrModelCatalog.Models[0].Id;
+
+        var settings = new AppSettings { ActiveTranscriptionModelId = "stale" };
+        vm.ApplyTo(settings);
+
+        Assert.Null(settings.ActiveTranscriptionModelId);
+    }
+
+    [Fact]
+    public void DeleteIsOfferedWhenOnlySomePartsAreOnDisk()
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(dir);
+        var model = AsrModelCatalog.Models[0];
+        var downloads = new ModelDownloadManager(dir);
+        var item = new ModelItemViewModel(model, downloads);
+        Assert.False(item.CanDelete);
+
+        File.WriteAllText(downloads.GetPath(model.Parts[0]), "");
+        item = new ModelItemViewModel(model, downloads);
+        Assert.False(item.IsDownloaded);
+        Assert.True(item.CanDelete);
+
+        item.DeleteCommand.Execute(null);
+        Assert.False(item.CanDelete);
+        Assert.Empty(Directory.EnumerateFiles(dir));
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public void AModelIsDownloadedOnlyWhenEveryPartIsOnDisk()
     {
         var dir = TempDir();

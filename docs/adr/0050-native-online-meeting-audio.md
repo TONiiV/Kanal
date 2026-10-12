@@ -4,6 +4,12 @@
 **Date:** 2026-09-04  
 **Issue:** [#50](https://github.com/TONiiV/Kanal/issues/50)
 
+> **Amended 2026-10-03:** computer audio is no longer tied to a selected output. A device-bound tap
+> heard nothing when the meeting app played to headphones or any other device, so macOS now uses a
+> global tap (`stereoGlobalTapButExcludeProcesses: []`) and Windows uses WASAPI process loopback
+> excluding Kanal's own process tree (Windows 10 2004 or later). The host offers no output selector;
+> "the selected computer output" below now reads "all computer audio". Kanal plays no audio itself.
+
 ## Context
 
 Kanal currently opens one recording endpoint and sends one 16 kHz mono PCM stream to the speech

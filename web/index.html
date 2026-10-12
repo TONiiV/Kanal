@@ -121,7 +121,7 @@ header{
 main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
 
 .rec{
-  --speaker:#4C5C68;
+  --speaker:#74808C;
   border-top:1px solid var(--rule);
   padding-top:.8125rem;margin-bottom:1.75rem;
   animation:enter .42s cubic-bezier(.22,1,.36,1) both;
@@ -131,7 +131,7 @@ main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
   font-size:.6875rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
   margin-bottom:.375rem;
 }
-.rec__who{color:var(--speaker)}
+.rec__who{color:color-mix(in oklab,var(--speaker),var(--ink) 30%)}
 .rec__lang{color:var(--ink-3);font-weight:400;letter-spacing:.14em}
 .rec__cs{color:var(--ink-3);font-weight:400;letter-spacing:0}
 .rec__cs[hidden]{display:none}
@@ -182,13 +182,6 @@ main{max-width:var(--measure);margin:0 auto;padding:1.75rem 1.25rem 7rem}
   margin:0 0 .625rem;font-size:1.5rem;font-weight:400;color:var(--ink-2);letter-spacing:-.01em;
 }
 .empty__hint{margin:0;font-size:.9375rem;color:var(--ink-3);line-height:1.7}
-
-@media (prefers-color-scheme: dark){
-  /* Speaker hues are picked for paper; lift them off the dark sheet. */
-  .rec__who{color:color-mix(in oklab,var(--speaker),#FFF 40%)}
-  .rec--live{border-top-color:color-mix(in oklab,var(--speaker),#FFF 40%)}
-  .rec--live.partial .rec__meta::after{background:color-mix(in oklab,var(--speaker),#FFF 40%)}
-}
 
 @media (max-width:380px){
   .mast{padding-inline:.75rem;gap:.5rem}
@@ -337,7 +330,7 @@ function setStatus(key) {
 function resolveSpeaker(tag) {
   const canonical = state.aliases.get(tag) || tag;
   const s = state.speakers.get(canonical);
-  return s ? { name: s.displayName || s.tag, color: s.color } : { name: tag, color: "#4C5C68" };
+  return s ? { name: s.displayName || s.tag, color: s.color } : { name: tag, color: "#74808C" };
 }
 
 function applySpeaker(s) {
@@ -592,7 +585,7 @@ function startDemo() {
       { zh: "图纸中的公差还没有放行。", pl: "Tolerancje w zestawie rysunków nie zostały jeszcze zatwierdzone." }],
   ];
   applyConfig({ languages: ["zh", "de", "pl"] });
-  const colors = { S01: "#B23A2E", S02: "#9A6B10", S03: "#1C6B58" };
+  const colors = { S01: "#3F7BD4", S02: "#AE5EA8", S03: "#1F8A55" };
   let i = 0;
   (function next() {
     const [tag, lang, text, translations] = script[i % script.length];
