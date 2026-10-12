@@ -157,6 +157,28 @@ public class WorkspaceStoreRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void ARebuiltMeetingKeepsEveryRunEvenAfterASkippedNumber()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "de", 0));
+        var third = Path.Combine(folder, MeetingRun.TranscriptFileName(3));
+        var scratch = Directory.CreateDirectory(Path.Combine(_root, "scratch")).FullName;
+        File.Move(WriteTranscript(scratch, Said("u1", "pl", 0)), third);
+        File.WriteAllBytes(Path.Combine(folder, MeetingRun.AudioFileName(3)), [0x52, 0x49, 0x46, 0x46]);
+
+        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+
+        Assert.Equal(
+            [Path.Combine(folder, TranscriptLog.FileName), third],
+            record.Runs.Select(r => r.TranscriptPath));
+        Assert.Null(record.Runs[0].AudioPath);
+        Assert.Equal(Path.Combine(folder, MeetingRun.AudioFileName(3)), record.Runs[1].AudioPath);
+        Assert.Equal(["de", "pl"], record.Languages);
+    }
+
+    [Fact]
     public void ADamagedRecordIsRenamedBeforeTheNewOneIsWritten()
     {
         var store = Store();
