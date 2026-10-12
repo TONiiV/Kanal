@@ -19,6 +19,8 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
    change nothing, because the record may be healthy.
    `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
    `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
+   In the Issues list, `ProjectIssueViewModel.For` shows `RecordMissing` and `RecordDamaged` with
+   `workspace.issues.unreadable`. `Misfiled` gets the generic cause until ticket #213 adds its sentence.
 2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
    `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
 3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
