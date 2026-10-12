@@ -134,6 +134,29 @@ public class SpeakerReidentificationTests
         Assert.Empty(SpeakerReidentification.Read(folder));
     }
 
+    [Fact]
+    public async Task AMissingModelFailsBeforeTheNativeLibraryIsCalled()
+    {
+        var folder = NewFolder();
+        var diarizer = new SherpaSpeakerDiarizer(
+            Path.Combine(folder, "missing-segmentation.onnx"), Path.Combine(folder, "missing-embedding.onnx"));
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => diarizer.DiarizeAsync(
+            Path.Combine(folder, "audio.wav"), null, null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void ANonAsciiModelPathIsRefusedOnWindowsOnly()
+    {
+        var folder = Path.Combine(NewFolder(), "Łukasz");
+        Directory.CreateDirectory(folder);
+        var model = Path.Combine(folder, "model.onnx");
+        File.WriteAllBytes(model, [0]);
+
+        Assert.Throws<IOException>(() => SherpaSpeakerDiarizer.CheckModelPath(model, isWindows: true));
+        SherpaSpeakerDiarizer.CheckModelPath(model, isWindows: false);
+    }
+
     private sealed record TestFile(string FileName, string DownloadUrl, long SizeBytes, string Sha256)
         : IDownloadableFile;
 

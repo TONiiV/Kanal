@@ -2264,9 +2264,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();
+        var reidentified = Sidebar.RecordOf(_sessionRecordId) is { } record && Sidebar.FolderOf(record) is { } folder
+            ? SpeakerReidentification.Read(folder)
+            : new Dictionary<string, string>();
         foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
         {
-            var (_, speaker, _) = ResolveSpeaker(u.SpeakerTag);
+            var speaker = reidentified.TryGetValue(u.Id, out var tag) ? tag : ResolveSpeaker(u.SpeakerTag).Name;
             sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");

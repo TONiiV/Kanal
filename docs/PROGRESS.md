@@ -19,14 +19,17 @@ The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherp
 - **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
 - **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
 - **Speaker count.** `ISpeakerDiarizer` takes a nullable count. The UI passes none, so clustering uses the threshold 0.5. [#110](https://github.com/TONiiV/Kanal/issues/110) adds the operator's count.
-- **Memory.** The run reads the whole recording into one `float[]`: about 230 MB per hour. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
+- **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
+- **Exports.** A `.kl` bundle carries `speakers.json`, and import accepts it. The bundle's `transcript.md` and the Markdown export of the just-stopped meeting use the new tags. `transcript.jsonl` keeps the original tags.
 
 Open items:
 
 1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
-2. A `.kl` bundle does not carry `speakers.json`. Its Markdown uses the original tags.
-3. sherpa-onnx marshals model paths as ANSI on Windows. A user folder with non-ASCII characters can stop the model from loading.
-4. Hugging Face and GitHub release downloads can be blocked in mainland China.
+2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
+3. Hugging Face and GitHub release downloads can be blocked in mainland China.
+4. The speaker tab of the just-stopped meeting still lists the live tags.
 
 ### Speaker names follow the colour scheme
 

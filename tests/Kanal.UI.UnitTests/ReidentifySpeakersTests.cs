@@ -4,6 +4,7 @@ using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Workspaces;
 using Kanal.Host.Localization;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -18,6 +19,13 @@ public class ReidentifySpeakersTests : IDisposable
         public Task<IReadOnlyList<SpeakerTurn>> DiarizeAsync(
             string wavPath, int? speakerCount, IProgress<double>? progress, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<SpeakerTurn>>([new(0, 1.0, 4), new(1.0, 2.0, 9)]);
+    }
+
+    private sealed class OneSpeaker : ISpeakerDiarizer
+    {
+        public Task<IReadOnlyList<SpeakerTurn>> DiarizeAsync(
+            string wavPath, int? speakerCount, IProgress<double>? progress, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<SpeakerTurn>>([new(0, 1_000_000, 0)]);
     }
 
     public void Dispose()
@@ -123,5 +131,43 @@ public class ReidentifySpeakersTests : IDisposable
         Assert.Equal(Localizer.Instance.Format("meeting.reidentify.done", 2), vm.Status);
         Assert.False(row.IsReidentifying);
         Assert.Null(vm.Sidebar.ReidentifyingMeetingId);
+    }
+
+    [AvaloniaFact]
+    public async Task ReidentifyingTheJustStoppedMeetingRetagsItsBubblesAndItsExport()
+    {
+        var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
+        Directory.CreateDirectory(Path.Combine(_root, "acme"));
+        store.CreateWorkspace("ACME", Path.Combine(_root, "acme"));
+        var vm = TestViewModels.Hermetic(
+            modelsDir: ModelsWithDefaultPair(),
+            workspaces: () => store,
+            diarizerFactory: (_, _) => new OneSpeaker());
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        var deadline = Environment.TickCount64 + 15_000;
+        while (!vm.Columns.Any(c => c.Bubbles.Any(b => !b.IsPartial)) && Environment.TickCount64 < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+        var row = vm.Sidebar.SelectedMeeting!;
+        Assert.False(vm.IsBrowsingRecord);
+        var audio = Path.Combine(vm.Sidebar.FolderOf(row.Record)!, WorkspaceStore.AudioFileName);
+        File.WriteAllBytes(audio, [0]);
+        vm.Sidebar.SaveRecord(row.Record with { AudioPath = audio });
+
+        await row.ReidentifySpeakersCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var finals = vm.Columns.SelectMany(c => c.Bubbles).Where(b => !b.IsPartial).ToList();
+        Assert.NotEmpty(finals);
+        Assert.All(finals, b => Assert.Equal("D01", b.SpeakerTag));
+        Assert.Contains("**D01**", vm.BuildMarkdownExport());
+        Assert.DoesNotContain("**S", vm.BuildMarkdownExport());
     }
 }

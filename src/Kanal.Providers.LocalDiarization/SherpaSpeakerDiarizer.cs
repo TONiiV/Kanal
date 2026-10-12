@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using Kanal.Audio;
 using Kanal.Core.Meetings;
 using SherpaOnnx;
@@ -13,6 +14,8 @@ public sealed class SherpaSpeakerDiarizer(string segmentationModel, string embed
 
     private IReadOnlyList<SpeakerTurn> Diarize(string wavPath, int? speakerCount, IProgress<double>? progress)
     {
+        CheckModelPath(segmentationModel, OperatingSystem.IsWindows());
+        CheckModelPath(embeddingModel, OperatingSystem.IsWindows());
         var samples = ReadSamples(wavPath);
         var threads = Math.Max(1, Environment.ProcessorCount / 2);
 
@@ -36,6 +39,17 @@ public sealed class SherpaSpeakerDiarizer(string segmentationModel, string embed
         GC.KeepAlive(callback);
 
         return [.. segments.Select(s => new SpeakerTurn(s.Start, s.End, s.Speaker))];
+    }
+
+    // sherpa-onnx aborts the process on a model it cannot open, and 1.13.8 never checks the handle.
+    // It marshals the path as LPStr: the ANSI code page on Windows, which cannot hold every user name.
+    internal static void CheckModelPath(string path, bool isWindows)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"The speaker model {path} is missing.", path);
+        if (isWindows && !Ascii.IsValid(path))
+            throw new IOException(
+                $"The speaker model path {path} has non-ASCII characters, which the speaker library cannot open on Windows.");
     }
 
     // ponytail: the whole recording as one float[] (~230 MB per hour); chunk it if meetings run many hours.
