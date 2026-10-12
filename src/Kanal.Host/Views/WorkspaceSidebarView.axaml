@@ -281,9 +281,6 @@
                                                     <TextBlock x:Name="MeetingRowNaming" Text="{l:T title.naming}"
                                                                FontSize="10.5" IsVisible="{Binding IsNaming}"
                                                                Foreground="{DynamicResource Ink2}" />
-                                                    <TextBlock x:Name="MeetingRowReidentifying" Text="{Binding ReidentifyNote}"
-                                                               FontSize="10.5" IsVisible="{Binding IsReidentifying}"
-                                                               Foreground="{DynamicResource Ink2}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                                                 IsVisible="{Binding IsRecording}">
                                                         <Ellipse Width="5" Height="5" VerticalAlignment="Center"
@@ -293,6 +290,10 @@
                                                                    Foreground="{DynamicResource Ink2}" />
                                                     </StackPanel>
                                                 </StackPanel>
+                                                <TextBlock x:Name="MeetingRowReidentifying" Text="{Binding ReidentifyNote}"
+                                                           FontSize="10.5" IsVisible="{Binding IsReidentifying}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Ink2}" />
                                             </StackPanel>
                                             <Button Grid.Column="1" Classes="ghost" x:Name="MeetingMenu" Padding="7,6"
                                                     VerticalAlignment="Center"
