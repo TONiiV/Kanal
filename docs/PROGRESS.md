@@ -36,6 +36,40 @@ Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice
   is the 1024 px master.
 - Until #193 lands, the host shows the light marks in Dark too.
 
+### Speaker palette readable on light and dark sheets
+
+The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. Speaker names are small text, so they need 4.5:1.
+No single colour reaches 4.5:1 on both a light and a dark sheet. The palette therefore serves graphics, and names use a text tone.
+
+- `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
+  The rules, bars, dots and ticks use the palette colour.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names to the light tone through `SpeakerTones.OnLight`.
+  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+- No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
+- A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
+- The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
+- Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
+
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
 ### Issues banner and Issues section (#212, part of spec #209)
 
 The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
@@ -50,7 +84,7 @@ banner and in project settings. The issues are read-only. Ticket #213 adds the R
 3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
    mark in the project drop-down. A project whose root is already reported missing is not listed
    again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
-   `Distinct()` and logged once per listing. Ticket #222 moves this scan off the UI thread.
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
 4. The banner sits above the settings gear. It shows the count of the current project only. The
    alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
    colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
