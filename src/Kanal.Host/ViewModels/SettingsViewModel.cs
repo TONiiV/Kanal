@@ -291,8 +291,16 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private ColourSchemeOption _scheme;
 
-    partial void OnSchemeChanged(ColourSchemeOption value)
+    // A Ctrl+click on the selected card clears the selection; restore it instead of
+    // AlwaysSelected, which selects the first card before the binding lands.
+    partial void OnSchemeChanged(ColourSchemeOption? oldValue, ColourSchemeOption value)
     {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Scheme = oldValue!);
+            return;
+        }
+
         Appearance.Apply(value.Scheme);
         try
         {
@@ -311,8 +319,14 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private AccentThemeOption _theme;
 
-    partial void OnThemeChanged(AccentThemeOption value)
+    partial void OnThemeChanged(AccentThemeOption? oldValue, AccentThemeOption value)
     {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Theme = oldValue!);
+            return;
+        }
+
         Appearance.Apply(value.Theme);
         try
         {
