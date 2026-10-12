@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
@@ -125,6 +128,32 @@ public class SettingsTabsTests
             ((ColourSchemeOption)card.DataContext!).Name,
             ControlAutomationPeer.CreatePeerForElement(card).GetName()));
 
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData("ColourScheme")]
+    [InlineData("AccentTheme")]
+    public void ACtrlClickOnTheSelectedCardKeepsTheSelection(string list)
+    {
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+        var window = new SettingsWindow(vm);
+        window.Show();
+        var tabs = Tabs(window);
+        tabs.SelectedItem = tabs.Items.OfType<TabItem>().ElementAt(1);
+        Dispatcher.UIThread.RunJobs();
+        var cards = window.GetVisualDescendants().OfType<ListBox>().Single(box => box.Name == list);
+        var selected = cards.GetVisualDescendants().OfType<ListBoxItem>().Single(item => item.IsSelected);
+        var centre = selected.TranslatePoint(new Point(selected.Bounds.Width / 2, selected.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(centre, MouseButton.Left, RawInputModifiers.Control);
+        window.MouseUp(centre, MouseButton.Left, RawInputModifiers.Control);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(cards.SelectedIndex >= 0);
+        Assert.NotNull(vm.Scheme);
+        Assert.NotNull(vm.Theme);
+        vm.ApplyTo(new AppSettings());
         window.Close();
     }
 

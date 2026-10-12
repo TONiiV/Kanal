@@ -106,12 +106,12 @@ public class ColourSchemeTests
                 .ToList();
             Assert.Equal(7, ramp.Count);
 
-            foreach (var theme in AccentThemes.All)
+            foreach (var (scheme, variant) in new[] { (ColourScheme.Dark, ThemeVariant.Dark), (ColourScheme.Light, ThemeVariant.Light) })
             {
-                Appearance.Apply(theme);
-                foreach (var (scheme, variant) in new[] { (ColourScheme.Dark, ThemeVariant.Dark), (ColourScheme.Light, ThemeVariant.Light) })
+                Appearance.Apply(scheme);
+                foreach (var theme in AccentThemes.All)
                 {
-                    Appearance.Apply(scheme);
+                    Appearance.Apply(theme);
                     Assert.All(ramp, key => Assert.Equal(
                         Brush(variant, "AccentRamp" + key["SystemAccentColor".Length..]), (Color)root[key]!));
                     // FluentTheme paints a checked box and the settings tab marker with the base colour.
@@ -267,6 +267,28 @@ public class ColourSchemeTests
     }
 
     [AvaloniaFact]
+    public void TheStartupBrandIsKanalIndigo()
+    {
+        var fresh = new App();
+        fresh.Initialize();
+        Appearance.Apply(ColourScheme.Light);
+        Appearance.Apply(AccentThemes.Kanal);
+        var live = Application.Current!;
+        foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+        {
+            var expected = (ResourceDictionary)live.Resources.ThemeDictionaries[variant];
+            var actual = (ResourceDictionary)fresh.Resources.ThemeDictionaries[variant];
+            foreach (var key in new[] { "Brand", "BrandHover", "BrandPressed", "BrandWash", "OnBrand" })
+                Assert.Equal(((ISolidColorBrush)expected[key]!).Color, ((ISolidColorBrush)actual[key]!).Color);
+            foreach (var key in expected.Keys.OfType<string>().Where(k => k.StartsWith("AccentRamp", StringComparison.Ordinal)))
+                Assert.Equal((Color)expected[key]!, (Color)actual[key]!);
+        }
+
+        foreach (var key in live.Resources.Keys.OfType<string>().Where(k => k.StartsWith("SystemAccentColor", StringComparison.Ordinal)))
+            Assert.Equal((Color)live.Resources[key]!, (Color)fresh.Resources[key]!);
+    }
+
+    [AvaloniaFact]
     public void ASettingsFileWithAnUnknownSchemeFallsBackToLight()
     {
         var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("""{"ColourScheme":"Sepia"}""")!;
@@ -376,6 +398,7 @@ public class ColourSchemeTests
                 var fill = (Color)app.Resources["SystemAccentColor"]!;
                 Assert.All(glyphs, key =>
                 {
+                    Assert.Equal(Brush(app.ActualThemeVariant, "OnBrand"), Brush(app.ActualThemeVariant, key));
                     var ratio = Contrast(Brush(app.ActualThemeVariant, key), fill);
                     Assert.True(ratio >= 3, $"{theme.Id} {scheme}: {key} on the accent fill is {ratio:F2}:1, below 3:1.");
                 });

@@ -30,8 +30,6 @@ public static class Appearance
 
     public static ColourScheme Scheme { get; private set; } = ColourScheme.Light;
 
-    public static AccentTheme Theme { get; private set; } = AccentThemes.Kanal;
-
     public static IPlatformSettings? Platform
     {
         get => _platform;
@@ -55,7 +53,6 @@ public static class Appearance
 
     public static void Apply(AccentTheme theme)
     {
-        Theme = theme;
         if (Application.Current is { } app)
         {
             Write(app, ThemeVariant.Light, theme.Light, dark: false);

@@ -105,6 +105,7 @@ HTML 磨砂是视觉模拟，原生 Avalonia 的平台材质仍需实施时验�
 - 主题只改品牌色：`Brand`、`BrandHover`、`BrandPressed`、`BrandWash`、`OnBrand`、`AccentRamp*`，以及复选框、单选框、开关的勾选符号。
 - 纸面、墨色、分隔线、`BrandAccent`、录音、暂停、告警、说话人颜色和应用图标不变。
 - 外观页的主题卡显示两个球：左边是浅色版 `Brand`，右边是深色版 `Brand`。点击即生效，无需重启。
+- 石墨的 `Brand` 与 `Ink2` 接近。这是中性主题的设计：主按钮靠填充色识别，选中状态另有边框或填充。
 - 不提供新建、导入或复制主题。未知的主题 id 回退到 Kanal 靛蓝。
 - 每套主题在浅、深两种变体下，`OnBrand` 在 `Brand` 上 ≥ 4.5:1，`Brand` 在 `Sheet` 上 ≥ 4.5:1、在 `Paper` 上 ≥ 3:1。
 
