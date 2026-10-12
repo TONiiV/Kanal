@@ -173,6 +173,19 @@ install-directory dialog, because the install is per-user. The licence page read
 command always queries nuget.org, so `PackMsi` runs it only when the cache folder is missing. The
 first build needs network access to fetch the extension once. Later builds work offline.
 
+**Artwork.** `installers/windows/Dialog.bmp` (493×312) is the left panel of the welcome and finish
+pages. `Banner.bmp` (493×58) is the top banner of the other pages. WixUI draws text over the dialog
+bitmap right of x=164, so that part stays white. `WindowsInstallerBitmapTests` checks both sizes.
+To change the artwork:
+
+1. Replace `design/installer-art/panel-art.png` or `design/icon/kanal-tile-light.png`.
+2. Run `python design/installer-art/compose.py`.
+3. Commit the two new bitmaps.
+
+`panel-art.png` came from `google/gemini-3.1-flash-image` through OpenRouter, in indigo and apricot.
+`compose.py` maps these colours to the silver, charcoal and purple of the app icon tile. It pastes
+the tile from `design/icon/kanal-tile-light.png`, because generated art distorts the logo.
+
 **Same-version upgrade.** `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. An msi with the same
 numeric version replaces the installed one, and a newer msi replaces an older one. An older msi stops
 with the downgrade message. A pre-release and the release of one numeric version replace each other
