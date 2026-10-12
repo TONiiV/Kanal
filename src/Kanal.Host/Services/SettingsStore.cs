@@ -94,6 +94,8 @@ public sealed class AppSettings
     [JsonConverter(typeof(ColourSchemeConverter))]
     public ColourScheme ColourScheme { get; set; } = ColourScheme.Light;
 
+    public string AccentTheme { get; set; } = "kanal";
+
     [JsonConverter(typeof(LogLevelConverter))]
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
 
@@ -194,6 +196,13 @@ public static class SettingsStore
     {
         var settings = Load();
         settings.ColourScheme = scheme;
+        Save(settings);
+    }
+
+    public static void SaveAccentTheme(string id)
+    {
+        var settings = Load();
+        settings.AccentTheme = id;
         Save(settings);
     }
 
