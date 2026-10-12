@@ -419,12 +419,13 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0));
         var record = Path.Combine(folder, WorkspaceStore.MeetingFileName);
-        File.WriteAllText(record, """{"schemaVersion":2,"id":"lost1"}""");
+        var newer = $$"""{"schemaVersion":{{WorkspaceStore.MeetingSchemaVersion + 1}},"id":"lost1"}""";
+        File.WriteAllText(record, newer);
 
         var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
 
         Assert.Equal(StoreProblemKind.UnsupportedVersion, result.Problem!.Kind);
-        Assert.Equal("""{"schemaVersion":2,"id":"lost1"}""", File.ReadAllText(record));
+        Assert.Equal(newer, File.ReadAllText(record));
         Assert.False(File.Exists(record + ".damaged"));
     }
 

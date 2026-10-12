@@ -22,6 +22,8 @@ internal sealed record StoredMeeting(
         && CreatedAt != default
         && Languages is not null
         && Languages.All(language => !string.IsNullOrWhiteSpace(language))
+        && StorePaths.IsFileName(TranscriptFileName)
+        && StorePaths.IsFileName(AudioFileName)
         && StoredRun.AllComplete(AllRuns);
 
     private List<StoredRun> AllRuns =>
