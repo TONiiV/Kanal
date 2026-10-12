@@ -4,6 +4,27 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-12
+
+### The fast-source-clock capture test no longer times out
+
+`ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
+1 run in 4 under CPU load. The production code is correct. The test harness caused the fault.
+
+1. `SendNumberedChunksAsync` advanced the manual clock without a wait for the drainer. The test
+   moves 180 s of clock time in 1 to 2 s of wall time.
+2. Under load, the drainer fell more than `ConsumerStallLimit` (60 s, 3000 frames) behind the clock.
+   The output channel filled, and the mixer faulted with `consumer_stalled`. This is the correct
+   behaviour for a consumer that stalls.
+3. After the fault, the mixer arms no timer. The next `StepAsync` waited for a timer and timed out.
+4. Now `SendNumberedChunksAsync` waits until the drainer is at most 1 s of frames behind the clock
+   before each step. `Drainer.ReachAsync` waits on a signal from each drained frame, not on a
+   polling loop. `FinishAsync` uses the same wait.
+
+The fix also covers `ASourceClockRunningSlowLosesNoSamplesOverMinutes`, which uses the same
+harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs, 60 of them under
+load.
+
 ## 2026-10-11
 
 ### Issues banner and Issues section (#212, part of spec #209)
