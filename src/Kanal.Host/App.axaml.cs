@@ -24,6 +24,7 @@ public partial class App : Application
             var settings = SettingsStore.Load();
             Localizer.Instance.Current = settings.AppLanguage ?? Localizer.FromSystem();
             Appearance.Platform = PlatformSettings;
+            Appearance.Apply(AccentThemes.Find(settings.AccentTheme));
             Appearance.Apply(settings.ColourScheme);
 
             var splash = new SplashWindow();
