@@ -6,6 +6,56 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-11
 
+### Meeting problem kinds and recovery in the store (#210, spec #209)
+
+This is core work only. The UI follows in other tickets.
+The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` and `ReidentifyMeeting` to it.
+
+1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
+   `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
+   Only content gives `RecordDamaged`: a JSON parse failure, an empty file, missing fields, or a `meeting.json` that is a folder. A read that fails
+   on access or I/O (a sharing violation, no permission, an offline cloud file) gives `Unreadable`, with the
+   meeting folder as subject. `RecoverMeeting` and `ReidentifyMeeting` refuse an `Unreadable` folder and
+   change nothing, because the record may be healthy.
+   `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
+   `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
+   In the Issues list, `ProjectIssueViewModel.For` shows `RecordMissing` and `RecordDamaged` with
+   `workspace.issues.unreadable`. `Misfiled` gets the generic cause until ticket #213 adds its sentence.
+   For these kinds the issue `Subject` is the meeting folder. Only `UnsupportedVersion` keeps `meeting.json`.
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+   `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
+3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
+   `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
+4. Rebuild rules:
+   - The id is the folder name.
+   - The languages are the source and translation languages in the transcript, in order of first use.
+     Codes that differ only in case count once, with the first spelling.
+     The code `und` (unknown language) is left out.
+   - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
+   - The start time is the end time minus the span of the utterance times. The created time equals the start time.
+   - The title is `FreeTitle` of the base title.
+5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
+   `.damaged.2`, `.damaged.3` and so on.
+6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid
+   id, or when the transcript holds no readable utterance or no language. A name clash gets `-2`, `-3`.
+7. `WorkspaceStore.ReidentifyMeeting(workspaceId, folder)` writes the folder name into a misfiled record.
+   The record gets a unique title from `FreeTitle`, for example "Tooling review 2".
+   It returns a `RecoverResult`, like `RecoverMeeting`.
+   When the folder name is not a valid id (a copy named `<id> - Copy` or `<id> copy`), Kanal moves the
+   folder to `kanal-set-aside` with the same rules as in item 6. The original meeting stays listed.
+8. No operation deletes a file. Tests compare the file contents before and after.
+
+Open items:
+
+1. The creation time of a file is not used, because copies change it.
+2. The start time is later than the real start by the silence before the first utterance.
+3. With `audio.wav`, the end time is the time the recording stopped. The start time is then also
+   later by the silence after the last utterance, and the duration is shorter by the same amount.
+4. A copy that does not keep write times (`cp` without `-p`, some archive tools and sync clients)
+   gives the copy time as end time. The start time is then wrong by the same offset.
+5. `ReidentifyMeeting` has no check for an id that is already listed. A listed id always equals its own
+   folder name, so a second folder cannot hold it.
+
 ### Speaker palette readable on light and dark sheets
 
 The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. Speaker names are small text, so they need 4.5:1.
