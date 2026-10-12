@@ -2,9 +2,14 @@
 
 状态：accepted，2026-09-08。
 
+> **2026-10-07 修订：** 决定 20–21 改为「一种导出格式、一种导入格式」。所有导出都把一场会议打包成
+> 一个 `.kl` 文件。会议导入只接受 `.kl`。其他任何文件导入后都成为该会议的附件。会议的三点菜单
+> 不再有 Markdown 导出。Markdown 转写仍在 `.kl` 包内，文件名 `transcript.md`。原因记录在
+> [`docs/PROGRESS.md`](../PROGRESS.md) 的 2026-10-07 条目。下文决定 20–21 保留原文，供追溯。
+
 延续 [ADR 0051](0051-peer-meeting-workspaces.md)（平级工作空间拥有会议记录）。0051 冻结了记录的
 归属边界，并明说「文件格式、迁移、跨空间移动、共享和运行中切换行为仍需独立设计」——本文补的
-就是那份设计。同时补上 [`docs/specs/meeting-workspace.md`](../specs/meeting-workspace.md) 未确认
+就是那份设计。同时补上 [工作空间规格 #64](https://github.com/TONiiV/Kanal/issues/64) 未确认
 清单里的「工作空间内活动会议与浏览记录关系」，以及
 [`docs/design/meeting-workspace.md`](../design/meeting-workspace.md) 验收项「工作空间切换不混淆
 活动会议与所浏览记录」所依赖的契约。
@@ -83,6 +88,9 @@
     能力缩水。
 21. `transcript.jsonl` **存储保留**，导入继续接受 json。刻度尺的语义层与句子回放都需要「这句话在
     音频的第几秒、谁说的」这样的锚点，Markdown 存不下。
+
+    > **2026-10-07 修订（决定 20–21）：** 三点菜单的唯一导出是「导出本场会议（.kl）」，不再有
+    > Markdown 导出。导入只接受 `.kl`，不接受 json。`transcript.jsonl` 的存储不变，它在 `.kl` 包内。
 22. **单场会议的迁移包**，可植入任意工作空间。包内含 manifest（id、标题、语言、`StartedAt` /
     `EndedAt`）、`transcript.md`、`transcript.jsonl`、`attachments/`；导出时一个勾选框决定是否含
     `audio.wav`，**默认不含**（一小时约 115 MB，邮件发不动）。
@@ -92,12 +100,16 @@
 ### H. 知情确认
 
 24. 知情确认从工具栏上的常驻复选框移入**点录制时弹出的对话框**，按
-    [`meeting-ui.prototype.html`](../design/obsolete/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
+    [`meeting-ui.prototype.html`](https://github.com/TONiiV/Kanal/blob/8783e2c7d31c554fe4427ebe6acc3a2b0b15593c/docs/design/obsolete/meeting-ui.prototype.html) 的 `consent()` 实现：两个独立
     勾选项（同时保存音频文件／我已告知所有参与者），后者未勾时「确认并开始」禁用。
 25. 弹窗里的「同时保存音频文件」是**本场一次性覆盖**，不写回设置——为某一场敏感会议临时取消勾选，
     不应让下一场默默不录音。
 26. Esc 与点击窗外都算取消，取消后原地不动。`consent-confirmed-at` 记录「确认并开始」被按下那一
     刻——它会进入 Markdown 导出，是合规凭证。
+
+    > **2026-10-07 修订：** 合规凭证写进 `transcript.jsonl` 的第一行，不再写进 Markdown 导出。
+    > 这一行有两个字段：`captureProfile` 与 `consentConfirmedAt`。它没有 utterance id，所以读取
+    > 转写时跳过它。`.kl` 包含 `transcript.jsonl`，所以凭证随会议一起导出与导入。
 27. 远程参与者提醒作为固定小字常驻，线上采集档案下再额外强调。当前实现按采集档案在室内／线上两套
     文案间二选一，会让混合会议（室内几人 + 线上几人）完全看不到远程提醒，而采集档案只有一个值。
 

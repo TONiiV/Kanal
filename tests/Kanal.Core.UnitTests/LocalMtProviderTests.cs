@@ -193,11 +193,11 @@ public class LlamaSharpTextGeneratorTests
         var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
 
         var generating = generator.GenerateAsync("prompt", CancellationToken.None);
-        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-        var disposing = Task.Run(generator.Dispose);
+        var disposing = Task.Run(generator.Dispose, TestContext.Current.CancellationToken);
 
-        var finishedEarly = await Task.WhenAny(disposing, Task.Delay(250)) == disposing;
+        var finishedEarly = await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken)) == disposing;
         Assert.False(finishedEarly, "Dispose returned while a decode was still running.");
         Assert.False(backend.FreedUnderARunningDecode, "the weights were freed under a live decode.");
         Assert.False(backend.Freed);
@@ -205,8 +205,8 @@ public class LlamaSharpTextGeneratorTests
         backend.Resume();
 
         // the decode completes normally — no ObjectDisposedException out of the released gate
-        Assert.Equal("Wsporniki KX-4402.", await generating.WaitAsync(TimeSpan.FromSeconds(10)));
-        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("Wsporniki KX-4402.", await generating.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.True(backend.Freed);
         Assert.False(backend.FreedUnderARunningDecode);
     }
@@ -234,15 +234,15 @@ public class LlamaSharpTextGeneratorTests
 
         var translating = provider.TranslateAsync(
             "这批支架。", "zh", ["pl"], Array.Empty<Utterance>(), CancellationToken.None);
-        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         var disposing = provider.DisposeAsync().AsTask();
-        Assert.False(await Task.WhenAny(disposing, Task.Delay(250)) == disposing);
+        Assert.False(await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken)) == disposing);
         Assert.False(backend.FreedUnderARunningDecode);
 
         backend.Resume();
-        var result = await translating.WaitAsync(TimeSpan.FromSeconds(10));
-        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await translating.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         Assert.Equal("Wsporniki KX-4402.", result["pl"]);
         Assert.True(backend.Freed);

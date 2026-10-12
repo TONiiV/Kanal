@@ -25,7 +25,7 @@ public sealed record LocalModelInfo(
 {
     public string DownloadUrl => HuggingFace.FileUrl(Repo, FileName);
 
-    public string SizeLabel => $"{SizeBytes / (1024.0 * 1024 * 1024):0.0} GB";
+    public string SizeLabel => ModelSize.Label(SizeBytes);
 }
 
 /// <summary>

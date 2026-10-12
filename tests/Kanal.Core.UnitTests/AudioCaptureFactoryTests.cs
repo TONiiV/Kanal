@@ -71,9 +71,10 @@ public class AudioCaptureFactoryTests
         if (capture.GetDevices().Count == 0)
             return;
 
-        // Device start can take well over a second on some Windows drivers, so the
-        // 700 ms measurement window opens at the FIRST frame, not at StartCapture.
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        // Device start can take well over a second on some Windows drivers, so timing starts at the
+        // FIRST frame. Frames queued while the reader was not yet scheduled arrive at once, so the
+        // first 500 ms are drained uncounted; counting them made the result depend on test load.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         var sw = new System.Diagnostics.Stopwatch();
         var bytes = 0;
         try
@@ -84,11 +85,12 @@ public class AudioCaptureFactoryTests
                 if (!sw.IsRunning)
                 {
                     sw.Start();
-                    // full measurement window even when device start ate most of the 6 s
-                    cts.CancelAfter(TimeSpan.FromSeconds(2));
+                    cts.CancelAfter(TimeSpan.FromSeconds(4));
                 }
+                if (sw.ElapsedMilliseconds < 500)
+                    continue;
                 bytes += frame.Length;
-                if (sw.ElapsedMilliseconds >= 700)
+                if (sw.ElapsedMilliseconds >= 2500)
                     break;
             }
         }
@@ -97,10 +99,9 @@ public class AudioCaptureFactoryTests
             // device never produced a frame within the overall timeout
         }
 
-        // ~700 ms at 16 kHz mono PCM16 is 22 400 bytes plus at most one trailing buffer.
-        // The upper bound must stay below 2× rate (44 800) so an un-downmixed stereo or
-        // un-resampled 32 kHz stream still fails.
-        Assert.InRange(bytes, 8_000, 32_000);
+        // 2 s of 16 kHz mono PCM16 is 64 000 bytes. The upper bound stays below 2x (128 000), so
+        // stereo or un-resampled 32 kHz still fails.
+        Assert.InRange(bytes, 48_000, 80_000);
     }
 
     /// <summary>

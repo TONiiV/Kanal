@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,11 +12,6 @@ using Kanal.Providers.LocalMt;
 
 namespace Kanal.Host.ViewModels;
 
-/// <summary>
-/// One row in a local-model list: either the translation list's "None" default (no download
-/// lifecycle) or a catalog model with download / cancel / delete. Which stage runs where is the
-/// mode's decision — this row only says *which* local model the local modes should load.
-/// </summary>
 public partial class ModelItemViewModel : ViewModelBase
 {
     private readonly ModelDownloadManager? _downloads;
@@ -25,7 +21,6 @@ public partial class ModelItemViewModel : ViewModelBase
     private readonly bool _transcription;
     private CancellationTokenSource? _downloadCts;
 
-    /// <summary>The "no local model" row — the cloud-translation modes need nothing here.</summary>
     public ModelItemViewModel()
     {
     }
@@ -99,7 +94,8 @@ public partial class ModelItemViewModel : ViewModelBase
 
     public bool CanDownload => IsLocal && !IsDownloaded && !IsDownloading;
 
-    public bool CanDelete => IsLocal && IsDownloaded && !IsDownloading;
+    public bool CanDelete =>
+        IsLocal && !IsDownloading && (IsDownloaded || _parts.Any(_downloads!.IsDownloaded));
 
     public string StatusLabel =>
         !IsLocal ? "" :
@@ -128,14 +124,13 @@ public partial class ModelItemViewModel : ViewModelBase
         _downloadCts = new CancellationTokenSource();
         try
         {
-            // a cancelled transcription download may already hold its 627 MB encoder
             await _downloads.DownloadAsync(
-                _downloads.MissingParts(_parts), new Progress<double>(p => Progress = p), _downloadCts.Token);
+                _parts, new Progress<double>(p => Progress = p), _downloadCts.Token);
             IsDownloaded = true;
         }
         catch (OperationCanceledException)
         {
-            // user pressed Cancel — no error, no file left behind
+            // user pressed Cancel
         }
         catch (Exception ex)
         {
@@ -162,5 +157,6 @@ public partial class ModelItemViewModel : ViewModelBase
         _downloads.Delete(_parts);
         IsDownloaded = false;
         Error = "";
+        OnPropertyChanged(nameof(CanDelete));
     }
 }

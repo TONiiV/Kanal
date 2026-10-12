@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -28,6 +29,21 @@ public sealed partial class LogLevelOption(LogLevel level) : ViewModelBase
     public void RefreshText() => OnPropertyChanged(nameof(Name));
 }
 
+public sealed partial class ColourSchemeOption(ColourScheme scheme) : ViewModelBase
+{
+    public ColourScheme Scheme { get; } = scheme;
+
+    public string Name => Localizer.Instance[$"appearance.scheme.{Scheme.ToString().ToLowerInvariant()}"];
+
+    public ThemeVariant Left => Scheme == ColourScheme.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+
+    public ThemeVariant Right => Scheme == ColourScheme.Light ? ThemeVariant.Light : ThemeVariant.Dark;
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+
+    public override string ToString() => Name;
+}
+
 public partial class ApiKeyItemViewModel : ViewModelBase
 {
     [ObservableProperty]
@@ -41,14 +57,18 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 }
 
 /// <summary>
-/// Manages the stored Gladia API keys and the active transcription and translation models.
+/// Manages the stored Gladia API keys and the active translation model.
 /// Multiple keys, one active; the env var GLADIA_API_KEY stays as the fallback
 /// when no stored key exists.
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
     public SettingsViewModel()
-        : this(SettingsStore.Load(), deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
+        : this(
+            SettingsStore.Load(),
+            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
+            saveColourScheme: SettingsStore.SaveColourScheme,
+            saveAppLanguage: SettingsStore.SaveAppLanguage)
     {
     }
 
@@ -68,8 +88,12 @@ public partial class SettingsViewModel : ViewModelBase
         Func<IAudioCaptureService?>? captureFactory = null,
         bool? isMacOs = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
-        Action<string>? openFolder = null)
+        Action<string>? openFolder = null,
+        Action<ColourScheme>? saveColourScheme = null,
+        Action<string>? saveAppLanguage = null)
     {
+        _saveAppLanguage = saveAppLanguage ?? (_ => { });
+        _saveColourScheme = saveColourScheme ?? (_ => { });
         _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
@@ -122,6 +146,7 @@ public partial class SettingsViewModel : ViewModelBase
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
 
+        _scheme = Schemes.First(o => o.Scheme == settings.ColourScheme);
         _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
         _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
@@ -147,6 +172,8 @@ public partial class SettingsViewModel : ViewModelBase
             model.RefreshText();
         foreach (var level in LogLevels)
             level.RefreshText();
+        foreach (var scheme in Schemes)
+            scheme.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -205,10 +232,43 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private AppLanguage? _appLanguage;
 
+    private readonly Action<string> _saveAppLanguage;
+
     partial void OnAppLanguageChanged(AppLanguage? value)
     {
-        if (value is not null)
-            Localizer.Instance.Current = value.Code;
+        if (value is null)
+            return;
+
+        Localizer.Instance.Current = value.Code;
+        try
+        {
+            _saveAppLanguage(value.Code);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The app language could not be saved.", ex);
+        }
+    }
+
+    public IReadOnlyList<ColourSchemeOption> Schemes { get; } =
+        [new(ColourScheme.System), new(ColourScheme.Light), new(ColourScheme.Dark)];
+
+    private readonly Action<ColourScheme> _saveColourScheme;
+
+    [ObservableProperty]
+    private ColourSchemeOption _scheme;
+
+    partial void OnSchemeChanged(ColourSchemeOption value)
+    {
+        Appearance.Apply(value.Scheme);
+        try
+        {
+            _saveColourScheme(value.Scheme);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The colour scheme could not be saved.", ex);
+        }
     }
 
     // ---- microphone test -------------------------------------------------------------------
@@ -553,12 +613,13 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
-        settings.ActiveTranscriptionModelId =
-            TranscriptionModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        var asrId = TranscriptionModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        settings.ActiveTranscriptionModelId = asrId == AsrModelCatalog.Models[0].Id ? null : asrId;
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.RecordAudio = RecordAudio;
         settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
+        settings.ColourScheme = Scheme.Scheme;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
             ? _lastLogSize

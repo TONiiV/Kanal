@@ -259,18 +259,14 @@ public class WorkspaceShellCompositionTests
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
-        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-
-        var bar = Region<IconBarView>(window);
+        var (window, bar) = ShownBar(vm, WideBar);
         var cluster = (Panel)Named(bar, "RightCluster");
         var devices = (Button)Named(cluster, "AudioDevices");
         var join = (Button)Named(cluster, "JoinQr");
         Assert.True(devices.IsTabStop);
         Assert.True(join.IsTabStop);
 
-        window.Width = vm.Shell.MinShellWidth;
+        window.Width = NarrowBar;
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(cluster.Bounds.Width, join.Bounds.Right, precision: 0);
@@ -279,12 +275,24 @@ public class WorkspaceShellCompositionTests
         Assert.False(devices.IsTabStop);
         Assert.True(join.IsTabStop);
 
-        window.Width = 1320;
+        window.Width = WideBar;
         Dispatcher.UIThread.RunJobs();
 
         Assert.True(devices.IsTabStop);
 
         window.Close();
+    }
+
+    private const double WideBar = 700;
+    private const double NarrowBar = 220;
+
+    private static (Window Window, IconBarView Bar) ShownBar(MainViewModel vm, double width)
+    {
+        var bar = new IconBarView { DataContext = vm };
+        var window = new Window { Content = bar, Width = width, Height = 120 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        return (window, bar);
     }
 
     [AvaloniaFact]
@@ -311,10 +319,8 @@ public class WorkspaceShellCompositionTests
     {
         var vm = TestViewModels.Hermetic();
         vm.SelectedMode = vm.Modes.First(mode => !mode.Mode.NeedsMicrophone);
-        var window = new MainWindow { DataContext = vm, Width = vm.Shell.MinShellWidth, Height = 820 };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-        var devices = (Button)Named(Region<IconBarView>(window), "AudioDevices");
+        var (window, bar) = ShownBar(vm, NarrowBar);
+        var devices = (Button)Named(bar, "AudioDevices");
 
         vm.SelectedMode = vm.Modes.First(mode => mode.Mode.NeedsMicrophone);
         Dispatcher.UIThread.RunJobs();

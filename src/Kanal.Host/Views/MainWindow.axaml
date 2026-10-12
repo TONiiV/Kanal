@@ -8,15 +8,14 @@
         mc:Ignorable="d" d:DesignWidth="1320" d:DesignHeight="820"
         x:Class="Kanal.Host.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/kanal.ico"
         Title="Kanal"
         Width="1320" Height="820"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="58"
         MinWidth="{Binding Shell.MinShellWidth}"
         FontFamily="{StaticResource Sans}"
-        TextElement.Foreground="{StaticResource Ink}"
-        Background="{StaticResource Sheet}">
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
     <Design.DataContext>
         <vm:MainViewModel />
     </Design.DataContext>
@@ -28,10 +27,10 @@
             <ColumnDefinition Width="{Binding Shell.Left.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Left.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Left.ColumnMaxWidth}" />
-            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
+            <ColumnDefinition Width="{Binding Shell.Left.SplitterColumn}" />
             <ColumnDefinition Width="*"
                               MinWidth="{x:Static vm:WorkspaceShellViewModel.TranscriptReserve}" />
-            <ColumnDefinition Width="{x:Static vm:WorkspaceShellViewModel.SplitterColumn}" />
+            <ColumnDefinition Width="{Binding Shell.Right.SplitterColumn}" />
             <ColumnDefinition Width="{Binding Shell.Right.Column, Mode=TwoWay}"
                               MinWidth="{Binding Shell.Right.ColumnMinWidth}"
                               MaxWidth="{Binding Shell.Right.ColumnMaxWidth}" />

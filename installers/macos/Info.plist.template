@@ -42,6 +42,10 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kanal captures room audio to transcribe and translate what is said in the meeting.</string>
 
+	<!-- Without this key macOS refuses the process tap and ScreenCaptureKit audio silently, with no prompt. -->
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Kanal captures the audio this computer plays so remote participants are transcribed and translated too.</string>
+
 	<!-- The prompt above is the English fallback. macOS reads the operator's own language from
 	     Resources/<lang>.lproj/InfoPlist.strings, staged from installers/macos/lproj - and a room
 	     whose whole point is that nobody shares a language should not ask for the microphone in a
