@@ -490,6 +490,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private static LiveSpeakerLabels? LiveSpeakerLabelsFor(ModelDownloadManager downloads) =>
+        downloads.IsDownloaded(DiarizationModelCatalog.DefaultEmbedding)
+            ? new LiveSpeakerLabels(new SherpaSpeakerEmbedder(downloads.GetPath(DiarizationModelCatalog.DefaultEmbedding)))
+            : null;
+
     private async Task ReidentifySpeakersAsync(MeetingItemViewModel item)
     {
         if (IsRunning || IsStarting || Sidebar.ReidentifyingMeetingId is not null
@@ -1387,7 +1392,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _relay = relay;
 
         var session = new MeetingSession(
-            asr, mt, relay, config, announceTranscription: mode.NeedsMicrophone);
+            asr, mt, relay, config, announceTranscription: mode.NeedsMicrophone,
+            speakerLabels: LiveSpeakerLabelsFor(_downloads()));
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));

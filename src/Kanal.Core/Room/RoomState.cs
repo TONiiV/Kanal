@@ -51,7 +51,7 @@ public sealed class RoomState
                 var translations = MergeTranslations(existing.Translations, t.Translations);
                 updated = existing with
                 {
-                    SpeakerTag = tag,
+                    SpeakerTag = existing.AsrSpeakerTag is null ? tag : existing.SpeakerTag,
                     TStartMs = t.TStartMs,
                     TEndMs = t.TEndMs,
                     SrcLang = t.SrcLang,
@@ -81,6 +81,36 @@ public sealed class RoomState
             SpeakerUpserted?.Invoke(newSpeaker);
         UtteranceUpserted?.Invoke(updated);
         return updated;
+    }
+
+    public (Utterance? Utterance, Speaker? NewSpeaker) AssignSpeaker(string utteranceId, string speakerTag)
+    {
+        Utterance updated;
+        Speaker? newSpeaker = null;
+        lock (_gate)
+        {
+            if (!_utterances.TryGetValue(utteranceId, out var existing))
+                return (null, null);
+
+            var tag = ResolveTag(speakerTag);
+            if (!_speakers.ContainsKey(tag))
+            {
+                newSpeaker = new Speaker(tag, null, [], Colours[_speakers.Count % Colours.Length]);
+                _speakers[tag] = newSpeaker;
+            }
+
+            updated = existing with
+            {
+                SpeakerTag = tag,
+                AsrSpeakerTag = existing.AsrSpeakerTag ?? existing.SpeakerTag,
+            };
+            _utterances[utteranceId] = updated;
+        }
+
+        if (newSpeaker is not null)
+            SpeakerUpserted?.Invoke(newSpeaker);
+        UtteranceUpserted?.Invoke(updated);
+        return (updated, newSpeaker);
     }
 
     /// <summary>

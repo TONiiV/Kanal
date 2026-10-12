@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- During a meeting, Kanal now gives each finished sentence a speaker tag from the voice. The tags
+  are `V01?`, `V02?`… The question mark shows that the tag is a guess. This works only after the
+  speaker models are on this computer: run *Re-identify speakers* on a recorded meeting once.
+  Kanal keeps no voiceprint after the meeting ends.
 - A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
   choose *Re-identify speakers*. Kanal runs speaker separation on the recording on this computer
   and gives each person their own tag and colour. The first run downloads a 34 MB model. The
