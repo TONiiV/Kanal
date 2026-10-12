@@ -4,7 +4,26 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-13
+
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
 ## 2026-10-11
+
+### Icons on the settings tabs
+
+1. Each of the seven settings tabs shows an icon left of its name. The icon takes the tab colour:
+   Ink3 at rest, Ink2 on hover, Brand when selected.
+2. Section headings get no icon, in Settings and in the project settings window (owner decision,
+   2026-10-11).
+3. New glyphs in `Assets/Icons`: `sliders`, `appearance`, `transcript`, `translate`, `summary`.
+   Audio input reuses `microphone`; Workspace reuses `folder`.
 
 ### Silver app icon
 
