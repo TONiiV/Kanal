@@ -1,37 +1,48 @@
-"""Builds the two WixUI bitmaps from panel-art.png and the K mark.
+"""Builds the two WixUI bitmaps from panel-art.png and the app icon tile.
 
     python design/installer-art/compose.py
 
 Writes installers/windows/Dialog.bmp (493x312) and Banner.bmp (493x58). WixUI draws the
 welcome and finish text over the dialog bitmap right of x=164, so that part stays plain white.
+panel-art.png keeps its generated indigo/apricot colours; recolor() maps them to the silver,
+charcoal and purple of design/icon/kanal-tile-light.png.
 """
+import colorsys
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-MARK = ROOT / "design" / "kanal-icon.png"
+TILE = ROOT / "design" / "icon" / "kanal-tile-light.png"
 OUT = ROOT / "installers" / "windows"
 WHITE = (255, 255, 255, 255)
-SHEET = (255, 252, 247, 255)
-SS = 4
+
+PURPLE = colorsys.rgb_to_hsv(114 / 255, 103 / 255, 183 / 255)
+APRICOT = colorsys.rgb_to_hsv(234 / 255, 166 / 255, 106 / 255)
+SILVER_HUE, SILVER_SAT = 240 / 360, 0.025
 
 
-def mark(size):
-    k = Image.open(MARK).convert("RGBA")
-    k = k.crop(k.getbbox())
-    k.thumbnail((size, size), Image.LANCZOS)
-    return k
+def recolor(img):
+    src = img.load()
+    out = img.copy()
+    dst = out.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            h, s, v = colorsys.rgb_to_hsv(*(c / 255 for c in src[x, y]))
+            deg = h * 360
+            if 10 <= deg <= 50 and s > 0.2:
+                h, s, v = PURPLE[0], min(1, s * PURPLE[1] / APRICOT[1]), v * PURPLE[2] / APRICOT[2]
+            elif s < 0.2 and v > 0.8:
+                h, s = SILVER_HUE, SILVER_SAT
+            elif 200 <= deg <= 260 and s > 0.2:
+                s *= 0.08
+            dst[x, y] = tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h, s, v))
+    return out
 
 
 def tile(size):
-    big = size * SS
-    m = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(m).rounded_rectangle([0, 0, big - 1, big - 1], radius=big // 5, fill=255)
-    t = Image.new("RGBA", (size, size), SHEET[:3] + (0,))
-    t.putalpha(m.resize((size, size), Image.LANCZOS))
-    k = mark(int(size * 0.66))
-    t.alpha_composite(k, ((size - k.width) // 2, (size - k.height) // 2))
+    t = Image.open(TILE).convert("RGBA")
+    t.thumbnail((size, size), Image.LANCZOS)
     return t
 
 
@@ -47,16 +58,18 @@ def cover(img, w, h):
 
 
 def dialog():
+    art = cover(Image.open(HERE / "panel-art.png").convert("RGB"), 164 * 2, 312 * 2)
+    panel = recolor(art).resize((164, 312), Image.LANCZOS)
     d = Image.new("RGBA", (493, 312), WHITE)
-    d.alpha_composite(cover(Image.open(HERE / "panel-art.png").convert("RGBA"), 164, 312))
+    d.alpha_composite(panel.convert("RGBA"))
     d.alpha_composite(tile(76), ((164 - 76) // 2, 34))
     return d
 
 
 def banner():
     b = Image.new("RGBA", (493, 58), WHITE)
-    k = mark(40)
-    b.alpha_composite(k, (493 - 9 - k.width, (58 - k.height) // 2))
+    t = tile(44)
+    b.alpha_composite(t, (493 - 7 - t.width, (58 - t.height) // 2))
     return b
 
 
