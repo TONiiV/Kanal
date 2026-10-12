@@ -11,6 +11,8 @@
          the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
          Ignored by non-Windows builds, so it needs no OS condition. -->
     <ApplicationIcon>Assets\kanal.ico</ApplicationIcon>
+    <!-- AVLN3001: the dialogs take constructor arguments and are built in code, never by the runtime XAML loader. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +22,10 @@
     <!-- The repository's own changelog, shown in the application: one file, so the version an
          operator reads on screen cannot drift from the one a reader sees on GitHub. -->
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="Kanal.Host.CHANGELOG.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kanal.UI.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

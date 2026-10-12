@@ -202,7 +202,7 @@
       pointing outside the repository.
     -->
     <Exec WorkingDirectory="$(RepoRoot)"
-          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -ext $(WixUiExtension) -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -d LicensePath=&quot;$(WindowsLicense)&quot; -o &quot;$(MsiPath)&quot;" />
+          Command="dotnet wix build &quot;$(WixSource)&quot; -arch x64 -ext $(WixUiExtension) -d Version=$(Version) -d PublishDir=&quot;$(PublishOutDir)&quot; -d IconPath=&quot;$(WindowsIcon)&quot; -d LicensePath=&quot;$(WindowsLicense)&quot; -d WindowsDir=&quot;$(MSBuildThisFileDirectory)windows&quot; -o &quot;$(MsiPath)&quot;" />
 
     <Message Importance="high" Text="msi: $(MsiPath)" />
   </Target>

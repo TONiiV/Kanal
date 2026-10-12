@@ -6,6 +6,49 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Accent themes
+
+Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
+
+1. The Appearance tab shows five theme cards after the colour scheme cards. Each card shows two
+   orbs: the light and the dark `Brand` of the theme. A click applies the theme at once. The id
+   goes to `settings.json`. An unknown id gives Kanal indigo.
+2. `AccentThemes` holds the five themes. A theme sets `Brand`, `BrandHover`, `BrandPressed`,
+   `BrandWash`, `OnBrand` and the seven `AccentRamp*` colours, in Light and in Dark.
+3. `Appearance.Apply(AccentTheme)` writes these keys into both theme dictionaries. It also writes
+   the twelve glyph keys of check box, radio button and switch, because they repeat `OnBrand`.
+   Then it copies the ramp of the current variant into the root `SystemAccentColor*` keys.
+4. Tests run every theme in both variants. `OnBrand` on `Brand` and `BrandHover` reaches 4.5:1.
+   `Brand` reaches 4.5:1 on `Sheet` and 3:1 on `Paper`. The check glyphs reach 3:1 on
+   `SystemAccentColor`. The glyph test now lists the indeterminate pointer-over and pressed keys.
+5. A test compares every theme dictionary key before and after a theme change. Only the brand
+   family may change. The theme never touches `Sheet`, `Paper`, `Ink*`, `Rule*`, `BrandAccent`,
+   record, hold, alarm, warning, speaker and close-button colours.
+6. A headless render of each theme in both variants shows that a checked box and the settings
+   tab marker use the `Brand` of the theme.
+
+### Speaker names follow the colour scheme
+
+Ticket #240 of the Appearance spec (#187).
+
+- `SpeakerTones.Name` replaces `SpeakerTones.OnLight`. It is a multi-value converter. It takes the speaker colour and the `ActualThemeVariant` of the name TextBlock.
+- In Dark, a name uses 30% of the dark ink `#F6F1E8`. In Light, it uses 30% of the light ink `#252B3B`.
+- A scheme change repaints the names that are already shown. This includes System following the operating system. The palette names need no view-model code; the fallback colour is re-resolved by `MainViewModel.OnThemeVariantChanged`.
+- The Dark fallback `SpeakerFallbackColor` `#9AA8B3` gives the name tone `#B5BDC3`: 8.93:1 on the dark sheet and 7.72:1 on the dark paper.
+- The design docs list the speaker colours. ADR 0057 names the icon purple `#6A5FB0`.
+
+### Icon follows the colour scheme
+
+Ticket #193 of the Appearance spec (#187).
+
+- `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
+  Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
+  `-dark` files.
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
+  Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
+  Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
+- The icon of the exe, the installer and the macOS bundle stays the light version.
+
 ### App language saves on pick
 
 Ticket #206.
@@ -13,6 +56,8 @@ Ticket #206.
 - The app language saves to `settings.json` when the operator picks it.
   `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
 - "Save & Close" writes the same value. A failed save writes a warning to the log.
+
+---
 
 ## 2026-10-12
 
@@ -34,7 +79,37 @@ This is ticket #225 of spec #209.
    on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
    `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
 
+### The fast-source-clock capture test no longer times out
+
+`ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
+1 run in 4 under CPU load. The production code is correct. The test harness caused the fault.
+
+1. `SendNumberedChunksAsync` advanced the manual clock without a wait for the drainer. The test
+   moves 180 s of clock time in 1 to 2 s of wall time.
+2. Under load, the drainer fell more than `ConsumerStallLimit` (60 s, 3000 frames) behind the clock.
+   The output channel filled, and the mixer faulted with `consumer_stalled`. This is the correct
+   behaviour for a consumer that stalls.
+3. After the fault, the mixer arms no timer. The next `StepAsync` waited for a timer and timed out.
+4. Now `SendNumberedChunksAsync` waits until the drainer is at most 1 s of frames behind the clock
+   before each step. `Drainer.ReachAsync` waits on a signal from each drained frame, not on a
+   polling loop. `FinishAsync` uses the same wait.
+
+The fix also covers `ASourceClockRunningSlowLosesNoSamplesOverMinutes`, which uses the same
+harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs, 60 of them under
+load.
+
 ## 2026-10-11
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
 
 ### Icons on the settings tabs
 
@@ -111,7 +186,7 @@ Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
    Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
    every meeting.
 
-Open: the speaker name tone in Dark follows after #200 merges.
+Done in #240: the speaker names use the dark text tone in Dark (see 2026-10-13).
 
 ### Meeting problem kinds and recovery in the store (#210, spec #209)
 
@@ -171,12 +246,12 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
 - `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
-  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names to the light tone through `SpeakerTones.OnLight`.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
   The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
-- Open item: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stay as they are. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handles them, and adds the dark text tone to the host.
+- Done later: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stayed as they were. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handled the fallbacks. The dark text tone for the host names landed in #240.
 
 ### Background scan of the other projects (#222, part of spec #209)
 
@@ -914,6 +989,66 @@ Without a key the row states the missing key, which is the operator's next step.
 line "Demo needs no key." is dropped in all four languages, and `.vscode/launch.json`'s demo target
 sets `KANAL_ENV=development`.
 
+### Start says it is connecting, connects in parallel, and names the meeting first
+
+Operator report (Cloud/Cloud): after the consent dialog the app sat for about five seconds with
+nothing on screen; was it loading a local model or naming the meeting? Neither. Cloud/Cloud plans no
+local model, so there was no warm-up and no titler. The room id is stamped right after consent
+(`RoomIds.New`, one-second resolution) and "Room … open" landed 4.2–5.7 s later in Cloud/Cloud and
+1.9–3.3 s later in Demo (log of 2026-09-23). In that window Start awaited, one after the other: the
+gateway room creation (`GatewayRelayPublisher.CreateRoomAsync`), on a restart the `room.moved`
+publish on the previous channel, the Gladia session (HTTP init + WebSocket), then the `room.config`
+and `room.transcribing` publishes. `IsStarting` was only set around model warm-up, and the record,
+and with it the name, was opened only after all of that.
+
+- **Starting phase.** `IsStarting` is true from consent until the room opens or the start is
+  abandoned, so the stop mark's spinner shows, and the status line reads "Connecting…" (the
+  model-loading line while a model warms up). One cancellation token reaches warm-up, relay
+  creation (`CreateRoomAsync`'s HttpClient) and the transcriber's connect. Stop during this phase
+  only cancels it; the start tears itself down once it sees the cancellation, rather than Stop
+  disposing providers under a connect still in flight.
+- **Parallel.** Relay room creation starts right after consent, before warm-up, as a task. The
+  session is handed a `PendingRelay`, an `IRelayPublisher` whose publishes wait for that task, so
+  `MeetingSession.StartAsync` connects the transcriber while the relay room is still being created
+  and its first publish (`room.config`) waits for the relay. Chosen over letting `MeetingSession`
+  accept its relay later: its contract (one relay from construction; config, then transcribing,
+  then the pump) is unchanged, and the ordering guarantee stays inside it. The room now opens after
+  the slower of relay and transcriber instead of their sum. A relay failure still resolves to the
+  null publisher with a warning, so the QR goes and transcription does not. `room.moved` on the
+  previous channel is now sent once the new session has started, so a failed restart no longer
+  redirects phones to a room that never opened.
+- **Name first: the record opens at consent (option a).** This is what ADR 0054 decision 2
+  words, and it supersedes the 2026-09-12 note that kept the record at room open. The default name
+  is on screen in the heading and the sidebar at once and is the same string the record holds: one
+  `_utcNow()`, one write. A start that fails or is abandoned hands the record back through
+  `WorkspaceSidebarViewModel.DiscardRecord`. A record created for the start is deleted; a reused
+  blank record is saved back as it was (`StartedAt` null, its old title), so the binding rule
+  still reuses it; the selection returns to where it was. "Cancel or failure leaves nothing behind"
+  holds. Option (b), a heading-only preview with the record written at room open, was rejected.
+  While an ended record is selected, the heading and body show that record, so a preview would need
+  its own override of `MeetingTitle` and would still leave the sidebar without a row. The row carries
+  its Recording mark from consent, which also keeps it from being deleted mid-start.
+- **Log.** `relay`: "Relay room created in N ms." (or the failure, with its elapsed time). `room`:
+  "Transcriber <id> connected in N ms." (from `MeetingSession.StartAsync`). The "Room … open" line
+  now ends with "N ms after Start", counted from consent.
+- The `RelayPublisherFactory` test seam now returns a `Task` and gets the start token, so a test
+  can hold relay creation open and cancel it.
+- Review fixes (2026-10-05):
+  - The room-open step reads the current record before it sets `AudioPath`. A rename typed while
+    the room connects is kept. Before, the step saved the copy from consent and wrote the default
+    name back.
+  - `StartAsync` clears `IsStarting` in a `finally` block. An exception after consent, or during
+    the teardown in `AbandonStartAsync`, no longer leaves Start disabled.
+  - `room.moved` is the commit point of a restart. The start checks for cancellation before it
+    sends `room.moved`. After `room.moved` is sent, the new room opens. A Stop pressed during the
+    publish then stops the new room normally, so the phones that moved get `room.closed`.
+  - `DiscardRecord` deletes the record from its own workspace (`WorkspaceId`), not from the
+    selected workspace. A workspace switch during the start no longer leaves a record behind.
+
+Open: a gateway that hangs still holds the room for up to its 15 s HttpClient timeout, because
+`room.config` waits for the relay. The fix would be to open the room on the transcriber alone and
+let publishes queue behind the relay. Not done here.
+
 ## 2026-09-15
 
 ### Rename and generate a title from the sidebar menu
@@ -1542,6 +1677,46 @@ Three items are open.
 3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
 
 No operator can reach these models yet, so this PR adds no CHANGELOG entry.
+
+### The transcription catalog, and what a model turned out to be ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+`AsrModelCatalog` lists Nemotron 3.5 ASR Streaming 0.6B in sherpa-onnx transducer format. It has
+three models, one for each chunk size: 560 ms (default), 160 ms (lower latency) and 1120 ms
+(higher accuracy).
+
+The three models differ only in the encoder file. The decoder, the joiner and the token table are
+byte-identical in all three. For this reason, chunk size is a catalog entry and not a setting on
+one model. A new chunk size means a new encoder, which is a new download.
+
+The catalog omits 80 ms and 320 ms. Both are published. No measurement asks for latency below 160 ms.
+The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
+
+We read the sizes and hashes from the HF API on 2026-09-08. The exception is `tokens.txt`: it is
+not an LFS object, so we computed its hash from the downloaded file.
+
+Two facts follow from the four-file format:
+
+**Local file names carry the model id.** All three models publish a file named
+`encoder.int8.onnx`, and one models directory holds them all. `AsrModelFile` therefore keeps the
+local name and the remote name apart. A test checks that local names stay unique across the
+catalog. Without that test, a collision shows up as a model that loads and transcribes badly, not
+as an error.
+
+**Progress is weighted by bytes.** The encoder is 96% of a model. A progress bar that counts files
+would stay at 25% for 600 MB and then jump to done. `ModelDownloadManager` has new overloads that
+take a list of files: `IsDownloaded`, `MissingParts`, `Delete` and `DownloadAsync`. The download
+overload skips files that are already on disk and counts their bytes as done. It forwards progress
+through a synchronous relay, because `Progress<double>` can deliver reports out of order.
+
+Readiness in this slice is what the disk shows: all files present, or not. The states
+*downloading* and *failed* exist only while a download runs, so the view model of the Settings
+*Transcription* section owns them (C-3).
+
+`AppSettings.ActiveTranscriptionModelId` holds the choice. Null keeps transcription on the cloud
+provider, the same as `ActiveTranslationModelId` does for translation. Both catalogs now build the
+HuggingFace URL and the size label with one function each.
+
+The operator cannot reach any of this yet, so there is no CHANGELOG entry.
 
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
