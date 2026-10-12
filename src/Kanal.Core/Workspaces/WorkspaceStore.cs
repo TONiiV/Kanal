@@ -290,6 +290,12 @@ public sealed class WorkspaceStore
     public StoreProblem? DeleteMeeting(string workspaceId, string meetingId) =>
         meetings.Delete(workspaceId, meetingId);
 
+    public RecoverResult RecoverMeeting(string workspaceId, string folder, string baseTitle) =>
+        meetings.Recover(workspaceId, folder, baseTitle);
+
+    public RecoverResult ReidentifyMeeting(string workspaceId, string folder) =>
+        meetings.Reidentify(workspaceId, folder);
+
     public string? MeetingFolder(string workspaceId, string meetingId) =>
         meetings.FolderOf(workspaceId, meetingId).Folder;
 
