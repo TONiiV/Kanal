@@ -323,7 +323,8 @@
         </Button>
 
         <ItemsControl Grid.Column="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                      Width="30" Margin="0,2,12,10" VerticalAlignment="Top"
+                      Width="30" Margin="0,2,12,10" VerticalAlignment="Stretch"
+                      UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                       AutomationProperties.Name="{l:T ruler.name}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RulerTickViewModel">

@@ -48,7 +48,7 @@ public partial class RulerTickViewModel : ViewModelBase
 public sealed partial class TranscriptRulerViewModel : ViewModelBase
 {
     public const double MaxPitch = 9;
-    public const double StripHeight = 648;
+    public const double DefaultStripHeight = 648;
     public const double CardHeight = 96;
 
     private const int PreviewLimit = 88;
@@ -61,6 +61,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _resolve = resolve;
 
     public ObservableCollection<RulerTickViewModel> Ticks { get; } = new();
+
+    public double StripHeight { get; private set; } = DefaultStripHeight;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPreviewOpen))]
@@ -107,6 +109,13 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             Write(entry);
     }
 
+    public void SetStripHeight(double height)
+    {
+        StripHeight = Math.Max(0, height);
+        if (Ticks.Count > 0)
+            Layout();
+    }
+
     public void Hover(RulerTickViewModel? tick)
     {
         HoveredTick = tick;
@@ -114,7 +123,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             return;
 
         var centre = Ticks.IndexOf(tick) * tick.Pitch + tick.Pitch / 2 - CardHeight / 2;
-        PreviewTop = Math.Clamp(centre, 0, StripHeight - CardHeight);
+        PreviewTop = Math.Clamp(centre, 0, Math.Max(0, StripHeight - CardHeight));
     }
 
     public void Jump(RulerTickViewModel tick) => JumpRequested?.Invoke(tick.AnchorUtteranceId);

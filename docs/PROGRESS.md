@@ -12,7 +12,7 @@ Part of #103.
 
 - The transcript ruler draws one tick for each final utterance. Partial utterances get no tick. The tick uses the colour of its speaker.
 - A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
-- Up to 72 ticks keep the fixed pitch of 9 px. Past 72 ticks, the 648 px strip is shared equally between all ticks. A one-hour meeting fits without a scroll, and the ticks may touch.
+- Up to 72 ticks keep the fixed pitch of 9 px. Past 72 ticks, the real height of the strip is shared equally between all ticks. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
 - Past 72 ticks, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
 
 ### Speaker names follow the colour scheme

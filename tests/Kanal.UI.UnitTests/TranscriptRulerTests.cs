@@ -158,8 +158,8 @@ public class TranscriptRulerTests
         Assert.Equal(600, ruler.Ticks.Count);
         Assert.Equal("u0", ruler.Ticks[0].AnchorUtteranceId);
         Assert.Equal("u599", ruler.Ticks[^1].AnchorUtteranceId);
-        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.StripHeight / 600, t.Pitch));
-        Assert.Equal(TranscriptRulerViewModel.StripHeight, ruler.Ticks.Sum(t => t.Pitch), 6);
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight / 600, t.Pitch));
+        Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight, ruler.Ticks.Sum(t => t.Pitch), 6);
         Assert.Equal(["#B23A2E", "#1C6B58"], ruler.Ticks.Take(2).Select(t => t.SpeakerColor));
     }
 
@@ -175,7 +175,36 @@ public class TranscriptRulerTests
         Assert.Equal(0, ruler.PreviewTop);
 
         ruler.Hover(ruler.Ticks[^1]);
-        Assert.Equal(TranscriptRulerViewModel.StripHeight - TranscriptRulerViewModel.CardHeight, ruler.PreviewTop);
+        Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight - TranscriptRulerViewModel.CardHeight, ruler.PreviewTop);
+    }
+
+    [AvaloniaFact]
+    public void TheRowsNeverAddUpToMoreThanTheStripThatIsReallyThere()
+    {
+        var ruler = Ruler();
+        ruler.SetStripHeight(633);
+
+        for (var i = 0; i < 165; i++)
+        {
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+            Assert.True(ruler.Ticks.Sum(t => t.Pitch) <= 633 + 1e-9);
+        }
+
+        Assert.Equal(633.0 / 165, ruler.Ticks[0].Pitch, 9);
+    }
+
+    [AvaloniaFact]
+    public void AStripThatShrinksAfterwardsReSpacesTheTicksAndKeepsThePreviewInside()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 200; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetStripHeight(400);
+
+        Assert.True(ruler.Ticks.Sum(t => t.Pitch) <= 400 + 1e-9);
+        ruler.Hover(ruler.Ticks[^1]);
+        Assert.Equal(400 - TranscriptRulerViewModel.CardHeight, ruler.PreviewTop);
     }
 
     [AvaloniaFact]
