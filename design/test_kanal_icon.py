@@ -2,17 +2,35 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import struct
 import sys
 import tempfile
 import unittest
-import zlib
 from pathlib import Path
 
 
 SCRIPT = Path(__file__).with_name("kanal-icon.py")
 sys.dont_write_bytecode = True
+
+
+SHEETS = {
+    "light": (bytes.fromhex("F5F0E6"), bytes.fromhex("FFFCF7")),
+    "dark": (bytes.fromhex("222838"), bytes.fromhex("181C28")),
+}
+
+
+def contrast(first: bytes, second: bytes) -> float:
+    def luminance(rgb: bytes) -> float:
+        linear = [
+            c / 255 / 12.92 if c / 255 <= 0.04045 else ((c / 255 + 0.055) / 1.055) ** 2.4
+            for c in rgb
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    high, low = sorted((luminance(first), luminance(second)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
 
 
 def load_generator():
@@ -41,6 +59,11 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             (root / "design" / "kanal-icon.png").write_bytes(
                 SCRIPT.with_name("kanal-icon.png").read_bytes()
             )
+            (root / "design" / "icon").mkdir()
+            for name in generator.TILE_SOURCES.values():
+                (root / "design" / "icon" / name).write_bytes(
+                    SCRIPT.with_name("icon").joinpath(name).read_bytes()
+                )
 
             generator.ROOT = str(root)
             generator.main()
@@ -54,56 +77,71 @@ class BrandAssetGeneratorTests(unittest.TestCase):
             self.assertEqual(SCRIPT.with_name("kanal-icon.png").read_bytes(), source_data)
             self.assertFalse(list((root / "design").glob("*.svg")))
 
-            splash = root / "src" / "Kanal.Host" / "Assets" / "kanal-splash-mark.png"
-            data = splash.read_bytes()
-            self.assertEqual(b"\x89PNG\r\n\x1a\n", data[:8])
-            width, height, bit_depth, colour_type = struct.unpack(">IIBB", data[16:26])
-            self.assertEqual((512, 512, 8, 6), (width, height, bit_depth, colour_type))
-            chunks = []
-            offset = 8
-            while offset < len(data):
-                length = struct.unpack(">I", data[offset : offset + 4])[0]
-                tag = data[offset + 4 : offset + 8]
-                if tag == b"IDAT":
-                    chunks.append(data[offset + 8 : offset + 8 + length])
-                offset += 12 + length
-            first_scanline = zlib.decompress(b"".join(chunks))[: 1 + width * 4]
-            self.assertEqual(0, first_scanline[0], "the generator writes unfiltered scanlines")
-            self.assertEqual(0, first_scanline[4], "the transparent canvas must have an empty top-left pixel")
+            assets = root / "src" / "Kanal.Host" / "Assets"
             source_width, source_height, source_rgba = generator.decode_png(str(source))
             source_size, square_source = generator.square_rgba(source_width, source_height, source_rgba)
-            expected_splash = generator.png_bytes(
-                512, generator.resize_rgba(square_source, source_size, 512)
-            )
-            self.assertEqual(expected_splash, data, "the splash must retain the standalone mark")
+            mark_1024 = generator.resize_rgba(square_source, source_size, 1024)
+            brightness = {}
+            for variant, name in generator.SPLASH_MARK_NAMES.items():
+                data = (assets / name).read_bytes()
+                width, height, bit_depth, colour_type = struct.unpack(">IIBB", data[16:26])
+                self.assertEqual((512, 512, 8, 6), (width, height, bit_depth, colour_type))
+                _, _, tile = generator.decode_png(
+                    str(root / "design" / "icon" / generator.TILE_SOURCES[variant])
+                )
+                expected = generator.png_bytes(
+                    512,
+                    generator.resize_rgba(
+                        generator.tile_mark_rgba(mark_1024, tile, 1024), 1024, 512
+                    ),
+                )
+                self.assertEqual(expected, data, "the splash must be the tile-toned mark on transparency")
 
-            app_icon = root / "design" / "kanal-icon-1024.png"
-            icon_data = app_icon.read_bytes()
-            chunks = []
-            offset = 8
-            while offset < len(icon_data):
-                length = struct.unpack(">I", icon_data[offset : offset + 4])[0]
-                tag = icon_data[offset + 4 : offset + 8]
-                if tag == b"IDAT":
-                    chunks.append(icon_data[offset + 8 : offset + 8 + length])
-                offset += 12 + length
-            icon_pixels = zlib.decompress(b"".join(chunks))
-            row_stride = 1 + 1024 * 4
+                _, _, pixels = generator.decode_png(str(assets / name))
+                self.assertEqual(0, pixels[3], "the transparent canvas must have an empty top-left pixel")
+                opaque = [
+                    (i // 4, pixels[i : i + 4])
+                    for i in range(0, len(pixels), 4)
+                    if pixels[i + 3] >= 250
+                ]
+                self.assertTrue(opaque)
+                neutral = [(n, p) for n, p in opaque if max(p[:3]) - min(p[:3]) <= 12]
+                purple = [(n, p) for n, p in opaque if p[2] - p[0] >= 30 and p[2] - p[1] >= 30]
+                self.assertGreater(len(neutral), len(opaque) // 4, "the upper stroke is neutral")
+                self.assertGreater(len(purple), len(opaque) // 4, "the lower stroke is purple")
+                self.assertGreater(
+                    sum(n // 512 for n, _ in purple) / len(purple),
+                    sum(n // 512 for n, _ in neutral) / len(neutral),
+                    "the purple stroke is the lower one",
+                )
+                brightness[variant] = sum(p[0] for _, p in neutral) / len(neutral)
+                opaque = [p for _, p in opaque]
+                tones = {bytes(p[:3]) for p in opaque}
+                for tone in tones:
+                    for background in SHEETS[variant]:
+                        self.assertGreaterEqual(
+                            contrast(tone, background), 3.0,
+                            f"{name} tone {tuple(tone)} on #{background.hex().upper()}",
+                        )
+            self.assertGreater(brightness["dark"], brightness["light"] + 60)
 
-            def icon_pixel(x: int, y: int) -> bytes:
-                start = y * row_stride + 1 + x * 4
-                return icon_pixels[start : start + 4]
+            for variant, name in generator.HOST_ICON_NAMES.items():
+                ico = (assets / name).read_bytes()
+                self.assertEqual((0, 1, 7), struct.unpack("<HHH", ico[:6]))
+                sizes = [ico[6 + 16 * i] or 256 for i in range(7)]
+                self.assertEqual([16, 24, 32, 48, 64, 128, 256], sizes)
+            self.assertNotEqual((assets / "kanal.ico").read_bytes(), (assets / "kanal-dark.ico").read_bytes())
+            self.assertFalse((root / "design" / "kanal-icon-1024.png").exists())
 
-            for corner in ((0, 0), (1023, 0), (0, 1023), (1023, 1023)):
-                self.assertEqual(0, icon_pixel(*corner)[3], "all outer corners must be transparent")
-            beige = bytes((0xF5, 0xF0, 0xE6, 255))
-            for edge_centre in ((512, 0), (512, 1023), (0, 512), (1023, 512)):
-                self.assertEqual(beige, icon_pixel(*edge_centre), "the rounded tile must reach each edge")
-
-            self.assertTrue((root / "src" / "Kanal.Host" / "Assets" / "kanal.ico").is_file())
-            self.assertTrue(app_icon.is_file())
             favicon = (root / "design" / "favicon-datauri.txt").read_text()
             self.assertTrue(favicon.startswith("data:image/png;base64,"))
+            favicon_png = generator.png_bytes(
+                32,
+                generator.resize_rgba(
+                    generator.rounded_beige_icon_rgba(square_source, source_size), source_size, 32
+                ),
+            )
+            self.assertIn(base64.b64encode(favicon_png).decode(), favicon, "the favicon keeps the coloured mark")
             page_text = (root / "web" / "index.html").read_text()
             self.assertNotIn('src="data:image/png;base64,old"', page_text)
             self.assertIn('<img class="brand-logo" src="data:image/png;base64,', page_text)

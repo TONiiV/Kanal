@@ -14,9 +14,23 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Each settings tab shows an icon next to its name.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
+- Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
+  follows the operating system, also during a meeting. Your choice applies at once and stays on
+  this computer. Light is the default, so Kanal looks the same until you change it.
+- The app language in Settings now saves when you pick it. Kanal shows that language at the next
+  start, also when you close Settings without "Save & Close".
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
   host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
+  scheme during a meeting.
 - You can now change the microphone while a meeting records. Pick another one in the microphone
   menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
   Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
@@ -31,7 +45,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   be read".
 - If Kanal cannot create the default project at start-up, the log now names the folder and the
   reason. Before, the log said nothing in some cases, for example when the folder was a file.
-- The Windows installer now shows its steps: welcome page with the licence, install, finish. Run the msi again
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
   on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
   the same version number.
 - When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete

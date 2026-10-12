@@ -191,7 +191,14 @@
                                                 <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="5">
                                                     <StackPanel Orientation="Horizontal" Spacing="7">
                                                         <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
-                                                                   LetterSpacing="1.2" Foreground="{Binding Color, Converter={x:Static conv:SpeakerTones.OnLight}}" />
+                                                                   LetterSpacing="1.2">
+                                                            <TextBlock.Foreground>
+                                                                <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
+                                                                    <Binding Path="Color" />
+                                                                    <Binding Path="$self.ActualThemeVariant" />
+                                                                </MultiBinding>
+                                                            </TextBlock.Foreground>
+                                                        </TextBlock>
                                                         <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
                                                                    Foreground="{DynamicResource Ink3}" />
                                                     </StackPanel>
