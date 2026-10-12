@@ -39,8 +39,8 @@ lookup that silently falls through to auto.
 
 **It streams natively, so Kanal does not have to.** Cache-aware FastConformer-RNNT: encoder
 self-attention and convolution caches are carried across chunks, so frames are strictly
-non-overlapping and there is no buffered re-decode. Chunk size is a runtime choice among 80, 160,
-320, 560 and 1120 ms — a latency/accuracy dial, no retraining.
+non-overlapping and there is no buffered re-decode. The model is published at 80, 160,
+320, 560 and 1120 ms chunk sizes — a latency/accuracy dial, no retraining.
 
 **Licence is OpenMDW-1.1** (`https://openmdw.ai/license/1-1/`), not Apache-2.0 and not OSI-listed.
 It is permissive in intent, but it is the Gemma case, not the Qwen case, and needs a review note in
@@ -78,12 +78,14 @@ separate decision with its own evidence, not part of this one.
 **3. Transcription models become a catalog in Settings, mirroring translation models.** Same
 operator-visible shape: pick, download on demand, run in process, no vendor branch anywhere.
 
-**4. A catalog record owns a list of parts.** `IDownloadableModel` — file name, URL, size, SHA-256 —
+**4. A catalog record owns a list of parts.** `IDownloadableFile` — file name, URL, size, SHA-256 —
 describes one file; the record holds the four and readiness is "every part present and verified".
 Progress is the sum. `ModelDownloadManager` is shared, not duplicated: it moved to
 `Kanal.Core.Models` and retargeted to the interface.
 
 **5. Readiness is a state the UI acts on**, not a guess: not downloaded, downloading, ready, failed.
+The disk decides *not downloaded* and *ready*. The view model that runs the download owns
+*downloading* and *failed*.
 A model that is not ready never silently changes what the meeting does — the `PipelinePlanner`
 "chosen but not downloaded" reason that already exists for MT is reused.
 
@@ -93,9 +95,11 @@ does not change. The rest of `Caps` is
 `Streaming: true`, `Diarization: false`, `AutoLanguageDetect: true`, `Latency: Near`, and a
 `Languages` set taken from the model's own prompt dictionary rather than hand-written.
 
-**7. Chunk size is a setting with a default, not a constant.** 560 ms is the starting point — the
-accuracy/latency knee on the model card's own FLEURS curve — and it is recorded here so the number
-that ships can be argued with rather than discovered in a diff.
+**7. Chunk size is a catalog entry, with a default.** Each chunk size ships a different encoder
+file, so a change of chunk size is a new download and not a runtime switch. The catalog has three
+entries: 560 ms (default), 160 ms and 1120 ms. 560 ms is the accuracy/latency knee on the model
+card's own FLEURS curve. The catalog omits 80 ms and 320 ms. No measurement asks for latency below 160 ms.
+The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
 
 ## Consequences
 
@@ -121,11 +125,11 @@ that ships can be argued with rather than discovered in a diff.
 
 One PR each, TDD, suite green at every step.
 
-1. `IDownloadableModel` + `ModelDownloadManager` retarget — pure refactor. **Done, PR #88.**
-2. `AsrModelCatalog` (multi-part records, verified sizes and hashes) + `ActiveTranscriptionModelId`
-   + readiness over the shared downloader.
-3. Settings *Transcription* section — download, progress, select, delete — reusing the translation
-   section's controls.
+1. `IDownloadableFile` + `ModelDownloadManager` retarget — pure refactor. **Done, PR #88.**
+2. `AsrModelCatalog` (multi-file records, verified sizes and hashes) + `ActiveTranscriptionModelId`
+   + disk readiness over the shared downloader. **Done, PR #126.**
+3. Settings *Transcription* section — download, progress, the *downloading* and *failed* states,
+   select, delete — reusing the translation section's controls.
 4. `NemotronAsrProvider` over `org.k2fsa.sherpa.onnx`: `IAsrSession`, `IWarmupProvider`, per-stream
    language including the `zh` → `zh-CN` mapping, partial and final emission.
 5. `PipelinePlanner`: `StageKind.Local` transcription resolves to the provider; `reason.localasr`
