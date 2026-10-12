@@ -58,11 +58,11 @@ public class MeetingTimelineTests
             asr, null, new NullRelay(), new RoomConfig("t", ["zh"]));
         await session.StartAsync(TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(Audio(1));
-        await session.SetPausedAsync(true);
-        await session.PushAudioAsync(Audio(1));
-        await session.SetPausedAsync(false);
-        await session.PushAudioAsync(Audio(1));
+        await session.PushAudioAsync(Audio(1), TestContext.Current.CancellationToken);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(Audio(1), TestContext.Current.CancellationToken);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(Audio(1), TestContext.Current.CancellationToken);
 
         // the transcriber counted two seconds of audio, because two is all it was given
         await asr.Feed.SayAsync(Final("u1", tStartMs: 1_000, tEndMs: 2_000));
