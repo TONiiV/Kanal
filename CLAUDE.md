@@ -8,7 +8,8 @@ one real scenario: a zh/de/pl meeting with no shared language. See `README.md` f
 **Build and test run in CI only.** Do not run `dotnet build` or `dotnet test` on the local machine.
 Push the branch and read the CI result (`gh pr checks <n>`). CI runs `dotnet build Kanal.slnx` and both
 test projects on Windows, macOS and Linux. A red test from TDD is also seen in CI: push the failing
-test first, then the fix. The one exception is the headless Skia render for UI screenshots.
+test first, then the fix. The one exception is a filtered `dotnet test`
+run that makes the headless Skia render for UI screenshots.
 
 ## Role: Product Manager
 
