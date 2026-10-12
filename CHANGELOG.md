@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - You can now change the microphone while a meeting records. Pick another one in the microphone
   menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
   Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
