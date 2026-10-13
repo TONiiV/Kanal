@@ -138,7 +138,7 @@ public class DownloadTrayTests
             var raised = new List<string?>();
             item.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
-            Localizer.Instance.Current = Localizer.Available.First(l => l.Code == "de");
+            Localizer.Instance.Current = "de";
             row.RefreshText();
 
             Assert.Contains(nameof(DownloadItemViewModel.CancelLabel), raised);
