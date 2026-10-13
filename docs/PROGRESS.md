@@ -171,7 +171,7 @@ Four things the ADR did not anticipate, all found by running the model:
   language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
   `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
   script first. Then it checks distinctive letters and stopwords in every Latin language it knows.
-  A room language wins a tie. It was correct on every test sentence. A short Latin sentence with no
+  A room language wins a tie. A language outside the room needs two signals (a score of 4). It was correct on every test sentence. A short Latin sentence with no
   signal falls to the room's first Latin language. 2026-10-14: the check first counted only the
   room's languages. An English sentence in a zh/de/pl room was labelled Polish, because "to" is a
   Polish stopword.
