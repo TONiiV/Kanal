@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Kanal.Core.Providers.Testing;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
 
@@ -64,9 +65,9 @@ public class BubbleContextMenuTests
     private static MenuItem Item(MenuFlyout flyout, string name) =>
         flyout.Items.OfType<MenuItem>().Single(i => i.Name == name);
 
-    private static void RightClick(Window window, Control target, double fromBottom)
+    private static void RightClick(Window window, Control target, double x, double fromBottom)
     {
-        var at = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height - fromBottom), window)!.Value;
+        var at = target.TranslatePoint(new Point(x, target.Bounds.Height - fromBottom), window)!.Value;
         window.MouseDown(at, MouseButton.Right);
         window.MouseUp(at, MouseButton.Right);
         Settle(window);
@@ -105,7 +106,7 @@ public class BubbleContextMenuTests
         var (window, translated, _) = Shown();
         var border = BubbleOf(window, translated);
 
-        RightClick(window, border, fromBottom: 6);
+        RightClick(window, border, border.Bounds.Width / 2, fromBottom: 6);
 
         var flyout = Assert.IsType<MenuFlyout>(border.ContextFlyout);
         Assert.True(flyout.IsOpen);
@@ -121,7 +122,7 @@ public class BubbleContextMenuTests
         var line = BubbleOf(window, translated).GetVisualDescendants().OfType<SelectableTextBlock>()
             .First(b => b.Text == Translation);
 
-        RightClick(window, line, fromBottom: line.Bounds.Height / 2);
+        RightClick(window, line, 10, fromBottom: line.Bounds.Height / 2);
 
         var flyout = Assert.IsType<MenuFlyout>(line.ContextFlyout);
         Assert.True(flyout.IsOpen);
@@ -164,6 +165,62 @@ public class BubbleContextMenuTests
 
         Assert.True(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
         flyout.Hide();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void PinFollowsTheBubbleTheMenuOpenedOnWhenItMovesBetweenBubbles()
+    {
+        var (window, translated, original) = Shown();
+        translated.IsPartial = true;
+        var first = LineOf(window, translated);
+        var second = LineOf(window, original);
+
+        var flyout = OpenMenuOn(window, first);
+        Assert.False(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
+        flyout.Hide();
+        Settle(window);
+
+        OpenMenuOn(window, second);
+        Assert.Same(original.PinCommand, Item(flyout, "PinToPoints").Command);
+        Assert.True(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
+        flyout.Hide();
+        Settle(window);
+
+        OpenMenuOn(window, first);
+        Assert.False(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
+        flyout.Hide();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task PinIsEnabledOnAFinalTranslatedBubbleOfALiveMeeting()
+    {
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(
+                script: [new FakeAsrProvider.Line("S01", "zh", "零件不合适。")], loop: true),
+        };
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        await vm.StartCommand.ExecuteAsync(null);
+        var deadline = Environment.TickCount64 + 15_000;
+        while (!vm.Columns.All(c => c.Bubbles.Any(b => !b.IsPartial && !b.AwaitingTranslation)))
+        {
+            Assert.True(Environment.TickCount64 < deadline, "No final translated bubble in time.");
+            Settle(window);
+            await Task.Delay(50);
+        }
+
+        var translated = vm.Columns.First(c => c.Language != "zh").Bubbles.First(b => !b.IsPartial && !b.AwaitingTranslation);
+        var flyout = OpenMenuOn(window, LineOf(window, translated));
+
+        var pin = Item(flyout, "PinToPoints");
+        Assert.True(translated.PinCommand.CanExecute(translated.Text));
+        Assert.True(pin.IsEffectivelyEnabled, $"same={ReferenceEquals(pin.Command, translated.PinCommand)} param={pin.CommandParameter}");
+        flyout.Hide();
+        await vm.StopCommand.ExecuteAsync(null);
         window.Close();
     }
 }
