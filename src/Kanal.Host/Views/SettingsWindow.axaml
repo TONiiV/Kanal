@@ -150,7 +150,7 @@
                         <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
                                 IsVisible="{Binding CanDownload}" />
                         <Panel IsVisible="{Binding IsDownloading}">
-                            <views:DownloadIndicatorView Bare="True" DataContext="{Binding Download}" />
+                            <views:DownloadIndicatorView DataContext="{Binding Download}" />
                         </Panel>
                         <Button Content="{l:T settings.model.delete}"
                                 Command="{Binding DeleteCommand}"
