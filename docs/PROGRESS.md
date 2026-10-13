@@ -6,6 +6,11 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
 ### Project icon chooser (PR #251)
 
 Choosing an icon in Project settings did nothing. The icon now changes.
@@ -18,6 +23,7 @@ No command ran.
 
 Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
 Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
+
 ### Local transcription runs (ADR 0053, slice C-5)
 
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*

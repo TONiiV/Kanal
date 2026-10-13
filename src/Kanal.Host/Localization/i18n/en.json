@@ -181,7 +181,7 @@
   "settings.key.name": "name (e.g. work)",
   "settings.key.value": "API key",
   "settings.add": "Add",
-  "settings.localasr.note": "Runs on this computer: after a one-time download, no audio leaves this machine to be transcribed. Used by the local-transcription modes. A shorter chunk shows words sooner; a longer one is more accurate.",
+  "settings.localasr.note": "Runs on this computer: after a one-time download, no audio leaves this machine to be transcribed. Used by the local-transcription modes.",
   "settings.translation.heading": "TRANSLATION",
   "settings.translation.localmodel": "Local model",
   "settings.translation.note": "Downloaded once; after that no translated text leaves this machine. Used by the local-translation modes.",

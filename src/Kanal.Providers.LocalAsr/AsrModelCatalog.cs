@@ -51,10 +51,6 @@ public static class AsrModelCatalog
     [
         Package("560", 657_601_403,
             "012e9321373af99021415e0b0eb3ec827b4be3153be6f30d9b448fe65e896e68"),
-        Package("160", 657_601_518,
-            "e1b39e5e16bef578a54ed2fba5f031438e000cc36c3ea2ca49d55699d5baebd4"),
-        Package("1120", 657_601_521,
-            "2fff2166acaa535bd969fb223c1f0783d71029f143cb298bc54c2afe85abf772"),
     ];
 
     public static AsrModelInfo? Find(string? id) =>

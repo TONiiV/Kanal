@@ -181,7 +181,7 @@
   "settings.key.name": "Name (z. B. work)",
   "settings.key.value": "API-Schlüssel",
   "settings.add": "Hinzufügen",
-  "settings.localasr.note": "Läuft auf diesem Rechner: nach einmaligem Herunterladen verlässt zum Transkribieren kein Audio mehr diesen Rechner. Wird von den Modi mit lokaler Transkription genutzt. Kürzere Blöcke zeigen Wörter früher, längere sind genauer.",
+  "settings.localasr.note": "Läuft auf diesem Rechner: nach einmaligem Herunterladen verlässt zum Transkribieren kein Audio mehr diesen Rechner. Wird von den Modi mit lokaler Transkription genutzt.",
   "settings.translation.heading": "ÜBERSETZUNG",
   "settings.translation.localmodel": "Lokales Modell",
   "settings.translation.note": "Einmal herunterladen; danach verlässt kein übersetzter Text diesen Rechner. Wird von den Modi mit lokaler Übersetzung genutzt.",
