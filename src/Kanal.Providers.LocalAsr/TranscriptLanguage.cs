@@ -19,6 +19,9 @@ public static class TranscriptLanguage
         ["cs"] = ("ěščřžýůťď", ["a", "je", "to", "se", "na", "že", "v", "ne", "jsou", "pro"]),
     };
 
+    // One shared stopword ("in", "no", "e") is too weak to leave the room; two signals are needed.
+    private const int OutsideRoomMinimum = 4;
+
     public static string Guess(string text, IReadOnlyList<string> room)
     {
         var script = ByScript(text, room);
@@ -28,11 +31,12 @@ public static class TranscriptLanguage
         var lower = text.ToLowerInvariant();
         var words = Regex.Split(lower, @"\P{L}+");
 
-        var best = room
-            .Where(Latin.ContainsKey)
-            .Select(code => (code, score:
-                3 * lower.Count(Latin[code].Letters.Contains) + 2 * words.Count(Latin[code].Words.Contains)))
+        var best = Latin
+            .Select(l => (code: l.Key, score:
+                3 * lower.Count(l.Value.Letters.Contains) + 2 * words.Count(l.Value.Words.Contains)))
+            .Where(c => c.score >= (room.Contains(c.code) ? 1 : OutsideRoomMinimum))
             .OrderByDescending(c => c.score)
+            .ThenByDescending(c => room.Contains(c.code))
             .FirstOrDefault();
 
         return best.code ?? room.FirstOrDefault(Latin.ContainsKey) ?? room[0];
