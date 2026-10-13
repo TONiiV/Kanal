@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using LLama.Native;
 
 namespace Kanal.Providers.LocalMt;
@@ -18,8 +17,7 @@ public static class LlamaAcceleration
     private static readonly Lock Gate = new();
     private static Accelerator? _active;
 
-    // LLamaSharp itself tries CUDA, then Vulkan, then CPU, and falls back when a native library fails
-    // to load. Kanal only switches the GPU variants off on request and reports which one loaded.
+    // LLamaSharp already tries CUDA, then Vulkan, then CPU; only a forced value needs config calls.
     public static Accelerator EnsureConfigured()
     {
         lock (Gate)
@@ -28,27 +26,26 @@ public static class LlamaAcceleration
                 return active;
 
             var forced = Parse(Environment.GetEnvironmentVariable(OverrideVariable));
-            var config = NativeLibraryConfig.All;
-            if (!NativeLibraryConfig.LLama.LibraryHasLoaded)
-                config.WithCuda(forced is null or Accelerator.Cuda)
-                    .WithVulkan(forced is null or Accelerator.Vulkan)
-                    .WithAutoFallback(true);
+            if (forced is not null && !NativeLibraryConfig.LLama.LibraryHasLoaded)
+                NativeLibraryConfig.All.WithCuda(forced == Accelerator.Cuda).WithVulkan(forced == Accelerator.Vulkan);
 
-            config.DryRun(out var llama, out _);
-            var appleSilicon = OperatingSystem.IsMacOS() && RuntimeInformation.OSArchitecture == Architecture.Arm64;
-            _active = Classify(llama?.Metadata?.UseCuda == true, llama?.Metadata?.UseVulkan == true, appleSilicon, forced);
+            NativeApi.llama_empty_call();
+            var metadata = NativeApi.GetLoadedNativeLibrary(NativeLibraryName.LLama)?.Metadata;
+            _active = Classify(metadata?.UseCuda == true, metadata?.UseVulkan == true,
+                NativeApi.llama_supports_gpu_offload(), OperatingSystem.IsMacOS(), forced);
             return _active.Value;
         }
     }
 
-    // The osx-arm64 build in LLamaSharp.Backend.Cpu carries Metal; it reports neither CUDA nor Vulkan.
-    internal static Accelerator Classify(bool useCuda, bool useVulkan, bool appleSilicon, Accelerator? forced) =>
-        forced == Accelerator.Cpu ? Accelerator.Cpu
+    internal static Accelerator Classify(bool useCuda, bool useVulkan, bool gpuOffload, bool macOS, Accelerator? forced) =>
+        forced == Accelerator.Cpu || !gpuOffload ? Accelerator.Cpu
         : useCuda ? Accelerator.Cuda
         : useVulkan ? Accelerator.Vulkan
-        : appleSilicon ? Accelerator.Metal
+        : macOS ? Accelerator.Metal
         : Accelerator.Cpu;
 
     internal static Accelerator? Parse(string? value) =>
-        Enum.TryParse<Accelerator>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
+        value is { Length: > 0 } && value.All(char.IsAsciiLetter) && Enum.TryParse<Accelerator>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : null;
 }

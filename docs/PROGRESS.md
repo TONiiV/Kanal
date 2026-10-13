@@ -6,6 +6,26 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### Local translation on the GPU
+
+Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
+CPU, and `GpuLayerCount = 999` had no effect. Now:
+
+- `LLamaSharp.Backend.Vulkan` is always in. It needs only the GPU driver and works with NVIDIA, AMD
+  and Intel GPUs. It adds 65 MB to the Windows installer.
+- Apple silicon uses Metal. The osx-arm64 build in `LLamaSharp.Backend.Cpu` already contains it.
+- `LLamaSharp.Backend.Cuda12` is optional (`-p:KanalCuda=true`). It adds about 600 MB and needs the
+  CUDA 12 toolkit, so it is not in the installer.
+- LLamaSharp selects the library: CUDA, then Vulkan, then CPU. It falls back when a library does not
+  load. `LlamaAcceleration` reads the loaded library and `llama_supports_gpu_offload()`, and logs
+  the result as `Accelerator`.
+- `KANAL_ACCELERATOR=cpu|vulkan|cuda` forces one library. With `cpu`, no layer goes to the GPU.
+
+Limits:
+
+- LLamaSharp tries Vulkan only when `vulkaninfo --summary` runs. On Linux this needs `vulkan-tools`.
+- LLamaSharp 0.27 `DryRun` always returns null libraries. Do not use it to detect the backend.
+
 ### Local translation benchmark
 
 `tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
@@ -42,7 +62,8 @@ Options:
 - `--gguf <file>`: an extra model. Repeat it for more models.
 - `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
 - `--streams 1,2,4`: the stream levels.
-- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
+- `-p:KanalCuda=true` (before `--`): add the CUDA 12 backend. Vulkan and Metal are always in.
+- `KANAL_ACCELERATOR=cpu` (environment): force the CPU, to compare it with the GPU.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
 
