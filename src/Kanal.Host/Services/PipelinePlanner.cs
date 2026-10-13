@@ -127,14 +127,9 @@ public static class PipelinePlanner
                 return (L["stage.transcription.scripted"], null, null);
 
             case StageKind.Local:
-                // nothing chosen is the recommended model: Settings shows it selected
-                var id = settings.ActiveTranscriptionModelId ?? AsrModelCatalog.Models[0].Id;
-                var model = AsrModelCatalog.Find(id);
-                if (model is null)
-                {
-                    reasons.Add(L.Format("reason.unknownasrmodel", id));
-                    return (L.Format("stage.transcription.unknown", id), null, null);
-                }
+                // nothing chosen, or an id the catalog no longer lists, is the recommended model
+                var model = (settings.ActiveTranscriptionModelId is { } id ? AsrModelCatalog.Find(id) : null)
+                    ?? AsrModelCatalog.Models[0];
 
                 if (!downloads.IsDownloaded(model.Parts))
                 {

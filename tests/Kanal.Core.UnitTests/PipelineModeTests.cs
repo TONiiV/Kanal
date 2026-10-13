@@ -286,14 +286,19 @@ public class PipelineModeTests
     }
 
     [Fact]
-    public void AnUnknownTranscriptionModelIsNamed()
+    public void ARemovedTranscriptionModelIdResolvesToTheCatalogDefault()
     {
-        var (downloads, _) = TempDownloads();
-        var settings = new AppSettings { ActiveTranscriptionModelId = "gone" };
+        var mt = LocalModelCatalog.Models[0];
+        var asr = AsrModelCatalog.Models[0];
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, [mt, .. asr.Parts]);
+        var settings = new AppSettings { ActiveTranslationModelId = mt.Id, ActiveTranscriptionModelId = "gone" };
 
-        var status = PipelinePlanner.Describe(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
+        var plan = PipelinePlanner.Plan(PipelineMode.Of(PipelineModeId.LocalLocal), settings, downloads, NoKey);
 
-        Assert.Contains("unknown transcription model “gone”", status.Unavailable);
+        Assert.Null(plan.Status.Unavailable);
+        Assert.NotNull(plan.Asr);
+        Directory.Delete(dir, recursive: true);
     }
 
     [Fact]
