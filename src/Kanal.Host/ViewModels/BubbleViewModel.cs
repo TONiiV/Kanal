@@ -60,24 +60,15 @@ public partial class BubbleViewModel : ViewModelBase
 
     public long StartMs { get; set; }
 
-    [ObservableProperty]
-    private string _selectedText = "";
-
-    [ObservableProperty]
-    private string _selectedSourceText = "";
-
     internal Func<string, Task> Clipboard { get; init; } = _ => Task.CompletedTask;
 
     [RelayCommand]
-    private Task Copy() => Clipboard(
-        !string.IsNullOrEmpty(SelectedText) ? SelectedText
-        : !string.IsNullOrEmpty(SelectedSourceText) ? SelectedSourceText
-        : Text);
+    private Task Copy(string text) => Clipboard(text);
 
     [RelayCommand]
-    private Task CopyWithSpeaker()
+    private Task CopyWithSpeaker(string text)
     {
         var time = TimeSpan.FromMilliseconds(Math.Max(0, StartMs)).ToString(@"hh\:mm\:ss");
-        return Clipboard($"[{time}] {SpeakerName}: {Text}");
+        return Clipboard($"[{time}] {SpeakerName}: {text}");
     }
 }

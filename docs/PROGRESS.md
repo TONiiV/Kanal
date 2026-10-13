@@ -14,14 +14,16 @@ The translation line and the source line of every utterance are selectable text.
   sizes, line heights and muted partial colour. Selection stays inside one line. It does not cross utterances.
 - **One shared menu.** The `UtteranceMenu` resource is a `MenuFlyout`. It replaces the default menu of the
   control. A new item is one `MenuItem` in the resource plus one command on `BubbleViewModel`.
-- **Copy.** It copies the selection. If nothing is selected, it copies the translation line of the column.
-  **Copy with speaker and time** writes `[hh:mm:ss] Speaker: text` for the language of the column.
-  The time is `TStartMs` of the utterance.
-- **Keys.** Ctrl+C and Ctrl+A are handled by the control itself.
-- **Clipboard seam.** `MainViewModel.WriteClipboard` is set by `MainWindow`. Columns pass it to bubbles.
+- **Menu text.** The `Opening` handler of the flyout reads the clicked line from `FlyoutBase.Target`.
+  It gives the selection of that line, or the whole line, to every item as `CommandParameter`.
+  A new item needs no code for this.
+- **Copy.** It copies the text of the menu. **Copy with speaker and time** writes
+  `[hh:mm:ss] Speaker: text` with the same text. The time is `TStartMs` of the utterance.
+- **Keys.** The control itself handles Ctrl+C and Ctrl+A.
+- **Clipboard seam.** `MainWindow` sets `MainViewModel.WriteClipboard`. Columns pass it to bubbles.
   Tests use a fake.
-- **Tests.** `TranscriptCopyTests`: selection versus whole line, the speaker-and-time format, the menu
-  items, the selection reaching the view model, and Ctrl+A.
+- **Tests.** `TranscriptCopyTests`: the text of the menu on the translation line and on the source line,
+  the speaker-and-time format, the menu items, and Ctrl+A.
 
 ### Download ring in the Settings model rows
 
