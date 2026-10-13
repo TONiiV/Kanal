@@ -53,7 +53,7 @@ public abstract record AsrEvent
         double SpeakerConfidence,
         IReadOnlyDictionary<string, string>? Translations) : AsrEvent;
 
-    public sealed record Error(string Message, bool Fatal) : AsrEvent;
+    public sealed record Error(string Message, bool Fatal, string? Code = null) : AsrEvent;
 
     public sealed record Ended(string? Reason) : AsrEvent;
 }
