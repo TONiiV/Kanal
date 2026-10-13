@@ -45,7 +45,6 @@
                     <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF" />
 
                     <Color x:Key="SpeakerFallbackColor">#4C5C68</Color>
-                    <Color x:Key="TickMixedColor">#7C8A93</Color>
 
                     <Color x:Key="AccentRamp">#414B83</Color>
                     <Color x:Key="AccentRampLight1">#535E96</Color>
@@ -104,7 +103,6 @@
                     <SolidColorBrush x:Key="OnBrand" Color="#181C28" />
 
                     <Color x:Key="SpeakerFallbackColor">#9AA8B3</Color>
-                    <Color x:Key="TickMixedColor">#7E8A99</Color>
 
                     <Color x:Key="AccentRamp">#B9C2FF</Color>
                     <Color x:Key="AccentRampLight1">#CDD3FF</Color>

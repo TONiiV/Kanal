@@ -20,6 +20,7 @@ public partial class MeetingRoomView : UserControl
 
     private readonly ColumnScrollSync _scroll = new();
     private MainViewModel? _bound;
+    private double _rulerHeight;
 
     public MeetingRoomView()
     {
@@ -42,6 +43,7 @@ public partial class MeetingRoomView : UserControl
             _bound.Ruler.JumpRequested += ScrollTo;
             _bound.BrowsedRuler.JumpRequested += ScrollTo;
             _bound.Sidebar.PropertyChanged += OnSelectedMeetingChanged;
+            ApplyRulerHeight();
         }
 
         base.OnDataContextChanged(e);
@@ -51,6 +53,21 @@ public partial class MeetingRoomView : UserControl
     {
         if (e.PropertyName == nameof(WorkspaceSidebarViewModel.SelectedMeeting))
             _scroll.ScrollToLatest();
+    }
+
+    private void OnRulerSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        _rulerHeight = e.NewSize.Height;
+        ApplyRulerHeight();
+    }
+
+    private void ApplyRulerHeight()
+    {
+        if (_bound is null || _rulerHeight <= 0)
+            return;
+
+        _bound.Ruler.SetStripHeight(_rulerHeight);
+        _bound.BrowsedRuler.SetStripHeight(_rulerHeight);
     }
 
     private void OnJumpToLatestClick(object? sender, RoutedEventArgs e) => _scroll.ScrollToLatest();
