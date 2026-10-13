@@ -148,12 +148,14 @@ public partial class MeetingRoomView : UserControl
 
     private void OnColumnScrolled(object? sender, ScrollChangedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm || ReferenceColumn() is not { Content: ItemsControl items } scroller)
+        if (DataContext is not MainViewModel vm || ReferenceColumn() is not { Content: ItemsControl items } scroller ||
+            !ReferenceEquals(sender, scroller))
             return;
 
         var top = scroller.Offset.Y + 0.5;
         var bottom = scroller.Offset.Y + scroller.Viewport.Height - 0.5;
         var visible = new List<string>();
+        var whole = new List<string>();
         for (var i = 0; i < items.ItemCount; i++)
         {
             if (items.ContainerFromIndex(i) is not Control row ||
@@ -163,11 +165,15 @@ public partial class MeetingRoomView : UserControl
 
             if (at.Y >= bottom)
                 break;
-            if (at.Y + row.Bounds.Height > top)
-                visible.Add(bubble.UtteranceId);
+            if (at.Y + row.Bounds.Height <= top)
+                continue;
+
+            visible.Add(bubble.UtteranceId);
+            if (at.Y >= top - 1 && at.Y + row.Bounds.Height <= bottom + 1)
+                whole.Add(bubble.UtteranceId);
         }
 
-        vm.ShownRuler.SetVisible(visible);
+        vm.ShownRuler.SetVisible(visible, whole);
     }
 
     private async void OnLanguagesClick(object? sender, RoutedEventArgs e)

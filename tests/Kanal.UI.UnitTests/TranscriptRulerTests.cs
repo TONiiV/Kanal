@@ -205,6 +205,39 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
+    public void ASentenceCutByTheEdgeOfTheScreenIsTheNextPageNotSkipped()
+    {
+        var ruler = Ruler();
+        var paged = new List<(string, PageDirection)>();
+        ruler.PageRequested += (id, direction) => paged.Add((id, direction));
+        for (var i = 0; i < 8; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetVisible(["u2", "u3", "u4", "u5"], whole: ["u3", "u4"]);
+        ruler.PageUpCommand.Execute(null);
+        ruler.PageDownCommand.Execute(null);
+
+        Assert.Equal([("u2", PageDirection.Up), ("u5", PageDirection.Down)], paged);
+        Assert.Equal(["u2", "u3", "u4", "u5"], ruler.Ticks.Where(t => t.IsInView).Select(t => t.AnchorUtteranceId));
+    }
+
+    [AvaloniaFact]
+    public void ASentenceTallerThanTheScreenDoesNotTrapTheArrows()
+    {
+        var ruler = Ruler();
+        var paged = new List<(string, PageDirection)>();
+        ruler.PageRequested += (id, direction) => paged.Add((id, direction));
+        for (var i = 0; i < 5; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetVisible(["u2"], whole: []);
+        ruler.PageUpCommand.Execute(null);
+        ruler.PageDownCommand.Execute(null);
+
+        Assert.Equal([("u1", PageDirection.Up), ("u3", PageDirection.Down)], paged);
+    }
+
+    [AvaloniaFact]
     public void AnArrowIsOfferedOnlyWhenSomethingIsOffScreenThatWay()
     {
         var ruler = Ruler();

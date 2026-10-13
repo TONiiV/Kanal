@@ -138,28 +138,64 @@ public class ColumnScrollWiringTests
         window.Close();
     }
 
+    private static List<int> Whole(ScrollViewer scroller)
+    {
+        var items = (ItemsControl)scroller.Content!;
+        var whole = new List<int>();
+        for (var i = 0; i < items.ItemCount; i++)
+        {
+            if (items.ContainerFromIndex(i) is not Control row || row.TranslatePoint(default, items) is not { } at)
+                continue;
+            if (at.Y >= scroller.Offset.Y - 0.5 &&
+                at.Y + row.Bounds.Height <= scroller.Offset.Y + scroller.Viewport.Height + 0.5)
+                whole.Add(i);
+        }
+
+        return whole;
+    }
+
     [AvaloniaFact]
     public void TheRulerArrowsPageWithoutSkippingASentence()
     {
-        var (window, vm, scrollers) = ShownWithRuler();
+        var (window, _, scrollers) = ShownWithRuler();
         scrollers[0].Offset = new Vector(0, 0);
         Settle(window);
-        var firstPage = InView(vm);
-        var nextUnseen = $"u{firstPage.Count}";
-        Assert.DoesNotContain(nextUnseen, firstPage);
+        var firstPage = Whole(scrollers[0]);
 
         RulerArrow(window, "RulerPageDown").Command!.Execute(null);
         Settle(window);
 
-        var secondPage = InView(vm);
-        Assert.Equal(nextUnseen, secondPage[0]);
-        Assert.DoesNotContain("u0", secondPage);
+        var secondPage = Whole(scrollers[0]);
+        Assert.Equal(firstPage[^1] + 1, secondPage[0]);
 
-        var lastAbove = $"u{int.Parse(secondPage[0][1..]) - 1}";
         RulerArrow(window, "RulerPageUp").Command!.Execute(null);
         Settle(window);
 
-        Assert.Equal(lastAbove, InView(vm)[^1]);
+        Assert.Equal(secondPage[0] - 1, Whole(scrollers[0])[^1]);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ASentenceCutAtTheBottomIsWhereTheDownArrowLands()
+    {
+        var (window, _, scrollers) = ShownWithRuler();
+        var items = (ItemsControl)scrollers[0].Content!;
+        var viewport = scrollers[0].Viewport.Height;
+        var cutBottom = Enumerable.Range(0, items.ItemCount).First(i =>
+        {
+            var row = items.ContainerFromIndex(i)!;
+            return row.TranslatePoint(default, items)!.Value.Y + row.Bounds.Height / 2 > viewport;
+        });
+        var cut = items.ContainerFromIndex(cutBottom)!;
+        scrollers[0].Offset = new Vector(
+            0, cut.TranslatePoint(default, items)!.Value.Y + cut.Bounds.Height / 2 - viewport);
+        Settle(window);
+        Assert.DoesNotContain(cutBottom, Whole(scrollers[0]));
+
+        RulerArrow(window, "RulerPageDown").Command!.Execute(null);
+        Settle(window);
+
+        Assert.Equal(cutBottom, Whole(scrollers[0])[0]);
         window.Close();
     }
 }

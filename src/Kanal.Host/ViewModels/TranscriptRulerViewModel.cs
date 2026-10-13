@@ -71,8 +71,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
     private HashSet<string> _visible = new();
-    private int _firstInView = -1;
-    private int _lastInView = -1;
+    private HashSet<string>? _whole;
+    private int _pageUpTarget = -1;
+    private int _pageDownTarget = -1;
 
     public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
         _resolve = resolve;
@@ -94,9 +95,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     public event Action<string, PageDirection>? PageRequested;
 
-    public bool CanPageUp => _firstInView > 0;
+    public bool CanPageUp => _pageUpTarget >= 0;
 
-    public bool CanPageDown => _lastInView >= 0 && _lastInView < Ticks.Count - 1;
+    public bool CanPageDown => _pageDownTarget >= 0;
 
     public void Observe(Utterance u)
     {
@@ -140,9 +141,10 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             Layout();
     }
 
-    public void SetVisible(IEnumerable<string> utteranceIds)
+    public void SetVisible(IEnumerable<string> utteranceIds, IEnumerable<string>? whole = null)
     {
         _visible = new HashSet<string>(utteranceIds);
+        _whole = whole is null ? null : new HashSet<string>(whole);
         MarkInView();
     }
 
@@ -163,14 +165,14 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private void PageUp()
     {
         if (CanPageUp)
-            PageRequested?.Invoke(Ticks[_firstInView - 1].AnchorUtteranceId, PageDirection.Up);
+            PageRequested?.Invoke(Ticks[_pageUpTarget].AnchorUtteranceId, PageDirection.Up);
     }
 
     [RelayCommand(CanExecute = nameof(CanPageDown))]
     private void PageDown()
     {
         if (CanPageDown)
-            PageRequested?.Invoke(Ticks[_lastInView + 1].AnchorUtteranceId, PageDirection.Down);
+            PageRequested?.Invoke(Ticks[_pageDownTarget].AnchorUtteranceId, PageDirection.Down);
     }
 
     public void Clear()
@@ -178,6 +180,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _entries.Clear();
         _originMs = null;
         _visible = new HashSet<string>();
+        _whole = null;
         HoveredTick = null;
         Ticks.Clear();
         MarkInView();
@@ -192,18 +195,31 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     private void MarkInView()
     {
-        _firstInView = _lastInView = -1;
+        int firstInView = -1, lastInView = -1, firstWhole = -1, lastWhole = -1;
         for (var i = 0; i < Ticks.Count; i++)
         {
-            var inView = _visible.Contains(Ticks[i].AnchorUtteranceId);
+            var id = Ticks[i].AnchorUtteranceId;
+            var inView = _visible.Contains(id);
             Ticks[i].IsInView = inView;
             if (!inView)
                 continue;
 
-            if (_firstInView < 0)
-                _firstInView = i;
-            _lastInView = i;
+            if (firstInView < 0)
+                firstInView = i;
+            lastInView = i;
+            if (_whole?.Contains(id) ?? true)
+            {
+                if (firstWhole < 0)
+                    firstWhole = i;
+                lastWhole = i;
+            }
         }
+
+        // A sentence taller than the screen is never whole; paging then steps past the cut one.
+        var up = firstWhole >= 0 ? firstWhole - 1 : firstInView - 1;
+        var down = lastWhole >= 0 ? lastWhole + 1 : lastInView < 0 ? -1 : lastInView + 1;
+        _pageUpTarget = firstInView >= 0 && up >= 0 ? up : -1;
+        _pageDownTarget = down >= 0 && down < Ticks.Count ? down : -1;
 
         Magnify();
         OnPropertyChanged(nameof(CanPageUp));

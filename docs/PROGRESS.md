@@ -22,8 +22,13 @@ Issue #268. The reference is the message navigator of a chat app.
 - **Ticks grow towards the transcript.** The ticks are right-aligned, so they grow to the left,
   towards the text and the preview card.
 - **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
-  screen. `PageDownCommand` brings the first sentence below the screen to the top. No hidden
-  sentence is skipped. A page jump does not mark a jump target.
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
+  by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
+  whole rows next to the visible rows. A sentence taller than the screen is never whole; the arrow
+  then steps past it. A page jump does not mark a jump target.
+- **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
+  final. The current providers finalise sentences in the order they start. A provider that
+  finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.
 - **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
   not change when an arrow turns on or off.
 - **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
