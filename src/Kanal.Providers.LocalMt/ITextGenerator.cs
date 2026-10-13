@@ -9,4 +9,12 @@ public interface ITextGenerator
 {
     /// <summary>Run one completion for <paramref name="prompt"/> and return the raw model output.</summary>
     Task<string> GenerateAsync(string prompt, CancellationToken ct);
+
+    async Task<IReadOnlyList<string>> GenerateAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+    {
+        var outputs = new List<string>();
+        foreach (var prompt in prompts)
+            outputs.Add(await GenerateAsync(prompt, ct));
+        return outputs;
+    }
 }

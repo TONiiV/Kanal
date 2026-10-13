@@ -6,6 +6,27 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### All target languages in one batch
+
+Before, `LlamaSharpMtProvider` translated the target languages one after the other. Each call also
+made a new llama.cpp context through `StatelessExecutor`. Now:
+
+- The provider sends all target prompts in one call to `ITextGenerator.GenerateAsync(prompts)`.
+- `LlamaCppBackend` decodes them as parallel sequences in one `BatchedExecutor`.
+- The executor stays alive between calls, so a call no longer makes a new context.
+- `BatchedExecutor` never reuses a sequence id, and llama.cpp rejects an id at or above `SeqMax` (16).
+  Hybrid models such as Qwen3.5 fail at once. The backend makes a new executor before the ids run out.
+
+Measured with Vulkan on an RTX 3000 Ada Laptop GPU, one sentence in flight (seconds per sentence):
+
+| Model | 2 targets before → after | 3 targets before → after | 4 in flight utt/s before → after |
+|---|---:|---:|---:|
+| Hy-MT2 1.8B | 1.26 → 0.39 | 1.90 → 0.45 | 0.81 → 2.22 |
+| Qwen3.5 2B | 1.26 → 0.41 | 1.79 → 0.56 | 0.80 → 2.25 |
+| Qwen3.5 4B | 2.02 → 0.95 | 3.15 → 1.21 | 0.49 → 1.11 |
+
+The chrF stays the same within the run-to-run noise (±1.5).
+
 ### Local translation on the GPU
 
 Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the

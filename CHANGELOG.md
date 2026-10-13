@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Local translation now translates a sentence into all meeting languages at the same time. On a
+  graphics card, a sentence with two target languages is ready about 3 times sooner than before.
 - Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
   Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
   to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the

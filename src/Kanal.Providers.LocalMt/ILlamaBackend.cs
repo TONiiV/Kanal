@@ -15,4 +15,12 @@ public interface ILlamaBackend : IDisposable
     Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct);
 
     Task<string> InferAsync(string prompt, CancellationToken ct);
+
+    async Task<IReadOnlyList<string>> InferAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+    {
+        var outputs = new List<string>();
+        foreach (var prompt in prompts)
+            outputs.Add(await InferAsync(prompt, ct));
+        return outputs;
+    }
 }

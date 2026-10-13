@@ -308,6 +308,49 @@ public class LlamaSharpTextGeneratorTests
     }
 }
 
+public class LlamaSharpTextGeneratorBatchTests
+{
+    private sealed class BatchBackend : ILlamaBackend
+    {
+        public List<int> Batches { get; } = new();
+        public int Loads;
+
+        public Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct)
+        {
+            Loads++;
+            return Task.CompletedTask;
+        }
+
+        public Task<string> InferAsync(string prompt, CancellationToken ct) =>
+            throw new InvalidOperationException("a batch must reach the backend as one call");
+
+        public Task<IReadOnlyList<string>> InferAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+        {
+            Batches.Add(prompts.Count);
+            return Task.FromResult<IReadOnlyList<string>>(prompts.Select(p => p.ToUpperInvariant()).ToList());
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    [Fact]
+    public async Task ABatchReachesTheBackendAsOneCallInPromptOrder()
+    {
+        var backend = new BatchBackend();
+        using var generator = new LlamaSharpTextGenerator("m.gguf", backend);
+
+        var outputs = await generator.GenerateAsync(["a", "b", "c"], CancellationToken.None);
+        var single = await generator.GenerateAsync("d", CancellationToken.None);
+
+        Assert.Equal(["A", "B", "C"], outputs);
+        Assert.Equal("D", single);
+        Assert.Equal([3, 1], backend.Batches);
+        Assert.Equal(1, backend.Loads);
+    }
+}
+
 public class LlamaSharpMtProviderTests
 {
     private sealed class FakeTextGenerator : ITextGenerator
@@ -315,15 +358,37 @@ public class LlamaSharpMtProviderTests
         public List<string> Prompts { get; } = new();
         public Func<string, string> Respond { get; set; } = p => "out";
 
+        public List<int> BatchSizes { get; } = new();
+
         public Task<string> GenerateAsync(string prompt, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             Prompts.Add(prompt);
             return Task.FromResult(Respond(prompt));
         }
+
+        public async Task<IReadOnlyList<string>> GenerateAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+        {
+            BatchSizes.Add(prompts.Count);
+            var outputs = new List<string>();
+            foreach (var prompt in prompts)
+                outputs.Add(await GenerateAsync(prompt, ct));
+            return outputs;
+        }
     }
 
     private static readonly IReadOnlyList<Utterance> NoContext = Array.Empty<Utterance>();
+
+    [Fact]
+    public async Task SendsEveryTargetLanguageInOneBatch()
+    {
+        var generator = new FakeTextGenerator();
+        var provider = new LlamaSharpMtProvider(generator);
+
+        await provider.TranslateAsync("这批支架。", "zh", ["de", "zh", "pl", "en"], NoContext, CancellationToken.None);
+
+        Assert.Equal([3], generator.BatchSizes);
+    }
 
     [Fact]
     public async Task TranslatesIntoEveryTargetLanguage()
