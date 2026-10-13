@@ -194,7 +194,7 @@ public class DeepLMtProviderTests
             Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken),
             Translate(provider, "zh", ["pl"], ct: TestContext.Current.CancellationToken),
         };
-        await Task.WhenAny(Task.WhenAll(calls.Select(c => c.ContinueWith(_ => { }))))
+        await Task.WhenAll(calls.Select(c => c.ContinueWith(_ => { })))
             .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, calls.Count(c => c.IsFaulted));

@@ -29,7 +29,7 @@ public sealed class DeepLMtProvider : IMtProvider
     private readonly string _key;
     private readonly Uri _endpoint;
     private readonly HttpClient _http;
-    private volatile bool _refused;
+    private int _refused;
 
     public DeepLMtProvider(string apiKey, HttpClient? http = null)
     {
@@ -49,7 +49,7 @@ public sealed class DeepLMtProvider : IMtProvider
         IReadOnlyList<Utterance> context,
         CancellationToken ct)
     {
-        if (_refused)
+        if (Volatile.Read(ref _refused) == 1)
             return new Dictionary<string, string>();
 
         var source = from.Split('-')[0].ToUpperInvariant();
@@ -104,6 +104,10 @@ public sealed class DeepLMtProvider : IMtProvider
 
         using (response)
         {
+            var refused = response.StatusCode == HttpStatusCode.Forbidden || (int)response.StatusCode == 456;
+            if (refused && Interlocked.Exchange(ref _refused, 1) == 1)
+                return "";
+
             if (!response.IsSuccessStatusCode)
                 throw Failure(response.StatusCode);
 
@@ -112,15 +116,13 @@ public sealed class DeepLMtProvider : IMtProvider
         }
     }
 
-    private MtProviderException Failure(HttpStatusCode status)
+    private static MtProviderException Failure(HttpStatusCode status)
     {
         switch (status)
         {
             case HttpStatusCode.Forbidden:
-                _refused = true;
                 return new("DeepL rejected the API key (403).", MtProviderException.InvalidKey);
             case (HttpStatusCode)456:
-                _refused = true;
                 return new("The DeepL quota is used up (456).", MtProviderException.QuotaExceeded);
             case HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError:
                 return new($"DeepL is unavailable ({(int)status}).", MtProviderException.Unavailable);
