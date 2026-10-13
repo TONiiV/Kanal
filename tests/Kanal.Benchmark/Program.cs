@@ -25,7 +25,7 @@ var candidates = LocalModelCatalog.Models
     .Select(m => (Name: m.DisplayName, Path: Path.Combine(modelsDir, m.FileName), Prefill: m.AssistantPrefill))
     .Where(c => File.Exists(c.Path))
     .Concat(Args("--gguf").Select(p => (Path.GetFileNameWithoutExtension(p), p, (string?)null)))
-    .Concat(Args("--gguf-nothink").Select(p => (Path.GetFileNameWithoutExtension(p), p, (string?)LocalModelCatalog.QwenNoThink)))
+    .Concat(Args("--gguf-nothink").Select(p => (Path.GetFileNameWithoutExtension(p) + " no-think", p, (string?)LocalModelCatalog.QwenNoThink)))
     .ToList();
 
 if (candidates.Count == 0)
