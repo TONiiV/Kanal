@@ -12,9 +12,7 @@ namespace Kanal.UI.UnitTests;
 
 public static class UnitTestAppBuilder
 {
-    public static AppBuilder BuildAvaloniaApp() => Environment.GetEnvironmentVariable("KANAL_SHOTS") == "1"
-        ? AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-        : AppBuilder
-            .Configure<App>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder
+        .Configure<App>()
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions());
 }
