@@ -19,13 +19,20 @@ languages. The report gives, per model:
 - the mean sentence chrF against the reference translations in `Corpus.cs`;
 - how many translations keep every part number (`KB-4471`, `X5CrNi18-10`, `IP67`) verbatim;
 - script leaks (CJK in a de/pl output, no CJK in a zh output) and empty outputs;
-- for N parallel streams, the average and p95 latency per utterance and the throughput.
+- for N sentences in flight, the average and p95 latency per sentence and the throughput;
+- the latency per sentence for 1, 2 and 3 target languages, with one sentence in flight.
 
-N parallel streams copy a meeting where finals arrive while earlier finals still translate. Each
-stream sends its next sentence when the previous one is done, so the model is always busy. The
-generator runs one request at a time. Thus the latency at N streams is about N × the latency at
-N = 1, and the throughput (utt/s) is the real capacity number. The quality columns use only the
-first stream of the first level.
+Two different kinds of load:
+
+- **Target languages.** Each sentence goes to every other meeting language. The provider translates
+  them one after the other, so the latency of one sentence grows with the number of targets. The
+  corpus has English references too, so the third target is English. The quality columns use the
+  two meeting targets only.
+- **Sentences in flight.** N streams copy a meeting where a new final arrives while earlier finals
+  still translate. Each stream sends its next sentence when the previous one is done, so the model
+  is always busy. The generator runs one request at a time. Thus the latency with N sentences in
+  flight is about N × the latency with one, and the throughput (utt/s) is the real capacity number.
+  The quality columns use only the first stream of the first level.
 
 Run it:
 
@@ -41,7 +48,7 @@ Options:
 - `--models <folder>`: the folder with the catalog models. The default is `%APPDATA%/Kanal/models`.
 - `--gguf <file>`: an extra model. Repeat it for more models.
 - `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
-- `--streams 1,2,4`: the stream levels.
+- `--streams 1,2,4`: the levels of sentences in flight.
 - `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
