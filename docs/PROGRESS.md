@@ -21,16 +21,28 @@ languages. The report gives, per model:
 - script leaks (CJK in a de/pl output, no CJK in a zh output) and empty outputs;
 - for N parallel streams, the average and p95 latency per utterance and the throughput.
 
-N parallel streams copy a meeting where finals arrive while earlier finals still translate. The
-generator serializes all requests, so the latency at N = 4 shows the queue.
+N parallel streams copy a meeting where finals arrive while earlier finals still translate. Each
+stream sends its next sentence when the previous one is done, so the model is always busy. The
+generator runs one request at a time. Thus the latency at N streams is about N × the latency at
+N = 1, and the throughput (utt/s) is the real capacity number. The quality columns use only the
+first stream of the first level.
 
 Run it:
 
 1. Download the models in Kanal Settings, or download other GGUF files.
-2. `dotnet run -c Release --project tests/Kanal.Benchmark`
-3. Add `-- --gguf <file>` for an extra model, or `--gguf-nothink <file>` for a Qwen3 reasoning model.
-4. Add `-- --streams 1,2,4,8` to change the stream levels.
-5. Add `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` to compare a GPU backend with the CPU.
+2. Run the benchmark from the repo root:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.Benchmark -- --gguf D:/models/Hy-MT2-1.8B-Q4_K_M.gguf --streams 1,2,4
+   ```
+
+Options:
+
+- `--models <folder>`: the folder with the catalog models. The default is `%APPDATA%/Kanal/models`.
+- `--gguf <file>`: an extra model. Repeat it for more models.
+- `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
+- `--streams 1,2,4`: the stream levels.
+- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
 

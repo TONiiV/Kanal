@@ -41,7 +41,7 @@ internal static partial class Scoring
         Codes(source).All(output.Contains);
 
     public static bool LeaksScript(string targetLang, string output) =>
-        targetLang == "zh" ? !output.Any(IsCjk) : output.Any(IsCjk);
+        output.Length > 0 && (targetLang == "zh" ? !output.Any(IsCjk) : output.Any(IsCjk));
 
     public static double Percentile(IReadOnlyList<double> values, double p)
     {

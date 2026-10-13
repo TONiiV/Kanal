@@ -42,6 +42,7 @@ public class BenchmarkScoringTests
         Assert.False(Scoring.LeaksScript("pl", "Spoina pęka"));
         Assert.True(Scoring.LeaksScript("zh", "Die Schweißnaht"));
         Assert.False(Scoring.LeaksScript("zh", "支架 KB-4471"));
+        Assert.False(Scoring.LeaksScript("zh", ""));
     }
 
     [Fact]

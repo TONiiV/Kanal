@@ -48,11 +48,20 @@ foreach (var (name, path, prefill) in candidates)
     await using var mt = new LlamaSharpMtProvider(new LlamaSharpTextGenerator(path, prefill));
 
     var load = Stopwatch.StartNew();
-    await mt.WarmUpAsync(CancellationToken.None);
+    try
+    {
+        await mt.WarmUpAsync(CancellationToken.None);
+    }
+    catch (Exception e)
+    {
+        Console.WriteLine($"   load failed: {e.Message}");
+        summary.AppendLine($"| {name} | load failed: {e.Message.ReplaceLineEndings(" ")} |");
+        continue;
+    }
     var loadSeconds = load.Elapsed.TotalSeconds;
     await TranslateAsync(mt, Corpus.Sentences[0]);
 
-    var all = new List<Result>();
+    List<Result>? firstPass = null;
     var perLevel = new List<string>();
     foreach (var n in levels)
     {
@@ -68,10 +77,10 @@ foreach (var (name, path, prefill) in candidates)
         var seconds = results.Select(r => r.Seconds).ToList();
         perLevel.Add($" {seconds.Average():F2} / {Scoring.Percentile(seconds, 0.95):F2} | {results.Count / wall.Elapsed.TotalSeconds:F2} |");
         Console.WriteLine($"   N={n}: avg {seconds.Average():F2} s, p95 {Scoring.Percentile(seconds, 0.95):F2} s");
-        all.AddRange(results);
+        firstPass ??= streams[0];
     }
 
-    var scored = all.SelectMany(r => r.Sentence.References.Select(kv =>
+    var scored = firstPass!.SelectMany(r => r.Sentence.References.Select(kv =>
     {
         var output = r.Output.GetValueOrDefault(kv.Key, "");
         return (r.Sentence, Target: kv.Key, Output: output, ChrF: Scoring.ChrF(output, kv.Value));
@@ -86,14 +95,15 @@ foreach (var (name, path, prefill) in candidates)
 
     details.AppendLine().AppendLine($"## {name}").AppendLine()
         .AppendLine("| Source | → | Output | Reference | chrF |").AppendLine("|---|---|---|---|---:|");
-    foreach (var s in scored.Take(Corpus.Sentences.Count * 2))
+    foreach (var s in scored)
         details.AppendLine($"| {s.Sentence.Text} | {s.Target} | {s.Output.ReplaceLineEndings(" ")} | {s.Sentence.References[s.Target]} | {s.ChrF:F1} |");
 }
 
-var report = summary.Append(details).ToString();
+var report = summary.ToString() + details;
 var file = Path.GetFullPath($"kanal-benchmark-{DateTime.Now:yyyyMMdd-HHmmss}.md");
 await File.WriteAllTextAsync(file, report);
-Console.WriteLine().WriteLine(report.Split("\n## ")[0]);
+Console.WriteLine();
+Console.WriteLine(summary);
 Console.WriteLine($"Report: {file}");
 return 0;
 
@@ -106,8 +116,9 @@ static async Task<Result> TranslateAsync(LlamaSharpMtProvider mt, Sentence sente
     {
         output = await mt.TranslateAsync(sentence.Text, sentence.Lang, targets, [], CancellationToken.None);
     }
-    catch (InvalidOperationException)
+    catch (Exception e)
     {
+        Console.WriteLine($"   translate failed: {e.Message}");
         output = new Dictionary<string, string>();
     }
     var seconds = clock.Elapsed.TotalSeconds;
