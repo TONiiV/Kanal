@@ -33,9 +33,11 @@ public class RecordFileTests : IDisposable
         RecordFile.Write(Target, Registry("before"));
         var reader = new FileStream(Target, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-        var write = Task.Run(() => RecordFile.Write(Target, Registry("after")), TestContext.Current.CancellationToken);
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        await reader.DisposeAsync();
+        var write = Task.Factory.StartNew(() => RecordFile.Write(Target, Registry("after")),
+            TestContext.Current.CancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        // A starved thread pool once delayed the reader's release past the retry budget; block this thread instead.
+        Thread.Sleep(100);
+        reader.Dispose();
         await write.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         var (read, problem) = RecordFile.Read<StoredRegistry>(Target);
