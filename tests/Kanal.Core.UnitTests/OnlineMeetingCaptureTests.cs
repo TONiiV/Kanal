@@ -529,8 +529,10 @@ public class OnlineMeetingCaptureTests
             await Clock.IdleAsync();
             await drainer.ReachAsync(ClockFrames);
             Assert.Null(Fault);
-            await DisposeAsync();
+            // The drainer must stop calling MoveNextAsync before the stream is disposed, or DisposeAsync throws.
+            await _cts.CancelAsync();
             await drainer.Task.WaitAsync(Patience);
+            await DisposeAsync();
             return Diagnostics.Last(d => d is { Event: "stopped", Source: OnlineMeetingCapture.MicrophoneSource });
         }
 
