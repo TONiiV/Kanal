@@ -6,6 +6,25 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Selectable transcript lines
+
+The translation line and the source line of every utterance are selectable text.
+
+- **`SelectableTextBlock`.** Both lines use it in `MeetingRoomView`. The styles keep the same fonts,
+  sizes, line heights and muted partial colour. Selection stays inside one line. It does not cross utterances.
+- **One shared menu.** The `UtteranceMenu` resource is a `MenuFlyout`. It replaces the default menu of the
+  control. A new item is one `MenuItem` in the resource plus one command on `BubbleViewModel`.
+- **Menu text.** The `Opening` handler of the flyout reads the clicked line from `FlyoutBase.Target`.
+  It gives the selection of that line, or the whole line, to every item as `CommandParameter`.
+  A new item needs no code for this.
+- **Copy.** It copies the text of the menu. **Copy with speaker and time** writes
+  `[hh:mm:ss] Speaker: text` with the same text. The time is `TStartMs` of the utterance.
+- **Keys.** The control itself handles Ctrl+C and Ctrl+A.
+- **Clipboard seam.** `MainWindow` sets `MainViewModel.WriteClipboard`. Columns pass it to bubbles.
+  Tests use a fake.
+- **Tests.** `TranscriptCopyTests`: the text of the menu on the translation line and on the source line,
+  the speaker-and-time format, the menu items, and Ctrl+A.
+
 ### Download ring in the Settings model rows
 
 A Settings model row that downloads shows the same ring as the status bar.

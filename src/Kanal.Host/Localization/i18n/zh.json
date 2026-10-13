@@ -89,6 +89,8 @@
   "speaker.apply.tip": "应用名称（或按回车）",
   "speaker.count": "发言数",
   "speaker.colour": "颜色",
+  "transcript.copy": "复制",
+  "transcript.copy.speaker": "复制（含发言人和时间）",
   "column.original": "· 原文",
   "column.original.tip": "用这种语言说出——转写，不是译文",
   "lang.unknown": "未知语言",

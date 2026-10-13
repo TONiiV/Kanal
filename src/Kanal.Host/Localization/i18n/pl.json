@@ -89,6 +89,8 @@
   "speaker.apply.tip": "Zastosuj nazwę (lub naciśnij Enter)",
   "speaker.count": "Wypowiedzi",
   "speaker.colour": "Kolor",
+  "transcript.copy": "Kopiuj",
+  "transcript.copy.speaker": "Kopiuj z mówcą i czasem",
   "column.original": "· ORYGINAŁ",
   "column.original.tip": "Wypowiedziane w tym języku — zapis, nie tłumaczenie",
   "lang.unknown": "NIEZNANY",

@@ -5,7 +5,19 @@
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.MeetingRoomView" x:DataType="vm:MainViewModel">
+    <UserControl.Resources>
+        <MenuFlyout x:Key="UtteranceMenu">
+            <MenuItem Name="CopyLine" x:DataType="vm:BubbleViewModel" Header="{l:T transcript.copy}"
+                      Command="{Binding CopyCommand}" />
+            <MenuItem Name="CopyWithSpeaker" x:DataType="vm:BubbleViewModel" Header="{l:T transcript.copy.speaker}"
+                      Command="{Binding CopyWithSpeakerCommand}" />
+        </MenuFlyout>
+    </UserControl.Resources>
     <UserControl.Styles>
+        <Style Selector="Border.rec SelectableTextBlock">
+            <Setter Property="SelectionBrush" Value="{DynamicResource Brand}" />
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource OnBrand}" />
+        </Style>
         <Style Selector="Border.rec">
             <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
@@ -18,15 +30,15 @@
             <Setter Property="Padding" Value="12,9,12,19" />
             <Setter Property="Margin" Value="-12,0,-12,19" />
         </Style>
-        <Style Selector="Border.rec TextBlock.body">
+        <Style Selector="Border.rec SelectableTextBlock.body">
             <Setter Property="Foreground" Value="{DynamicResource Ink}" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="LineHeight" Value="28" />
         </Style>
-        <Style Selector="TextBlock.body.partial, TextBlock.body.pending">
+        <Style Selector="SelectableTextBlock.body.partial, SelectableTextBlock.body.pending">
             <Setter Property="Foreground" Value="{DynamicResource Ink3}" />
         </Style>
-        <Style Selector="Panel.focused Border.rec TextBlock.body">
+        <Style Selector="Panel.focused Border.rec SelectableTextBlock.body">
             <Setter Property="FontSize" Value="19" />
             <Setter Property="LineHeight" Value="33" />
         </Style>
@@ -288,13 +300,15 @@
                                                                    IsVisible="{Binding CodeSwitch}"
                                                                    Foreground="{DynamicResource Ink3}" />
                                                     </StackPanel>
-                                                    <TextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
+                                                    <SelectableTextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
+                                                               ContextFlyout="{StaticResource UtteranceMenu}"
                                                                Classes.partial="{Binding IsPartial}"
                                                                Classes.pending="{Binding AwaitingTranslation}" />
                                                     <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
                                                             BorderBrush="{DynamicResource Rule}"
                                                             BorderThickness="2,0,0,0" Padding="11,0,0,0">
-                                                        <TextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
+                                                        <SelectableTextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
+                                                                   ContextFlyout="{StaticResource UtteranceMenu}"
                                                                    FontSize="12.5" LineHeight="22"
                                                                    Foreground="{DynamicResource Ink3}" />
                                                     </Border>

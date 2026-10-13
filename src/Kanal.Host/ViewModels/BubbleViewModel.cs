@@ -1,4 +1,7 @@
+using System;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Kanal.Host.ViewModels;
 
@@ -54,4 +57,18 @@ public partial class BubbleViewModel : ViewModelBase
     private bool _isJumpTarget;
 
     public bool HasSource => SourceText.Length > 0;
+
+    public long StartMs { get; set; }
+
+    internal Func<string, Task> Clipboard { get; init; } = _ => Task.CompletedTask;
+
+    [RelayCommand]
+    private Task Copy(string text) => Clipboard(text);
+
+    [RelayCommand]
+    private Task CopyWithSpeaker(string text)
+    {
+        var time = TimeSpan.FromMilliseconds(Math.Max(0, StartMs)).ToString(@"hh\:mm\:ss");
+        return Clipboard($"[{time}] {SpeakerName}: {text}");
+    }
 }
