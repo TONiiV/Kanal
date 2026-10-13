@@ -6,6 +6,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Local transcription runs (ADR 0053, slice C-5)
+
+`PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
+is available when a transcription model and a translation model are downloaded. *Local · Cloud*
+stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
+is removed.
+
+- **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
+  the planner uses it too. The mode row says "not downloaded" until every part is on disk.
+- **A saved model id that the catalog no longer lists is the recommended model.** The planner does
+  not report an unknown model. A saved 160 ms or 1120 ms id therefore works after the catalog drops
+  those models. The two "unknown transcription model" strings are removed.
+- **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
+  Each load has its own status line. A failed load of either model stops the Start.
+
 ### The ruler draws one tick per sentence
 
 Part of #103.
@@ -14,6 +29,7 @@ Part of #103.
 - A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
 - The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
 - When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
+
 ### Nemotron provider (ADR 0053, slice C-4)
 
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
