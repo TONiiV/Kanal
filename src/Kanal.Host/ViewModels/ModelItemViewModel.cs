@@ -27,21 +27,22 @@ public partial class ModelItemViewModel : ViewModelBase
 
     public ModelItemViewModel(LocalModelInfo model, ModelDownloadManager downloads)
         : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
-            model.LicenseNote, [model], downloads, transcription: false)
+            model.LicenseNote, [model], downloads, transcription: false, model.SizeBytes)
     {
     }
 
     public ModelItemViewModel(AsrModelInfo model, ModelDownloadManager downloads)
         : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
-            model.LicenseNote, model.Parts, downloads, transcription: true)
+            model.LicenseNote, model.Parts, downloads, transcription: true, model.SizeBytes)
     {
     }
 
     private ModelItemViewModel(
         string id, string name, string parameters, string size, string license, string? licenseNote,
-        IReadOnlyList<IDownloadableFile> parts, ModelDownloadManager downloads, bool transcription)
+        IReadOnlyList<IDownloadableFile> parts, ModelDownloadManager downloads, bool transcription, long sizeBytes)
     {
         _transcription = transcription;
+        SizeBytes = sizeBytes;
         ModelId = id;
         _name = name;
         _meta = $"{parameters} · {size} · {license}";
@@ -54,6 +55,8 @@ public partial class ModelItemViewModel : ViewModelBase
     public bool IsLocal => _downloads is not null;
 
     public string? ModelId { get; }
+
+    public long SizeBytes { get; }
 
     public string DisplayName => _name ?? Localizer.Instance["settings.model.none"];
 

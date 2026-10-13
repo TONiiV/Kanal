@@ -100,6 +100,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ModelRows ModelRows { get; }
 
+    public DownloadTray DownloadTray { get; }
+
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
@@ -203,6 +205,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _loadSettings = loadSettings;
         _downloads = downloads;
         ModelRows = new ModelRows(downloads());
+        DownloadTray = new DownloadTray(ModelRows);
         foreach (var row in ModelRows.Translation.Concat(ModelRows.Transcription))
         {
             row.PropertyChanged += (_, e) =>

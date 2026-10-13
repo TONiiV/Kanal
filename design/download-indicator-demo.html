@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download Indicator Demo</title>
+<style>
+  :root {
+    --sheet: #f6f5f8; --panel: #ffffff; --ink: #1d1b22; --ink2: #5b5866; --ink3: #8d8a96;
+    --line: #e3e1e8; --brand: #5b4fc9; --brand-soft: #e8e5fa; --ok: #2f8a57; --alarm: #c4413a;
+    --track: #e3e1e8; --shadow: 0 2px 10px rgba(20,16,40,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sheet: #16151a; --panel: #211f27; --ink: #ece9f2; --ink2: #b4b0bf; --ink3: #7f7b8a;
+      --line: #34313d; --brand: #9d93ff; --brand-soft: #2c2847; --ok: #5cc48a; --alarm: #ef7a72;
+      --track: #3a3744; --shadow: 0 2px 12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --sheet: #16151a; --panel: #211f27; --ink: #ece9f2; --ink2: #b4b0bf; --ink3: #7f7b8a;
+    --line: #34313d; --brand: #9d93ff; --brand-soft: #2c2847; --ok: #5cc48a; --alarm: #ef7a72;
+    --track: #3a3744; --shadow: 0 2px 12px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sheet); color: var(--ink);
+         font: 14px/1.5 "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.note { color: var(--ink2); margin: 0 0 16px; }
+
+  /* mock host window */
+  .window { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+  .titlebar { height: 36px; display: flex; align-items: center; padding: 0 12px; gap: 8px; border-bottom: 1px solid var(--line); color: var(--ink2); font-size: 12px; }
+  .body { display: grid; grid-template-columns: 56px 1fr; min-height: 300px; }
+  .iconbar { border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 10px; }
+  .iconbar .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--ink2); }
+  .content { padding: 16px; color: var(--ink3); }
+  .statusbar { height: 40px; border-top: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; gap: 8px; }
+  .statusbar .status { color: var(--ink2); font-size: 12px; flex: 1; }
+  .tray { display: flex; gap: 6px; align-items: center; }
+
+  /* the indicator */
+  .dl { --p: 0; height: 28px; min-width: 28px; border-radius: 14px; display: inline-flex; align-items: center;
+        background: transparent; border: 1px solid transparent; cursor: default; position: relative;
+        transition: background .18s, border-color .18s, max-width .22s ease, opacity .3s, transform .3s;
+        max-width: 28px; overflow: hidden; flex-direction: row-reverse; }
+  .dl.entering { opacity: 0; transform: scale(.6); }
+  .dl.leaving { opacity: 0; transform: scale(.6); }
+  .dl:hover, .dl:focus-within { max-width: 340px; background: var(--panel); border-color: var(--line); box-shadow: var(--shadow); }
+  .ring { flex: none; width: 26px; height: 26px; position: relative; display: grid; place-items: center; }
+  .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring .trk { stroke: var(--track); }
+  .ring .bar { stroke: var(--brand); stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .2s; }
+  .dl.done .ring .bar { stroke: var(--ok); }
+  .dl.failed .ring .bar, .dl.failed .ring .trk { stroke: var(--alarm); }
+  .dl.cancelled .ring .bar { stroke: var(--ink3); }
+  .glyph, .x { position: relative; font-size: 11px; line-height: 1; transition: opacity .12s; }
+  .glyph { color: var(--brand); font-weight: 600; }
+  .dl.done .glyph { color: var(--ok); }
+  .dl.failed .glyph { color: var(--alarm); }
+  .dl.cancelled .glyph { color: var(--ink3); }
+  .x { position: absolute; opacity: 0; border: 0; background: none; color: var(--ink); width: 26px; height: 26px; border-radius: 13px; cursor: pointer; font-size: 13px; }
+  .dl.running:hover .glyph, .dl.running:focus-within .glyph { opacity: 0; }
+  .dl.running:hover .x, .dl.running:focus-within .x { opacity: 1; }
+  .x:hover { background: var(--brand-soft); }
+  .info { white-space: nowrap; padding: 0 6px 0 12px; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
+  .info .name { color: var(--ink); font-weight: 600; }
+  .info .meta { color: var(--ink2); font-variant-numeric: tabular-nums; }
+  .dl.failed .info .meta { color: var(--alarm); }
+
+  /* controls */
+  .controls { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .controls button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+  .controls button:hover { border-color: var(--brand); }
+  ul.spec { color: var(--ink2); padding-left: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>后台下载指示器（Demo）</h1>
+  <p class="note">关闭设置后，正在下载的模型在状态栏右侧显示为小圆环。鼠标悬停：圆环中心变成 ×，横向展开，显示模型名和进度。点 × 取消。</p>
+
+  <div class="window">
+    <div class="titlebar">Kanal</div>
+    <div class="body">
+      <div class="iconbar"><div class="ico">⚙</div><div class="ico">🎙</div></div>
+      <div class="content">会议内容区域</div>
+    </div>
+    <div class="statusbar">
+      <span class="status">准备就绪</span>
+      <div class="tray" id="tray"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button data-add="asr">开始：转写模型（Nemotron 3.5 · 682 MB）</button>
+    <button data-add="mt">开始：翻译模型（Qwen 7B · 4.4 GB）</button>
+    <button data-add="dia">开始：分离模型（pyannote + CAM++ · 34 MB）</button>
+    <button id="fail">让第一个失败</button>
+    <button id="theme">切换深色 / 浅色</button>
+  </div>
+
+  <ul class="spec">
+    <li><b>下载中：</b>紫色圆环表示进度。中心字母表示种类：转=转写，译=翻译，分=分离。</li>
+    <li><b>悬停：</b>圆环留在原位并变成 ×（在最右侧，鼠标不用移动），信息向左展开，显示"模型名 · 42% · 286 / 682 MB"。点 × 取消。</li>
+    <li><b>完成：</b>圆环变绿，显示 ✓，3 秒后自动消失。</li>
+    <li><b>取消：</b>圆环变灰，2 秒后自动消失。</li>
+    <li><b>失败：</b>圆环变红，显示 !，悬停显示原因；8 秒后自动消失（设置里仍可重试）。</li>
+    <li>多个下载并排显示，每个一个圆环。</li>
+  </ul>
+</main>
+
+<script>
+const R = 11, C = 2 * Math.PI * R;
+const models = {
+  asr: { name: "Nemotron 3.5 转写", glyph: "转", mb: 682, speed: 9 },
+  mt:  { name: "Qwen 7B 翻译", glyph: "译", mb: 4400, speed: 40 },
+  dia: { name: "说话人分离", glyph: "分", mb: 34, speed: 1.2 },
+};
+const tray = document.getElementById("tray");
+const live = [];
+
+function add(kind) {
+  const m = models[kind];
+  const el = document.createElement("div");
+  el.className = "dl running entering";
+  el.tabIndex = 0;
+  el.innerHTML = `
+    <div class="ring">
+      <svg width="26" height="26" viewBox="0 0 26 26">
+        <circle class="trk" cx="13" cy="13" r="${R}" fill="none" stroke-width="2.5"/>
+        <circle class="bar" cx="13" cy="13" r="${R}" fill="none" stroke-width="2.5"
+                stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
+      </svg>
+      <span class="glyph">${m.glyph}</span>
+      <button class="x" title="取消下载" aria-label="取消 ${m.name} 下载">✕</button>
+    </div>
+    <div class="info"><span class="name">${m.name}</span><span class="meta"></span></div>`;
+  tray.prepend(el);
+  requestAnimationFrame(() => el.classList.remove("entering"));
+  const d = { el, m, done: 0, state: "running" };
+  el.querySelector(".x").onclick = () => finish(d, "cancelled");
+  live.push(d);
+  render(d);
+}
+
+function render(d) {
+  const p = Math.min(1, d.done / d.m.mb);
+  d.el.querySelector(".bar").style.strokeDashoffset = C * (1 - (d.state === "failed" ? 1 : p));
+  const meta = d.el.querySelector(".meta");
+  if (d.state === "running") meta.textContent = `${Math.floor(p * 100)}% · ${Math.floor(d.done)} / ${d.m.mb} MB`;
+  if (d.state === "done") meta.textContent = "已完成";
+  if (d.state === "cancelled") meta.textContent = "已取消";
+  if (d.state === "failed") meta.textContent = "失败：网络中断";
+}
+
+function finish(d, state) {
+  if (d.state !== "running") return;
+  d.state = state;
+  d.el.classList.remove("running");
+  d.el.classList.add(state);
+  d.el.querySelector(".glyph").textContent = { done: "✓", cancelled: "–", failed: "!" }[state];
+  render(d);
+  const wait = { done: 3000, cancelled: 2000, failed: 8000 }[state];
+  setTimeout(() => {
+    d.el.classList.add("leaving");
+    setTimeout(() => d.el.remove(), 300);
+    live.splice(live.indexOf(d), 1);
+  }, wait);
+}
+
+setInterval(() => {
+  for (const d of live) {
+    if (d.state !== "running") continue;
+    d.done += d.m.speed * (0.6 + Math.random() * 0.8);
+    if (d.done >= d.m.mb) { d.done = d.m.mb; finish(d, "done"); } else render(d);
+  }
+}, 100);
+
+document.querySelectorAll("[data-add]").forEach(b => b.onclick = () => add(b.dataset.add));
+document.getElementById("fail").onclick = () => { const d = live.find(x => x.state === "running"); if (d) finish(d, "failed"); };
+document.getElementById("theme").onclick = () => {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+};
+add("asr"); add("dia");
+</script>
+</body>
+</html>
