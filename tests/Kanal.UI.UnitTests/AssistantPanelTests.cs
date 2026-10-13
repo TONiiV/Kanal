@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Kanal.Core.Insights;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Core.Providers.Testing;
 using Kanal.Core.Room;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -56,6 +57,157 @@ public class AssistantPanelTests
 
         vm.Record(Insight("i1", InsightKind.Point, "Delivery", "u1"));
         Assert.False(vm.ShowNothingFoundYet);
+    }
+
+    private sealed class OnePointPerWindow : IMeetingAgent
+    {
+        public string Id => "test-agent";
+
+        public MeetingAgentCapabilities Caps { get; } = new(new HashSet<InsightKind> { InsightKind.Point });
+
+        public Task<IReadOnlyList<MeetingInsight>> ProposeAsync(MeetingAgentWindow window, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<MeetingInsight>>(
+                [new("", InsightKind.Point, "Lieferung", "Termin vor Ende August", [window.Finals[0].Id])]);
+    }
+
+    private static MainViewModel DemoWith(IMeetingAgent? agent)
+    {
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(partialInterval: TimeSpan.FromMilliseconds(5), loop: true),
+            Agent = agent,
+        };
+        return vm;
+    }
+
+    private static async Task PumpUntilAsync(Func<bool> condition)
+    {
+        var deadline = Environment.TickCount64 + 15_000;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline)
+                throw new TimeoutException("Condition not met in time.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task AConnectedAgentsCandidatesAppearInThePanelWhileTheMeetingRuns()
+    {
+        var vm = DemoWith(new OnePointPerWindow());
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.True(vm.Assistant.IsAnalystConnected);
+        await PumpUntilAsync(() => vm.Assistant.Topics.Count > 0);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        var topic = Assert.Single(vm.Assistant.Topics);
+        Assert.Equal("Lieferung", topic.Topic);
+        Assert.All(topic.Items, item => Assert.True(item.IsCandidate));
+        Assert.True(vm.Assistant.IsAnalystConnected);
+    }
+
+    private sealed class GatedTranslator(SemaphoreSlim model) : IMtProvider
+    {
+        public int Requested;
+        public int Cancelled;
+
+        public string Id => "gated-mt";
+
+        public async Task<IReadOnlyDictionary<string, string>> TranslateAsync(
+            string text, string from, IReadOnlyList<string> to, IReadOnlyList<Utterance> context, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Requested);
+            try
+            {
+                await model.WaitAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Increment(ref Cancelled);
+                throw;
+            }
+
+            try
+            {
+                return to.ToDictionary(lang => lang, lang => $"[{lang}] {text}");
+            }
+            finally
+            {
+                model.Release();
+            }
+        }
+    }
+
+    private sealed class ModelHoldingAgent(SemaphoreSlim model) : IMeetingAgent
+    {
+        public volatile bool Holding;
+
+        public string Id => "model-holder";
+
+        public MeetingAgentCapabilities Caps { get; } = new(new HashSet<InsightKind> { InsightKind.Point });
+
+        public async Task<IReadOnlyList<MeetingInsight>> ProposeAsync(MeetingAgentWindow window, CancellationToken ct)
+        {
+            await model.WaitAsync(ct);
+            try
+            {
+                Holding = true;
+                await Task.Delay(Timeout.Infinite, ct);
+                return [];
+            }
+            finally
+            {
+                model.Release();
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task StopEndsTheAgentCallBeforeTheLastTranslationsAreDrained()
+    {
+        var model = new SemaphoreSlim(1, 1);
+        var translator = new GatedTranslator(model);
+        var agent = new ModelHoldingAgent(model);
+        var vm = TestViewModels.Demo();
+        vm.PlanFilter = plan => plan with
+        {
+            Asr = new FakeAsrProvider(partialInterval: TimeSpan.FromMilliseconds(5), loop: true),
+            Mt = translator,
+            Agent = agent,
+        };
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpUntilAsync(() => agent.Holding);
+        var before = Volatile.Read(ref translator.Requested);
+        await PumpUntilAsync(() => Volatile.Read(ref translator.Requested) > before);
+        await vm.StopCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, Volatile.Read(ref translator.Cancelled));
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutAnAgentTheMeetingRunsAndThePanelSaysNoneIsConnected()
+    {
+        var vm = DemoWith(null);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.Assistant.IsAnalystConnected);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public void ANewMeetingStartsWithNoAnalystUntilOneIsConnected()
+    {
+        var vm = Following("u1");
+        vm.IsAnalystConnected = true;
+
+        vm.Forget();
+
+        Assert.False(vm.IsAnalystConnected);
     }
 
     [Fact]

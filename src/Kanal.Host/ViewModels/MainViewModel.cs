@@ -14,6 +14,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Kanal.Audio;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Insights;
 using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
@@ -91,6 +92,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Column the operator has picked up, or -1. Set by the header's drag handler.</summary>
     private int _dragSource = -1;
     private IMeetingTitler? _titler;
+    private MeetingAgentRunner? _agentRunner;
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
     private readonly Func<Action, Task> _offUiThread;
     private string? _titleOnRecord;
@@ -1346,6 +1348,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _relay = relayConnection.Publisher;
         _session = session;
         Assistant.Follow(session.Room);
+        if (plan.Agent is { } agent)
+        {
+            var room = session.Room;
+            _agentRunner = new MeetingAgentRunner(
+                room,
+                agent,
+                insight => Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(_session?.Room, room))
+                        Assistant.Record(insight);
+                }),
+                L.Current);
+            Assistant.IsAnalystConnected = true;
+        }
         _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
             ? new MeetingAttestation(profile.Profile, confirmedAt)
             : null;
@@ -1430,6 +1446,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
             await StopCaptureAsync();
+            // Before the session drains: its last translations wait on the model an agent call may hold.
+            await StopAgentAsync();
 
             if (_session is not null)
             {
@@ -1482,8 +1500,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _mt = null;
         // The titler shares the translator's generator, which is freed just below.
         _titler = null;
+        // The agent shares that generator too, so its last call has to end before the weights go.
+        await StopAgentAsync();
         await DisposeAnyAsync(mt);
         await DisposeAnyAsync(asr);
+    }
+
+    private async Task StopAgentAsync()
+    {
+        var runner = _agentRunner;
+        _agentRunner = null;
+        if (runner is not null)
+            await runner.DisposeAsync();
     }
 
     private static async Task DisposeAnyAsync(object? provider)

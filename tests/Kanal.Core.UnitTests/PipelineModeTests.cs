@@ -301,12 +301,14 @@ public class PipelineModeTests
         var local = PipelinePlanner.Plan(
             PipelineMode.Of(PipelineModeId.Demo), settings, new ModelDownloadManager(dir), NoKey);
         Assert.NotNull(local.Titler);
+        Assert.Null(local.Agent);
         (local.Mt as IDisposable)?.Dispose();
 
         var (empty, _) = TempDownloads();
         var scripted = PipelinePlanner.Plan(
             PipelineMode.Of(PipelineModeId.Demo), settings, empty, NoKey);
         Assert.Null(scripted.Titler);
+        Assert.Null(scripted.Agent);
 
         Directory.Delete(dir, recursive: true);
     }

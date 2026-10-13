@@ -2,6 +2,7 @@
 
 状态：2026-09-07 新增需求，讨论中；不作为 provider 接入或权限边界的已批准实现规格。
 已完成 UI 基线见 [会议工作空间](meeting-workspace.md)。
+旁听 Agent 的抽象层与 A1–A4 的推荐答案见 [ADR 0058](../adr/0058-meeting-agent.md)（proposed）。
 
 ## 已确认目标
 
