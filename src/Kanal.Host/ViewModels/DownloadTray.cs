@@ -81,10 +81,12 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
 
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ModelItemViewModel.Progress) or nameof(ModelItemViewModel.Error))
+        if (e.PropertyName is nameof(ModelItemViewModel.Progress) or nameof(ModelItemViewModel.Error)
+            or nameof(ModelItemViewModel.DisplayName))
         {
             OnPropertyChanged(nameof(RingSweep));
             OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(CancelLabel));
         }
     }
 }
