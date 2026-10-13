@@ -38,6 +38,19 @@ public class TempRingShots(ITestOutputHelper output)
         output.WriteLine($"after={window.RenderScaling} raised={(raise is not null)}");
     }
 
+    private static uint Crc32(string text)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var b in System.Text.Encoding.ASCII.GetBytes(text))
+        {
+            crc ^= b;
+            for (var k = 0; k < 8; k++)
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+
+        return ~crc;
+    }
+
     private void Dump(string name, Window window)
     {
         var frame = window.CaptureRenderedFrame();
@@ -49,7 +62,13 @@ public class TempRingShots(ITestOutputHelper output)
 
         using var stream = new MemoryStream();
         frame.Save(stream);
-        output.WriteLine($"SHOT {name} {frame.PixelSize.Width}x{frame.PixelSize.Height} {Convert.ToBase64String(stream.ToArray())}");
+        var base64 = Convert.ToBase64String(stream.ToArray());
+        output.WriteLine($"SHOT {name} {frame.PixelSize.Width}x{frame.PixelSize.Height} chars={base64.Length}");
+        for (var i = 0; i * 64 < base64.Length; i++)
+        {
+            var chunk = base64.Substring(i * 64, Math.Min(64, base64.Length - i * 64));
+            output.WriteLine($"B64 {i:D2} {Crc32(chunk):x8} {chunk}");
+        }
     }
 
     [AvaloniaFact]
