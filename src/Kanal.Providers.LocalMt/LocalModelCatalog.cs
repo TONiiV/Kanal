@@ -41,7 +41,7 @@ public static class LocalModelCatalog
     /// 40 s and an empty translation; reasoning skipped, 1 s and a usable one. Note that the
     /// documented <c>/no_think</c> marker did <em>not</em> work: the model reasoned anyway.
     /// </summary>
-    private const string QwenNoThink = "<think>\n\n</think>\n\n";
+    public const string QwenNoThink = "<think>\n\n</think>\n\n";
 
     public static IReadOnlyList<LocalModelInfo> Models { get; } =
     [

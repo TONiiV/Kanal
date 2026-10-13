@@ -4,6 +4,50 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-14
+
+### Local translation benchmark
+
+`tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
+because it needs the model files and the local hardware.
+
+It sends 12 meeting sentences (4 each in zh, de and pl) through the production path:
+`LlamaSharpMtProvider` → `LlamaSharpTextGenerator` → llama.cpp. Each sentence goes to the two other
+languages. The report gives, per model:
+
+- the load time of the weights;
+- the mean sentence chrF against the reference translations in `Corpus.cs`;
+- how many translations keep every part number (`KB-4471`, `X5CrNi18-10`, `IP67`) verbatim;
+- script leaks (CJK in a de/pl output, no CJK in a zh output) and empty outputs;
+- for N parallel streams, the average and p95 latency per utterance and the throughput.
+
+N parallel streams copy a meeting where finals arrive while earlier finals still translate. The
+generator serializes all requests, so the latency at N = 4 shows the queue.
+
+Run it:
+
+1. Download the models in Kanal Settings, or download other GGUF files.
+2. `dotnet run -c Release --project tests/Kanal.Benchmark`
+3. Add `-- --gguf <file>` for an extra model, or `--gguf-nothink <file>` for a Qwen3 reasoning model.
+4. Add `-- --streams 1,2,4,8` to change the stream levels.
+5. Add `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` to compare a GPU backend with the CPU.
+
+The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
+
+Smaller candidates to measure (HF API, 2026-10-14):
+
+| Model | GGUF file | Size | Licence | Note |
+|---|---|---:|---|---|
+| Hy-MT2 1.8B | `tencent/Hy-MT2-1.8B-GGUF` · `Hy-MT2-1.8B-Q4_K_M.gguf` | 1.13 GB | Apache-2.0 | Dedicated MT model, zh/de/pl. Newer than the llama.cpp in LLamaSharp 0.27.0: check that it loads. |
+| HY-MT1.5 1.8B | `tencent/HY-MT1.5-1.8B-GGUF` · `HY-MT1.5-1.8B-Q4_K_M.gguf` | 1.13 GB | check LICENSE | Same architecture (`hunyuan-dense`), older GGUF. |
+| Qwen3.5 0.8B | `unsloth/Qwen3.5-0.8B-GGUF` · `Qwen3.5-0.8B-Q4_K_M.gguf` | 0.53 GB | Apache-2.0 | No reasoning by default. Speed floor; Polish expected weak. |
+| Qwen3 1.7B | `unsloth/Qwen3-1.7B-GGUF` · `Qwen3-1.7B-Q4_K_M.gguf` | 1.11 GB | Apache-2.0 | Reasoning model: use `--gguf-nothink`. |
+
+Rejected: LFM2.5 1.2B, SmolLM3 3B and Llama 3.2 1B do not support Polish. TranslateGemma has no model
+below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
+
+---
+
 ## 2026-10-13
 
 ### Pin to Points
