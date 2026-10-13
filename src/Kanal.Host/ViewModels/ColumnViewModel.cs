@@ -13,10 +13,10 @@ public partial class ColumnViewModel : ViewModelBase
     private BubbleViewModel? _jumpTarget;
 
     private readonly Func<string, Task>? _clipboard;
-    private readonly Action<BubbleViewModel>? _pin;
+    private readonly Action<BubbleViewModel, string>? _pin;
 
     public ColumnViewModel(
-        string language, Func<string, Task>? clipboard = null, Action<BubbleViewModel>? pin = null)
+        string language, Func<string, Task>? clipboard = null, Action<BubbleViewModel, string>? pin = null)
     {
         _clipboard = clipboard;
         _pin = pin;

@@ -36,46 +36,23 @@ public class TranscriptCopyTests
     }
 
     [AvaloniaFact]
-    public void CopyTakesTheSelectionWhenThereIsOne()
+    public void CopyWritesTheTextTheMenuGivesIt()
     {
         var (bubble, clipboard) = Spoken();
-        bubble.SelectedText = "Bauteil";
 
-        bubble.CopyCommand.Execute(null);
+        bubble.CopyCommand.Execute("Bauteil");
 
         Assert.Equal(["Bauteil"], clipboard.Written);
     }
 
     [AvaloniaFact]
-    public void CopyTakesTheSelectionOfTheSourceLineToo()
-    {
-        var (bubble, clipboard) = Spoken();
-        bubble.SelectedSourceText = "零件";
-
-        bubble.CopyCommand.Execute(null);
-
-        Assert.Equal(["零件"], clipboard.Written);
-    }
-
-    [AvaloniaFact]
-    public void CopyTakesTheWholeLineWhenNothingIsSelected()
+    public void CopyWithSpeakerAndTimeWritesTheGivenTextBehindSpeakerAndTime()
     {
         var (bubble, clipboard) = Spoken();
 
-        bubble.CopyCommand.Execute(null);
+        bubble.CopyWithSpeakerCommand.Execute("零件不合适。");
 
-        Assert.Equal(["Das Bauteil passt nicht."], clipboard.Written);
-    }
-
-    [AvaloniaFact]
-    public void CopyWithSpeakerAndTimeWritesTheColumnLanguageLine()
-    {
-        var (bubble, clipboard) = Spoken();
-        bubble.SelectedText = "Bauteil";
-
-        bubble.CopyWithSpeakerCommand.Execute(null);
-
-        Assert.Equal(["[01:02:03] Anna: Das Bauteil passt nicht."], clipboard.Written);
+        Assert.Equal(["[01:02:03] Anna: 零件不合适。"], clipboard.Written);
     }
 
     [AvaloniaFact]
@@ -89,24 +66,9 @@ public class TranscriptCopyTests
         };
 
         var columns = StoredTranscript.Columns(utterances, ["zh", "de"], clipboard.Write);
-        columns[1].Bubbles[0].CopyWithSpeakerCommand.Execute(null);
+        columns[1].Bubbles[0].CopyWithSpeakerCommand.Execute("Das Bauteil passt nicht.");
 
         Assert.Equal(["[00:01:05] s1: Das Bauteil passt nicht."], clipboard.Written);
-    }
-
-    [AvaloniaFact]
-    public void ALiveRoomCopiesThroughTheClipboardSeamOfTheViewModel()
-    {
-        var clipboard = new FakeClipboard();
-        var vm = TestViewModels.Hermetic();
-        vm.WriteClipboard = clipboard.Write;
-        vm.Columns.Add(new ColumnViewModel("de", vm.WriteClipboard));
-        var bubble = vm.Columns[0].GetOrAdd("u1");
-        bubble.Text = "Hallo";
-
-        bubble.CopyCommand.Execute(null);
-
-        Assert.Equal(["Hallo"], clipboard.Written);
     }
 
     private static void Settle(Window window)
@@ -118,11 +80,13 @@ public class TranscriptCopyTests
         }
     }
 
-    private static (Window Window, List<SelectableTextBlock> Blocks) Shown()
+    private static (Window Window, List<SelectableTextBlock> Blocks, FakeClipboard Clipboard) Shown()
     {
+        var clipboard = new FakeClipboard();
         var vm = TestViewModels.Hermetic();
-        vm.Columns.Add(new ColumnViewModel("de"));
+        vm.Columns.Add(new ColumnViewModel("de", clipboard.Write));
         var bubble = vm.Columns[0].GetOrAdd("u1");
+        bubble.SpeakerName = "Anna";
         bubble.Text = "Das Bauteil passt nicht.";
         bubble.SourceText = "零件不合适。";
         bubble.IsPartial = false;
@@ -131,13 +95,13 @@ public class TranscriptCopyTests
         window.Show();
         Settle(window);
         var blocks = window.GetVisualDescendants().OfType<SelectableTextBlock>().ToList();
-        return (window, blocks);
+        return (window, blocks, clipboard);
     }
 
     [AvaloniaFact]
     public void TheTranslationAndTheSourceLineAreSelectable()
     {
-        var (window, blocks) = Shown();
+        var (window, blocks, _) = Shown();
 
         Assert.Contains(blocks, b => b.Text == "Das Bauteil passt nicht.");
         Assert.Contains(blocks, b => b.Text == "零件不合适。");
@@ -147,7 +111,7 @@ public class TranscriptCopyTests
     [AvaloniaFact]
     public void EveryLineCarriesTheSharedMenuWithTheCopyItems()
     {
-        var (window, blocks) = Shown();
+        var (window, blocks, _) = Shown();
         Assert.Equal(2, blocks.Count);
 
         foreach (var block in blocks)
@@ -167,7 +131,7 @@ public class TranscriptCopyTests
     [AvaloniaFact]
     public void OpeningTheMenuOnALineBindsItsItemsToThatUtterance()
     {
-        var (window, blocks) = Shown();
+        var (window, blocks, _) = Shown();
         var block = blocks[0];
         var bubble = Assert.IsType<BubbleViewModel>(block.DataContext);
         var flyout = Assert.IsType<MenuFlyout>(block.ContextFlyout);
@@ -182,29 +146,62 @@ public class TranscriptCopyTests
         window.Close();
     }
 
-    [AvaloniaFact]
-    public void SelectingInALineReachesTheUtteranceViewModel()
+    private static List<MenuItem> OpenMenuOn(Window window, SelectableTextBlock line)
     {
-        var (window, blocks) = Shown();
-        var translation = blocks.Single(b => b.Text == "Das Bauteil passt nicht.");
-        var source = blocks.Single(b => b.Text == "零件不合适。");
-        var bubble = Assert.IsType<BubbleViewModel>(translation.DataContext);
+        var flyout = Assert.IsType<MenuFlyout>(line.ContextFlyout);
+        flyout.ShowAt(line);
+        Settle(window);
+        return flyout.Items.OfType<MenuItem>().ToList();
+    }
 
+    [AvaloniaFact]
+    public void TheMenuGivesItsItemsTheSelectionOfTheLineItOpenedOn()
+    {
+        var (window, blocks, clipboard) = Shown();
+        var translation = blocks.Single(b => b.Text == "Das Bauteil passt nicht.");
         translation.SelectionStart = 4;
         translation.SelectionEnd = 11;
-        source.SelectionStart = 0;
-        source.SelectionEnd = 2;
-        Settle(window);
 
-        Assert.Equal("Bauteil", bubble.SelectedText);
-        Assert.Equal("零件", bubble.SelectedSourceText);
+        var items = OpenMenuOn(window, translation);
+        var copy = items.Single(i => i.Name == "CopyLine");
+        copy.Command!.Execute(copy.CommandParameter);
+
+        Assert.Equal(["Bauteil"], clipboard.Written);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheMenuGivesItsItemsTheWholeTranslationLineWhenNothingIsSelected()
+    {
+        var (window, blocks, clipboard) = Shown();
+        var translation = blocks.Single(b => b.Text == "Das Bauteil passt nicht.");
+
+        var items = OpenMenuOn(window, translation);
+        var copy = items.Single(i => i.Name == "CopyWithSpeaker");
+        copy.Command!.Execute(copy.CommandParameter);
+
+        Assert.Equal(["[00:00:00] Anna: Das Bauteil passt nicht."], clipboard.Written);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheMenuGivesItsItemsTheSourceLineWhenItOpenedOnTheSourceLine()
+    {
+        var (window, blocks, clipboard) = Shown();
+        var source = blocks.Single(b => b.Text == "零件不合适。");
+
+        var items = OpenMenuOn(window, source);
+        var copy = items.Single(i => i.Name == "CopyLine");
+        copy.Command!.Execute(copy.CommandParameter);
+
+        Assert.Equal(["零件不合适。"], clipboard.Written);
         window.Close();
     }
 
     [AvaloniaFact]
     public void CtrlASelectsTheWholeFocusedLine()
     {
-        var (window, blocks) = Shown();
+        var (window, blocks, _) = Shown();
         var translation = blocks.Single(b => b.Text == "Das Bauteil passt nicht.");
 
         translation.Focus();

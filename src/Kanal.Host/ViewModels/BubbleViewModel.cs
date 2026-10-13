@@ -33,6 +33,7 @@ public partial class BubbleViewModel : ViewModelBase
     private string _sourceText = "";
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PinCommand))]
     private bool _isPartial = true;
 
     /// <summary>True in the column whose language was spoken — the text is a transcript, not a translation.</summary>
@@ -41,6 +42,7 @@ public partial class BubbleViewModel : ViewModelBase
 
     /// <summary>True while a non-source column waits for its translation; the body shows a muted ellipsis.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PinCommand))]
     private bool _awaitingTranslation;
 
     [ObservableProperty]
@@ -60,29 +62,20 @@ public partial class BubbleViewModel : ViewModelBase
 
     public long StartMs { get; set; }
 
-    [ObservableProperty]
-    private string _selectedText = "";
-
-    [ObservableProperty]
-    private string _selectedSourceText = "";
-
     internal Func<string, Task> Clipboard { get; init; } = _ => Task.CompletedTask;
 
     [RelayCommand]
-    private Task Copy() => Clipboard(
-        !string.IsNullOrEmpty(SelectedText) ? SelectedText
-        : !string.IsNullOrEmpty(SelectedSourceText) ? SelectedSourceText
-        : Text);
+    private Task Copy(string text) => Clipboard(text);
 
     [RelayCommand]
-    private Task CopyWithSpeaker() => Clipboard($"[{Clock(StartMs)}] {SpeakerName}: {Text}");
+    private Task CopyWithSpeaker(string text) => Clipboard($"[{Clock(StartMs)}] {SpeakerName}: {text}");
 
-    internal Action<BubbleViewModel>? PinHandler { get; init; }
+    internal Action<BubbleViewModel, string>? PinHandler { get; init; }
 
     [RelayCommand(CanExecute = nameof(CanPin))]
-    private void Pin() => PinHandler?.Invoke(this);
+    private void Pin(string text) => PinHandler?.Invoke(this, text);
 
-    private bool CanPin() => PinHandler is not null;
+    private bool CanPin() => PinHandler is not null && !IsPartial && !AwaitingTranslation;
 
     internal static string Clock(long ms) =>
         TimeSpan.FromMilliseconds(Math.Max(0, ms)).ToString(@"hh\:mm\:ss");

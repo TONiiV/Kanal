@@ -26,6 +26,17 @@ public partial class MeetingRoomView : UserControl
     {
         InitializeComponent();
         _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.OffersJump;
+        ((MenuFlyout)Resources["UtteranceMenu"]!).Opening += OnUtteranceMenuOpening;
+    }
+
+    private static void OnUtteranceMenuOpening(object? sender, EventArgs e)
+    {
+        if (sender is not MenuFlyout { Target: SelectableTextBlock line } menu)
+            return;
+
+        var text = string.IsNullOrEmpty(line.SelectedText) ? line.Text ?? "" : line.SelectedText;
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.CommandParameter = text;
     }
 
     protected override void OnDataContextChanged(EventArgs e)

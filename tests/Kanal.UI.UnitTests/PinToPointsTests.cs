@@ -103,21 +103,91 @@ public class PinToPointsTests
     public void ThePinCommandOfALineReachesTheHandlerAndNeedsOne()
     {
         var pinned = new List<string>();
-        var bubble = new ColumnViewModel("de", null, b => pinned.Add(b.UtteranceId)).GetOrAdd("u1");
+        var bubble = new ColumnViewModel("de", null, (b, text) => pinned.Add($"{b.UtteranceId}:{text}")).GetOrAdd("u1");
         var unwired = new ColumnViewModel("de").GetOrAdd("u1");
+        bubble.IsPartial = false;
+        unwired.IsPartial = false;
 
-        Assert.True(bubble.PinCommand.CanExecute(null));
-        bubble.PinCommand.Execute(null);
+        Assert.True(bubble.PinCommand.CanExecute("Hallo"));
+        bubble.PinCommand.Execute("Hallo");
 
-        Assert.Equal(["u1"], pinned);
-        Assert.False(unwired.PinCommand.CanExecute(null));
+        Assert.Equal(["u1:Hallo"], pinned);
+        Assert.False(unwired.PinCommand.CanExecute("Hallo"));
+    }
+
+    [AvaloniaFact]
+    public void ALineCannotBePinnedBeforeItIsFinalAndTranslated()
+    {
+        var bubble = new ColumnViewModel("de", null, (_, _) => { }).GetOrAdd("u1");
+        var changes = 0;
+        bubble.PinCommand.CanExecuteChanged += (_, _) => changes++;
+
+        Assert.False(bubble.PinCommand.CanExecute("x"));
+
+        bubble.IsPartial = false;
+        bubble.AwaitingTranslation = true;
+        Assert.False(bubble.PinCommand.CanExecute("x"));
+
+        bubble.AwaitingTranslation = false;
+        Assert.True(bubble.PinCommand.CanExecute("x"));
+        Assert.True(changes >= 2);
+    }
+
+    [AvaloniaFact]
+    public void ARenameAndAMergeReachThePinnedSpeaker()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.Assistant.Follow(RoomWith("u1"));
+        vm.Assistant.Pin("u1", "text");
+        string Attribution() => vm.Assistant.Topics.Single().Items.Single().Attribution!;
+        Assert.Equal("S01 · 00:00:00", Attribution());
+
+        vm.ApplySpeaker(new Speaker("S01", "Marek", [], RoomState.Palette[0]));
+        Assert.Equal("Marek · 00:00:00", Attribution());
+
+        vm.ApplySpeaker(new Speaker("S02", "Anna", ["S01"], RoomState.Palette[1]));
+        Assert.Equal("Anna · 00:00:00", Attribution());
+    }
+
+    [Fact]
+    public void ANewMeetingDropsThePinsOfTheOldOne()
+    {
+        var vm = Following("u1");
+        vm.Pin("u1", "text");
+
+        vm.Follow(RoomWith("u1"));
+
+        Assert.Empty(vm.Topics);
+    }
+
+    [AvaloniaFact]
+    public void ALanguageSwitchRelabelsThePinnedPoints()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var vm = TestViewModels.Hermetic();
+            vm.Assistant.Follow(RoomWith("u1"));
+            vm.Assistant.Pin("u1", "text");
+
+            Localizer.Instance.Current = "de";
+
+            var topic = vm.Assistant.Topics.Single();
+            Assert.Equal(Localizer.Instance["insight.pinned.heading"], topic.Topic);
+            Assert.Equal(Localizer.Instance["insight.pinned"], topic.Items.Single().KindLabel);
+            Assert.NotEqual("Pinned", topic.Topic);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
     }
 
     [AvaloniaFact]
     public void TheSharedMenuHasAPinItem()
     {
         var vm = TestViewModels.Hermetic();
-        vm.Columns.Add(new ColumnViewModel("de", null, _ => { }));
+        vm.Columns.Add(new ColumnViewModel("de", null, (_, _) => { }));
         vm.Columns[0].GetOrAdd("u1").Text = "Hallo";
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();

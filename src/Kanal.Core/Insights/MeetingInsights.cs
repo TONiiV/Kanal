@@ -32,7 +32,7 @@ public sealed class MeetingInsights(RoomState room)
     public MeetingInsight? Record(MeetingInsight insight)
     {
         var sources = insight.SourceUtteranceIds.Where(room.Contains).ToList();
-        if (sources.Count == 0)
+        if (sources.Count == 0 || insight.Topic == PinnedTopic)
             return null;
 
         var recorded = insight with { SourceUtteranceIds = sources, State = InsightState.Candidate };

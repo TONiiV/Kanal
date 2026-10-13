@@ -66,6 +66,19 @@ public class PinnedPointTests
     }
 
     [Fact]
+    public void AnAnalystCannotRecordIntoThePinnedTopic()
+    {
+        var insights = InsightsWith("u1");
+
+        var recorded = insights.Record(
+            new MeetingInsight("i1", InsightKind.Point, MeetingInsights.PinnedTopic, "analyst text", ["u1"]));
+
+        Assert.Null(recorded);
+        Assert.Empty(insights.Items);
+        Assert.NotNull(insights.Pin("u1", "pinned"));
+    }
+
+    [Fact]
     public void AnAnalystPointOnTheSameUtteranceDoesNotBlockAPin()
     {
         var insights = InsightsWith("u1");

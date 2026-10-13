@@ -280,6 +280,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 option.RefreshText();
             foreach (var option in CaptureProfiles)
                 option.RefreshText();
+            Assistant.Refresh();
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
@@ -2253,7 +2254,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private Task CopyToClipboard(string text) => WriteClipboard(text);
 
-    private void PinToPoints(BubbleViewModel bubble) => Assistant.Pin(bubble.UtteranceId, bubble.Text);
+    private void PinToPoints(BubbleViewModel bubble, string text) => Assistant.Pin(bubble.UtteranceId, text);
 
     private sealed record MeetingAttestation(
         CaptureProfile CaptureProfile,

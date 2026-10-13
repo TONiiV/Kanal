@@ -20,6 +20,12 @@ The transcript menu has a third item, **Pin to Points**. It adds the line to the
   and the time of the utterance, and the pinned text. Its cross button unpins. The list shows
   without a connected analyst when at least one point exists. `ShowNoAnalystNote` hides then.
 - **Menu.** `ColumnViewModel` takes a pin handler. A browsed transcript passes none, so the item is disabled.
+  The item gets the same `CommandParameter` as the copy items: the selection of the clicked line, or the whole line.
+  The pin keeps that text.
+- **Final lines only.** `CanPin` needs a final line (`!IsPartial`) with its translation (`!AwaitingTranslation`).
+  The pin text never updates, so a partial line or a "…" placeholder cannot be pinned.
+- **Reserved topic.** `MeetingInsights.Record` refuses the topic `PinnedTopic`. The topic alone marks a pin.
+- **Language switch.** `MainViewModel` calls `Assistant.Refresh()`, so the pinned labels change language.
 - **Not here.** "Ask the agent" waits for the meeting agent PR (#248).
 - **Tests.** `PinnedPointTests` (Core) and `PinToPointsTests` (UI).
 
@@ -31,14 +37,16 @@ The translation line and the source line of every utterance are selectable text.
   sizes, line heights and muted partial colour. Selection stays inside one line. It does not cross utterances.
 - **One shared menu.** The `UtteranceMenu` resource is a `MenuFlyout`. It replaces the default menu of the
   control. A new item is one `MenuItem` in the resource plus one command on `BubbleViewModel`.
-- **Copy.** It copies the selection. If nothing is selected, it copies the translation line of the column.
-  **Copy with speaker and time** writes `[hh:mm:ss] Speaker: text` for the language of the column.
-  The time is `TStartMs` of the utterance.
-- **Keys.** Ctrl+C and Ctrl+A are handled by the control itself.
-- **Clipboard seam.** `MainViewModel.WriteClipboard` is set by `MainWindow`. Columns pass it to bubbles.
+- **Menu text.** The `Opening` handler of the flyout reads the clicked line from `FlyoutBase.Target`.
+  It gives the selection of that line, or the whole line, to every item as `CommandParameter`.
+  A new item needs no code for this.
+- **Copy.** It copies the text of the menu. **Copy with speaker and time** writes
+  `[hh:mm:ss] Speaker: text` with the same text. The time is `TStartMs` of the utterance.
+- **Keys.** The control itself handles Ctrl+C and Ctrl+A.
+- **Clipboard seam.** `MainWindow` sets `MainViewModel.WriteClipboard`. Columns pass it to bubbles.
   Tests use a fake.
-- **Tests.** `TranscriptCopyTests`: selection versus whole line, the speaker-and-time format, the menu
-  items, the selection reaching the view model, and Ctrl+A.
+- **Tests.** `TranscriptCopyTests`: the text of the menu on the translation line and on the source line,
+  the speaker-and-time format, the menu items, and Ctrl+A.
 
 ### Download ring in the Settings model rows
 

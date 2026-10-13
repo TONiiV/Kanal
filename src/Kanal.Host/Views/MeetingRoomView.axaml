@@ -304,7 +304,6 @@
                                                     </StackPanel>
                                                     <SelectableTextBlock Classes="body" Text="{Binding Text}" TextWrapping="Wrap"
                                                                ContextFlyout="{StaticResource UtteranceMenu}"
-                                                               SelectedText="{Binding SelectedText, Mode=OneWayToSource}"
                                                                Classes.partial="{Binding IsPartial}"
                                                                Classes.pending="{Binding AwaitingTranslation}" />
                                                     <Border IsVisible="{Binding HasSource}" Margin="0,4,0,0"
@@ -312,7 +311,6 @@
                                                             BorderThickness="2,0,0,0" Padding="11,0,0,0">
                                                         <SelectableTextBlock Text="{Binding SourceText}" TextWrapping="Wrap"
                                                                    ContextFlyout="{StaticResource UtteranceMenu}"
-                                                                   SelectedText="{Binding SelectedSourceText, Mode=OneWayToSource}"
                                                                    FontSize="12.5" LineHeight="22"
                                                                    Foreground="{DynamicResource Ink3}" />
                                                     </Border>
