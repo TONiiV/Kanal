@@ -118,6 +118,25 @@ public class SpeakerManagementTests
     }
 
     [AvaloniaFact]
+    public void ARecolouredSpeakerRecoloursEveryRulerTickTheySpawned()
+    {
+        var vm = TestViewModels.Hermetic();
+        vm.ApplySpeaker(Person("S01"));
+        vm.ApplySpeaker(Person("S02"));
+        foreach (var (id, tag) in new[] { ("u1", "S01"), ("u2", "S01"), ("u3", "S02") })
+        {
+            vm.Ruler.Observe(new Utterance(id, tag, 0, 900, "zh", id, 1, UtteranceState.Final, false, 1.0,
+                new Dictionary<string, string>()));
+        }
+
+        vm.ApplySpeaker(new Speaker("S01", null, [], RoomState.Palette[5]));
+
+        Assert.Equal(
+            [RoomState.Palette[5], RoomState.Palette[5], RoomState.Palette[0]],
+            vm.Ruler.Ticks.Select(t => t.SpeakerColor));
+    }
+
+    [AvaloniaFact]
     public void MergeStaysDisabledUntilATargetIsChosen()
     {
         var vm = TestViewModels.Hermetic();

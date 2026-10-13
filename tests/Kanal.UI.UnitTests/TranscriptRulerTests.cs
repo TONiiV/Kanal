@@ -8,7 +8,7 @@ namespace Kanal.UI.UnitTests;
 /// <summary>
 /// The navigation ruler beside the transcript. Everything asserted here is the model behind the
 /// marks — which ticks exist for a given run of utterances, what each one previews, where a click
-/// lands, and what happens when a long meeting has more speaker turns than the strip has slots.
+/// lands, and how the pitch shrinks when a long meeting has more sentences than the strip has room.
 /// Nothing here asserts a pixel; the strip's geometry is a XAML concern.
 /// </summary>
 public class TranscriptRulerTests
@@ -39,39 +39,47 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
-    public void ASpeakerChangeOpensATickAndTheSameSpeakerCarryingOnDoesNot()
+    public void EveryFinalSentenceGetsItsOwnTickWhoeverSaidIt()
     {
         var ruler = Ruler();
 
         ruler.Observe(Said("u1", "s1", "第一句"));
         ruler.Observe(Said("u2", "s1", "第二句"));
         ruler.Observe(Said("u3", "s2", "Trzecie zdanie"));
-        ruler.Observe(Said("u4", "s2", "Czwarte"));
-        ruler.Observe(Said("u5", "s1", "第五句"));
 
-        Assert.Equal(3, ruler.Ticks.Count);
-        Assert.Equal(["u1", "u3", "u5"], ruler.Ticks.Select(t => t.AnchorUtteranceId));
-        Assert.Equal([2, 2, 1], ruler.Ticks.Select(t => t.Utterances));
+        Assert.Equal(["u1", "u2", "u3"], ruler.Ticks.Select(t => t.AnchorUtteranceId));
+        Assert.Equal(["#B23A2E", "#B23A2E", "#1C6B58"], ruler.Ticks.Select(t => t.SpeakerColor));
     }
 
     [AvaloniaFact]
-    public void ATickPreviewsTheOpeningLineOfItsTurnAndFollowsThatLinesRevisions()
+    public void ASentenceStillBeingSpokenHasNoTickUntilItIsFinal()
     {
         var ruler = Ruler();
 
         ruler.Observe(Said("u1", "s1", "我们把", state: UtteranceState.Partial));
-        Assert.Equal("我们把", ruler.Ticks[0].Preview);
+        Assert.Empty(ruler.Ticks);
 
         ruler.Observe(Said("u1", "s1", "我们把 KX-4402 的公差改了"));
-        ruler.Observe(Said("u2", "s1", "下周交货"));
 
-        // still the opening line: the tick marks where the turn began, not where it got to
-        Assert.Equal("我们把 KX-4402 的公差改了", ruler.Ticks[0].Preview);
-        Assert.Equal("S1", ruler.Ticks[0].SpeakerName);
+        Assert.Equal("我们把 KX-4402 的公差改了", Assert.Single(ruler.Ticks).Preview);
     }
 
     [AvaloniaFact]
-    public void ClickingATickAsksToJumpToTheFirstUtteranceOfThatTurn()
+    public void ATickFollowsLaterRevisionsOfItsSentence()
+    {
+        var ruler = Ruler();
+
+        ruler.Observe(Said("u1", "s1", "我们把"));
+        ruler.Observe(Said("u2", "s1", "下周交货"));
+        ruler.Observe(Said("u1", "s2", "我们把公差改了"));
+
+        Assert.Equal(["u1", "u2"], ruler.Ticks.Select(t => t.AnchorUtteranceId));
+        Assert.Equal("我们把公差改了", ruler.Ticks[0].Preview);
+        Assert.Equal("S2", ruler.Ticks[0].SpeakerName);
+    }
+
+    [AvaloniaFact]
+    public void ClickingATickAsksToJumpToItsUtterance()
     {
         var ruler = Ruler();
         string? landed = null;
@@ -81,13 +89,13 @@ public class TranscriptRulerTests
         ruler.Observe(Said("u2", "s2", "dwa"));
         ruler.Observe(Said("u3", "s2", "trzy"));
 
-        ruler.Jump(ruler.Ticks[1]);
+        ruler.Jump(ruler.Ticks[2]);
 
-        Assert.Equal("u2", landed);
+        Assert.Equal("u3", landed);
     }
 
     [AvaloniaFact]
-    public void ATranslationLandingLateDoesNotReopenAFinishedTurn()
+    public void ATranslationLandingLateDoesNotAddAnotherTick()
     {
         var ruler = Ruler();
 
@@ -95,13 +103,10 @@ public class TranscriptRulerTests
         ruler.Observe(Said("u2", "s1", "二"));
         ruler.Observe(Said("u3", "s2", "dwa"));
 
-        // translations upsert the utterance they were asked for, long after the room moved on
         ruler.Observe(Said("u1", "s1", "一"));
         ruler.Observe(Said("u2", "s1", "二"));
 
-        Assert.Equal(2, ruler.Ticks.Count);
-        Assert.Equal(["u1", "u3"], ruler.Ticks.Select(t => t.AnchorUtteranceId));
-        Assert.Equal([2, 1], ruler.Ticks.Select(t => t.Utterances));
+        Assert.Equal(["u1", "u2", "u3"], ruler.Ticks.Select(t => t.AnchorUtteranceId));
     }
 
     [AvaloniaFact]
@@ -132,71 +137,91 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
-    public void MoreTurnsThanSlotsFoldIntoStridedTicksWithoutLosingEitherEnd()
+    public void AShortMeetingKeepsTheFixedPitch()
     {
         var ruler = Ruler();
 
-        for (var i = 0; i < 200; i++)
-            ruler.Observe(Said($"u{i}", i % 2 == 0 ? "s1" : "s2", $"turn {i}", startMs: i * 1000));
+        for (var i = 0; i < 10; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
 
-        Assert.True(ruler.Ticks.Count <= TranscriptRulerViewModel.Slots);
-        // 200 turns fold by four; nothing is dropped, the strip just gets a coarser stride
-        Assert.Equal(50, ruler.Ticks.Count);
-        Assert.All(ruler.Ticks, t => Assert.Equal(4, t.Turns));
-        Assert.Equal(200, ruler.Ticks.Sum(t => t.Turns));
-
-        // both ends still reachable, and every tick lands on a real turn, in order
-        Assert.Equal("u0", ruler.Ticks[0].AnchorUtteranceId);
-        Assert.Equal("u196", ruler.Ticks[^1].AnchorUtteranceId);
-        Assert.Equal(
-            ruler.Ticks.Select(t => t.AnchorUtteranceId).ToList(),
-            ruler.Ticks.Select(t => t.AnchorUtteranceId).Distinct().ToList());
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.MaxPitch, t.Pitch));
     }
 
     [AvaloniaFact]
-    public void TheStripNeverOverflowsWhileTheMeetingGrows()
+    public void ALongMeetingKeepsEverySentenceAndSharesTheStripEvenly()
     {
         var ruler = Ruler();
 
-        for (var i = 0; i < 400; i++)
+        for (var i = 0; i < 600; i++)
+            ruler.Observe(Said($"u{i}", i % 2 == 0 ? "s1" : "s2", $"line {i}", startMs: i * 1000));
+
+        Assert.Equal(600, ruler.Ticks.Count);
+        Assert.Equal("u0", ruler.Ticks[0].AnchorUtteranceId);
+        Assert.Equal("u599", ruler.Ticks[^1].AnchorUtteranceId);
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight / 600, t.Pitch));
+        Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight, ruler.Ticks.Sum(t => t.Pitch), 6);
+        Assert.Equal(["#B23A2E", "#1C6B58"], ruler.Ticks.Take(2).Select(t => t.SpeakerColor));
+    }
+
+    [AvaloniaFact]
+    public void ThePreviewCardStaysInsideTheStripAtBothEnds()
+    {
+        var ruler = Ruler();
+
+        for (var i = 0; i < 300; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.Hover(ruler.Ticks[0]);
+        Assert.Equal(0, ruler.PreviewTop);
+
+        ruler.Hover(ruler.Ticks[^1]);
+        Assert.Equal(TranscriptRulerViewModel.DefaultStripHeight - TranscriptRulerViewModel.CardHeight, ruler.PreviewTop);
+    }
+
+    [AvaloniaFact]
+    public void TheRowsNeverAddUpToMoreThanTheStripThatIsReallyThere()
+    {
+        var ruler = Ruler();
+        ruler.SetStripHeight(633);
+
+        for (var i = 0; i < 165; i++)
         {
-            ruler.Observe(Said($"u{i}", i % 2 == 0 ? "s1" : "s2", $"turn {i}"));
-            Assert.True(ruler.Ticks.Count <= TranscriptRulerViewModel.Slots);
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+            Assert.True(ruler.Ticks.Sum(t => t.Pitch) <= 633 + 1e-9);
         }
 
-        Assert.NotEmpty(ruler.Ticks);
+        Assert.Equal(633.0 / 165, ruler.Ticks[0].Pitch, 9);
     }
 
     [AvaloniaFact]
-    public void AFoldedTickSpanningTwoSpeakersSpendsNoSpeakerColour()
+    public void AStripThatShrinksAfterwardsReSpacesTheTicksAndKeepsThePreviewInside()
     {
         var ruler = Ruler();
-
         for (var i = 0; i < 200; i++)
-            ruler.Observe(Said($"u{i}", i % 2 == 0 ? "s1" : "s2", $"turn {i}"));
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
 
-        Assert.Equal(50, ruler.Ticks.Count);
-        // colour identifies a person; a mark standing for four people's turns identifies nobody
-        Assert.All(ruler.Ticks, t => Assert.Equal("#7C8A93", t.SpeakerColor));
-        Assert.All(ruler.Ticks, t => Assert.Equal("S1, S2", t.SpeakerName));
+        ruler.SetStripHeight(400);
+
+        Assert.True(ruler.Ticks.Sum(t => t.Pitch) <= 400 + 1e-9);
+        ruler.Hover(ruler.Ticks[^1]);
+        Assert.Equal(400 - TranscriptRulerViewModel.CardHeight, ruler.PreviewTop);
     }
 
     [AvaloniaFact]
-    public void MergingTwoSpeakersClosesTheSeamTheirTurnsLeftInTheRuler()
+    public void MergingTwoSpeakersRelabelsTheirTicksInTheRuler()
     {
         var ruler = Ruler();
 
         ruler.Observe(Said("u1", "s1", "一"));
         ruler.Observe(Said("u2", "s2", "二"));
         ruler.Observe(Said("u3", "s1", "三"));
-        Assert.Equal(3, ruler.Ticks.Count);
 
         _canonical["s2"] = "s1";
         ruler.Reresolve();
 
-        Assert.Single(ruler.Ticks);
-        Assert.Equal("u1", ruler.Ticks[0].AnchorUtteranceId);
-        Assert.Equal(3, ruler.Ticks[0].Utterances);
+        Assert.Equal(3, ruler.Ticks.Count);
+        Assert.All(ruler.Ticks, t => Assert.Equal("S1", t.SpeakerName));
+        Assert.All(ruler.Ticks, t => Assert.Equal("#B23A2E", t.SpeakerColor));
     }
 
     [AvaloniaFact]
