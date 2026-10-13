@@ -1,14 +1,17 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
+using Avalonia.Styling;
 using Avalonia.Threading;
-using Kanal.Core.Models;
+using Avalonia.VisualTree;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
 
-// Measurement only. It splits the cost of a long meeting in the real window: bubbles against ruler ticks.
+// Measurement only. It finds what makes a bubble cost more in the real window than in a bare list.
 public class RealViewCostDiagnostics(ITestOutputHelper output)
 {
     private const int Utterances = 300;
@@ -19,30 +22,26 @@ public class RealViewCostDiagnostics(ITestOutputHelper output)
         Console.WriteLine(line);
     }
 
-    private static Utterance Said(int n) =>
-        new($"u{n}", "S01", n * 4000L, n * 4000L + 3500, "zh", $"第{n}条：这家公司相当于景江酒店的服务公司。",
-            1, UtteranceState.Final, false, 1.0, new Dictionary<string, string>());
-
-    private static double Settle(Window window)
+    private static void Settle(Window window)
     {
-        var clock = Stopwatch.StartNew();
         for (var i = 0; i < 3; i++)
         {
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
         }
-
-        return clock.Elapsed.TotalMilliseconds;
     }
 
-    [AvaloniaFact]
-    public void BubblesAgainstRulerTicksInTheRealWindow()
+    private double Run(string name, Action<MeetingRoomView, IReadOnlyList<ItemsControl>>? prepare)
     {
         var vm = TestViewModels.Hermetic();
         foreach (var code in new[] { "zh", "de", "pl" })
             vm.Columns.Add(new ColumnViewModel(code));
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();
+        Settle(window);
+        var room = window.GetLogicalDescendants().OfType<MeetingRoomView>().Single();
+        var lists = room.GetVisualDescendants().OfType<ItemsControl>().Where(i => i.Classes.Contains("bubbles")).ToList();
+        prepare?.Invoke(room, lists);
         Settle(window);
 
         var clock = Stopwatch.StartNew();
@@ -57,19 +56,46 @@ public class RealViewCostDiagnostics(ITestOutputHelper output)
                 bubble.IsPartial = false;
             }
 
-        var bubbleAddMs = clock.Elapsed.TotalMilliseconds;
-        var bubbleLayoutMs = Settle(window);
-        Report($"METRIC real view  bubbles only   x{Utterances * 3}: add={bubbleAddMs,7:F0} ms layout={bubbleLayoutMs,7:F0} ms " +
-               $"-> {(bubbleAddMs + bubbleLayoutMs) / (Utterances * 3),6:F2} ms/bubble");
-
-        clock.Restart();
-        for (var n = 0; n < Utterances; n++)
-            vm.Ruler.Observe(Said(n));
-        var tickAddMs = clock.Elapsed.TotalMilliseconds;
-        var tickLayoutMs = Settle(window);
-        Report($"METRIC real view  ruler ticks   x{Utterances}: add={tickAddMs,7:F0} ms layout={tickLayoutMs,7:F0} ms " +
-               $"-> {(tickAddMs + tickLayoutMs) / Utterances,6:F2} ms/tick");
-
+        Settle(window);
+        var perBubble = clock.Elapsed.TotalMilliseconds / (Utterances * 3);
+        Report($"METRIC real view  {name,-44} {perBubble,6:F2} ms/bubble ({lists.Count} lists)");
         window.Close();
+        return perBubble;
+    }
+
+    private static void DropStyles(MeetingRoomView room, Func<string, bool> drop)
+    {
+        foreach (var style in room.Styles.OfType<Style>().ToList())
+            if (drop(style.Selector?.ToString() ?? ""))
+                room.Styles.Remove(style);
+    }
+
+    [AvaloniaFact]
+    public void WhatMakesABubbleCostMoreInTheRealWindow()
+    {
+        Run("warm-up", null);
+        Run("as shipped", null);
+        Run("as shipped, again", null);
+        Run("no view-level styles", (room, _) => room.Styles.Clear());
+        Run("no styles with a space (descendant)", (room, _) => DropStyles(room, s => s.Contains(' ')));
+        Run("no 'Panel.focused' styles", (room, _) => DropStyles(room, s => s.Contains("focused")));
+        Run("template of the C# replica", (_, lists) =>
+        {
+            var menu = new MenuFlyout();
+            foreach (var list in lists)
+                list.ItemTemplate = new FuncDataTemplate<BubbleViewModel>((bubble, _) =>
+                    BubbleCostDiagnostics.Build(bubble!,
+                        BubbleCostDiagnostics.Feature.Bindings | BubbleCostDiagnostics.Feature.Flyout |
+                        BubbleCostDiagnostics.Feature.ToolTips | BubbleCostDiagnostics.Feature.MultiBinding |
+                        BubbleCostDiagnostics.Feature.SelectableText, menu));
+        });
+        Run("replica template and no view-level styles", (room, lists) =>
+        {
+            room.Styles.Clear();
+            var menu = new MenuFlyout();
+            foreach (var list in lists)
+                list.ItemTemplate = new FuncDataTemplate<BubbleViewModel>((bubble, _) =>
+                    BubbleCostDiagnostics.Build(bubble!, BubbleCostDiagnostics.Feature.Bindings, menu));
+        });
     }
 }

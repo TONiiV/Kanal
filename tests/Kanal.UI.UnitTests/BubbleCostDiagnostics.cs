@@ -18,7 +18,7 @@ public class BubbleCostDiagnostics(ITestOutputHelper output)
     private const int Count = 300;
 
     [Flags]
-    private enum Feature
+    internal enum Feature
     {
         None = 0,
         Bindings = 1,
@@ -31,7 +31,7 @@ public class BubbleCostDiagnostics(ITestOutputHelper output)
     private static Binding Localised(string key) =>
         new($"[{key}]") { Source = Localizer.Instance, Mode = BindingMode.OneWay };
 
-    private static Control Build(BubbleViewModel bubble, Feature features, MenuFlyout menu)
+    internal static Control Build(BubbleViewModel bubble, Feature features, MenuFlyout menu)
     {
         TextBlock Label(string property)
         {
