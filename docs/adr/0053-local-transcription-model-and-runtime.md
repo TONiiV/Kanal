@@ -1,6 +1,6 @@
 # ADR 0053: Nemotron 3.5 ASR Streaming on sherpa-onnx for local transcription
 
-**Status:** Proposed  
+**Status:** Accepted — implemented 2026-10-04; deviations found on the real model are in `docs/PROGRESS.md`  
 **Date:** 2026-09-08  
 **Issues:** [#72](https://github.com/TONiiV/Kanal/issues/72), [#49](https://github.com/TONiiV/Kanal/issues/49)
 
@@ -98,10 +98,10 @@ The model takes the language as input and reports none, so `AutoLanguageDetect` 
 `TranscriptLanguage` reads the source language back from the text (see `docs/PROGRESS.md`).
 
 **7. Chunk size is a catalog entry, with a default.** Each chunk size ships a different encoder
-file, so a change of chunk size is a new download and not a runtime switch. The catalog has three
-entries: 560 ms (default), 160 ms and 1120 ms. 560 ms is the accuracy/latency knee on the model
-card's own FLEURS curve. The catalog omits 80 ms and 320 ms. No measurement asks for latency below 160 ms.
-The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
+file, so a change of chunk size is a new download and not a runtime switch. The catalog has one
+entry: 560 ms. 560 ms is the accuracy/latency knee on the model card's own FLEURS curve. The 160 ms
+and 1120 ms sizes shipped first and were removed: the operator should not choose a chunk size. They
+can return as catalog entries if a measurement asks for them.
 
 ## Consequences
 
