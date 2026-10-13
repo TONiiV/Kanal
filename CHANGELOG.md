@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Project settings: choosing an icon from the Choose icon list now changes the project icon.
 - Transcription can now run on this laptop. Settings → Transcription → Local models downloads the
   Nemotron 3.5 speech model (about 680 MB). The *Local transcription · Local
   translation* mode is available when this model and a translation model are downloaded. In this
@@ -26,6 +27,12 @@ The first release. Everything below is what Kanal does on the day it ships.
   choice, the number of utterances and a "merge into" list. A colour change also reaches the phones.
 - Kanal no longer damages a meeting record when the computer stops during a save. A meeting folder
   that Kanal cannot open now shows as unreadable, not as a meeting without a record.
+- Each issue in project settings now has a button that repairs it. Kanal rebuilds a damaged
+  meeting record from its transcript, or moves the folder to `kanal-set-aside` when it cannot. A
+  copied meeting folder becomes a separate meeting. A missing project folder gets "Choose folder…"
+  or "Remove from list". Kanal creates a missing meetings folder and removes a damaged row of the
+  project list. Kanal deletes no file. The row shows the result in one line. While a project
+  records a meeting, its issues show no buttons.
 - Each settings tab shows an icon next to its name.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the

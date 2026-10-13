@@ -31,7 +31,7 @@ public class StoreProblemsTests : IDisposable
         var folder = Directory.CreateDirectory(Path.Combine(workspace.RootPath, "meetings", "lost1")).FullName;
         File.WriteAllText(Path.Combine(workspace.RootPath, "kanal-set-aside"), "in the way");
 
-        var result = store.RecoverMeeting(workspace.Id, folder, "Recovered meeting");
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => "Recovered meeting");
 
         Assert.Equal(StoreProblemKind.Unwritable, result.Problem!.Kind);
         var line = Assert.Single(_sink.Lines, l => l.Message.Contains("could not be moved"));
