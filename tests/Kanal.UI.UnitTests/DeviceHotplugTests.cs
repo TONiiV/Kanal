@@ -220,7 +220,7 @@ public class DeviceHotplugTests
         var vm = SettingsVm(source, watcher);
         Assert.True(watcher.HasSubscribers);
 
-        vm.CancelDownloads(); // the settings-state close path
+        vm.OnWindowClosed(); // the settings-state close path
 
         Assert.True(watcher.Disposed);
         Assert.False(watcher.HasSubscribers);

@@ -146,10 +146,14 @@ public partial class ModelItemViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Also called when the Settings window closes — a download nobody can see
-    /// or cancel any more must not keep running against a discarded view model.</summary>
     [RelayCommand]
     public void CancelDownload() => _downloadCts?.Cancel();
+
+    public void RefreshDownloaded()
+    {
+        if (_downloads is not null && !IsDownloading)
+            IsDownloaded = _downloads.IsDownloaded(_parts);
+    }
 
     [RelayCommand]
     private void Delete()

@@ -480,7 +480,7 @@ public class AppLanguageTests
             Assert.Contains(nameof(row.UseTip), changed);
             Assert.Contains(nameof(row.StatusLabel), changed);
             Assert.Equal(Strings.Tables["zh"]["settings.asrmodel.usetip"], row.UseTip);
-            vm.CancelDownloads();
+            vm.OnWindowClosed();
         }
         finally
         {

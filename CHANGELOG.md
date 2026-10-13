@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A model download keeps running when you close Settings. Open Settings again to see the progress
+  or to cancel. The mode list updates when the download completes. Closing Kanal still stops the
+  download.
 - Project settings: choosing an icon from the Choose icon list now changes the project icon.
 - Transcription can now run on this laptop. Settings → Transcription → Local models downloads the
   Nemotron 3.5 speech model (about 680 MB). The *Local transcription · Local

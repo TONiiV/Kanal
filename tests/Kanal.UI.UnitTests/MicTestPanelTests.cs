@@ -233,7 +233,7 @@ public class MicTestPanelTests : IDisposable
         await PumpAsync(200);
         Assert.True(vm.IsTesting);
 
-        vm.CancelDownloads(); // the settings-state close path
+        vm.OnWindowClosed(); // the settings-state close path
         await PumpAsync(200);
 
         Assert.False(vm.IsTesting);

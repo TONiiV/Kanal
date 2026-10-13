@@ -98,13 +98,14 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
-    public SettingsViewModel()
+    public SettingsViewModel(ModelRows? modelRows = null)
         : this(
             SettingsStore.Load(),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             saveColourScheme: SettingsStore.SaveColourScheme,
             saveAccentTheme: SettingsStore.SaveAccentTheme,
-            saveAppLanguage: SettingsStore.SaveAppLanguage)
+            saveAppLanguage: SettingsStore.SaveAppLanguage,
+            modelRows: modelRows)
     {
     }
 
@@ -115,6 +116,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// <param name="isMacOs">
     /// Test seam for the advice wording: the tests pin a platform so their assertions hold on
     /// whatever OS CI happens to run.
+    /// </param>
+    /// <param name="modelRows">
+    /// The app-owned download rows (<c>MainViewModel.ModelRows</c>). Without them the window
+    /// builds its own, so parallel tests cannot share selection or download state.
     /// </param>
     /// <param name="deviceWatcherFactory">
     /// Hot-plug notifications for the test-device dropdown; tests fire a fake by hand.
@@ -127,7 +132,8 @@ public partial class SettingsViewModel : ViewModelBase
         Action<string>? openFolder = null,
         Action<ColourScheme>? saveColourScheme = null,
         Action<string>? saveAppLanguage = null,
-        Action<string>? saveAccentTheme = null)
+        Action<string>? saveAccentTheme = null,
+        ModelRows? modelRows = null)
     {
         _saveAppLanguage = saveAppLanguage ?? (_ => { });
         _saveColourScheme = saveColourScheme ?? (_ => { });
@@ -159,20 +165,22 @@ public partial class SettingsViewModel : ViewModelBase
 
         _envVarIsSet = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null;
 
-        var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
-        TranslationModels.Add(new ModelItemViewModel());
-        foreach (var model in LocalModelCatalog.Models)
-            TranslationModels.Add(new ModelItemViewModel(model, downloads));
+        var rows = modelRows ?? new ModelRows(new ModelDownloadManager(SettingsStore.ModelsPath));
+        foreach (var row in rows.Translation)
+            TranslationModels.Add(row);
+        foreach (var row in rows.Transcription)
+            TranscriptionModels.Add(row);
 
         var active = TranslationModels.FirstOrDefault(
                          m => m.IsLocal && m.ModelId == settings.ActiveTranslationModelId)
                      ?? TranslationModels[0];
-        active.IsActive = true;
-
-        foreach (var model in AsrModelCatalog.Models)
-            TranscriptionModels.Add(new ModelItemViewModel(model, downloads) { HasChoice = AsrModelCatalog.Models.Count > 1 });
-        (TranscriptionModels.FirstOrDefault(m => m.ModelId == settings.ActiveTranscriptionModelId)
-         ?? TranscriptionModels[0]).IsActive = true;
+        var activeTranscription = TranscriptionModels.FirstOrDefault(m => m.ModelId == settings.ActiveTranscriptionModelId)
+                                  ?? TranscriptionModels[0];
+        foreach (var row in TranslationModels.Concat(TranscriptionModels))
+        {
+            row.IsActive = ReferenceEquals(row, active) || ReferenceEquals(row, activeTranscription);
+            row.RefreshDownloaded();
+        }
 
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _recordAudio = settings.RecordAudio;
@@ -190,8 +198,8 @@ public partial class SettingsViewModel : ViewModelBase
         _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
         // The switch happens in this window, so this window least of all may stay in the old
-        // language. Unsubscribed in CancelDownloads — the same close-time cleanup the downloads
-        // use — so the static localizer does not keep dead view models reachable.
+        // language. Unsubscribed in OnWindowClosed so the static localizer does not keep dead view
+        // models reachable.
         Localizer.Instance.PropertyChanged += OnLanguageChanged;
     }
 
@@ -642,19 +650,11 @@ public partial class SettingsViewModel : ViewModelBase
             key.IsActive = ReferenceEquals(key, item);
     }
 
-    /// <summary>
-    /// Stops anything still downloading. The window owns this view model, and MainWindow builds
-    /// a new pair every time Settings opens: a download left running behind a closed dialog is
-    /// invisible, uncancellable, and collides with the download the next dialog offers.
-    /// </summary>
-    public void CancelDownloads()
+    public void OnWindowClosed()
     {
-        // Part of the same window-closed cleanup: without this the static localizer keeps
-        // every closed Settings dialog's view model alive and keeps refreshing it.
+        // Without this the static localizer keeps every closed Settings dialog's view model
+        // alive and keeps refreshing it.
         Localizer.Instance.PropertyChanged -= OnLanguageChanged;
-
-        foreach (var model in TranslationModels.Concat(TranscriptionModels))
-            model.CancelDownload();
 
         // Same reasoning: a microphone left open behind a closed dialog is invisible and
         // uncancellable, and it holds the device the next meeting wants.
