@@ -175,7 +175,9 @@ public class ActiveVersusBrowsedTests : IDisposable
             german.Bubbles.Take(2).Select(b => b.Text));
         Assert.True(german.Bubbles.Count > 2, "the new run added nothing below the earlier one.");
 
-        var live = TranscriptLog.Read(Row(vm, older.Id).Record.Runs[1].TranscriptPath);
+        var second = Row(vm, older.Id).Record.Runs[1].TranscriptPath;
+        await PumpUntilAsync(() => TranscriptLog.Read(second).Any(u => u.State == UtteranceState.Final));
+        var live = TranscriptLog.Read(second).Where(u => u.State == UtteranceState.Final).ToList();
         var markdown = vm.BuildMarkdownExport();
         Assert.Contains("**S1** (de): Toleranz bei KX-4402", markdown);
         Assert.NotEmpty(live);
