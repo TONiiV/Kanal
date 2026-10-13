@@ -35,6 +35,10 @@ The first release. Everything below is what Kanal does on the day it ships.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
   scheme during a meeting.
+- You can now change the microphone while a meeting records. Pick another one in the microphone
+  menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
+  Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
+  recording starts.
 - The window no longer freezes at start when a project is on a slow network share. Kanal now checks
   the other projects for issues in the background. The warning marks in the project list appear when
   that check ends.

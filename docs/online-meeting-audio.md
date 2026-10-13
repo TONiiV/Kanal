@@ -63,6 +63,8 @@ Capture lines use the `audio` category. Audio samples, transcript text, and API 
 - `capture_fault code=device_unavailable source=microphone reason=device_list_changed` at Warning, when
   the microphone the meeting is using disappears from the device list. Computer audio is not tied to a
   device, so its loss only ever shows up as a capture fault.
+- `capture_device_switched source=microphone` at Info, when the operator picks another microphone
+  during a meeting. The `starting` JSON lines that follow carry the new device hash.
 - `Capture running on …` and `<n> frames captured.` at Debug.
 
 Fields of the JSON lines:
@@ -87,7 +89,7 @@ in-room meeting stays live and says capture stopped. The same code reaches the l
 | Code | Source | What happened | What to do |
 |---|---|---|---|
 | `permission_denied` | microphone / system | The OS refused access. | Windows: Settings → Privacy & security → Microphone → allow desktop apps. macOS: System Settings → Privacy & Security → Microphone, and Screen & System Audio Recording (the system-audio list where the OS version shows one), for Kanal; quit and reopen Kanal after changing it. |
-| `device_unavailable` | microphone / system | The device was unplugged, disabled, switched, or is held exclusively by another app; or a Doctor index is not listed. | Re-plug or re-enable it, run `devices`, pick it again in the microphone menu. Turn off exclusive mode in the device's Windows sound properties. |
+| `device_unavailable` | microphone / system | The device was unplugged, disabled, switched, or is held exclusively by another app; or a Doctor index is not listed. | Re-plug or re-enable it, run `devices`, pick it again in the microphone menu — during an in-room meeting too, without stopping it. Turn off exclusive mode in the device's Windows sound properties. |
 | `source_ended` | microphone / system | The source stopped delivering without an error (driver reset, Bluetooth profile switch). | Pick the device again; for Bluetooth, see below. |
 | `source_failed` | microphone / system / mixer | Any other platform error; the message carries the platform's text. | Read the attached exception in the log; retry with `system` or `online` in Doctor. |
 | `clock_stalled` | mixer | The mixer fell more than 2 s behind the clock: the computer slept or was saturated. | Keep the laptop awake and on power; close heavy apps; start again. |
