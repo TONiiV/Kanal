@@ -24,6 +24,11 @@ capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 
 took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
 voice for a test clip.
 
+`doctor asr <wav> [modelsDir]` downloads the default model if needed, transcribes the WAV and prints
+a Markdown report. `local-asr-windows.yml` runs the Core tests and `doctor asr` on a hosted Windows
+runner for every PR that touches the provider. The workflow posts the report as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`.
+
 Four things the ADR did not anticipate, all found by running the model:
 
 - **The model does not report the language it heard.** The language is an input (a prompt id).
