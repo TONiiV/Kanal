@@ -282,6 +282,7 @@
   "assistant.tab.files": "Dateien",
   "assistant.noanalyst": "Kein mithörendes Modell verbunden. Punkte und Entscheidungen erscheinen hier, sobald eines verbunden ist.",
   "assistant.nothingyet": "Noch nichts festgehalten.",
+  "assistant.nospeakers": "Noch kein Sprecher erkannt. Sprecher erscheinen hier während der Sitzung.",
   "insight.kind.point": "PUNKT",
   "insight.kind.proposal": "VORSCHLAG",
   "insight.kind.decision": "ENTSCHEIDUNG",

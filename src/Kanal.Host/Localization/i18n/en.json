@@ -282,6 +282,7 @@
   "assistant.tab.files": "Files",
   "assistant.noanalyst": "No listening model is connected. Points and decisions appear here once one is.",
   "assistant.nothingyet": "Nothing raised yet.",
+  "assistant.nospeakers": "No speaker has been heard yet. Speakers appear here during the meeting.",
   "insight.kind.point": "POINT",
   "insight.kind.proposal": "PROPOSAL",
   "insight.kind.decision": "DECISION",
