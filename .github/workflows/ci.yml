@@ -60,7 +60,7 @@ jobs:
 
       - name: Meeting switch responsiveness (prints the METRIC lines)
         if: ${{ !cancelled() }}
-        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "FullyQualifiedName~MeetingSwitchResponsiveness" --logger "console;verbosity=detailed"
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "FullyQualifiedName~MeetingSwitchResponsiveness|FullyQualifiedName~BubbleCostDiagnostics" --logger "console;verbosity=detailed"
 
       - uses: actions/upload-artifact@v4
         with:
