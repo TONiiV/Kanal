@@ -110,17 +110,119 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
-    public void OnlyTheNewestTickIsTheCurrentOne()
+    public void OnlyTheSentencesOnScreenAreMarkedInView()
     {
         var ruler = Ruler();
+        for (var i = 0; i < 6; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        Assert.All(ruler.Ticks, t => Assert.False(t.IsInView));
 
-        ruler.Observe(Said("u1", "s1", "一"));
-        Assert.True(ruler.Ticks[0].IsCurrent);
+        ruler.SetVisible(["u2", "u3", "partial"]);
 
-        ruler.Observe(Said("u2", "s2", "dwa"));
+        Assert.Equal(["u2", "u3"], ruler.Ticks.Where(t => t.IsInView).Select(t => t.AnchorUtteranceId));
 
-        Assert.False(ruler.Ticks[0].IsCurrent);
-        Assert.True(ruler.Ticks[1].IsCurrent);
+        ruler.SetVisible(["u5"]);
+
+        Assert.Equal(["u5"], ruler.Ticks.Where(t => t.IsInView).Select(t => t.AnchorUtteranceId));
+    }
+
+    [AvaloniaFact]
+    public void ATickOnScreenReachesFurtherThanOneOffScreen()
+    {
+        var ruler = Ruler();
+        ruler.Observe(Said("u0", "s1", "一"));
+        ruler.Observe(Said("u1", "s1", "二"));
+
+        ruler.SetVisible(["u1"]);
+
+        Assert.True(ruler.Ticks[1].Reach > ruler.Ticks[0].Reach);
+    }
+
+    [AvaloniaFact]
+    public void HoverMagnifiesTheTickMostAndItsTwoNeighboursOnEachSideLess()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 9; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        var rest = ruler.Ticks[0].Reach;
+
+        ruler.Hover(ruler.Ticks[4]);
+
+        var reach = ruler.Ticks.Select(t => t.Reach).ToList();
+        Assert.True(reach[4] > reach[3] && reach[3] > reach[2] && reach[2] > rest);
+        Assert.Equal(reach[3], reach[5]);
+        Assert.Equal(reach[2], reach[6]);
+        Assert.Equal(rest, reach[1]);
+        Assert.Equal(rest, reach[7]);
+
+        ruler.Hover(null);
+
+        Assert.All(ruler.Ticks, t => Assert.Equal(rest, t.Reach));
+    }
+
+    [AvaloniaFact]
+    public void MagnificationNeverShortensATickOnScreen()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 9; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        ruler.SetVisible(["u6"]);
+        var inView = ruler.Ticks[6].Reach;
+
+        ruler.Hover(ruler.Ticks[4]);
+
+        Assert.True(ruler.Ticks[6].Reach >= inView);
+    }
+
+    [AvaloniaFact]
+    public void TheUpArrowPagesToTheLastSentenceAboveTheScreen()
+    {
+        var ruler = Ruler();
+        (string Id, PageDirection Direction)? paged = null;
+        ruler.PageRequested += (id, direction) => paged = (id, direction);
+        for (var i = 0; i < 8; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetVisible(["u3", "u4"]);
+        ruler.PageUpCommand.Execute(null);
+
+        Assert.Equal(("u2", PageDirection.Up), paged);
+    }
+
+    [AvaloniaFact]
+    public void TheDownArrowPagesToTheFirstSentenceBelowTheScreen()
+    {
+        var ruler = Ruler();
+        (string Id, PageDirection Direction)? paged = null;
+        ruler.PageRequested += (id, direction) => paged = (id, direction);
+        for (var i = 0; i < 8; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetVisible(["u3", "u4"]);
+        ruler.PageDownCommand.Execute(null);
+
+        Assert.Equal(("u5", PageDirection.Down), paged);
+    }
+
+    [AvaloniaFact]
+    public void AnArrowIsOfferedOnlyWhenSomethingIsOffScreenThatWay()
+    {
+        var ruler = Ruler();
+        Assert.False(ruler.PageUpCommand.CanExecute(null));
+        Assert.False(ruler.PageDownCommand.CanExecute(null));
+
+        ruler.Observe(Said("u0", "s1", "一"));
+        ruler.Observe(Said("u1", "s1", "二"));
+        ruler.SetVisible(["u0", "u1"]);
+        Assert.False(ruler.PageUpCommand.CanExecute(null));
+        Assert.False(ruler.PageDownCommand.CanExecute(null));
+
+        ruler.Observe(Said("u2", "s1", "三"));
+        Assert.True(ruler.PageDownCommand.CanExecute(null));
+
+        ruler.SetVisible(["u2"]);
+        Assert.True(ruler.PageUpCommand.CanExecute(null));
+        Assert.False(ruler.PageDownCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -278,12 +380,15 @@ public class TranscriptRulerTests
         var ruler = Ruler();
 
         ruler.Observe(Said("u1", "s1", "一", startMs: 60_000));
+        ruler.Observe(Said("u2", "s1", "二", startMs: 61_000));
+        ruler.SetVisible(["u2"]);
         ruler.Hover(ruler.Ticks[0]);
 
         ruler.Clear();
 
         Assert.Empty(ruler.Ticks);
         Assert.Null(ruler.HoveredTick);
+        Assert.False(ruler.PageUpCommand.CanExecute(null));
 
         ruler.Observe(Said("v1", "s2", "dwa", startMs: 900_000));
         Assert.Equal("0:00", ruler.Ticks[0].TimeLabel);
@@ -299,7 +404,6 @@ public class TranscriptRulerTests
 
         Assert.All(vm.Ruler.Ticks, t => Assert.NotEqual("", t.AnchorUtteranceId));
         Assert.All(vm.Ruler.Ticks, t => Assert.NotEqual("", t.Preview));
-        Assert.True(vm.Ruler.Ticks[^1].IsCurrent);
 
         // a jump names an utterance the transcript body actually holds
         string? landed = null;
