@@ -215,10 +215,18 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             }
         }
 
-        // A sentence taller than the screen is never whole; paging then steps past the cut one.
-        var up = firstWhole >= 0 ? firstWhole - 1 : firstInView - 1;
-        var down = lastWhole >= 0 ? lastWhole + 1 : lastInView < 0 ? -1 : lastInView + 1;
-        _pageUpTarget = firstInView >= 0 && up >= 0 ? up : -1;
+        int up, down;
+        if (firstWhole >= 0)
+            (up, down) = (firstWhole - 1, lastWhole + 1);
+        // A lone cut sentence is taller than the screen; landing on it again would never move.
+        else if (firstInView >= 0 && firstInView == lastInView)
+            (up, down) = (firstInView - 1, lastInView + 1);
+        else if (firstInView >= 0)
+            (up, down) = (firstInView, lastInView);
+        else
+            (up, down) = (-1, -1);
+
+        _pageUpTarget = up >= 0 ? up : -1;
         _pageDownTarget = down >= 0 && down < Ticks.Count ? down : -1;
 
         Magnify();

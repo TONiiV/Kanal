@@ -24,8 +24,9 @@ Issue #268. The reference is the message navigator of a chat app.
 - **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
   screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
   by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
-  whole rows next to the visible rows. A sentence taller than the screen is never whole; the arrow
-  then steps past it. A page jump does not mark a jump target.
+  whole rows next to the visible rows. When no row is whole, two cut sentences are the targets.
+  One lone cut sentence is taller than the screen; the arrow then steps past it. A page jump does
+  not mark a jump target.
 - **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
   final. The current providers finalise sentences in the order they start. A provider that
   finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.

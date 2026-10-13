@@ -238,6 +238,22 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
+    public void TwoCutSentencesAndNothingWholeArePagedToNotSkipped()
+    {
+        var ruler = Ruler();
+        var paged = new List<(string, PageDirection)>();
+        ruler.PageRequested += (id, direction) => paged.Add((id, direction));
+        for (var i = 0; i < 5; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.SetVisible(["u2", "u3"], whole: []);
+        ruler.PageUpCommand.Execute(null);
+        ruler.PageDownCommand.Execute(null);
+
+        Assert.Equal([("u2", PageDirection.Up), ("u3", PageDirection.Down)], paged);
+    }
+
+    [AvaloniaFact]
     public void AnArrowIsOfferedOnlyWhenSomethingIsOffScreenThatWay()
     {
         var ruler = Ruler();
