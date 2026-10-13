@@ -18,11 +18,18 @@ public class TranscriptLanguageTests
         Assert.Equal(expected, TranscriptLanguage.Guess(text, Room));
 
     [Fact]
-    public void OnlyRoomLanguagesAreAnswered()
-    {
+    public void AScriptOutsideTheRoomFallsBackToTheRoom() =>
         Assert.Equal("de", TranscriptLanguage.Guess("这批支架的料号", ["de", "pl"]));
-        Assert.Equal("en", TranscriptLanguage.Guess("Musimy potwierdzić termin", ["en"]));
-    }
+
+    [Fact]
+    public void ALatinLanguageOutsideTheRoomIsStillRecognised() =>
+        Assert.Equal("en", TranscriptLanguage.Guess("If you want to try this, you gotta be really sure about it", Room));
+
+    [Theory]
+    [InlineData("In Ordnung.", "de")]
+    [InlineData("Hast du meine E-Mail bekommen?", "de")]
+    public void OneSignalForALanguageOutsideTheRoomDoesNotBeatTheRoom(string text, string expected) =>
+        Assert.Equal(expected, TranscriptLanguage.Guess(text, Room));
 
     [Fact]
     public void TextWithNoSignalGoesToTheFirstLatinLanguageOfTheRoom() =>
