@@ -16,6 +16,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 
 - The "Points and decisions" tab is now called **Keypoints**. The menu item is now Pin to Keypoints.
   The names change in Chinese, English, German and Polish.
+- Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
+  A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.

@@ -13,6 +13,16 @@ The tab "Points and decisions" and the menu item "Pin to Points" are now **Keypo
 - **Names.** English "Keypoints", Chinese "要点", German "Kernpunkte", Polish "Kluczowe punkty".
 - **Strings only.** The i18n keys and the C# identifiers keep their names (`assistant.tab.points`, `PointsTab`, `PinToPoints`).
 - **Item kinds.** The item labels POINT, PROPOSAL and DECISION stay. They name the kind of one item, not the tab.
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
 
 ## 2026-10-13
 
