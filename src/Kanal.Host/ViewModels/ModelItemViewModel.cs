@@ -158,7 +158,6 @@ public partial class ModelItemViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
     public void CancelDownload() => _downloadCts?.Cancel();
 
     public void RefreshDownloaded()

@@ -104,30 +104,28 @@ public sealed class DownloadTray
     {
         _clock = clock ?? TimeProvider.System;
         _post = post ?? (action => Dispatcher.UIThread.Post(action));
-        foreach (var row in rows.Translation.Where(r => r.IsLocal))
-            Watch(row, "translate");
-        foreach (var row in rows.Transcription)
-            Watch(row, "transcript");
+        foreach (var row in rows.Translation.Where(r => r.IsLocal).Concat(rows.Transcription))
+            Watch(row);
     }
 
     public ObservableCollection<DownloadItemViewModel> Items { get; } = [];
 
-    public void Watch(ModelItemViewModel row, string iconName) =>
+    public void Watch(ModelItemViewModel row) =>
         row.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ModelItemViewModel.IsDownloading))
                 return;
             if (row.IsDownloading)
-                Start(row, iconName);
+                Start(row);
             else
                 Finish(row);
         };
 
-    private void Start(ModelItemViewModel row, string iconName)
+    private void Start(ModelItemViewModel row)
     {
         foreach (var old in Items.Where(i => i.Row == row).ToList())
             Remove(old);
-        Items.Add(new DownloadItemViewModel(row, iconName));
+        Items.Add(new DownloadItemViewModel(row, row.Download.IconName));
     }
 
     private void Finish(ModelItemViewModel row)

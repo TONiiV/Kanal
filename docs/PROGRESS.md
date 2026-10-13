@@ -29,7 +29,7 @@ A running model download shows at the right end of the main window status bar. D
 - **`DownloadTray` feeds the indicators.** It watches `IsDownloading` on every `ModelRows` row except the None translation row.
   A row that starts downloading adds a `DownloadItemViewModel`. A row that stops downloading sets
   the item to Done, Cancelled or Failed, and a `TimeProvider` timer removes it after 3 s, 2 s or 8 s.
-  A diarization row joins with one more `Watch(row, "people")` call.
+  A diarization row joins with one more `Watch(row)` call. Its icon name comes from `ModelItemViewModel.Download`.
 - **Collapsed:** 28 DIP circle. A progress ring surrounds the model icon (`transcript`, `translate`).
 - **Pointer or keyboard focus:** the ring stays at the right end. Its centre turns into a cross.
   The pill grows to the left and shows "name · 42% · 286 / 682 MB". The cross cancels the row,
