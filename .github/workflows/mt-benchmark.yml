@@ -3,18 +3,29 @@ name: MT benchmark
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: Runner. Standard macOS runners have no GPU acceleration; xlarge M1 runners do (billed).
+        type: choice
+        options: [macos-latest, macos-latest-xlarge, self-hosted]
+        default: macos-latest
+      accelerator:
+        description: KANAL_ACCELERATOR value
+        type: choice
+        options: [auto, cpu]
+        default: cpu
       streams:
-        description: Stream levels, comma-separated
-        default: '1,2,4'
+        description: Levels of sentences in flight, comma-separated
+        default: '1'
   push:
     branches: [feat/llama-gpu]
 
 jobs:
   benchmark:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 120
     env:
-      STREAMS: ${{ inputs.streams || '1,2,4' }}
+      STREAMS: ${{ inputs.streams || '1' }}
+      KANAL_ACCELERATOR: ${{ (inputs.accelerator || 'cpu') == 'cpu' && 'cpu' || '' }}
     steps:
       - uses: actions/checkout@v6
 
