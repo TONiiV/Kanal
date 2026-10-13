@@ -6,6 +6,29 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Pin to Points
+
+The transcript menu has a third item, **Pin to Points**. It adds the line to the Points tab.
+
+- **Core.** `MeetingInsights.Pin(utteranceId, text)` records a confirmed `Point` in the topic
+  `PinnedTopic`. The utterance is the source. A second pin of a pinned utterance returns null. A
+  dismissed (unpinned) pin allows a new pin. An analyst point on the same utterance does not block it.
+- **Host authority, text only.** Pins live in `MeetingInsights` in memory on the host, like analyst
+  points. They do not reach the relay, the room snapshot or the meeting record.
+  **Open decision:** saving pins in the meeting record changes the record schema. A human must decide this.
+- **Panel.** `AssistantViewModel.Pin` refreshes the list. A pinned item shows "PINNED", the speaker
+  and the time of the utterance, and the pinned text. Its cross button unpins. The list shows
+  without a connected analyst when at least one point exists. `ShowNoAnalystNote` hides then.
+- **Menu.** `ColumnViewModel` takes a pin handler. A browsed transcript passes none, so the item is disabled.
+  The item gets the same `CommandParameter` as the copy items: the selection of the clicked line, or the whole line.
+  The pin keeps that text.
+- **Final lines only.** `CanPin` needs a final line (`!IsPartial`) with its translation (`!AwaitingTranslation`).
+  The pin text never updates, so a partial line or a "…" placeholder cannot be pinned.
+- **Reserved topic.** `MeetingInsights.Record` refuses the topic `PinnedTopic`. The topic alone marks a pin.
+- **Language switch.** `MainViewModel` calls `Assistant.Refresh()`, so the pinned labels change language.
+- **Not here.** "Ask the agent" waits for the meeting agent PR (#248).
+- **Tests.** `PinnedPointTests` (Core) and `PinToPointsTests` (UI).
+
 ### Selectable transcript lines
 
 The translation line and the source line of every utterance are selectable text.

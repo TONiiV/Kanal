@@ -146,6 +146,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return Task.CompletedTask;
         });
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
+        Assistant.SpeakerName = tag => ResolveSpeaker(tag).Name;
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
             (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
         Ruler.JumpRequested += MarkJumpTarget;
@@ -279,6 +280,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 option.RefreshText();
             foreach (var option in CaptureProfiles)
                 option.RefreshText();
+            Assistant.Refresh();
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
@@ -1258,7 +1260,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang, CopyToClipboard));
+            Columns.Add(new ColumnViewModel(lang, CopyToClipboard, PinToPoints));
         FocusedLanguage = null;
 
         var asr = plan.Asr!;
@@ -2252,6 +2254,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private Task CopyToClipboard(string text) => WriteClipboard(text);
 
+    private void PinToPoints(BubbleViewModel bubble, string text) => Assistant.Pin(bubble.UtteranceId, text);
+
     private sealed record MeetingAttestation(
         CaptureProfile CaptureProfile,
         DateTimeOffset ConsentConfirmedAt);
@@ -2409,6 +2413,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         Ruler.Reresolve();
+        Assistant.Refresh();
         RefreshMergeTargets();
         RefreshUtteranceCounts();
     }

@@ -15,9 +15,12 @@ public sealed partial class InsightItemViewModel : ViewModelBase
         MeetingInsight insight,
         IReadOnlyList<string> sources,
         Action<string> confirm,
-        Action<string> dismiss)
+        Action<string> dismiss,
+        string? attribution = null)
     {
         Id = insight.Id;
+        IsPinned = insight.Topic == MeetingInsights.PinnedTopic;
+        Attribution = attribution;
         Text = insight.Text;
         Kind = insight.Kind;
         IsCandidate = insight.State == InsightState.Candidate;
@@ -28,6 +31,10 @@ public sealed partial class InsightItemViewModel : ViewModelBase
 
     public string Id { get; }
 
+    public bool IsPinned { get; }
+
+    public string? Attribution { get; }
+
     public string Text { get; }
 
     public InsightKind Kind { get; }
@@ -36,10 +43,14 @@ public sealed partial class InsightItemViewModel : ViewModelBase
 
     public IReadOnlyList<string> Sources { get; }
 
-    public string KindLabel => Localizer.Instance[$"insight.kind.{Kind.ToString().ToLowerInvariant()}"];
+    public string KindLabel => Localizer.Instance[
+        IsPinned ? "insight.pinned" : $"insight.kind.{Kind.ToString().ToLowerInvariant()}"];
 
-    public string StateLabel =>
-        Localizer.Instance[IsCandidate ? "insight.candidate" : "insight.confirmed"];
+    public string StateLabel => IsPinned
+        ? Attribution ?? ""
+        : Localizer.Instance[IsCandidate ? "insight.candidate" : "insight.confirmed"];
+
+    public string DismissTip => Localizer.Instance[IsPinned ? "insight.unpin.tip" : "insight.dismiss.tip"];
 
     [RelayCommand]
     private void Confirm() => _confirm(Id);

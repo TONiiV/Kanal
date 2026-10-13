@@ -11,6 +11,8 @@
                       Command="{Binding CopyCommand}" />
             <MenuItem Name="CopyWithSpeaker" x:DataType="vm:BubbleViewModel" Header="{l:T transcript.copy.speaker}"
                       Command="{Binding CopyWithSpeakerCommand}" />
+            <MenuItem Name="PinToPoints" x:DataType="vm:BubbleViewModel" Header="{l:T transcript.pin}"
+                      Command="{Binding PinCommand}" />
         </MenuFlyout>
     </UserControl.Resources>
     <UserControl.Styles>
