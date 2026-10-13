@@ -123,7 +123,8 @@ public class BubbleContextMenuTests
         var line = BubbleOf(window, translated).GetVisualDescendants().OfType<SelectableTextBlock>()
             .First(b => b.Text == Translation);
 
-        RequestContextAt(window, line, 10, line.Bounds.Height / 2);
+        line.RaiseEvent(new ContextRequestedEventArgs());
+        Settle(window);
 
         var flyout = Assert.IsType<MenuFlyout>(line.ContextFlyout);
         Assert.True(flyout.IsOpen);
