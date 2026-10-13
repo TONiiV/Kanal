@@ -144,7 +144,7 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
         parse.Stop();
         Assert.Equal(LongMeetingUtterances, parsed.Count);
 
-        var vm = TestViewModels.Hermetic(workspaces: () => store, offUiThread: work => Task.Run(work));
+        var vm = TestViewModels.Hermetic(workspaces: () => store, offUiThread: work => Task.Run(work), yieldToUi: MainViewModel.YieldToInput);
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
@@ -206,7 +206,7 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
         var sizes = new[] { 100, 200, 400, 800 };
         var meetings = sizes.Select(n => (N: n, Record: Stored(store, workspace, $"Lang {n}", n))).ToList();
 
-        var vm = TestViewModels.Hermetic(workspaces: () => store, offUiThread: work => Task.Run(work));
+        var vm = TestViewModels.Hermetic(workspaces: () => store, offUiThread: work => Task.Run(work), yieldToUi: MainViewModel.YieldToInput);
         var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
         window.Show();
         Dispatcher.UIThread.RunJobs();

@@ -109,7 +109,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
             scanOffUiThread: work => Task.Run(work),
-            yieldToUi: () => Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask(),
+            yieldToUi: YieldToInput,
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -992,6 +992,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         await FillBodyAsync(version, columns, pending, utterances);
     }
+
+    public static Task YieldToInput() =>
+        Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask();
 
     private const int FirstSliceRows = 3;
     private const int MaxSliceRows = 60;
