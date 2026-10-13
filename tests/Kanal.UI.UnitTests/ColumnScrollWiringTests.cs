@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -220,6 +221,26 @@ public class ColumnScrollWiringTests
         Settle(window);
 
         Assert.Equal(cutBottom, Whole(scrollers[0])[0]);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void EveryRulerArrowSitsInTheCentreOfItsButton()
+    {
+        var (window, _, _) = ShownWithRuler();
+
+        foreach (var name in new[] { "RulerPageUp", "RulerPageDown" })
+        {
+            var button = RulerArrow(window, name);
+            Assert.True(button.Bounds.Width > 0, $"{name} has no width.");
+            var glyph = Assert.Single(button.GetVisualDescendants().OfType<Shape>());
+            var offset = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), button)!.Value
+                - new Point(button.Bounds.Width / 2, button.Bounds.Height / 2);
+            Assert.True(
+                Math.Abs(offset.X) < 0.01 && Math.Abs(offset.Y) < 0.01,
+                $"the {name} glyph sits {offset} off the centre of its {button.Bounds.Size} button.");
+        }
+
         window.Close();
     }
 }
