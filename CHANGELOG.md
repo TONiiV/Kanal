@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
+  A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
 - Right-click a transcript line and choose Pin to Points. The line shows in the Points tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to
   unpin it. Pinned points are not saved with the meeting record yet.
