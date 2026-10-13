@@ -6,6 +6,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### The ruler draws one tick per sentence
+
+Part of #103.
+
+- The transcript ruler draws one tick for each final utterance. Partial utterances get no tick. The tick uses the colour of its speaker.
+- A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
+- The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
+- When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
 ### Nemotron provider (ADR 0053, slice C-4)
 
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
