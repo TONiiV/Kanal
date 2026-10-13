@@ -21,7 +21,8 @@ new record. [ADR 0059](adr/0059-continue-a-meeting-as-runs.md) replaces ADR 0054
 - **Model.** `MeetingRecord.Runs` replaces `TranscriptPath` and `AudioPath`.
   `TranscriptLog.Read(MeetingRecord)` reads the runs in order. In memory, it puts the run position
   in front of each id of run 2 and later (`2/u1`). Run 1 keeps its ids, so a meeting with one run
-  reads as before. The files keep their own ids.
+  reads as before. Beside a live run, run 1 also takes the prefix (`1/u1`), because the live run
+  restarts at `u1`. The files keep their own ids.
 - **Schema.** `meeting.json` and the bundle manifest go to schema 2 (`RecordFile.MeetingSchemaVersion`).
   `RecordFile.Parse` does the version check for both. Schema 1 reads as one run.
   `StoredRun.Legacy` builds that run for the store and for the import. The workspace file and the
