@@ -367,32 +367,28 @@
                         <Border Width="308" Height="96" CornerRadius="{StaticResource OverlayRadius}"
                                 Background="{DynamicResource Sheet}"
                                 BorderBrush="{DynamicResource Rule}" BorderThickness="1">
-                            <Panel>
-                                <StackPanel Margin="15,11" Spacing="7">
-                                    <StackPanel Orientation="Horizontal" Spacing="9">
-                                        <TextBlock Text="{Binding SpeakerName}" FontSize="10.5"
-                                                   FontWeight="Bold" LetterSpacing="1.2" MaxWidth="176"
-                                                   TextTrimming="CharacterEllipsis">
-                                            <TextBlock.Foreground>
-                                                <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
-                                                    <Binding Path="SpeakerColor" />
-                                                    <Binding Path="$self.ActualThemeVariant" />
-                                                </MultiBinding>
-                                            </TextBlock.Foreground>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding TimeLabel}" FontSize="10.5"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource Ink3}" />
-                                    </StackPanel>
-                                    <Border BorderBrush="{DynamicResource RuleFaint}"
-                                            BorderThickness="0,0,0,1" />
-                                    <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2"
-                                               TextTrimming="CharacterEllipsis" FontSize="12.5"
-                                               LineHeight="20" Foreground="{DynamicResource Ink2}" />
+                            <StackPanel Margin="15,11" Spacing="7">
+                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                    <TextBlock Text="{Binding SpeakerName}" FontSize="10.5"
+                                               FontWeight="Bold" LetterSpacing="1.2" MaxWidth="176"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
+                                                <Binding Path="SpeakerColor" />
+                                                <Binding Path="$self.ActualThemeVariant" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding TimeLabel}" FontSize="10.5"
+                                               LetterSpacing="1.5"
+                                               Foreground="{DynamicResource Ink3}" />
                                 </StackPanel>
-                                <Rectangle Width="3" HorizontalAlignment="Right"
-                                           Fill="{DynamicResource Ink}" />
-                            </Panel>
+                                <Border BorderBrush="{DynamicResource RuleFaint}"
+                                        BorderThickness="0,0,0,1" />
+                                <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2"
+                                           TextTrimming="CharacterEllipsis" FontSize="12.5"
+                                           LineHeight="20" Foreground="{DynamicResource Ink2}" />
+                            </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ContentControl.ContentTemplate>
