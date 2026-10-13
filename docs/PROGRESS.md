@@ -6,6 +6,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Project icon chooser (PR #251)
+
+Choosing an icon in Project settings did nothing. The icon now changes.
+
+Cause, proven by CI run 38342718637: the glyph button had a `Command` bound through `$parent[Window]`.
+That binding resolved while the flyout was open. The test asserted a non-null `Command` before the click.
+The click still left `Glyph` null. Avalonia raises `Click` before it reads `Command`.
+The `Click` handler called `Hide()`. `Hide()` removed the popup from the logical tree and unbound `Command`.
+No command ran.
+
+Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
+Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
 ### Local transcription runs (ADR 0053, slice C-5)
 
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
@@ -20,6 +32,7 @@ is removed.
   those models. The two "unknown transcription model" strings are removed.
 - **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
   Each load has its own status line. A failed load of either model stops the Start.
+
 
 ### The ruler draws one tick per sentence
 

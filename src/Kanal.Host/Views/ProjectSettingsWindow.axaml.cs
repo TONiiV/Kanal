@@ -35,7 +35,14 @@ public partial class ProjectSettingsWindow : Window
     public static double FittedMaxHeight(double designed, int workAreaPixels, double scaling) =>
         Math.Min(designed, workAreaPixels / scaling - TitleBarAllowance);
 
-    private void OnGlyphClick(object? sender, RoutedEventArgs e) => ChooseGlyph.Flyout?.Hide();
+    // Hide() unbinds a Command that reads its window through the popup before Click finishes, so run it here.
+    private void OnGlyphClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: string glyph } && DataContext is ProjectSettingsViewModel settings)
+            settings.ChooseGlyphCommand.Execute(glyph);
+
+        ChooseGlyph.Flyout?.Hide();
+    }
 
     private async Task<string?> ChooseImageAsync()
     {
