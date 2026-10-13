@@ -203,7 +203,7 @@ The original product requirements and design trade-offs are documented in Chines
 
 ## Development and testing
 
-Build and run the complete test suite from the repository root:
+CI builds the solution and runs the complete test suite with these commands:
 
 ```bash
 dotnet build Kanal.slnx --configuration Release
@@ -225,17 +225,6 @@ cmp web/index.html docs/index.html
 CI runs both suites on Windows and macOS, and on Linux as an optional job. The `coverage` job
 merges the reports of all platforms. The run page shows the summary table. The `coverage-report`
 artifact holds the full HTML report, line by line.
-
-To make the same report on your machine:
-
-```bash
-dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
-dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
-dotnet tool restore
-dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:Html -filefilters:"-**/obj/**"
-```
-
-Open `coverage-report/index.html`. Delete `coverage/` before the next run, or old reports merge in.
 
 For pipeline diagnosis:
 
