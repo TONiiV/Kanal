@@ -21,6 +21,15 @@ is removed.
 - **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
   Each load has its own status line. A failed load of either model stops the Start.
 
+### The ruler draws one tick per sentence
+
+Part of #103.
+
+- The transcript ruler draws one tick for each final utterance. Partial utterances get no tick. The tick uses the colour of its speaker.
+- A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
+- The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
+- When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
+
 ### Nemotron provider (ADR 0053, slice C-4)
 
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
@@ -30,6 +39,11 @@ Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 
 capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
 took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
 voice for a test clip.
+
+`doctor asr <wav> [modelsDir]` downloads the default model if needed, transcribes the WAV and prints
+a Markdown report. `local-asr-windows.yml` runs the Core tests and `doctor asr` on a hosted Windows
+runner for every PR that touches the provider. The workflow posts the report as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`.
 
 Four things the ADR did not anticipate, all found by running the model:
 
