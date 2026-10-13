@@ -115,17 +115,18 @@ public class SettingsViewModelDownloadTests
     }
 
     [AvaloniaFact]
-    public async Task AppShutdownCancelsEveryRunningDownload()
+    public async Task DisposingTheMainViewModelCancelsEveryRunningDownload()
     {
         var dir = NewDir();
         var handler = new StalledHandler();
-        var rows = new ModelRows(new ModelDownloadManager(dir, new HttpClient(handler)));
-        var translation = rows.Translation.First(m => m.IsLocal);
+        var vm = TestViewModels.Hermetic(
+            downloads: new ModelDownloadManager(dir, new HttpClient(handler)));
+        var translation = vm.ModelRows.Translation.First(m => m.IsLocal);
 
         var download = translation.DownloadCommand.ExecuteAsync(null);
         await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
 
-        rows.CancelAll();
+        vm.Dispose();
 
         await download.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.False(translation.IsDownloading);

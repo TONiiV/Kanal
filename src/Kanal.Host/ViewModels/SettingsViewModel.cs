@@ -98,14 +98,14 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
-    public SettingsViewModel()
+    public SettingsViewModel(ModelRows? modelRows = null)
         : this(
             SettingsStore.Load(),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             saveColourScheme: SettingsStore.SaveColourScheme,
             saveAccentTheme: SettingsStore.SaveAccentTheme,
             saveAppLanguage: SettingsStore.SaveAppLanguage,
-            modelRows: ModelRows.Shared)
+            modelRows: modelRows)
     {
     }
 
@@ -118,8 +118,8 @@ public partial class SettingsViewModel : ViewModelBase
     /// whatever OS CI happens to run.
     /// </param>
     /// <param name="modelRows">
-    /// The app-owned download rows. Only the production constructor passes the shared set; tests
-    /// get their own so parallel tests cannot share selection or download state.
+    /// The app-owned download rows (<c>MainViewModel.ModelRows</c>). Without them the window
+    /// builds its own, so parallel tests cannot share selection or download state.
     /// </param>
     /// <param name="deviceWatcherFactory">
     /// Hot-plug notifications for the test-device dropdown; tests fire a fake by hand.

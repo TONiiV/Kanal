@@ -12,17 +12,19 @@ Closing Settings no longer cancels a model download.
 
 - **`ModelRows` owns the model rows.** It holds the translation and transcription
   `ModelItemViewModel` rows, with the download state, progress and cancellation token of each.
-  `ModelRows.Shared` lives for the whole application. Each `SettingsViewModel` shows the same row
-  instances, so a reopened window shows the live progress and a working Cancel.
-- **The duplicate-download hazard is gone.** The reopened window shows the same row. The row is
-  already downloading, so the Download button stays off.
-- **Explicit Cancel and app exit still cancel.** `MainWindow.OnClosed` calls
-  `ModelRows.Shared.CancelAll()`.
+  `MainViewModel` creates it and exposes it as `ModelRows`, so it lives as long as the application.
+  The sidebar passes it to each `SettingsViewModel`. A reopened window shows the same row
+  instances: live progress, a working Cancel, and no second Download button.
+- **The mode list follows a finished download.** `MainViewModel` watches `IsDownloaded` on every
+  row. When it turns true, `MainViewModel` calls `RefreshPipelineStatus()`. The local modes and
+  "Generate title" become available without opening Settings again.
+- **Explicit Cancel and app exit still cancel.** `MainViewModel.Dispose()` calls
+  `ModelRows.CancelAll()`.
 - **`CancelDownloads` is now `OnWindowClosed`.** It stops the microphone test, the device
   listener and the language subscription. It no longer touches downloads.
 - **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
-  the same row and progress, `CancelAll` cancels. Only the production constructor passes
-  `ModelRows.Shared`; tests get their own rows.
+  the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
+  makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
 
 ### Accent themes
 

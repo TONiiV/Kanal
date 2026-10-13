@@ -78,8 +78,9 @@ public partial class WorkspaceSidebarView : UserControl
         if (TopLevel.GetTopLevel(this) is not Window owner)
             return;
 
-        await new SettingsWindow().ShowDialog(owner);
-        (DataContext as MainViewModel)?.RefreshPipelineStatus();
+        var vm = DataContext as MainViewModel;
+        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows)).ShowDialog(owner);
+        vm?.RefreshPipelineStatus();
     }
 
     private void OnProjectSettingsClick(object? sender, RoutedEventArgs e)
