@@ -130,14 +130,15 @@
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                     <RadioButton Grid.Column="0" GroupName="{Binding RadioGroup}"
                                  IsChecked="{Binding IsActive}"
-                                 VerticalAlignment="Top" Margin="0,1,0,0"
+                                 VerticalAlignment="Top" Margin="0,1,6,0"
+                                 IsVisible="{Binding HasChoice}"
                                  ToolTip.Tip="{Binding UseTip}" />
-                    <StackPanel Grid.Column="1" Margin="6,0,10,0">
+                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
                         <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding MetaLabel}" FontSize="11"
                                    Foreground="{DynamicResource Ink3}" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource Alarm}" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource Ink3}" Margin="0,2,0,0"
                                    IsVisible="{Binding HasLicenseNote}" />
                     </StackPanel>
                     <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"

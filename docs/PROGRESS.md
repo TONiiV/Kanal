@@ -46,6 +46,40 @@ Closing Settings no longer cancels a model download.
   the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
   makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
 
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
+### Project icon chooser (PR #251)
+
+Choosing an icon in Project settings did nothing. The icon now changes.
+
+Cause, proven by CI run 38342718637: the glyph button had a `Command` bound through `$parent[Window]`.
+That binding resolved while the flyout was open. The test asserted a non-null `Command` before the click.
+The click still left `Glyph` null. Avalonia raises `Click` before it reads `Command`.
+The `Click` handler called `Hide()`. `Hide()` removed the popup from the logical tree and unbound `Command`.
+No command ran.
+
+Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
+Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
+
+### Local transcription runs (ADR 0053, slice C-5)
+
+`PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
+is available when a transcription model and a translation model are downloaded. *Local · Cloud*
+stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
+is removed.
+
+- **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
+  the planner uses it too. The mode row says "not downloaded" until every part is on disk.
+- **A saved model id that the catalog no longer lists is the recommended model.** The planner does
+  not report an unknown model. A saved 160 ms or 1120 ms id therefore works after the catalog drops
+  those models. The two "unknown transcription model" strings are removed.
+- **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
+  Each load has its own status line. A failed load of either model stops the Start.
+
+
 ### The ruler draws one tick per sentence
 
 Part of #103.
@@ -64,6 +98,11 @@ Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 
 capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
 took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
 voice for a test clip.
+
+`doctor asr <wav> [modelsDir]` downloads the default model if needed, transcribes the WAV and prints
+a Markdown report. `local-asr-windows.yml` runs the Core tests and `doctor asr` on a hosted Windows
+runner for every PR that touches the provider. The workflow posts the report as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`.
 
 Four things the ADR did not anticipate, all found by running the model:
 
@@ -218,6 +257,57 @@ load.
 
 ## 2026-10-11
 
+### Resolve buttons in the Issues section (#213, part of spec #209)
+
+Each row of the Issues section in project settings now has its action. Kanal does the repair. The
+operator does not edit files.
+
+1. The causes name the kinds of #210 and #211. A damaged record, a folder without a record, a copied
+   folder and a damaged row of the project list each have their own sentence. The subject of a
+   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed.
+   An `Unreadable` meeting folder (an I/O error on `meeting.json`) gets the cause
+   `workspace.issues.unreachable` and no button: the record may be healthy. For the same reason it
+   uses the warning colour, not the alarm colour, in the banner and in the drop-down mark. So does a
+   `meetings` folder that cannot be listed. A project list that cannot be read stays in the alarm
+   colour: `ProjectIssueViewModel.For` decides the colour together with the cause.
+2. `ProjectIssueViewModel.Action` selects the action from the kind:
+
+   | Kind | Button | Core call |
+   |---|---|---|
+   | `RecordMissing`, `RecordDamaged` | Resolve | `RecoverMeeting` |
+   | `Misfiled` | Resolve | `ReidentifyMeeting` |
+   | `FolderMissing` (project folder) | Choose folder… / Remove from list | `RelocateWorkspace` / `ForgetWorkspace` |
+   | `FolderMissing` (`meetings`) | Resolve | `CreateMeetingsFolder` |
+   | `RegistryRowDamaged` | Resolve | `DropBrokenRegistryRows` |
+   | `UnsupportedVersion` | none | none |
+   | `Unreadable` (meeting folder) | none | none |
+
+3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
+   language. The time is the rebuilt start time of the meeting, in the operator's time zone.
+   `WorkspaceStore.RecoverMeeting` now takes `Func<DateTimeOffset, string> titleFor` in place of a
+   base title. Core calls it after the rebuild with the start time, refuses a blank result, and
+   then applies `FreeTitle`. This changes the API that #210 added.
+4. After each action, `ReloadIssues` calls `Refresh` on the sidebar. The meeting list, the banner and
+   the project marks update. The settings window then merges the new issue list into its rows:
+   - A row with an outcome stays, so the operator can read the outcome. When its issue is not in
+     the new list, the row loses its buttons, and its commands do nothing.
+   - A row without an outcome that is not in the new list goes away.
+   - A new issue is added at the end.
+5. The outcome shows in one line in the row. A refusal shows its reason in the alarm colour. The
+   reason is mapped from the `StoreProblemKind`. A reason without its own sentence gets the
+   generic sentence, and the log gets the detail.
+6. "Choose folder…" uses a folder picker in the settings window (`ChooseProjectFolder`), owned by
+   that window. "Remove from list" opens the remove dialog with only "Remove from list" and "Keep
+   it" (`RemoveProjectWindow` with `listOnly`). It then follows the existing remove flow: the window
+   closes and the sidebar reloads. A refused removal also reloads the issue list.
+7. After a relocation, an icon file of the project points to the new folder. Without this, Save
+   refused the old icon path.
+8. Spec decision 14: no action is offered for the project that records. The sidebar keeps the
+   project of `RecordingMeetingId` (`_recordingProjectId`). The project switcher stays open while
+   a meeting records, so this is not always the selected project. A note in the Issues section
+   says why the buttons are missing. "Remove from list" also follows the existing rule: no project
+   leaves the list while any meeting records.
+
 ### The Windows installer shows Kanal artwork
 
 The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
@@ -319,10 +409,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
    change nothing, because the record may be healthy.
    `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
    `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
-   In the Issues list, `ProjectIssueViewModel.For` shows `RecordMissing` and `RecordDamaged` with
-   `workspace.issues.unreadable`. `Misfiled` gets the generic cause until ticket #213 adds its sentence.
-   For these kinds the issue `Subject` is the meeting folder. Only `UnsupportedVersion` keeps `meeting.json`.
-2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, titleFor)` rebuilds `meeting.json` from
    `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
 3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
    `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
@@ -333,7 +420,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
      The code `und` (unknown language) is left out.
    - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
    - The start time is the end time minus the span of the utterance times. The created time equals the start time.
-   - The title is `FreeTitle` of the base title.
+   - The title is `FreeTitle` of `titleFor(start time)`. A blank title is refused before anything moves.
 5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
    `.damaged.2`, `.damaged.3` and so on.
 6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid

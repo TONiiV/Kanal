@@ -11,7 +11,7 @@ public sealed class ModelRows
     public ModelRows(ModelDownloadManager downloads)
     {
         Translation = [new ModelItemViewModel(), .. LocalModelCatalog.Models.Select(m => new ModelItemViewModel(m, downloads))];
-        Transcription = [.. AsrModelCatalog.Models.Select(m => new ModelItemViewModel(m, downloads))];
+        Transcription = [.. AsrModelCatalog.Models.Select(m => new ModelItemViewModel(m, downloads) { HasChoice = AsrModelCatalog.Models.Count > 1 })];
     }
 
     public IReadOnlyList<ModelItemViewModel> Translation { get; }

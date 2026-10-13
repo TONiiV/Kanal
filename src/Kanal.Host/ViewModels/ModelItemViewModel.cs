@@ -64,6 +64,8 @@ public partial class ModelItemViewModel : ViewModelBase
 
     public string? LicenseNote { get; }
 
+    public bool HasChoice { get; set; } = true;
+
     public bool HasLicenseNote => !string.IsNullOrEmpty(LicenseNote);
 
     // Avalonia scopes GroupName to the window, so both lists sharing one name would be one group.
