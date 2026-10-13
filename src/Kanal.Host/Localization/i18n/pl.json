@@ -279,6 +279,7 @@
   "assistant.tab.files": "Pliki",
   "assistant.noanalyst": "Żaden model nasłuchujący nie jest podłączony. Ustalenia i decyzje pojawią się tutaj po podłączeniu.",
   "assistant.nothingyet": "Nic jeszcze nie odnotowano.",
+  "assistant.nospeakers": "Nie rozpoznano jeszcze mówców. Mówcy pojawią się tutaj w trakcie spotkania.",
   "insight.kind.point": "USTALENIE",
   "insight.kind.proposal": "PROPOZYCJA",
   "insight.kind.decision": "DECYZJA",

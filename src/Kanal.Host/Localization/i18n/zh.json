@@ -279,6 +279,7 @@
   "assistant.tab.files": "文件",
   "assistant.noanalyst": "尚未接入旁听模型。接入后，要点与决定会出现在这里。",
   "assistant.nothingyet": "暂无内容。",
+  "assistant.nospeakers": "还没有听到发言人。会议中出现发言人后，会显示在这里。",
   "insight.kind.point": "要点",
   "insight.kind.proposal": "提议",
   "insight.kind.decision": "决定",
