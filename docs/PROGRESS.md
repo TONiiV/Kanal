@@ -507,9 +507,9 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
-- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in sRGB. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
   The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
-  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+  The mobile page uses `color-mix(in srgb, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
