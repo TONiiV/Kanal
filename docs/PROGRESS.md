@@ -6,6 +6,29 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### The ruler shows the screen and pages through the transcript
+
+Issue #268. The reference is the message navigator of a chat app.
+
+- **Colour stays.** A tick keeps the colour of its speaker. The emphasis comes from length and
+  thickness, not from opacity. Thus every tick stays at 3:1 or more (`ui-design.md`).
+- **In view.** The view reports the utterance ids of the bubbles on screen to
+  `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
+  replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **Reference column.** The leftmost shown column decides what is on screen. Rows in other
+  languages have other heights, so one column must decide. The arrows use the same column.
+- **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
+  ticks 21 and 15. A tick never gets shorter than its in-view reach.
+- **Ticks grow towards the transcript.** The ticks are right-aligned, so they grow to the left,
+  towards the text and the preview card.
+- **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. No hidden
+  sentence is skipped. A page jump does not mark a jump target.
+- **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
+  not change when an arrow turns on or off.
+- **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
+  `ColumnScrollWiringTests` (scrolling marks the ticks; the arrows page without a skip).
+
 ### Pin to Points
 
 The transcript menu has a third item, **Pin to Points**. It adds the line to the Points tab.

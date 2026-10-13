@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Models;
 
 namespace Kanal.Host.ViewModels;
@@ -12,6 +13,12 @@ public enum RulerTickKind
     // Nothing produces Topic until the semantic layer (#103) lands; it reconciles into this
     // same tick list rather than a second strip.
     Topic,
+}
+
+public enum PageDirection
+{
+    Up,
+    Down,
 }
 
 public partial class RulerTickViewModel : ViewModelBase
@@ -40,7 +47,10 @@ public partial class RulerTickViewModel : ViewModelBase
     private double _pitch = TranscriptRulerViewModel.MaxPitch;
 
     [ObservableProperty]
-    private bool _isCurrent;
+    private bool _isInView;
+
+    [ObservableProperty]
+    private double _reach = TranscriptRulerViewModel.RestReach;
 
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
@@ -50,12 +60,19 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double MaxPitch = 9;
     public const double DefaultStripHeight = 648;
     public const double CardHeight = 96;
+    public const double RestReach = 10;
+    public const double InViewReach = 16;
+
+    private static readonly double[] HoverReach = [28, 21, 15];
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private HashSet<string> _visible = new();
+    private int _firstInView = -1;
+    private int _lastInView = -1;
 
     public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
         _resolve = resolve;
@@ -74,6 +91,12 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public bool IsPreviewOpen => HoveredTick is not null;
 
     public event Action<string>? JumpRequested;
+
+    public event Action<string, PageDirection>? PageRequested;
+
+    public bool CanPageUp => _firstInView > 0;
+
+    public bool CanPageDown => _lastInView >= 0 && _lastInView < Ticks.Count - 1;
 
     public void Observe(Utterance u)
     {
@@ -101,6 +124,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         Write(added);
         Ticks.Add(tick);
         Layout();
+        MarkInView();
     }
 
     public void Reresolve()
@@ -116,9 +140,16 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             Layout();
     }
 
+    public void SetVisible(IEnumerable<string> utteranceIds)
+    {
+        _visible = new HashSet<string>(utteranceIds);
+        MarkInView();
+    }
+
     public void Hover(RulerTickViewModel? tick)
     {
         HoveredTick = tick;
+        Magnify();
         if (tick is null)
             return;
 
@@ -128,21 +159,69 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     public void Jump(RulerTickViewModel tick) => JumpRequested?.Invoke(tick.AnchorUtteranceId);
 
+    [RelayCommand(CanExecute = nameof(CanPageUp))]
+    private void PageUp()
+    {
+        if (CanPageUp)
+            PageRequested?.Invoke(Ticks[_firstInView - 1].AnchorUtteranceId, PageDirection.Up);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPageDown))]
+    private void PageDown()
+    {
+        if (CanPageDown)
+            PageRequested?.Invoke(Ticks[_lastInView + 1].AnchorUtteranceId, PageDirection.Down);
+    }
+
     public void Clear()
     {
         _entries.Clear();
         _originMs = null;
+        _visible = new HashSet<string>();
         HoveredTick = null;
         Ticks.Clear();
+        MarkInView();
     }
 
     private void Layout()
     {
         var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
         foreach (var tick in Ticks)
-        {
             tick.Pitch = pitch;
-            tick.IsCurrent = ReferenceEquals(tick, Ticks[^1]);
+    }
+
+    private void MarkInView()
+    {
+        _firstInView = _lastInView = -1;
+        for (var i = 0; i < Ticks.Count; i++)
+        {
+            var inView = _visible.Contains(Ticks[i].AnchorUtteranceId);
+            Ticks[i].IsInView = inView;
+            if (!inView)
+                continue;
+
+            if (_firstInView < 0)
+                _firstInView = i;
+            _lastInView = i;
+        }
+
+        Magnify();
+        OnPropertyChanged(nameof(CanPageUp));
+        OnPropertyChanged(nameof(CanPageDown));
+        PageUpCommand.NotifyCanExecuteChanged();
+        PageDownCommand.NotifyCanExecuteChanged();
+    }
+
+    private void Magnify()
+    {
+        var hovered = HoveredTick is null ? -1 : Ticks.IndexOf(HoveredTick);
+        for (var i = 0; i < Ticks.Count; i++)
+        {
+            var reach = Ticks[i].IsInView ? InViewReach : RestReach;
+            var distance = hovered < 0 ? int.MaxValue : Math.Abs(i - hovered);
+            if (distance < HoverReach.Length)
+                reach = Math.Max(reach, HoverReach[distance]);
+            Ticks[i].Reach = reach;
         }
     }
 
