@@ -81,6 +81,24 @@ Ticket #206.
 
 ## 2026-10-12
 
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store makes at most 10 attempts,
+   with 50 ms between them. `RecordFile` logs each of the first 9 failures as a Warning line.
+   The last failure goes to the caller, which logs it and reports `Unwritable`.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
+
 ### The fast-source-clock capture test no longer times out
 
 `ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
