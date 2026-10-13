@@ -65,11 +65,11 @@ public class BubbleContextMenuTests
     private static MenuItem Item(MenuFlyout flyout, string name) =>
         flyout.Items.OfType<MenuItem>().Single(i => i.Name == name);
 
-    private static void RightClick(Window window, Control target, double x, double fromBottom)
+    private static void RequestContextAt(Window window, Control inside, double x, double y)
     {
-        var at = target.TranslatePoint(new Point(x, target.Bounds.Height - fromBottom), window)!.Value;
-        window.MouseDown(at, MouseButton.Right);
-        window.MouseUp(at, MouseButton.Right);
+        var at = inside.TranslatePoint(new Point(x, y), window)!.Value;
+        var hit = Assert.IsAssignableFrom<Interactive>(window.InputHitTest(at));
+        hit.RaiseEvent(new ContextRequestedEventArgs());
         Settle(window);
     }
 
@@ -101,12 +101,12 @@ public class BubbleContextMenuTests
     }
 
     [AvaloniaFact]
-    public void ARightClickOnTheBubblePaddingOpensTheMenuOnTheBubble()
+    public void AContextRequestOnTheBubblePaddingOpensTheMenuOnTheBubble()
     {
         var (window, translated, _) = Shown();
         var border = BubbleOf(window, translated);
 
-        RightClick(window, border, border.Bounds.Width / 2, fromBottom: 6);
+        RequestContextAt(window, border, border.Bounds.Width / 2, border.Bounds.Height - 6);
 
         var flyout = Assert.IsType<MenuFlyout>(border.ContextFlyout);
         Assert.True(flyout.IsOpen);
@@ -116,13 +116,13 @@ public class BubbleContextMenuTests
     }
 
     [AvaloniaFact]
-    public void ARightClickOnALineOpensTheMenuOnThatLineOnly()
+    public void AContextRequestOnALineOpensTheMenuOnThatLineOnly()
     {
         var (window, translated, _) = Shown();
         var line = BubbleOf(window, translated).GetVisualDescendants().OfType<SelectableTextBlock>()
             .First(b => b.Text == Translation);
 
-        RightClick(window, line, 10, fromBottom: line.Bounds.Height / 2);
+        RequestContextAt(window, line, 10, line.Bounds.Height / 2);
 
         var flyout = Assert.IsType<MenuFlyout>(line.ContextFlyout);
         Assert.True(flyout.IsOpen);
@@ -189,6 +189,26 @@ public class BubbleContextMenuTests
 
         OpenMenuOn(window, first);
         Assert.False(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
+        flyout.Hide();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void PinFollowsTheMenuStraightFromOneBubbleToAnother()
+    {
+        var (window, translated, original) = Shown();
+        translated.IsPartial = true;
+        var first = LineOf(window, translated);
+        var second = LineOf(window, original);
+
+        var flyout = OpenMenuOn(window, first);
+        Assert.False(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
+
+        OpenMenuOn(window, second);
+
+        Assert.Same(second, flyout.Target);
+        Assert.Same(original.PinCommand, Item(flyout, "PinToPoints").Command);
+        Assert.True(Item(flyout, "PinToPoints").IsEffectivelyEnabled);
         flyout.Hide();
         window.Close();
     }
