@@ -8,8 +8,6 @@ internal static class ThemeColours
 {
     public static string SpeakerFallback => Hex("SpeakerFallbackColor");
 
-    public static string TickMixed => Hex("TickMixedColor");
-
     private static string Hex(string key)
     {
         var app = Application.Current!;
