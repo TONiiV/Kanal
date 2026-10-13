@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Kanal.Core.Models;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
 
