@@ -15,6 +15,10 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - Project settings: choosing an icon from the Choose icon list now changes the project icon.
+- The Speakers tab shows when the room has a speaker. Each speaker row has a name box, a colour
+  choice, the number of utterances and a "merge into" list. A colour change also reaches the phones.
+- Kanal no longer damages a meeting record when the computer stops during a save. A meeting folder
+  that Kanal cannot open now shows as unreadable, not as a meeting without a record.
 - Each settings tab shows an icon next to its name.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
@@ -36,6 +40,10 @@ The first release. Everything below is what Kanal does on the day it ships.
   A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
 - Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
   scheme during a meeting.
+- You can now change the microphone while a meeting records. Pick another one in the microphone
+  menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
+  Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
+  recording starts.
 - The window no longer freezes at start when a project is on a slow network share. Kanal now checks
   the other projects for issues in the background. The warning marks in the project list appear when
   that check ends.
