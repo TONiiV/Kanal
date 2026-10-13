@@ -181,12 +181,12 @@ public class MeetingSessionTests
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
             asr, null, relay, new RoomConfig("t", ["zh"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
         await asr.Feed.SayAsync(Spoken("u1", "料号 KX-", isFinal: false));
         await WaitUntilAsync(() => relay.OfType<UtteranceUpsert>().Count == 1);
 
-        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
         await asr.Feed.SayAsync(Spoken("u1", "料号 KX-4402 确认。", isFinal: true));
 
         await WaitUntilAsync(() =>
@@ -207,9 +207,9 @@ public class MeetingSessionTests
         var relay = new RecordingRelay();
         await using var session = new MeetingSession(
             asr, null, relay, new RoomConfig("t", ["zh"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
-        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
         await asr.Feed.SayAsync(Spoken("u2", "内部", isFinal: false));
         await asr.Feed.SayAsync(Spoken("u2", "内部商量。", isFinal: true));
 
@@ -219,9 +219,9 @@ public class MeetingSessionTests
         var sentinel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         session.ErrorOccurred += _ => sentinel.TrySetResult();
         await asr.Feed.SayAsync(new AsrEvent.Error("sentinel", Fatal: false));
-        await sentinel.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await sentinel.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        await session.SetPausedAsync(false);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
         await asr.Feed.SayAsync(Spoken("u3", "继续。", isFinal: true));
 
         await WaitUntilAsync(() => relay.OfType<UtteranceUpsert>().Any(u => u.Utterance.Id == "u3"));
@@ -241,18 +241,18 @@ public class MeetingSessionTests
         var asr = new AudioCountingAsr();
         await using var session = new MeetingSession(
             asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(1, asr.Pushes.Frames);
 
-        await session.SetPausedAsync(true);
-        await session.PushAudioAsync(new byte[320]);
-        await session.PushAudioAsync(new byte[320]);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(1, asr.Pushes.Frames);
 
-        await session.SetPausedAsync(false);
-        await session.PushAudioAsync(new byte[320]);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(2, asr.Pushes.Frames);
     }
 
@@ -268,18 +268,18 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             asr, null, new RecordingRelay(), new RoomConfig("t", ["zh"]));
         session.AudioAccepted += _ => Interlocked.Increment(ref taken);
-        await session.StartAsync();
+        await session.StartAsync(TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(new byte[320]);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(1, taken);
 
-        await session.SetPausedAsync(true);
-        await session.PushAudioAsync(new byte[320]);
-        await session.PushAudioAsync(new byte[320]);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(1, taken);
 
-        await session.SetPausedAsync(false);
-        await session.PushAudioAsync(new byte[320]);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
+        await session.PushAudioAsync(new byte[320], TestContext.Current.CancellationToken);
         Assert.Equal(2, taken);
         Assert.Equal(taken, asr.Pushes.Frames); // the tap and the wire see exactly the same audio
     }
@@ -297,7 +297,7 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
         await RunToEndAsync(session);
 
         Assert.Empty(relay.OfType<UtteranceUpsert>());
@@ -311,8 +311,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetPausedAsync(true);
-        await session.SetPausedAsync(false);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
         await RunToEndAsync(session);
 
         Assert.NotEmpty(relay.OfType<UtteranceUpsert>());
@@ -330,8 +330,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetPausedAsync(true);
-        await session.SetPausedAsync(false);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.SetPausedAsync(false, TestContext.Current.CancellationToken);
 
         var announced = relay.OfType<RoomPausedMessage>();
         Assert.Equal([true, false], announced.Select(m => m.Paused));
@@ -346,8 +346,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetPausedAsync(true);
-        await session.SetPausedAsync(true);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
 
         Assert.Single(relay.OfType<RoomPausedMessage>());
     }
@@ -361,8 +361,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetPausedAsync(true);
-        await session.PublishSnapshotAsync();
+        await session.SetPausedAsync(true, TestContext.Current.CancellationToken);
+        await session.PublishSnapshotAsync(TestContext.Current.CancellationToken);
 
         Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Paused);
     }
@@ -380,8 +380,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetRecordingAsync(true);
-        await session.SetRecordingAsync(false);
+        await session.SetRecordingAsync(true, TestContext.Current.CancellationToken);
+        await session.SetRecordingAsync(false, TestContext.Current.CancellationToken);
 
         Assert.Equal([true, false], relay.OfType<RoomRecordingMessage>().Select(m => m.Recording));
     }
@@ -394,8 +394,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetRecordingAsync(true);
-        await session.SetRecordingAsync(true);
+        await session.SetRecordingAsync(true, TestContext.Current.CancellationToken);
+        await session.SetRecordingAsync(true, TestContext.Current.CancellationToken);
 
         Assert.Single(relay.OfType<RoomRecordingMessage>());
     }
@@ -412,8 +412,8 @@ public class MeetingSessionTests
         await using var session = new MeetingSession(
             FastFake(translation: true), null, relay, new RoomConfig("t", ["zh", "de"]));
 
-        await session.SetRecordingAsync(true);
-        await session.PublishSnapshotAsync();
+        await session.SetRecordingAsync(true, TestContext.Current.CancellationToken);
+        await session.PublishSnapshotAsync(TestContext.Current.CancellationToken);
 
         Assert.True(relay.OfType<RoomSnapshotMessage>().Single().Snapshot.Recording);
     }
@@ -654,11 +654,11 @@ public class MeetingSessionTests
             FastFake(), mt, new RecordingRelay(), new RoomConfig("t", ["zh", "de"]),
             translationGrace: TimeSpan.FromMilliseconds(50));
 
-        await session.StartAsync();
-        await mt.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await session.StartAsync(TestContext.Current.CancellationToken);
+        await mt.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         var started = Environment.TickCount64;
-        await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         var elapsed = Environment.TickCount64 - started;
 
         Assert.True(elapsed < 2000, $"Stop was held open for {elapsed} ms.");
@@ -703,18 +703,18 @@ public class MeetingSessionTests
             asr, mt, new RecordingRelay(), new RoomConfig("t", ["zh", "de"]),
             translationGrace: TimeSpan.FromSeconds(5));
 
-        await session.StartAsync();
-        await asr.Events.Writer.WriteAsync(Final("u1", "第一句。"));
-        await mt.FirstStarted.WaitAsync(TimeSpan.FromSeconds(10)); // …is pending at the snapshot
+        await session.StartAsync(TestContext.Current.CancellationToken);
+        await asr.Events.Writer.WriteAsync(Final("u1", "第一句。"), TestContext.Current.CancellationToken);
+        await mt.FirstStarted.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); // …is pending at the snapshot
 
         // Disposal runs synchronously up to the grace wait, so once we regain control the
         // pending set has been snapshotted — anything the pump tracks from here on is late.
         var disposing = session.DisposeAsync().AsTask();
-        await asr.Events.Writer.WriteAsync(Final("u2", "第二句。"));
-        await mt.SecondStarted.WaitAsync(TimeSpan.FromSeconds(10));
+        await asr.Events.Writer.WriteAsync(Final("u2", "第二句。"), TestContext.Current.CancellationToken);
+        await mt.SecondStarted.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         mt.ReleaseFirst(); // first lands inside the grace; the cancel follows and catches u2
-        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         Assert.True(mt.LateUnwound,
             "disposal returned while a late-tracked translation was still unwinding.");

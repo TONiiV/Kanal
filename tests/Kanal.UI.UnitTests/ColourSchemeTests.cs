@@ -17,6 +17,7 @@ public class ColourSchemeTests
     {
         Appearance.SystemChanged(PlatformThemeVariant.Light);
         Appearance.Apply(ColourScheme.Light);
+        Appearance.Apply(AccentThemes.Kanal);
     }
 
     private static ColourSchemeOption Option(SettingsViewModel vm, ColourScheme scheme) =>
@@ -108,10 +109,15 @@ public class ColourSchemeTests
             foreach (var (scheme, variant) in new[] { (ColourScheme.Dark, ThemeVariant.Dark), (ColourScheme.Light, ThemeVariant.Light) })
             {
                 Appearance.Apply(scheme);
-                Assert.All(ramp, key => Assert.Equal(
-                    Brush(variant, "AccentRamp" + key["SystemAccentColor".Length..]), (Color)root[key]!));
-                // FluentTheme paints a checked box and the settings tab marker with the base colour.
-                Assert.Equal(Brush(variant, "Brand"), (Color)root["SystemAccentColor"]!);
+                foreach (var theme in AccentThemes.All)
+                {
+                    Appearance.Apply(theme);
+                    Assert.All(ramp, key => Assert.Equal(
+                        Brush(variant, "AccentRamp" + key["SystemAccentColor".Length..]), (Color)root[key]!));
+                    // FluentTheme paints a checked box and the settings tab marker with the base colour.
+                    Assert.Equal(Brush(variant, "Brand"), (Color)root["SystemAccentColor"]!);
+                    Assert.Equal(theme.Of(variant == ThemeVariant.Dark).BrandColour, (Color)root["SystemAccentColor"]!);
+                }
             }
         }
         finally
@@ -168,6 +174,121 @@ public class ColourSchemeTests
     }
 
     [AvaloniaFact]
+    public void ChoosingAThemeSavesItsIdAndAppliesItsBrandInBothVariants()
+    {
+        try
+        {
+            var saved = new List<string>();
+            var vm = new SettingsViewModel(new AppSettings(), () => null, saveAccentTheme: saved.Add);
+            Assert.Equal(AccentThemes.Kanal, vm.Theme.Theme);
+
+            foreach (var option in vm.Themes.Skip(1).Append(vm.Themes[0]))
+            {
+                vm.Theme = option;
+
+                foreach (var (scheme, variant) in new[] { (ColourScheme.Light, ThemeVariant.Light), (ColourScheme.Dark, ThemeVariant.Dark) })
+                {
+                    Appearance.Apply(scheme);
+                    Assert.Equal(option.Theme.Of(variant == ThemeVariant.Dark).BrandColour, Brush(variant, "Brand"));
+                }
+            }
+
+            Assert.Equal(["grove", "ocean", "iris", "graphite", "kanal"], saved);
+            vm.Theme = vm.Themes.Single(o => o.Theme.Id == "iris");
+            var written = new AppSettings();
+            vm.ApplyTo(written);
+            Assert.Equal("iris", written.AccentTheme);
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [AvaloniaFact]
+    public void AnUnknownThemeIdFallsBackToKanalIndigo()
+    {
+        var vm = new SettingsViewModel(new AppSettings { AccentTheme = "mauve" }, () => null);
+
+        Assert.Equal(AccentThemes.Kanal, vm.Theme.Theme);
+        Assert.Equal(AccentThemes.Kanal, AccentThemes.Find(null));
+        Assert.Equal("kanal", new AppSettings().AccentTheme);
+    }
+
+    [AvaloniaFact]
+    public void AThemeCardShowsTheBrandOfBothVariants()
+    {
+        foreach (var option in new SettingsViewModel(new AppSettings(), () => null).Themes)
+        {
+            Assert.Equal(option.Theme.Light.BrandColour, ((RadialGradientBrush)option.LightOrb).GradientStops[^1].Color);
+            Assert.Equal(option.Theme.Dark.BrandColour, ((RadialGradientBrush)option.DarkOrb).GradientStops[^1].Color);
+        }
+    }
+
+    [AvaloniaFact]
+    public void NoThemeChangesAKeyOutsideTheBrandFamily()
+    {
+        string[] brandFamily =
+        [
+            "Brand", "BrandHover", "BrandPressed", "BrandWash", "OnBrand",
+            "AccentRamp", "AccentRampLight1", "AccentRampLight2", "AccentRampLight3",
+            "AccentRampDark1", "AccentRampDark2", "AccentRampDark3",
+            "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver",
+            "CheckBoxCheckGlyphForegroundCheckedPressed", "CheckBoxCheckGlyphForegroundIndeterminate",
+            "CheckBoxCheckGlyphForegroundIndeterminatePointerOver", "CheckBoxCheckGlyphForegroundIndeterminatePressed",
+            "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed",
+            "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed",
+        ];
+        try
+        {
+            var dictionaries = Application.Current!.Resources.ThemeDictionaries;
+            Dictionary<string, string> Snapshot(ThemeVariant variant) =>
+                ((ResourceDictionary)dictionaries[variant]).ToDictionary(
+                    entry => (string)entry.Key,
+                    entry => entry.Value is ISolidColorBrush brush ? brush.Color.ToString() : entry.Value?.ToString() ?? "");
+
+            Appearance.Apply(AccentThemes.Kanal);
+            foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+            {
+                var baseline = Snapshot(variant);
+                foreach (var theme in AccentThemes.All)
+                {
+                    Appearance.Apply(theme);
+                    var now = Snapshot(variant);
+                    Assert.Equal(baseline.Keys.Order(), now.Keys.Order());
+                    Assert.Empty(baseline.Keys.Where(key => baseline[key] != now[key]).Except(brandFamily));
+                }
+            }
+        }
+        finally
+        {
+            Restore();
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheStartupBrandIsKanalIndigo()
+    {
+        var fresh = new App();
+        fresh.Initialize();
+        Appearance.Apply(ColourScheme.Light);
+        Appearance.Apply(AccentThemes.Kanal);
+        var live = Application.Current!;
+        foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+        {
+            var expected = (ResourceDictionary)live.Resources.ThemeDictionaries[variant];
+            var actual = (ResourceDictionary)fresh.Resources.ThemeDictionaries[variant];
+            foreach (var key in new[] { "Brand", "BrandHover", "BrandPressed", "BrandWash", "OnBrand" })
+                Assert.Equal(((ISolidColorBrush)expected[key]!).Color, ((ISolidColorBrush)actual[key]!).Color);
+            foreach (var key in expected.Keys.OfType<string>().Where(k => k.StartsWith("AccentRamp", StringComparison.Ordinal)))
+                Assert.Equal((Color)expected[key]!, (Color)actual[key]!);
+        }
+
+        foreach (var key in live.Resources.Keys.OfType<string>().Where(k => k.StartsWith("SystemAccentColor", StringComparison.Ordinal)))
+            Assert.Equal((Color)live.Resources[key]!, (Color)fresh.Resources[key]!);
+    }
+
+    [AvaloniaFact]
     public void ASettingsFileWithAnUnknownSchemeFallsBackToLight()
     {
         var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("""{"ColourScheme":"Sepia"}""")!;
@@ -203,30 +324,32 @@ public class ColourSchemeTests
         return (hi + 0.05) / (lo + 0.05);
     }
 
-    public static TheoryData<string, string, string, double> Pairs()
+    public static TheoryData<string, string, string, string, double> Pairs()
     {
-        var data = new TheoryData<string, string, string, double>();
+        var data = new TheoryData<string, string, string, string, double>();
+        foreach (var accent in AccentThemes.All.Select(theme => theme.Id))
         foreach (var variant in new[] { "Light", "Dark" })
         {
             foreach (var surface in new[] { "Sheet", "Paper" })
             {
-                data.Add(variant, "Ink", surface, 4.5);
-                data.Add(variant, "Ink2", surface, 4.5);
-                data.Add(variant, "Ink3", surface, 4.5);
-                data.Add(variant, "Alarm", surface, 4.5);
-                data.Add(variant, "SpeakerFallbackColor", surface, 4.5);
+                data.Add(accent, variant, "Ink", surface, 4.5);
+                data.Add(accent, variant, "Ink2", surface, 4.5);
+                data.Add(accent, variant, "Ink3", surface, 4.5);
+                data.Add(accent, variant, "Alarm", surface, 4.5);
+                data.Add(accent, variant, "SpeakerFallbackColor", surface, 4.5);
             }
 
-            data.Add(variant, "Ink", "BrandWash", 4.5);
-            data.Add(variant, "Alarm", "AlarmWash", 4.5);
-            data.Add(variant, "Warning", "WarningWash", 3.0);
-            data.Add(variant, "Warning", "Sheet", 4.5);
-            data.Add(variant, "Brand", "Sheet", 4.5);
-            data.Add(variant, "Brand", "BrandWash", 4.5);
-            data.Add(variant, "OnBrand", "Brand", 4.5);
-            data.Add(variant, "OnBrand", "BrandHover", 4.5);
-            data.Add(variant, "OnBrand", "Alarm", 4.5);
-            data.Add(variant, "OnCloseHover", "CloseHover", 4.5);
+            data.Add(accent, variant, "Ink", "BrandWash", 4.5);
+            data.Add(accent, variant, "Alarm", "AlarmWash", 4.5);
+            data.Add(accent, variant, "Warning", "WarningWash", 3.0);
+            data.Add(accent, variant, "Warning", "Sheet", 4.5);
+            data.Add(accent, variant, "Brand", "Sheet", 4.5);
+            data.Add(accent, variant, "Brand", "Paper", 3.0);
+            data.Add(accent, variant, "Brand", "BrandWash", 4.5);
+            data.Add(accent, variant, "OnBrand", "Brand", 4.5);
+            data.Add(accent, variant, "OnBrand", "BrandHover", 4.5);
+            data.Add(accent, variant, "OnBrand", "Alarm", 4.5);
+            data.Add(accent, variant, "OnCloseHover", "CloseHover", 4.5);
         }
 
         return data;
@@ -234,13 +357,21 @@ public class ColourSchemeTests
 
     [AvaloniaTheory]
     [MemberData(nameof(Pairs))]
-    public void TextStaysReadableInEveryVariant(string variant, string text, string surface, double minimum)
+    public void TextStaysReadableInEveryVariant(string accent, string variant, string text, string surface, double minimum)
     {
-        var theme = variant == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        try
+        {
+            Appearance.Apply(AccentThemes.Find(accent));
+            var theme = variant == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
 
-        var ratio = Contrast(Brush(theme, text), Brush(theme, surface));
+            var ratio = Contrast(Brush(theme, text), Brush(theme, surface));
 
-        Assert.True(ratio >= minimum, $"{variant}: {text} on {surface} is {ratio:F2}:1, below {minimum}:1.");
+            Assert.True(ratio >= minimum, $"{accent} {variant}: {text} on {surface} is {ratio:F2}:1, below {minimum}:1.");
+        }
+        finally
+        {
+            Restore();
+        }
     }
 
     [AvaloniaTheory]
@@ -250,22 +381,28 @@ public class ColourSchemeTests
     {
         try
         {
-            Appearance.Apply(scheme);
             var app = Application.Current!;
-            var fill = (Color)app.Resources["SystemAccentColor"]!;
             string[] glyphs =
             [
                 "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver",
                 "CheckBoxCheckGlyphForegroundCheckedPressed", "CheckBoxCheckGlyphForegroundIndeterminate",
+                "CheckBoxCheckGlyphForegroundIndeterminatePointerOver", "CheckBoxCheckGlyphForegroundIndeterminatePressed",
                 "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed",
                 "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed",
             ];
 
-            Assert.All(glyphs, key =>
+            foreach (var theme in AccentThemes.All)
             {
-                var ratio = Contrast(Brush(app.ActualThemeVariant, key), fill);
-                Assert.True(ratio >= 3, $"{scheme}: {key} on the accent fill is {ratio:F2}:1, below 3:1.");
-            });
+                Appearance.Apply(theme);
+                Appearance.Apply(scheme);
+                var fill = (Color)app.Resources["SystemAccentColor"]!;
+                Assert.All(glyphs, key =>
+                {
+                    Assert.Equal(Brush(app.ActualThemeVariant, "OnBrand"), Brush(app.ActualThemeVariant, key));
+                    var ratio = Contrast(Brush(app.ActualThemeVariant, key), fill);
+                    Assert.True(ratio >= 3, $"{theme.Id} {scheme}: {key} on the accent fill is {ratio:F2}:1, below 3:1.");
+                });
+            }
         }
         finally
         {

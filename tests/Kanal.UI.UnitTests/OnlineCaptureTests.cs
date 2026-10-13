@@ -793,7 +793,7 @@ public class OnlineCaptureTests
                 development: true)
             {
                 RelayEnabled = true,
-                RelayPublisherFactory = _ => Relay,
+                RelayPublisherFactory = (_, _) => Task.FromResult<IRelayPublisher>(Relay),
             };
             Vm.SelectedMode = Vm.Modes.Single(o => o.Mode.Id == PipelineModeId.CloudCloud);
             Vm.PlanFilter = plan => plan with { Asr = Asr, Mt = null, CloudTranslation = true };
