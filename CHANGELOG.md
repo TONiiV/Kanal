@@ -14,8 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- The mode *Local transcription · Cloud translation* now works. Add a DeepL API key in Settings, in the
-  Translation tab. Kanal sends only text to DeepL, never audio. If the quota is used up or the key is
+- The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
+  Settings, in the Translation tab. Kanal sends only text to the translation service, never audio. If the quota is used up or the key is
   wrong, the status line says so.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a

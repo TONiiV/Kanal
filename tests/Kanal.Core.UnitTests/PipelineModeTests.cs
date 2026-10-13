@@ -337,7 +337,7 @@ public class PipelineModeTests
     [Fact]
     public void CloudCloudStillTranslatesInsideTheTranscriptionSession()
     {
-        var (downloads, dir) = TempDownloads();
+        var (downloads, _) = TempDownloads();
 
         foreach (var translationKey in new[] { NoKey, SomeKey })
         {
@@ -349,8 +349,6 @@ public class PipelineModeTests
             Assert.True(plan.Asr!.Caps.Translation);
             (plan.Asr as IDisposable)?.Dispose();
         }
-
-        Directory.Delete(dir, recursive: true);
     }
 
     [Fact]
