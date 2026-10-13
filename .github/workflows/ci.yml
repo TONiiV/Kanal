@@ -58,6 +58,12 @@ jobs:
       - name: UI view-model unit tests
         run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
 
+      - name: Temporary ring screenshots
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          KANAL_SHOTS: '1'
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "FullyQualifiedName~TempRingShots" --logger "console;verbosity=detailed"
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.os }}
