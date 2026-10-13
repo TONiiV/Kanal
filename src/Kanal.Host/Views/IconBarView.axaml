@@ -170,8 +170,6 @@
                                         </Panel>
                                         <StackPanel Grid.Column="1" Spacing="3">
                                             <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Guidance}" FontSize="10.5" LineHeight="15"
-                                                       TextWrapping="Wrap" Foreground="{DynamicResource Ink3}" />
                                             <TextBlock Text="{Binding Unavailable}" FontSize="10.5" LineHeight="15"
                                                        TextWrapping="Wrap" FontWeight="SemiBold"
                                                        IsVisible="{Binding !IsAvailable}"
@@ -237,7 +235,7 @@
                                         <StackPanel Spacing="6">
                                             <TextBlock Text="{l:T input.label}" Classes="label" />
                                             <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
-                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding CanChooseAudio}">
+                                                      HorizontalAlignment="Stretch" IsEnabled="{Binding CanChooseDevice}">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
                                                 </ComboBox.ItemTemplate>

@@ -71,6 +71,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private Task? _captureStopping;
     private string? _activeMicrophoneId;
     private bool _activeOnline;
+    private bool _refreshingDevices;
+    private string _liveStatus = "";
+    private string? _audioFaultStatus;
     private SignalState _microphoneSignal;
     private SignalState _systemSignal;
     private string? _statusBeforePushFailure;
@@ -132,13 +135,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         bool development = false)
     {
         _titler = titler;
+        Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSpeakers));
         _offUiThread = offUiThread ?? (work =>
         {
             work();
             return Task.CompletedTask;
         });
-        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
-            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
             (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
@@ -198,6 +200,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
+        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
+            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
@@ -304,10 +308,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Re-enumerates into <see cref="Devices"/>. The selection survives by its stable id —
-    /// enumeration builds fresh instances every time — and an unplugged selection falls back
-    /// to the list head, which the backends already order default-first. A capture already
-    /// running keeps the device id it was started with: the dropdown updates, the meeting
-    /// does not switch microphones mid-sentence.
+    /// enumeration builds fresh instances every time. Idle, an unplugged selection falls back to
+    /// the list head, which the backends already order default-first; live, a refresh never moves
+    /// the capture — only the operator's pick does.
     /// </summary>
     private void RefreshDevices()
     {
@@ -324,11 +327,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // The active ids, not the selections: clearing a bound ComboBox's items nulls its selection.
         var lost = IsRunning && !IsStopping && _activeOnline && IsMissing(_activeMicrophoneId, fresh);
 
-        var selectedId = SelectedDevice?.Id;
-        Devices.Clear();
-        foreach (var device in fresh)
-            Devices.Add(device);
-        SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+        _refreshingDevices = true;
+        try
+        {
+            // Live, show the device in use or none: re-picking the item already shown raises no change.
+            var live = IsRunning && !IsStopping;
+            var selectedId = live ? _activeMicrophoneId : SelectedDevice?.Id;
+            Devices.Clear();
+            foreach (var device in fresh)
+                Devices.Add(device);
+            SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? (live ? null : Devices.FirstOrDefault());
+        }
+        finally
+        {
+            _refreshingDevices = false;
+        }
 
         if (lost)
         {
@@ -519,6 +532,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
+
+    public bool HasSpeakers => Speakers.Count > 0;
 
     public AssistantViewModel Assistant { get; } = new();
 
@@ -719,7 +734,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool RelayEnabled { get; set; } = true;
 
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
-    public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
+    public Func<string, CancellationToken, Task<IRelayPublisher>>? RelayPublisherFactory { get; set; }
 
     /// <summary>Loads relay runtime configuration; injectable so tests never read ambient secrets.</summary>
     public Func<RelaySettings> RelaySettingsFactory { get; set; } = RelaySettings.FromEnvironment;
@@ -819,19 +834,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isOpening;
 
     public bool CanChooseAudio => !IsRunning && !IsOpening;
 
+    // Devices stay pickable while recording; the capture profile does not — consent was given for it.
+    public bool CanChooseDevice => !IsOpening && !IsStopping;
+
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
     public bool ShowComputerLevel => ShowMicLevel && NeedsComputerAudio;
-
-    [ObservableProperty]
-    private string _mergeFromTag = "";
-
-    [ObservableProperty]
-    private string _mergeIntoTag = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
@@ -1035,13 +1048,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isStopping;
 
     /// <summary>
-    /// Set while Start is loading a local translation model — seconds to tens of seconds in
-    /// which the room is not yet open and nothing is being transcribed. Start stays refused
-    /// (no second load behind the first), and Stop stays offered: the loading phase is the
-    /// operator's to abort, not a wait they are locked into.
+    /// Set from consent until the room opens — loading a local model, creating the relay room,
+    /// connecting the transcriber. Start stays refused (no second start behind the first), and
+    /// Stop stays offered: the opening phase is the operator's to abort, not a wait they are
+    /// locked into.
     /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
@@ -1052,8 +1066,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(StopTip))]
     private bool _isStarting;
 
-    /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
-    private CancellationTokenSource? _warmupCts;
+    private CancellationTokenSource? _startCts;
 
     /// <summary>
     /// The room is open but off the record. One button carries both directions — an operator
@@ -1074,8 +1087,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool ShowPause => IsRunning;
 
-    // Stop stands in for the record mark while a model loads, because aborting the load is the
-    // only thing there is to do in that phase.
+    // Stop stands in for the record mark while the room opens, because abandoning the start is
+    // the only thing there is to do in that phase.
     public bool ShowStop => IsRunning || IsStarting;
 
     // Consent is not a precondition of the button: pressing record is how the operator gets the
@@ -1140,6 +1153,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         finally
         {
+            if (IsStarting)
+                EndStarting();
             IsOpening = false;
         }
     }
@@ -1200,6 +1215,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _pendingConsentConfirmedAt = _utcNow();
         }
 
+        var opening = Environment.TickCount64;
+        _startCts = new CancellationTokenSource();
+        var ct = _startCts.Token;
+        IsStarting = true;
+        Status = L["status.connecting"];
+
         if (_session is not null)
         {
             await _session.DisposeAsync();
@@ -1231,6 +1252,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = plan.Titler;
         OnTitlingChanged();
 
+        var selectedBefore = Sidebar.SelectedMeeting?.Record;
+        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
+        _sessionRecordId = record?.Id;
+        Sidebar.RecordingMeetingId = record?.Id;
+        RefreshBody();
+
+        var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
+        LoadedRoomId = config.RoomId;
+        var relaySettings = RelaySettingsFactory();
+        var signingKey = RelaySigningKey.Create();
+        var connecting = ConnectRelayAsync(config.RoomId, relaySettings, signingKey, ct);
+
         // A local translation model loads to a working state *before* the room opens. Loading
         // it on the first final — which is what lazy loading did — meant the meeting's opening
         // sentences waited out a multi-gigabyte load with nothing on screen saying why.
@@ -1239,82 +1272,32 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // rather than opening a room that cannot translate.
         if (mt is IWarmupProvider warmable)
         {
-            IsStarting = true;
             Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
-            var warmupCts = new CancellationTokenSource();
-            _warmupCts = warmupCts;
             try
             {
-                await Task.Run(() => warmable.WarmUpAsync(warmupCts.Token));
-            }
-            catch (OperationCanceledException)
-            {
-                await DisposeProvidersAsync();
-                Status = L["status.idle"];
-                return;
+                await Task.Run(() => warmable.WarmUpAsync(ct));
             }
             catch (Exception ex)
             {
-                await DisposeProvidersAsync();
+                var cancelled = ct.IsCancellationRequested;
+                await AbandonStartAsync(null, connecting, record, selectedBefore);
+                if (cancelled)
+                {
+                    Status = L["status.idle"];
+                    return;
+                }
+
                 Status = L.Format("status.modelloadfailed", ex.Message);
                 Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
                 return;
             }
-            finally
-            {
-                _warmupCts = null;
-                warmupCts.Dispose();
-                IsStarting = false;
-            }
+
+            Status = L["status.connecting"];
         }
 
-        var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
-        LoadedRoomId = config.RoomId;
-        var relaySettings = RelaySettingsFactory();
-        var signingKey = RelaySigningKey.Create();
-        RelayConnection relayConnection;
-        try
-        {
-            relayConnection = await CreateRelayAsync(
-                config.RoomId,
-                relaySettings,
-                signingKey);
-        }
-        catch (Exception ex)
-        {
-            // The meeting is the primary function; mobile delivery is optional. A missing,
-            // unreachable, or rejected gateway must remove the QR, not prevent transcription.
-            // There is deliberately no public Supabase fallback: the null publisher keeps the
-            // secure boundary while the operator gets an explicit degraded-mode warning.
-            relayConnection = new RelayConnection(
-                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
-                null,
-                null,
-                ex.Message);
-            Log.Warning(RelayLog, "The relay could not be set up; the room is running without a QR code.", ex);
-        }
-        var relay = relayConnection.Publisher;
-
-        // Phones hold the channel they scanned into, so the previous room has to be told
-        // where the meeting went — otherwise a restart strands everyone until they rescan.
-        if (_relay is not null)
-        {
-            if (relayConnection.InviteTicket is not null)
-            {
-                await PublishSafeAsync(
-                    _relay,
-                    new RoomMovedMessage(
-                        config.RoomId,
-                        signingKey.VerificationKey,
-                        relayConnection.InviteTicket));
-            }
-            await _relay.DisposeAsync();
-        }
-
-        _relay = relay;
-
+        // The transcriber connects while the relay room is still being created; the first publish waits.
         var session = new MeetingSession(
-            asr, mt, relay, config, announceTranscription: mode.NeedsMicrophone);
+            asr, mt, new PendingRelay(connecting), config, announceTranscription: mode.NeedsMicrophone);
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
@@ -1334,21 +1317,47 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         session.TranscribingChanged += transcribing =>
             Dispatcher.UIThread.Post(() => IsTranscribing = transcribing);
 
+        RelayConnection relayConnection;
         try
         {
-            await session.StartAsync();
+            await session.StartAsync(ct);
+            relayConnection = await connecting;
+            ct.ThrowIfCancellationRequested();
         }
         catch (Exception ex)
         {
+            var cancelled = ct.IsCancellationRequested;
+            await AbandonStartAsync(session, connecting, record, selectedBefore);
+            if (cancelled)
+            {
+                Status = L["status.idle"];
+                Log.Info(RoomLog, $"Room {config.RoomId} was abandoned before it opened.");
+                return;
+            }
+
             Status = L.Format("status.startfailed", ex.Message);
             Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
-            await session.DisposeAsync();
-            _relay = null;
-            await relay.DisposeAsync();
-            await DisposeProvidersAsync();
             return;
         }
 
+        // Phones hold the channel they scanned into, so the previous room has to be told
+        // where the meeting went — otherwise a restart strands everyone until they rescan.
+        // Phones follow room.moved, so from here on Stop closes the new room instead of abandoning it.
+        if (_relay is not null)
+        {
+            if (relayConnection.InviteTicket is not null)
+            {
+                await PublishSafeAsync(
+                    _relay,
+                    new RoomMovedMessage(
+                        config.RoomId,
+                        signingKey.VerificationKey,
+                        relayConnection.InviteTicket));
+            }
+            await _relay.DisposeAsync();
+        }
+
+        _relay = relayConnection.Publisher;
         _session = session;
         Assistant.Follow(session.Room);
         _lastAttestation = mode.NeedsMicrophone && _pendingConsentConfirmedAt is { } confirmedAt
@@ -1357,12 +1366,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _activeOnline = online;
         _activeMicrophoneId = microphoneId;
         IsRunning = true;
+        EndStarting();
         IsTranscribing = session.IsTranscribing;
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, capture {(_activeOnline ? "online" : "in-room")}, " +
             $"languages {string.Join("/", languages)}, " +
-            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}.");
+            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}, " +
+            $"{Environment.TickCount64 - opening} ms after Start.");
         var runningStatus = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
@@ -1373,12 +1384,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ? ""
             : L.Format("join.unavailable", relayConnection.Warning);
 
-        // Opened after the session started: a start that fails must not leave a blank record
-        // behind, and both artefacts are named from the folder this hands back.
-        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
-        _sessionRecordId = record?.Id;
-        Sidebar.RecordingMeetingId = record?.Id;
-        RefreshBody();
         StartTranscript(session, record);
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
@@ -1398,7 +1403,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
         if (record is not null && RecordingPath.Length > 0)
-            Sidebar.SaveRecord(record with { AudioPath = RecordingPath });
+            Sidebar.SaveRecord((Sidebar.RecordOf(record.Id) ?? record) with { AudioPath = RecordingPath });
         if (record is null)
             Status = $"{Status} {L["status.notsaved"]}";
 
@@ -1412,13 +1417,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _snapshotTimer.Start();
         }
 
+        _liveStatus = Status;
+        _audioFaultStatus = null;
         if (mode.NeedsMicrophone)
             await StartCaptureAsync(session);
+
+        if (ct.IsCancellationRequested)
+            await StopAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()
     {
+        // The start tears itself down on cancellation; doing it here too disposes providers mid-connect.
+        if (IsStarting)
+        {
+            _startCts?.Cancel();
+            return;
+        }
+
         IsStopping = true;
         Status = L["status.stopping"];
 
@@ -1428,7 +1445,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // rethrows what they throw, and anything escaping before the finally would leave
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
-            _warmupCts?.Cancel(); // a model still loading is abandoned, not waited out
             await StopCaptureAsync();
 
             if (_session is not null)
@@ -1452,6 +1468,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsPaused = false;
             _activeOnline = false;
             _activeMicrophoneId = null;
+            SelectedDevice ??= Devices.FirstOrDefault();
             ResetAudioHints();
             _pendingConsentConfirmedAt = null;
             _saveAudioThisMeeting = null;
@@ -1567,10 +1584,78 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Bounded(string message) =>
         message.Length <= 300 ? message : message[..300] + "…";
 
+    private async Task<RelayConnection> ConnectRelayAsync(
+        string roomId,
+        RelaySettings settings,
+        RelaySigningKey signingKey,
+        CancellationToken ct)
+    {
+        var started = Environment.TickCount64;
+        try
+        {
+            var connection = await CreateRelayAsync(roomId, settings, signingKey, ct);
+            Log.Info(RelayLog, $"Relay room created in {Environment.TickCount64 - started} ms.");
+            return connection;
+        }
+        catch (Exception ex)
+        {
+            // The meeting is the primary function; mobile delivery is optional. A missing,
+            // unreachable, or rejected gateway must remove the QR, not prevent transcription.
+            // There is deliberately no public Supabase fallback: the null publisher keeps the
+            // secure boundary while the operator gets an explicit degraded-mode warning.
+            if (!ct.IsCancellationRequested)
+                Log.Warning(
+                    RelayLog,
+                    $"The relay could not be set up after {Environment.TickCount64 - started} ms; " +
+                    "the room is running without a QR code.",
+                    ex);
+            return new RelayConnection(
+                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
+                null,
+                null,
+                ex.Message);
+        }
+    }
+
+    private sealed class PendingRelay(Task<RelayConnection> connecting) : IRelayPublisher
+    {
+        public async Task PublishAsync(RelayMessage message, CancellationToken ct = default) =>
+            await (await connecting.WaitAsync(ct)).Publisher.PublishAsync(message, ct);
+
+        public async ValueTask DisposeAsync() => await (await connecting).Publisher.DisposeAsync();
+    }
+
+    private async Task AbandonStartAsync(
+        MeetingSession? session,
+        Task<RelayConnection> connecting,
+        MeetingRecord? record,
+        MeetingRecord? selectedBefore)
+    {
+        _startCts?.Cancel();
+        if (session is not null)
+            await session.DisposeAsync();
+        await (await connecting).Publisher.DisposeAsync();
+        await DisposeProvidersAsync();
+        _sessionRecordId = null;
+        Sidebar.RecordingMeetingId = null;
+        if (record is not null)
+            Sidebar.DiscardRecord(record, selectedBefore);
+        RefreshBody();
+        EndStarting();
+    }
+
+    private void EndStarting()
+    {
+        _startCts?.Dispose();
+        _startCts = null;
+        IsStarting = false;
+    }
+
     private async Task<RelayConnection> CreateRelayAsync(
         string roomId,
         RelaySettings settings,
-        RelaySigningKey signingKey)
+        RelaySigningKey signingKey,
+        CancellationToken ct)
     {
         if (!RelayEnabled)
             return new RelayConnection(
@@ -1581,7 +1666,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (RelayPublisherFactory is not null)
             return new RelayConnection(
-                new SignedRelayPublisher(RelayPublisherFactory(roomId), signingKey),
+                new SignedRelayPublisher(await RelayPublisherFactory(roomId, ct), signingKey),
                 settings.GatewayUrl ?? "https://relay.test/kanal-relay",
                 "test-reader-ticket",
                 null);
@@ -1594,7 +1679,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             settings.GatewayUrl!,
             settings.HostToken!,
             roomId,
-            signingKey.VerificationKey);
+            signingKey.VerificationKey,
+            ct: ct);
         return new RelayConnection(
             new SignedRelayPublisher(room.Publisher, signingKey),
             settings.GatewayUrl,
@@ -1622,6 +1708,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var online = _activeOnline;
         _captureCts = cts;
         _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, online, cts.Token));
+    }
+
+    partial void OnSelectedDeviceChanged(AudioDeviceInfo? value)
+    {
+        if (!IsLivePick(value, _activeMicrophoneId))
+            return;
+        _activeMicrophoneId = value!.Id;
+        _ = MoveCaptureAsync();
+    }
+
+    // A list refresh re-selects (or falls back) on its own; only the operator's pick moves a live capture.
+    private bool IsLivePick(AudioDeviceInfo? picked, string? activeId) =>
+        !_refreshingDevices && picked is not null && picked.Id != activeId &&
+        IsRunning && !IsStopping && NeedsMicrophone;
+
+    private async Task MoveCaptureAsync()
+    {
+        if (_session is not { } session || IsPaused)
+            return;
+        Log.Info(AudioLog, $"capture_device_switched source={OnlineMeetingCapture.MicrophoneSource}");
+        await StopCaptureAsync();
+        await StartCaptureAsync(session);
+        if (!IsStale(session) && !IsPaused && Status == _audioFaultStatus)
+            Status = _liveStatus;
     }
 
     private Task StopCaptureAsync()
@@ -1857,7 +1967,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = message;
+            Status = _audioFaultStatus = message;
         }
     }
 
@@ -1874,7 +1984,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = L.Format("status.audiofailed", message);
+            Status = _audioFaultStatus = L.Format("status.audiofailed", message);
         }
     }
 
@@ -1972,16 +2082,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _session.RenameSpeaker(item.Tag, name);
     }
 
-    [RelayCommand]
-    private void MergeSpeakers()
-    {
-        if (_session is null ||
-            string.IsNullOrWhiteSpace(MergeFromTag) || string.IsNullOrWhiteSpace(MergeIntoTag))
-            return;
-        _session.MergeSpeakers(MergeFromTag.Trim(), MergeIntoTag.Trim());
-        MergeFromTag = "";
-        MergeIntoTag = "";
-    }
+    private void ApplyMerge(SpeakerItemViewModel item, string intoTag) =>
+        _session?.MergeSpeakers(item.Tag, intoTag);
+
+    private void ApplyColour(SpeakerItemViewModel item, string colour) =>
+        _session?.SetSpeakerColour(item.Tag, colour);
 
     /// <summary>
     /// Where a meeting's audio is written, or null when it is not being recorded — scripted
@@ -2202,7 +2307,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         return sb.ToString();
     }
 
-    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
+    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename, ApplyMerge, ApplyColour) { Tag = tag };
 
     private void ApplyUtterance(Utterance u)
     {
@@ -2232,6 +2337,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.Text = isSourceColumn ? u.SrcText : translation ?? "…";
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
+
+        RefreshUtteranceCounts();
     }
 
     // "und" is Gladia's answer when it could not place the language; printed raw it reads like an
@@ -2239,8 +2346,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Spoken(string srcLang) =>
         srcLang is "" or "und" ? L["lang.unknown"] : srcLang.ToUpperInvariant();
 
-    private void ApplySpeaker(Speaker speaker)
+    internal void ApplySpeaker(Speaker speaker)
     {
+        var storedName = _speakerModels.TryGetValue(speaker.Tag, out var previous) ? previous.DisplayName : null;
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
         foreach (var merged in speaker.MergedFrom)
@@ -2253,6 +2361,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var item = Speakers.FirstOrDefault(s => s.Tag == speaker.Tag);
+        var isNew = item is null;
         if (item is null)
         {
             item = CreateSpeakerItem(speaker.Tag);
@@ -2260,7 +2369,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         item.Color = speaker.Color;
-        item.Name = speaker.DisplayName ?? "";
+        if (isNew || storedName != speaker.DisplayName)
+            item.Name = speaker.DisplayName ?? "";
         item.MergedFromLabel = speaker.MergedFrom.Count > 0
             ? $"⊇ {string.Join(", ", speaker.MergedFrom)}"
             : "";
@@ -2274,6 +2384,28 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         Ruler.Reresolve();
+        RefreshMergeTargets();
+        RefreshUtteranceCounts();
+    }
+
+    private void RefreshUtteranceCounts()
+    {
+        var counts = (Columns.FirstOrDefault()?.Bubbles ?? [])
+            .GroupBy(b => ResolveSpeaker(b.SpeakerTag).Tag)
+            .ToDictionary(g => g.Key, g => g.Count());
+        foreach (var item in Speakers)
+            item.UtteranceCount = counts.GetValueOrDefault(item.Tag);
+    }
+
+    private void RefreshMergeTargets()
+    {
+        string Label(SpeakerItemViewModel o) =>
+            _speakerModels.TryGetValue(o.Tag, out var m) && m.DisplayName is { Length: > 0 } name
+                ? $"{o.Tag} · {name}"
+                : o.Tag;
+
+        foreach (var item in Speakers)
+            item.MergeTargets = Speakers.Where(o => o != item).Select(o => new MergeTarget(o.Tag, Label(o))).ToList();
     }
 
     private (string Tag, string Name, string Color) ResolveSpeaker(string tag)

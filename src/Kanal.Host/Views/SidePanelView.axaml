@@ -7,6 +7,12 @@
              xmlns:l="using:Kanal.Host.Localization"
              x:Class="Kanal.Host.Views.SidePanelView" x:DataType="vm:MainViewModel">
     <UserControl.Styles>
+        <Style Selector="Border.swatch">
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.swatch.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+        </Style>
         <!-- Retemplated only to put a ScrollViewer round the header strip: Fluent's TabControl has
              none, so a narrow right column wraps the tabs onto a second row instead of scrolling. -->
         <Style Selector="TabControl">
@@ -158,58 +164,87 @@
                     </Border>
                 </TabItem>
 
-                <!-- Hidden, not deleted: the live stream only ever tags S01, so there is no second
-                     speaker to rename or merge until diarization lands (ADR 0055). -->
-                <TabItem x:Name="SpeakersTab" IsVisible="False"
+                <TabItem x:Name="SpeakersTab" IsVisible="{Binding HasSpeakers}"
                          AutomationProperties.Name="{l:T assistant.tab.speakers}">
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.speakers}" Margin="0,0,0,7" />
                     </TabItem.Header>
                     <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
-                        <DockPanel>
-                            <StackPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
-                                <TextBlock Text="{l:T merge.label}" Classes="label" />
-                                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1" Margin="0,6,0,10" />
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBox x:Name="MergeFrom" Text="{Binding MergeFromTag}" PlaceholderText="S03" Width="58" />
-                                    <TextBlock Text="→" VerticalAlignment="Center" Foreground="{DynamicResource Ink3}" />
-                                    <TextBox x:Name="MergeInto" Text="{Binding MergeIntoTag}" PlaceholderText="S01" Width="58" />
-                                </StackPanel>
-                                <Button x:Name="MergeSpeakers" Content="{l:T merge.button}"
-                                        Command="{Binding MergeSpeakersCommand}"
-                                        HorizontalAlignment="Left" Margin="0,8,0,0" />
-                            </StackPanel>
-
-                            <ScrollViewer>
-                                <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:SpeakerItemViewModel">
-                                            <Grid ColumnDefinitions="3,*,Auto" Margin="0,0,0,14">
-                                                <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
-                                                           VerticalAlignment="Stretch" />
-                                                <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="5">
-                                                    <StackPanel Orientation="Horizontal" Spacing="7">
-                                                        <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
-                                                                   LetterSpacing="1.2" Foreground="{Binding Color, Converter={x:Static conv:SpeakerTones.OnLight}}" />
-                                                        <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
-                                                                   Foreground="{DynamicResource Ink3}" />
-                                                    </StackPanel>
+                        <ScrollViewer>
+                            <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SpeakerItemViewModel">
+                                        <Grid ColumnDefinitions="3,*" Margin="0,0,0,18">
+                                            <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
+                                                       VerticalAlignment="Stretch" />
+                                            <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="6">
+                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                    <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
+                                                               LetterSpacing="1.2">
+                                                        <TextBlock.Foreground>
+                                                            <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
+                                                                <Binding Path="Color" />
+                                                                <Binding Path="$self.ActualThemeVariant" />
+                                                            </MultiBinding>
+                                                        </TextBlock.Foreground>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
+                                                               Foreground="{DynamicResource Ink3}" />
+                                                    <TextBlock Text="{l:T speaker.count}" FontSize="10.5"
+                                                               Foreground="{DynamicResource Ink3}" />
+                                                    <TextBlock Text="{Binding UtteranceCount}" FontSize="10.5"
+                                                               Foreground="{DynamicResource Ink3}" />
+                                                </StackPanel>
+                                                <Grid ColumnDefinitions="*,Auto">
                                                     <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
                                                         <TextBox.KeyBindings>
                                                             <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
                                                         </TextBox.KeyBindings>
                                                     </TextBox>
-                                                </StackPanel>
-                                                <Button Grid.Column="2" Content="✓" Classes="ghost" Padding="10,5"
-                                                        VerticalAlignment="Bottom" Command="{Binding RenameCommand}"
-                                                        ToolTip.Tip="{l:T speaker.apply.tip}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </DockPanel>
+                                                    <Button Grid.Column="1" Content="✓" Classes="ghost" Padding="10,5"
+                                                            Command="{Binding RenameCommand}"
+                                                            ToolTip.Tip="{l:T speaker.apply.tip}" />
+                                                </Grid>
+                                                <ItemsControl x:Name="SpeakerColours" ItemsSource="{Binding Colours}"
+                                                              AutomationProperties.Name="{l:T speaker.colour}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ColourChoice">
+                                                            <Button Classes="ghost" Padding="0" Width="26" Height="26"
+                                                                    HorizontalContentAlignment="Center"
+                                                                    VerticalContentAlignment="Center"
+                                                                    Command="{Binding PickCommand}"
+                                                                    AutomationProperties.Name="{Binding Value}">
+                                                                <Border Classes="swatch" Classes.selected="{Binding IsSelected}"
+                                                                        Width="20" Height="20" CornerRadius="10"
+                                                                        BorderThickness="2">
+                                                                    <Ellipse Fill="{Binding Value}" Margin="2" />
+                                                                </Border>
+                                                            </Button>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanMerge}">
+                                                    <ComboBox x:Name="MergeInto" ItemsSource="{Binding MergeTargets}"
+                                                              SelectedItem="{Binding SelectedMergeTarget}"
+                                                              PlaceholderText="{l:T merge.into}"
+                                                              HorizontalAlignment="Stretch"
+                                                              AutomationProperties.Name="{l:T merge.label}" />
+                                                    <Button x:Name="MergeSpeaker" Grid.Column="1" Margin="7,0,0,0"
+                                                            Content="{l:T merge.button}"
+                                                            Command="{Binding MergeCommand}" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
                     </Border>
                 </TabItem>
 

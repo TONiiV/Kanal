@@ -385,8 +385,8 @@ public class MainWindowCompositionTests
             vm.SelectedMode = option;
             Dispatcher.UIThread.RunJobs();
 
-            var mark = Assert.Single(modes.GetVisualDescendants().OfType<Shape>()
-                .Where(path => path.Classes.Contains("mode") && path.IsVisible));
+            var mark = Assert.Single(modes.GetVisualDescendants().OfType<Shape>(),
+                path => path.Classes.Contains("mode") && path.IsVisible);
 
             Assert.Equal(Icons.Mode(option.Mode.Id), mark.Data);
         }
@@ -414,8 +414,8 @@ public class MainWindowCompositionTests
         foreach (var (option, index) in vm.Modes.Select((option, index) => (option, index)))
         {
             var row = Assert.IsType<ComboBoxItem>(modes.ContainerFromIndex(index));
-            var mark = Assert.Single(row.GetVisualDescendants().OfType<Shape>()
-                .Where(path => path.Classes.Contains("mode")));
+            var mark = Assert.Single(row.GetVisualDescendants().OfType<Shape>(),
+                path => path.Classes.Contains("mode"));
 
             Assert.Equal(Icons.Mode(option.Mode.Id), mark.Data);
         }
