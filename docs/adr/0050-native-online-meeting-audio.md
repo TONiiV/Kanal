@@ -38,7 +38,7 @@ operating systems' native audio facilities. Teams and Slack do not need to know 
 
 The host has two capture profiles:
 
-- **In the room** opens the selected microphone, as today.
+- **Offline meeting** (formerly "In the room") opens the selected microphone, as today.
 - **Online meeting** opens the selected microphone and the selected computer-output source.
 
 Capture profile is not a new `PipelineMode`: cloud/local transcription and translation remain
