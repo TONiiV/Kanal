@@ -253,7 +253,8 @@ public sealed class MeetingSession : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            ErrorOccurred?.Invoke(new AsrEvent.Error($"Translation failed: {ex.Message}", Fatal: false));
+            ErrorOccurred?.Invoke(new AsrEvent.Error(
+                $"Translation failed: {ex.Message}", Fatal: false, (ex as MtProviderException)?.Code));
         }
     }
 

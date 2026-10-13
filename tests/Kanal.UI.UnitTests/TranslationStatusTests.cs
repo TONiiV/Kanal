@@ -38,6 +38,7 @@ internal static class TestViewModels
             () => resolved,
             () => downloads ?? new ModelDownloadManager(dir),
             SettingsStore.ResolveStoredGladiaKey,
+            resolveTranslationKey: SettingsStore.ResolveStoredDeepLKey,
             utcNow: utcNow,
             // Same reason as the settings seam: a real registry would list the developer's own
             // workspaces into every headless run.
