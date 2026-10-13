@@ -248,13 +248,34 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         return trouble is not null ? (null, trouble) : (stored!.ToRecord(workspaceId, folder!), null);
     }
 
+    // File.Exists answers false on denied access, so a folder without access looks like a missing record.
+    private static StoreProblem? Probe(string folder)
+    {
+        try
+        {
+            _ = Directory.EnumerateFileSystemEntries(folder).Any();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(StoreProblems.LogCategory, $"{folder} could not be read.", ex);
+            return StoreProblems.Unreadable(folder, ex.Message);
+        }
+    }
+
     private static (StoredMeeting? Stored, StoreProblem? Problem) ReadFolder(string folder)
     {
         var file = Path.Combine(folder, FileName);
         if (!File.Exists(file) && !Directory.Exists(file))
+        {
+            var denied = Probe(folder);
+            if (denied is not null)
+                return (null, denied);
+
             // An interrupted save: the operator watched it being created, so it cannot vanish.
             return (null, new StoreProblem(
                 StoreProblemKind.RecordMissing, folder, "That meeting folder holds no record."));
+        }
 
         // Only content is damage. A read that fails on access or I/O says nothing about the bytes,
         // and recovery would rename a healthy record.
