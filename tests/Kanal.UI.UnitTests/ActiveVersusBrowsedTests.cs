@@ -191,6 +191,32 @@ public class ActiveVersusBrowsedTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task AnEarlierRunStaysOutOfTheLiveSpeakers()
+    {
+        var store = Store();
+        var workspace = Opened(store);
+        var older = Stored(store, workspace, "Vorbesprechung");
+        var vm = Demo(store);
+        vm.Sidebar.SelectedMeeting = Row(vm, older.Id);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        vm.ApplySpeaker(new Speaker("S1", "Anna", [], RoomState.Palette[5]));
+        var german = vm.Columns.Single(c => c.Language == "de");
+        var earlier = german.Bubbles[0];
+        var tick = vm.Ruler.Ticks.First(t => t.AnchorUtteranceId == earlier.UtteranceId);
+
+        Assert.Equal(
+            german.Bubbles.Count(b => b.SpeakerTag == "S1"),
+            vm.Speakers.Single(s => s.Tag == "S1").UtteranceCount);
+        Assert.Equal("S1", earlier.SpeakerName);
+        Assert.Equal(earlier.SpeakerName, tick.SpeakerName);
+        Assert.Equal(earlier.SpeakerColor, tick.SpeakerColor);
+        Assert.NotEqual(RoomState.Palette[5], earlier.SpeakerColor);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
     public async Task BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne()
     {
         var store = Store();

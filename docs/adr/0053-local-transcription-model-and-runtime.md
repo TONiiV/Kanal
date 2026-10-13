@@ -1,6 +1,6 @@
 # ADR 0053: Nemotron 3.5 ASR Streaming on sherpa-onnx for local transcription
 
-**Status:** Proposed  
+**Status:** Accepted — implemented 2026-10-04; deviations found on the real model are in `docs/PROGRESS.md`  
 **Date:** 2026-09-08  
 **Issues:** [#72](https://github.com/TONiiV/Kanal/issues/72), [#49](https://github.com/TONiiV/Kanal/issues/49)
 

@@ -123,7 +123,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         File.SetLastWriteTimeUtc(transcript, ended);
         File.SetLastWriteTimeUtc(Path.Combine(folder, WorkspaceStore.AudioFileName), ended.AddSeconds(-3));
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Null(result.Problem);
         Assert.Null(result.SetAsidePath);
@@ -151,7 +151,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0));
 
-        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
         Assert.Null(Assert.Single(record.Runs).AudioPath);
     }
@@ -163,18 +163,18 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var workspace = NewWorkspace(store);
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0));
-        var third = Path.Combine(folder, MeetingRun.TranscriptFileName(3));
+        var third = Path.Combine(folder, MeetingRun.TranscriptFileName(5));
         var scratch = Directory.CreateDirectory(Path.Combine(_root, "scratch")).FullName;
         File.Move(WriteTranscript(scratch, Said("u1", "pl", 0)), third);
-        File.WriteAllBytes(Path.Combine(folder, MeetingRun.AudioFileName(3)), [0x52, 0x49, 0x46, 0x46]);
+        File.WriteAllBytes(Path.Combine(folder, MeetingRun.AudioFileName(5)), [0x52, 0x49, 0x46, 0x46]);
 
-        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
         Assert.Equal(
             [Path.Combine(folder, TranscriptLog.FileName), third],
             record.Runs.Select(r => r.TranscriptPath));
         Assert.Null(record.Runs[0].AudioPath);
-        Assert.Equal(Path.Combine(folder, MeetingRun.AudioFileName(3)), record.Runs[1].AudioPath);
+        Assert.Equal(Path.Combine(folder, MeetingRun.AudioFileName(5)), record.Runs[1].AudioPath);
         Assert.Equal(["de", "pl"], record.Languages);
     }
 
@@ -187,7 +187,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         WriteTranscript(folder, Said("u1", "de", 0));
         File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.NotNull(result.Recovered);
         Assert.Equal("{ not json", File.ReadAllText(Path.Combine(folder, "meeting.json.damaged")));
@@ -204,7 +204,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         File.WriteAllText(Path.Combine(folder, "meeting.json.damaged"), "first");
         File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "second");
 
-        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered);
+        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered);
 
         Assert.Equal("first", File.ReadAllText(Path.Combine(folder, "meeting.json.damaged")));
         Assert.Equal("second", File.ReadAllText(Path.Combine(folder, "meeting.json.damaged.2")));
@@ -219,7 +219,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         WriteTranscript(folder, Said("u1", "de", 0));
         Directory.CreateDirectory(Path.Combine(folder, WorkspaceStore.MeetingFileName));
 
-        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered);
+        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered);
 
         Assert.True(Directory.Exists(Path.Combine(folder, "meeting.json.damaged")));
         Assert.True(File.Exists(Path.Combine(folder, WorkspaceStore.MeetingFileName)));
@@ -234,7 +234,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0));
 
-        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
         Assert.Equal(BaseTitle + " 2", record.Title);
     }
@@ -249,7 +249,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
         var before = Contents(workspace.RootPath);
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Null(result.Problem);
         Assert.Null(result.Recovered);
@@ -270,7 +270,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var workspace = NewWorkspace(store);
         var folder = Folder(workspace, "lost1");
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(Path.Combine(SetAsideOf(workspace), "lost1"), result.SetAsidePath);
         Assert.True(Directory.Exists(result.SetAsidePath));
@@ -284,7 +284,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "my meeting");
         WriteTranscript(folder, Said("u1", "de", 0));
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(Path.Combine(SetAsideOf(workspace), "my meeting"), result.SetAsidePath);
         Assert.True(File.Exists(Path.Combine(result.SetAsidePath!, TranscriptLog.FileName)));
@@ -301,7 +301,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         File.WriteAllText(Path.Combine(folder, "note.txt"), "later");
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(taken + "-2", result.SetAsidePath);
         Assert.Equal("earlier", File.ReadAllText(Path.Combine(taken, "note.txt")));
@@ -333,7 +333,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
 
         foreach (var path in refused)
         {
-            Assert.Equal(StoreProblemKind.Invalid, store.RecoverMeeting(workspace.Id, path, BaseTitle).Problem!.Kind);
+            Assert.Equal(StoreProblemKind.Invalid, store.RecoverMeeting(workspace.Id, path, _ => BaseTitle).Problem!.Kind);
             Assert.Equal(StoreProblemKind.Invalid, store.ReidentifyMeeting(workspace.Id, path).Problem!.Kind);
         }
 
@@ -350,7 +350,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var store = Store();
         var workspace = NewWorkspace(store);
 
-        var result = store.RecoverMeeting(workspace.Id, Path.Combine(MeetingsOf(workspace), "gone"), BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, Path.Combine(MeetingsOf(workspace), "gone"), _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.NotFound, result.Problem!.Kind);
     }
@@ -361,7 +361,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var store = Store();
 
         Assert.Equal(
-            StoreProblemKind.NotFound, store.RecoverMeeting("nosuchworkspace", "x", BaseTitle).Problem!.Kind);
+            StoreProblemKind.NotFound, store.RecoverMeeting("nosuchworkspace", "x", _ => BaseTitle).Problem!.Kind);
         Assert.Equal(
             StoreProblemKind.NotFound, store.ReidentifyMeeting("nosuchworkspace", "x").Problem!.Kind);
     }
@@ -372,11 +372,55 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var store = Store();
         var workspace = NewWorkspace(store);
         var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "de", 0, 1_000));
+        var record = Path.Combine(folder, WorkspaceStore.MeetingFileName);
+        File.WriteAllText(record, "{ not json");
 
-        var result = store.RecoverMeeting(workspace.Id, folder, "  ");
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => "  ");
 
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
-        Assert.True(Directory.Exists(folder));
+        Assert.Equal("{ not json", File.ReadAllText(record));
+        Assert.False(File.Exists(record + ".damaged"));
+    }
+
+    [Fact]
+    public void TheTitleIsMadeFromTheRebuiltStartTime()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        var transcript = WriteTranscript(folder, Said("u1", "de", 0, 1_000), Said("u2", "zh", 30_000, 90_000));
+        var ended = new DateTime(2026, 10, 10, 8, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(transcript, ended);
+        DateTimeOffset? asked = null;
+
+        var result = store.RecoverMeeting(workspace.Id, folder, start =>
+        {
+            asked = start;
+            return "Recovered " + start.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        });
+
+        Assert.Equal(new DateTimeOffset(ended.AddSeconds(-90)), asked);
+        Assert.Equal(asked, result.Recovered!.StartedAt);
+        Assert.Equal("Recovered 07:58:30", result.Recovered.Title);
+    }
+
+    [Fact]
+    public void TwoMeetingsThatStartedInOneMinuteGetDistinctTitles()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var ended = new DateTime(2026, 10, 10, 8, 0, 0, DateTimeKind.Utc);
+        var titles = new List<string>();
+        foreach (var name in new[] { "lost1", "lost2" })
+        {
+            var folder = Folder(workspace, name);
+            File.SetLastWriteTimeUtc(WriteTranscript(folder, Said("u1", "de", 0, 1_000)), ended);
+            titles.Add(store.RecoverMeeting(workspace.Id, folder, start =>
+                "Recovered " + start.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)).Recovered!.Title);
+        }
+
+        Assert.Equal(["Recovered 07:59", "Recovered 07:59 2"], titles);
     }
 
     [Fact]
@@ -388,7 +432,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
         var before = Contents(workspace.RootPath);
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.Invalid, result.Problem!.Kind);
         Assert.Equal(before, Contents(workspace.RootPath));
@@ -405,7 +449,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
             Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, WorkspaceStore.MeetingFileName),
             Path.Combine(copy, WorkspaceStore.MeetingFileName));
 
-        var result = store.RecoverMeeting(workspace.Id, copy, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, copy, _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.Misfiled, result.Problem!.Kind);
         Assert.True(File.Exists(Path.Combine(copy, WorkspaceStore.MeetingFileName)));
@@ -422,7 +466,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var newer = $$"""{"schemaVersion":{{WorkspaceStore.MeetingSchemaVersion + 1}},"id":"lost1"}""";
         File.WriteAllText(record, newer);
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.UnsupportedVersion, result.Problem!.Kind);
         Assert.Equal(newer, File.ReadAllText(record));
@@ -510,7 +554,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "und", 0, null, "de"), Said("u2", "zh", 1_000, null, "und"));
 
-        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
         Assert.Equal(["de", "zh"], record.Languages);
     }
@@ -523,7 +567,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "und", 0));
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(Path.Combine(SetAsideOf(workspace), "lost1"), result.SetAsidePath);
     }
@@ -538,7 +582,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         File.WriteAllText(SetAsideOf(workspace), "in the way");
         var before = Contents(workspace.RootPath);
 
-        var result = store.RecoverMeeting(workspace.Id, folder, BaseTitle);
+        var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.Unwritable, result.Problem!.Kind);
         Assert.Null(result.SetAsidePath);
@@ -581,7 +625,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
             Assert.Equal(StoreProblemKind.Unreadable, problem.Kind);
             Assert.Equal(folder, problem.Subject);
             Assert.Equal(
-                StoreProblemKind.Unreadable, store.RecoverMeeting(workspace.Id, folder, BaseTitle).Problem!.Kind);
+                StoreProblemKind.Unreadable, store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Problem!.Kind);
             Assert.Equal(StoreProblemKind.Unreadable, store.ReidentifyMeeting(workspace.Id, folder).Problem!.Kind);
         }
 
@@ -600,7 +644,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0, null, "zh"), Said("u2", "ZH", 1_000, null, "DE"));
 
-        var record = store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered!;
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
         Assert.Equal(["de", "zh"], record.Languages);
     }
@@ -616,7 +660,7 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
         var before = Contents(workspace.RootPath);
 
-        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, BaseTitle).Recovered);
+        Assert.NotNull(store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered);
 
         AssertNothingLost(before, Contents(workspace.RootPath));
     }

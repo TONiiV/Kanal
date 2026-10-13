@@ -149,11 +149,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         }
     }
 
-    public RecoverResult Recover(string workspaceId, string folder, string baseTitle)
+    public RecoverResult Recover(string workspaceId, string folder, Func<DateTimeOffset, string> titleFor)
     {
-        if (string.IsNullOrWhiteSpace(baseTitle))
-            return new RecoverResult(null, null, StoreProblems.Invalid(folder, NeedsTitle));
-
         var (path, problem) = MeetingsSubfolder(workspaceId, folder);
         if (problem is not null)
             return new RecoverResult(null, null, problem);
@@ -170,8 +167,12 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         if (languages.Count == 0)
             return SetAside(workspaceId, path!);
 
-        var record = Rebuilt(
-            workspaceId, path!, runs, utterances, languages, FreeTitle(workspaceId, baseTitle, exceptMeetingId: null));
+        var rebuilt = Rebuilt(workspaceId, path!, runs, utterances, languages);
+        var title = titleFor(rebuilt.StartedAt!.Value);
+        if (string.IsNullOrWhiteSpace(title))
+            return new RecoverResult(null, null, StoreProblems.Invalid(path!, NeedsTitle));
+
+        var record = rebuilt with { Title = FreeTitle(workspaceId, title, exceptMeetingId: null) };
         var recordFile = Path.Combine(path!, FileName);
         string? damaged = null;
         try
@@ -326,18 +327,29 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         !string.IsNullOrWhiteSpace(language)
         && !string.Equals(language, UnknownLanguage, StringComparison.OrdinalIgnoreCase);
 
-    // Every n up to the file count: a run number skips a name that is already taken.
+    // By file name, not by count: a run number skips a name that is already taken.
     private static List<MeetingRun> RunsOnDisk(string folder) =>
-        [.. Enumerable.Range(1, Directory.EnumerateFiles(folder).Count())
+        [.. Directory.EnumerateFiles(folder)
+            .Select(path => RunNumber(Path.GetFileName(path)))
+            .OfType<int>()
+            .Order()
             .Select(n => new MeetingRun(
                 Path.Combine(folder, MeetingRun.TranscriptFileName(n)),
                 Path.Combine(folder, MeetingRun.AudioFileName(n)), null, null))
-            .Where(r => File.Exists(r.TranscriptPath))
             .Select(r => File.Exists(r.AudioPath) ? r : r with { AudioPath = null })];
+
+    private static int? RunNumber(string name) =>
+        name == TranscriptLog.FileName ? 1
+        : name.StartsWith("transcript-", StringComparison.Ordinal)
+          && int.TryParse(Path.GetFileNameWithoutExtension(name)["transcript-".Length..],
+              System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+          && MeetingRun.TranscriptFileName(n) == name
+            ? n
+            : null;
 
     private static MeetingRecord Rebuilt(
         string workspaceId, string folder, List<MeetingRun> runs, IReadOnlyList<Utterance> utterances,
-        List<string> languages, string baseTitle)
+        List<string> languages)
     {
         var ended = runs.SelectMany(r => new[] { r.TranscriptPath, r.AudioPath })
             .OfType<string>()
@@ -347,7 +359,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         var started = new DateTimeOffset(ended).AddMilliseconds(-spanMs);
 
         return new MeetingRecord(
-            Path.GetFileName(folder), workspaceId, baseTitle.Trim(), started, started,
+            Path.GetFileName(folder), workspaceId, "", started, started,
             new DateTimeOffset(ended), languages, runs);
     }
 

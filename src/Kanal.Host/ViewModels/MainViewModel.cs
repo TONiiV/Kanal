@@ -50,6 +50,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly DispatcherTimer _snapshotTimer;
     private MeetingSession? _session;
     private IReadOnlyList<Utterance> _earlier = [];
+    private Dictionary<string, string> _earlierColours = new();
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
@@ -1246,10 +1247,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // two can never disagree about how many columns a room has
         var columns = languages.Take(MaxLanguages).ToList();
         _earlier = continuing is null ? [] : TranscriptLog.Read(continuing, beforeALiveRun: true);
+        _earlierColours = StoredTranscript.ColoursByTag(_earlier);
         var carried = StoredTranscript.Columns(_earlier, columns);
         foreach (var column in carried.Count > 0 ? carried : columns.Select(lang => new ColumnViewModel(lang)))
             Columns.Add(column);
         FocusedLanguage = null;
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerName = ResolveSpeaker(bubble.SpeakerTag).Name;
         foreach (var u in _earlier)
             Ruler.Observe(u);
         if (continuing is not null)
@@ -1277,15 +1281,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var signingKey = RelaySigningKey.Create();
         var connecting = ConnectRelayAsync(config.RoomId, relaySettings, signingKey, ct);
 
-        // A local translation model loads to a working state *before* the room opens. Loading
-        // it on the first final — which is what lazy loading did — meant the meeting's opening
-        // sentences waited out a multi-gigabyte load with nothing on screen saying why.
-        // Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
-        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start
-        // rather than opening a room that cannot translate.
-        if (mt is IWarmupProvider warmable)
+        // Load before the room opens: loading on first use left the opening sentences waiting with no status.
+        foreach (var (warmable, loading, failed, label) in new[]
+                 {
+                     (asr as IWarmupProvider, "status.loadingasrmodel", "status.asrmodelloadfailed",
+                         plan.Status.TranscriptionLabel),
+                     (mt as IWarmupProvider, "status.loadingmodel", "status.modelloadfailed",
+                         plan.Status.TranslationLabel),
+                 })
         {
-            Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
+            if (warmable is null)
+                continue;
+
+            Status = L.Format(loading, label);
             try
             {
                 await Task.Run(() => warmable.WarmUpAsync(ct));
@@ -1300,8 +1308,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
-                Status = L.Format("status.modelloadfailed", ex.Message);
-                Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
+                Status = L.Format(failed, ex.Message);
+                Log.Error(RoomLog, $"A local model failed to load ({label}); the room was not opened.", ex);
                 return;
             }
 
@@ -2312,10 +2320,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();
-        var lines = _earlier.Select(u => (u, speaker: u.SpeakerTag))
-            .Concat(snapshot.Utterances.Select(u => (u, speaker: ResolveSpeaker(u.SpeakerTag).Name)));
-        foreach (var (u, speaker) in lines.Where(l => l.u.State == UtteranceState.Final))
+        foreach (var u in _earlier.Concat(snapshot.Utterances).Where(u => u.State == UtteranceState.Final))
         {
+            var speaker = ResolveSpeaker(u.SpeakerTag).Name;
             sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");
@@ -2393,8 +2400,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : "";
 
         // re-resolve every history bubble — renames and merges rewrite the past
-        // Earlier runs are skipped: their tags were handed out by another ASR session.
-        foreach (var bubble in Columns.SelectMany(c => c.Bubbles.Skip(_earlier.Count)))
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
         {
             var (_, name, color) = ResolveSpeaker(bubble.SpeakerTag);
             bubble.SpeakerName = name;
@@ -2428,6 +2434,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private (string Tag, string Name, string Color) ResolveSpeaker(string tag)
     {
+        // An earlier run's tag ("1/S1") came from another ASR session: no rename, merge or count reaches it.
+        if (_earlierColours.TryGetValue(tag, out var stored))
+            return (tag, tag[(tag.IndexOf('/') + 1)..], stored);
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
             return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);

@@ -886,7 +886,7 @@ public class WorkspaceStoreTests : IDisposable
     }
 
     [Fact]
-    public void ANewRunSkipsEveryNameAPartHoldsOrTheDiskAlreadyHas()
+    public void ANewRunSkipsEveryNameARunHoldsOrTheDiskAlreadyHas()
     {
         var store = Store();
         var workspace = Created(store.CreateWorkspace("ACME", Folder("acme")));
