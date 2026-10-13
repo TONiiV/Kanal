@@ -9,6 +9,12 @@
 > global tap (`stereoGlobalTapButExcludeProcesses: []`) and Windows uses WASAPI process loopback
 > excluding Kanal's own process tree (Windows 10 2004 or later). The host offers no output selector;
 > "the selected computer output" below now reads "all computer audio". Kanal plays no audio itself.
+>
+> **Amended 2026-10-04:** the operator may pick another microphone while recording; capture
+> restarts on it the way pause/resume does. A device that changes or disappears on its own still
+> stops capture visibly — the verification line on "changing or unplugging either active device"
+> now reads "unplugging the active microphone, or the OS switching it". The capture profile stays
+> locked once recording starts.
 
 ## Context
 
@@ -38,7 +44,7 @@ operating systems' native audio facilities. Teams and Slack do not need to know 
 
 The host has two capture profiles:
 
-- **In the room** opens the selected microphone, as today.
+- **Offline meeting** (formerly "In the room") opens the selected microphone, as today.
 - **Online meeting** opens the selected microphone and the selected computer-output source.
 
 Capture profile is not a new `PipelineMode`: cloud/local transcription and translation remain

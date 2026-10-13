@@ -27,6 +27,26 @@ Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
 6. A headless render of each theme in both variants shows that a checked box and the settings
    tab marker use the `Brand` of the theme.
 
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).
@@ -653,6 +673,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
 
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
@@ -827,6 +853,32 @@ its preservation rules are specified as implementation work after design approva
 ---
 
 ## 2026-10-03
+
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
 
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
