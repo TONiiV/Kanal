@@ -67,6 +67,8 @@ public class LocalizationTests
         ("de", "workspace.glyph.cloud"),
         ("pl", "workspace.glyph.folder"),
         ("de", "appearance.scheme.system"),
+        ("de", "appearance.theme.iris"),
+        ("pl", "appearance.theme.ocean"),
     ];
 
     [Theory]
@@ -454,6 +456,31 @@ public class AppLanguageTests
             Assert.Contains(
                 row.StatusLabel,
                 new[] { zh["settings.model.downloaded"], zh["settings.model.notdownloaded"] });
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    [AvaloniaFact]
+    public void ALanguageSwitchRefreshesTheTranscriptionRows()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            Localizer.Instance.Current = "en";
+            var vm = new SettingsViewModel(new AppSettings(), () => null);
+            var row = vm.TranscriptionModels[0];
+            var changed = new List<string?>();
+            row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            Localizer.Instance.Current = "zh";
+
+            Assert.Contains(nameof(row.UseTip), changed);
+            Assert.Contains(nameof(row.StatusLabel), changed);
+            Assert.Equal(Strings.Tables["zh"]["settings.asrmodel.usetip"], row.UseTip);
+            vm.CancelDownloads();
         }
         finally
         {

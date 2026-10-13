@@ -139,8 +139,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             work();
             return Task.CompletedTask;
         });
-        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
-            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
             (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
@@ -200,6 +198,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
+        _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
+            new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
@@ -721,7 +721,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool RelayEnabled { get; set; } = true;
 
     /// <summary>Builds the publisher for a room id; tests substitute a recording fake.</summary>
-    public Func<string, IRelayPublisher>? RelayPublisherFactory { get; set; }
+    public Func<string, CancellationToken, Task<IRelayPublisher>>? RelayPublisherFactory { get; set; }
 
     /// <summary>Loads relay runtime configuration; injectable so tests never read ambient secrets.</summary>
     public Func<RelaySettings> RelaySettingsFactory { get; set; } = RelaySettings.FromEnvironment;
@@ -1040,10 +1040,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool _isStopping;
 
     /// <summary>
-    /// Set while Start is loading a local translation model — seconds to tens of seconds in
-    /// which the room is not yet open and nothing is being transcribed. Start stays refused
-    /// (no second load behind the first), and Stop stays offered: the loading phase is the
-    /// operator's to abort, not a wait they are locked into.
+    /// Set from consent until the room opens — loading a local model, creating the relay room,
+    /// connecting the transcriber. Start stays refused (no second start behind the first), and
+    /// Stop stays offered: the opening phase is the operator's to abort, not a wait they are
+    /// locked into.
     /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
@@ -1054,8 +1054,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(StopTip))]
     private bool _isStarting;
 
-    /// <summary>Cancels a model load in progress; null outside the loading phase.</summary>
-    private CancellationTokenSource? _warmupCts;
+    private CancellationTokenSource? _startCts;
 
     /// <summary>
     /// The room is open but off the record. One button carries both directions — an operator
@@ -1076,8 +1075,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool ShowPause => IsRunning;
 
-    // Stop stands in for the record mark while a model loads, because aborting the load is the
-    // only thing there is to do in that phase.
+    // Stop stands in for the record mark while the room opens, because abandoning the start is
+    // the only thing there is to do in that phase.
     public bool ShowStop => IsRunning || IsStarting;
 
     // Consent is not a precondition of the button: pressing record is how the operator gets the
@@ -1142,6 +1141,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         finally
         {
+            if (IsStarting)
+                EndStarting();
             IsOpening = false;
         }
     }
@@ -1202,6 +1203,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _pendingConsentConfirmedAt = _utcNow();
         }
 
+        var opening = Environment.TickCount64;
+        _startCts = new CancellationTokenSource();
+        var ct = _startCts.Token;
+        IsStarting = true;
+        Status = L["status.connecting"];
+
         if (_session is not null)
         {
             await _session.DisposeAsync();
@@ -1233,6 +1240,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = plan.Titler;
         OnTitlingChanged();
 
+        var selectedBefore = Sidebar.SelectedMeeting?.Record;
+        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
+        _sessionRecordId = record?.Id;
+        Sidebar.RecordingMeetingId = record?.Id;
+        RefreshBody();
+
+        var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
+        LoadedRoomId = config.RoomId;
+        var relaySettings = RelaySettingsFactory();
+        var signingKey = RelaySigningKey.Create();
+        var connecting = ConnectRelayAsync(config.RoomId, relaySettings, signingKey, ct);
+
         // A local translation model loads to a working state *before* the room opens. Loading
         // it on the first final — which is what lazy loading did — meant the meeting's opening
         // sentences waited out a multi-gigabyte load with nothing on screen saying why.
@@ -1241,82 +1260,32 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // rather than opening a room that cannot translate.
         if (mt is IWarmupProvider warmable)
         {
-            IsStarting = true;
             Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
-            var warmupCts = new CancellationTokenSource();
-            _warmupCts = warmupCts;
             try
             {
-                await Task.Run(() => warmable.WarmUpAsync(warmupCts.Token));
-            }
-            catch (OperationCanceledException)
-            {
-                await DisposeProvidersAsync();
-                Status = L["status.idle"];
-                return;
+                await Task.Run(() => warmable.WarmUpAsync(ct));
             }
             catch (Exception ex)
             {
-                await DisposeProvidersAsync();
+                var cancelled = ct.IsCancellationRequested;
+                await AbandonStartAsync(null, connecting, record, selectedBefore);
+                if (cancelled)
+                {
+                    Status = L["status.idle"];
+                    return;
+                }
+
                 Status = L.Format("status.modelloadfailed", ex.Message);
                 Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
                 return;
             }
-            finally
-            {
-                _warmupCts = null;
-                warmupCts.Dispose();
-                IsStarting = false;
-            }
+
+            Status = L["status.connecting"];
         }
 
-        var config = new RoomConfig(RoomIds.New(DateTime.Now), languages);
-        LoadedRoomId = config.RoomId;
-        var relaySettings = RelaySettingsFactory();
-        var signingKey = RelaySigningKey.Create();
-        RelayConnection relayConnection;
-        try
-        {
-            relayConnection = await CreateRelayAsync(
-                config.RoomId,
-                relaySettings,
-                signingKey);
-        }
-        catch (Exception ex)
-        {
-            // The meeting is the primary function; mobile delivery is optional. A missing,
-            // unreachable, or rejected gateway must remove the QR, not prevent transcription.
-            // There is deliberately no public Supabase fallback: the null publisher keeps the
-            // secure boundary while the operator gets an explicit degraded-mode warning.
-            relayConnection = new RelayConnection(
-                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
-                null,
-                null,
-                ex.Message);
-            Log.Warning(RelayLog, "The relay could not be set up; the room is running without a QR code.", ex);
-        }
-        var relay = relayConnection.Publisher;
-
-        // Phones hold the channel they scanned into, so the previous room has to be told
-        // where the meeting went — otherwise a restart strands everyone until they rescan.
-        if (_relay is not null)
-        {
-            if (relayConnection.InviteTicket is not null)
-            {
-                await PublishSafeAsync(
-                    _relay,
-                    new RoomMovedMessage(
-                        config.RoomId,
-                        signingKey.VerificationKey,
-                        relayConnection.InviteTicket));
-            }
-            await _relay.DisposeAsync();
-        }
-
-        _relay = relay;
-
+        // The transcriber connects while the relay room is still being created; the first publish waits.
         var session = new MeetingSession(
-            asr, mt, relay, config, announceTranscription: mode.NeedsMicrophone);
+            asr, mt, new PendingRelay(connecting), config, announceTranscription: mode.NeedsMicrophone);
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
@@ -1336,21 +1305,47 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         session.TranscribingChanged += transcribing =>
             Dispatcher.UIThread.Post(() => IsTranscribing = transcribing);
 
+        RelayConnection relayConnection;
         try
         {
-            await session.StartAsync();
+            await session.StartAsync(ct);
+            relayConnection = await connecting;
+            ct.ThrowIfCancellationRequested();
         }
         catch (Exception ex)
         {
+            var cancelled = ct.IsCancellationRequested;
+            await AbandonStartAsync(session, connecting, record, selectedBefore);
+            if (cancelled)
+            {
+                Status = L["status.idle"];
+                Log.Info(RoomLog, $"Room {config.RoomId} was abandoned before it opened.");
+                return;
+            }
+
             Status = L.Format("status.startfailed", ex.Message);
             Log.Error(RoomLog, $"Room {config.RoomId} failed to start.", ex);
-            await session.DisposeAsync();
-            _relay = null;
-            await relay.DisposeAsync();
-            await DisposeProvidersAsync();
             return;
         }
 
+        // Phones hold the channel they scanned into, so the previous room has to be told
+        // where the meeting went — otherwise a restart strands everyone until they rescan.
+        // Phones follow room.moved, so from here on Stop closes the new room instead of abandoning it.
+        if (_relay is not null)
+        {
+            if (relayConnection.InviteTicket is not null)
+            {
+                await PublishSafeAsync(
+                    _relay,
+                    new RoomMovedMessage(
+                        config.RoomId,
+                        signingKey.VerificationKey,
+                        relayConnection.InviteTicket));
+            }
+            await _relay.DisposeAsync();
+        }
+
+        _relay = relayConnection.Publisher;
         _session = session;
         Assistant.Follow(session.Room);
         if (plan.Agent is { } agent)
@@ -1373,12 +1368,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _activeOnline = online;
         _activeMicrophoneId = microphoneId;
         IsRunning = true;
+        EndStarting();
         IsTranscribing = session.IsTranscribing;
         Log.Info(
             RoomLog,
             $"Room {config.RoomId} open: mode {mode.Id}, capture {(_activeOnline ? "online" : "in-room")}, " +
             $"languages {string.Join("/", languages)}, " +
-            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}.");
+            $"relay {(!RelayEnabled ? "off" : relayConnection.Warning is null ? "on" : "unavailable")}, " +
+            $"{Environment.TickCount64 - opening} ms after Start.");
         var runningStatus = mode.Id == PipelineModeId.Demo
             ? L["status.demorunning"] + (plan.Substitution is null ? "" : $" {plan.Substitution}")
             : L.Format("status.live", mode.Leaves);
@@ -1389,12 +1386,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ? ""
             : L.Format("join.unavailable", relayConnection.Warning);
 
-        // Opened after the session started: a start that fails must not leave a blank record
-        // behind, and both artefacts are named from the folder this hands back.
-        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
-        _sessionRecordId = record?.Id;
-        Sidebar.RecordingMeetingId = record?.Id;
-        RefreshBody();
         StartTranscript(session, record);
 
         // Hung off the session's own tap, not the capture loop: pause promises that nothing said
@@ -1414,7 +1405,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
         if (record is not null && RecordingPath.Length > 0)
-            Sidebar.SaveRecord(record with { AudioPath = RecordingPath });
+            Sidebar.SaveRecord((Sidebar.RecordOf(record.Id) ?? record) with { AudioPath = RecordingPath });
         if (record is null)
             Status = $"{Status} {L["status.notsaved"]}";
 
@@ -1430,11 +1421,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (mode.NeedsMicrophone)
             await StartCaptureAsync(session);
+
+        if (ct.IsCancellationRequested)
+            await StopAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()
     {
+        // The start tears itself down on cancellation; doing it here too disposes providers mid-connect.
+        if (IsStarting)
+        {
+            _startCts?.Cancel();
+            return;
+        }
+
         IsStopping = true;
         Status = L["status.stopping"];
 
@@ -1444,7 +1445,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // rethrows what they throw, and anything escaping before the finally would leave
             // IsStopping latched — the exact both-buttons-grey wedge the finally exists to prevent.
             _snapshotTimer.Stop();
-            _warmupCts?.Cancel(); // a model still loading is abandoned, not waited out
             await StopCaptureAsync();
             // Before the session drains: its last translations wait on the model an agent call may hold.
             await StopAgentAsync();
@@ -1595,10 +1595,78 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static string Bounded(string message) =>
         message.Length <= 300 ? message : message[..300] + "…";
 
+    private async Task<RelayConnection> ConnectRelayAsync(
+        string roomId,
+        RelaySettings settings,
+        RelaySigningKey signingKey,
+        CancellationToken ct)
+    {
+        var started = Environment.TickCount64;
+        try
+        {
+            var connection = await CreateRelayAsync(roomId, settings, signingKey, ct);
+            Log.Info(RelayLog, $"Relay room created in {Environment.TickCount64 - started} ms.");
+            return connection;
+        }
+        catch (Exception ex)
+        {
+            // The meeting is the primary function; mobile delivery is optional. A missing,
+            // unreachable, or rejected gateway must remove the QR, not prevent transcription.
+            // There is deliberately no public Supabase fallback: the null publisher keeps the
+            // secure boundary while the operator gets an explicit degraded-mode warning.
+            if (!ct.IsCancellationRequested)
+                Log.Warning(
+                    RelayLog,
+                    $"The relay could not be set up after {Environment.TickCount64 - started} ms; " +
+                    "the room is running without a QR code.",
+                    ex);
+            return new RelayConnection(
+                new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
+                null,
+                null,
+                ex.Message);
+        }
+    }
+
+    private sealed class PendingRelay(Task<RelayConnection> connecting) : IRelayPublisher
+    {
+        public async Task PublishAsync(RelayMessage message, CancellationToken ct = default) =>
+            await (await connecting.WaitAsync(ct)).Publisher.PublishAsync(message, ct);
+
+        public async ValueTask DisposeAsync() => await (await connecting).Publisher.DisposeAsync();
+    }
+
+    private async Task AbandonStartAsync(
+        MeetingSession? session,
+        Task<RelayConnection> connecting,
+        MeetingRecord? record,
+        MeetingRecord? selectedBefore)
+    {
+        _startCts?.Cancel();
+        if (session is not null)
+            await session.DisposeAsync();
+        await (await connecting).Publisher.DisposeAsync();
+        await DisposeProvidersAsync();
+        _sessionRecordId = null;
+        Sidebar.RecordingMeetingId = null;
+        if (record is not null)
+            Sidebar.DiscardRecord(record, selectedBefore);
+        RefreshBody();
+        EndStarting();
+    }
+
+    private void EndStarting()
+    {
+        _startCts?.Dispose();
+        _startCts = null;
+        IsStarting = false;
+    }
+
     private async Task<RelayConnection> CreateRelayAsync(
         string roomId,
         RelaySettings settings,
-        RelaySigningKey signingKey)
+        RelaySigningKey signingKey,
+        CancellationToken ct)
     {
         if (!RelayEnabled)
             return new RelayConnection(
@@ -1609,7 +1677,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (RelayPublisherFactory is not null)
             return new RelayConnection(
-                new SignedRelayPublisher(RelayPublisherFactory(roomId), signingKey),
+                new SignedRelayPublisher(await RelayPublisherFactory(roomId, ct), signingKey),
                 settings.GatewayUrl ?? "https://relay.test/kanal-relay",
                 "test-reader-ticket",
                 null);
@@ -1622,7 +1690,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             settings.GatewayUrl!,
             settings.HostToken!,
             roomId,
-            signingKey.VerificationKey);
+            signingKey.VerificationKey,
+            ct: ct);
         return new RelayConnection(
             new SignedRelayPublisher(room.Publisher, signingKey),
             settings.GatewayUrl,
