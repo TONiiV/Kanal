@@ -170,7 +170,6 @@ public static class PipelinePlanner
     {
         if (mode.Translation == StageKind.Cloud)
         {
-            // the cloud transcriber translates inside its own session and needs no second key
             if (mode.Transcription == StageKind.Cloud)
                 return (L["stage.translation.cloud"], null, null, null);
 

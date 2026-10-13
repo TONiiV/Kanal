@@ -24,9 +24,12 @@ public sealed class DeepLMtProvider : IMtProvider
         ["pt"] = "PT-PT",
     };
 
+    private static readonly HttpClient Shared = new() { Timeout = TimeSpan.FromSeconds(15) };
+
     private readonly string _key;
     private readonly Uri _endpoint;
     private readonly HttpClient _http;
+    private volatile bool _refused;
 
     public DeepLMtProvider(string apiKey, HttpClient? http = null)
     {
@@ -34,7 +37,7 @@ public sealed class DeepLMtProvider : IMtProvider
         _endpoint = new Uri(_key.EndsWith(":fx", StringComparison.Ordinal)
             ? "https://api-free.deepl.com/v2/translate"
             : "https://api.deepl.com/v2/translate");
-        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        _http = http ?? Shared;
     }
 
     public string Id => "deepl";
@@ -46,6 +49,9 @@ public sealed class DeepLMtProvider : IMtProvider
         IReadOnlyList<Utterance> context,
         CancellationToken ct)
     {
+        if (_refused)
+            return new Dictionary<string, string>();
+
         var source = from.Split('-')[0].ToUpperInvariant();
         var recent = context.Count == 0 ? null : string.Join('\n', context.Select(u => u.SrcText));
 
@@ -86,18 +92,40 @@ public sealed class DeepLMtProvider : IMtProvider
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", _key);
 
-        using var response = await _http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-            throw Failure(response.StatusCode);
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            throw new MtProviderException("DeepL could not be reached.", MtProviderException.Unavailable);
+        }
 
-        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
-        return json?["translations"]?[0]?["text"]?.GetValue<string>() ?? "";
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+                throw Failure(response.StatusCode);
+
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
+            return json?["translations"]?[0]?["text"]?.GetValue<string>() ?? "";
+        }
     }
 
-    private static MtProviderException Failure(HttpStatusCode status) => status switch
+    private MtProviderException Failure(HttpStatusCode status)
     {
-        HttpStatusCode.Forbidden => new("DeepL rejected the API key (403).", MtProviderException.InvalidKey),
-        (HttpStatusCode)456 => new("The DeepL quota is used up (456).", MtProviderException.QuotaExceeded),
-        _ => new($"DeepL translation failed ({(int)status})."),
-    };
+        switch (status)
+        {
+            case HttpStatusCode.Forbidden:
+                _refused = true;
+                return new("DeepL rejected the API key (403).", MtProviderException.InvalidKey);
+            case (HttpStatusCode)456:
+                _refused = true;
+                return new("The DeepL quota is used up (456).", MtProviderException.QuotaExceeded);
+            case HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError:
+                return new($"DeepL is unavailable ({(int)status}).", MtProviderException.Unavailable);
+            default:
+                return new($"DeepL translation failed ({(int)status}).");
+        }
+    }
 }

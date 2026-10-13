@@ -23,8 +23,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
   A language outside DeepL's target list is skipped, and the other languages still translate.
 - **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
-  accepted*. `AsrEvent.Error.Code` carries the code to the host. The host shows a message in the
-  operator's language. Other failures keep the English message.
+  accepted*. 429, every 5xx, a timeout and a network error map to *service unavailable*
+  (`mt.unavailable`). `AsrEvent.Error.Code` carries the code to the host. The host shows a message in
+  the operator's language. A 400 keeps the English message.
+- **One warning per meeting for 403 and 456.** After the first 403 or 456, the provider sends no
+  more requests and returns no translations. The planner builds a new provider for the next meeting.
+  A timeout or a 5xx does not latch: the next line tries again.
+- **One shared `HttpClient`.** Every DeepL provider uses one static client with a 15 s timeout.
 - **Not built:** formality setting, glossary, usage and cost display, a second vendor.
 
 ### Keypoints

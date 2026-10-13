@@ -6,5 +6,7 @@ public sealed class MtProviderException(string message, string? code = null) : E
 
     public const string InvalidKey = "mt.key";
 
+    public const string Unavailable = "mt.unavailable";
+
     public string? Code { get; } = code;
 }
