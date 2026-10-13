@@ -82,6 +82,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private IAudioDeviceWatcher? _deviceWatcher;
     /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
     private readonly PipelinePlanner.KeyResolver? _resolveKey;
+    private readonly PipelinePlanner.KeyResolver? _resolveTranslationKey;
 
     /// <summary>
     /// Presentation order of the language codes, seeded from <see cref="LanguageCatalog"/> and
@@ -136,7 +137,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<Action, Task>? scanOffUiThread = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
-        bool development = false)
+        bool development = false,
+        PipelinePlanner.KeyResolver? resolveTranslationKey = null)
     {
         _titler = titler;
         Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
@@ -219,6 +221,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
+        _resolveTranslationKey = resolveTranslationKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
         _signalClock = signalClock ?? TimeProvider.System;
@@ -1049,9 +1052,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         foreach (var option in Modes)
             option.Unavailable = PipelinePlanner
-                .Describe(option.Mode, settings, downloads, _resolveKey).Unavailable;
+                .Describe(option.Mode, settings, downloads, _resolveKey, _resolveTranslationKey).Unavailable;
 
-        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey);
+        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey, _resolveTranslationKey);
         TranscriptionStatus = status.TranscriptionLabel;
         TranslationStatus = status.TranslationLabel;
         Sidebar.TitleModelReady = NamingModel() is not null;
@@ -1198,7 +1201,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
         var settings = _loadSettings();
-        var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
+        var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey, _resolveTranslationKey);
         if (PlanFilter is not null)
             plan = PlanFilter(plan);
         TranscriptionStatus = plan.Status.TranscriptionLabel;
@@ -1328,7 +1331,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Log.Write(
                 e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
             Dispatcher.UIThread.Post(() =>
-                Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
+                Status = L.Format(
+                    e.Fatal ? "status.fatal" : "status.warning", e.Code is null ? e.Message : L["error." + e.Code]));
         };
         session.SessionEnded += reason =>
         {

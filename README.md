@@ -249,8 +249,8 @@ question before starting a broad change.
 
 - Live microphone capture is available on Windows and macOS, but not Linux.
 - Local transcription has no speaker separation yet: every sentence carries one speaker label.
-- There is no standalone cloud text-translation provider, so local-to-cloud mode is also
-  unavailable.
+- Local-to-cloud mode needs a DeepL API key in Settings. DeepL is the only standalone cloud
+  text-translation provider today.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.
 - Mobile delivery depends on the authenticated gateway being reachable. Another relay can be
   added behind `IRelayPublisher`, but Kanal ships with no alternative today. The default

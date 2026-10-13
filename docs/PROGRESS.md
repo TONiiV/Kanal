@@ -4,6 +4,31 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-14
+
+### Cloud translation with DeepL (ADR 0060)
+
+*Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
+`Kanal.Providers.DeepL`. The orchestrator is unchanged. Only `PipelinePlanner` chooses the vendor.
+
+- **The planner resolves the key.** Local transcription with cloud translation needs a stored key
+  or the `DEEPL_API_KEY` variable. Without a key the mode row says *no cloud translation key — add
+  one in Settings*. The row names no vendor. *Cloud · Cloud* is unchanged: Gladia translates
+  inside its own session and ignores the DeepL key.
+- **Settings holds the key.** The *Translation* tab has one masked field. The key is stored in
+  `settings.json` as an `ApiKeyEntry` with provider `deepl`, like the Gladia keys.
+- **One request per target language.** The requests run in parallel. Recent finals go in DeepL's
+  `context` parameter. DeepL does not bill that parameter. A key that ends in `:fx` uses
+  `api-free.deepl.com`. Other keys use `api.deepl.com`.
+- **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
+  A language outside DeepL's target list is skipped, and the other languages still translate.
+- **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
+  accepted*. `AsrEvent.Error.Code` carries the code to the host. The host shows a message in the
+  operator's language. Other failures keep the English message.
+- **Not built:** formality setting, glossary, usage and cost display, a second vendor.
+
+---
+
 ## 2026-10-13
 
 ### Pin to Points
@@ -126,7 +151,7 @@ Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
 is available when a transcription model and a translation model are downloaded. *Local · Cloud*
 stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
-is removed.
+is removed. *Resolved on 2026-10-14: DeepL is the standalone cloud translator (ADR 0060).*
 
 - **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
   the planner uses it too. The mode row says "not downloaded" until every part is on disk.
@@ -3979,8 +4004,8 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Operator control over the language columns** — selection capped at four with the reason
       stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
       order host-local (#15).
-- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
-      second blocker on `local · cloud`, buildable independently of the local ASR work.
+- [x] Standalone cloud `IMtProvider` — DeepL first, other vendors later behind the same interface
+      (ADR 0060). `local · cloud` runs when a DeepL key exists.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).
