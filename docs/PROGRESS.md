@@ -6,6 +6,11 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
 ### Accent themes
 
 Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.

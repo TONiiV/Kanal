@@ -176,7 +176,7 @@
   "settings.key.name": "名称（例如 work）",
   "settings.key.value": "API 密钥",
   "settings.add": "添加",
-  "settings.localasr.note": "在本机运行：下载一次后，转写不再把音频送出本机。供本地转写类模式使用。块越短出字越快，块越长越准。",
+  "settings.localasr.note": "在本机运行：下载一次后，转写不再把音频送出本机。供本地转写类模式使用。",
   "settings.translation.heading": "翻译",
   "settings.translation.localmodel": "本地模型",
   "settings.translation.note": "只需下载一次；此后译文不会离开本机。供本地翻译类模式使用。",

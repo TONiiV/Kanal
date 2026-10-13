@@ -176,7 +176,7 @@
   "settings.key.name": "nazwa (np. work)",
   "settings.key.value": "klucz API",
   "settings.add": "Dodaj",
-  "settings.localasr.note": "Działa na tym komputerze: po jednorazowym pobraniu żaden dźwięk nie opuszcza tej maszyny w celu transkrypcji. Używany przez tryby z transkrypcją lokalną. Krótszy blok szybciej pokazuje słowa, dłuższy jest dokładniejszy.",
+  "settings.localasr.note": "Działa na tym komputerze: po jednorazowym pobraniu żaden dźwięk nie opuszcza tej maszyny w celu transkrypcji. Używany przez tryby z transkrypcją lokalną.",
   "settings.translation.heading": "TŁUMACZENIE",
   "settings.translation.localmodel": "Model lokalny",
   "settings.translation.note": "Pobierany raz; potem żaden przetłumaczony tekst nie opuszcza tej maszyny. Używany przez tryby z tłumaczeniem lokalnym.",

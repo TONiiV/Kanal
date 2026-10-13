@@ -21,50 +21,31 @@ public class TranscriptionModelSettingsTests
         Assert.Equal(AsrModelCatalog.Models[0].Id, active.ModelId);
     }
 
-    [Fact]
-    public void StoredSelectionIsRestored()
+    [Theory]
+    [InlineData("gone")]
+    [InlineData("nemotron-3.5-asr-160ms-int8")]
+    [InlineData("nemotron-3.5-asr-1120ms-int8")]
+    public void UnknownStoredSelectionFallsBackToTheRecommendedModelAndIsStoredAsDefault(string stored)
     {
-        var id = AsrModelCatalog.Models[^1].Id;
-        var vm = new SettingsViewModel(new AppSettings { ActiveTranscriptionModelId = id }, () => null);
-
-        Assert.Equal(id, Assert.Single(vm.TranscriptionModels, m => m.IsActive).ModelId);
-    }
-
-    [Fact]
-    public void UnknownStoredSelectionFallsBackToTheRecommendedModel()
-    {
-        var vm = new SettingsViewModel(new AppSettings { ActiveTranscriptionModelId = "gone" }, () => null);
+        var vm = new SettingsViewModel(new AppSettings { ActiveTranscriptionModelId = stored }, () => null);
 
         Assert.Equal(
             AsrModelCatalog.Models[0].Id, Assert.Single(vm.TranscriptionModels, m => m.IsActive).ModelId);
-    }
 
-    [Fact]
-    public void ApplyToPersistsTheSelectedModel()
-    {
-        var vm = new SettingsViewModel(new AppSettings(), () => null);
-        var pick = vm.TranscriptionModels[^1];
-        foreach (var m in vm.TranscriptionModels)
-            m.IsActive = ReferenceEquals(m, pick);
-
-        var settings = new AppSettings();
-        vm.ApplyTo(settings);
-
-        Assert.Equal(pick.ModelId, settings.ActiveTranscriptionModelId);
-    }
-
-    [Fact]
-    public void SelectingTheDefaultModelStoresNullSoTheDefaultFollowsTheCatalog()
-    {
-        var vm = new SettingsViewModel(
-            new AppSettings { ActiveTranscriptionModelId = AsrModelCatalog.Models[^1].Id }, () => null);
-        foreach (var m in vm.TranscriptionModels)
-            m.IsActive = m.ModelId == AsrModelCatalog.Models[0].Id;
-
-        var settings = new AppSettings { ActiveTranscriptionModelId = "stale" };
+        var settings = new AppSettings { ActiveTranscriptionModelId = stored };
         vm.ApplyTo(settings);
 
         Assert.Null(settings.ActiveTranscriptionModelId);
+    }
+
+    [Fact]
+    public void ASingleTranscriptionModelShowsNoSelectorButTranslationModelsDo()
+    {
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+
+        Assert.Single(vm.TranscriptionModels);
+        Assert.All(vm.TranscriptionModels, m => Assert.False(m.HasChoice));
+        Assert.All(vm.TranslationModels, m => Assert.True(m.HasChoice));
     }
 
     [Fact]

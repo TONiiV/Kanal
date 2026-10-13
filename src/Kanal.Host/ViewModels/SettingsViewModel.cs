@@ -170,7 +170,7 @@ public partial class SettingsViewModel : ViewModelBase
         active.IsActive = true;
 
         foreach (var model in AsrModelCatalog.Models)
-            TranscriptionModels.Add(new ModelItemViewModel(model, downloads));
+            TranscriptionModels.Add(new ModelItemViewModel(model, downloads) { HasChoice = AsrModelCatalog.Models.Count > 1 });
         (TranscriptionModels.FirstOrDefault(m => m.ModelId == settings.ActiveTranscriptionModelId)
          ?? TranscriptionModels[0]).IsActive = true;
 
