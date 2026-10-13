@@ -4,6 +4,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-14
+
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
 ## 2026-10-13
 
 ### Pin to Points
@@ -170,9 +182,11 @@ Four things the ADR did not anticipate, all found by running the model:
   on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
   language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
   `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
-  script first. Then it checks distinctive letters and stopwords among the room's Latin languages.
-  It was correct on every test sentence. A short Latin sentence with no signal falls to the room's
-  first Latin language.
+  script first. Then it checks distinctive letters and stopwords in every Latin language it knows.
+  A room language wins a tie. A language outside the room needs two signals (a score of 4). It was correct on every test sentence. A short Latin sentence with no
+  signal falls to the room's first Latin language. 2026-10-14: the check first counted only the
+  room's languages. An English sentence in a zh/de/pl room was labelled Polish, because "to" is a
+  Polish stopword.
 - **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
   ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
   second of silence when it is created. Priming again after an endpoint reset made things worse:
