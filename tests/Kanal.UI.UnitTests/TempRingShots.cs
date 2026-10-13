@@ -8,7 +8,6 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
-using Xunit.Abstractions;
 
 namespace Kanal.UI.UnitTests;
 
