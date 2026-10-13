@@ -6,6 +6,24 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Downloads survive the Settings window
+
+Closing Settings no longer cancels a model download.
+
+- **`ModelRows` owns the model rows.** It holds the translation and transcription
+  `ModelItemViewModel` rows, with the download state, progress and cancellation token of each.
+  `ModelRows.Shared` lives for the whole application. Each `SettingsViewModel` shows the same row
+  instances, so a reopened window shows the live progress and a working Cancel.
+- **The duplicate-download hazard is gone.** The reopened window shows the same row. The row is
+  already downloading, so the Download button stays off.
+- **Explicit Cancel and app exit still cancel.** `MainWindow.OnClosed` calls
+  `ModelRows.Shared.CancelAll()`.
+- **`CancelDownloads` is now `OnWindowClosed`.** It stops the microphone test, the device
+  listener and the language subscription. It no longer touches downloads.
+- **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
+  the same row and progress, `CancelAll` cancels. Only the production constructor passes
+  `ModelRows.Shared`; tests get their own rows.
+
 ### Accent themes
 
 Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
@@ -3659,10 +3677,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   — the first then died at `File.Move` after however many gigabytes had transferred (on Windows
   the delete itself failed with a sharing violation and masked the original error). Each call now
   streams into its own `<file>.<guid>.part` and only removes the one it created; `Delete` sweeps
-  any leftovers. The reachable trigger is fixed too: `SettingsWindow.OnClosed` cancels outstanding
-  downloads, since MainWindow builds a fresh window and view model each time Settings opens, and a
-  download left running behind a closed dialog was invisible, uncancellable, and collided with the
-  Download button the next dialog offered.
+  any leftovers. The reachable trigger was fixed too: `SettingsWindow.OnClosed` cancelled outstanding
+  downloads. That rule is replaced: a download now survives the window (see "Downloads survive the
+  Settings window", 2026-10-13).
 
 - **`MtOutputCleaner` mangled two quoted spans.** A quote at each end is not the same as a quoted
   line: `"ISO 7599" gilt auch für "KX-4402"` came out as `ISO 7599" gilt auch für "KX-4402`,

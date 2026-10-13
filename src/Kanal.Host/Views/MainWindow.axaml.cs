@@ -36,6 +36,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        ModelRows.Shared.CancelAll();
         (DataContext as MainViewModel)?.Dispose();
         base.OnClosed(e);
     }
