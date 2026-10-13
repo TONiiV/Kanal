@@ -25,6 +25,7 @@ Closing Settings no longer cancels a model download.
 - **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
   the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
   makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
+
 ### Nemotron provider (ADR 0053, slice C-4)
 
 `NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
