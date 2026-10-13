@@ -70,7 +70,6 @@
             <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
         </Style>
         <Style Selector="Border.tickrow">
-            <Setter Property="Height" Value="9" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
@@ -324,17 +323,18 @@
         </Button>
 
         <ItemsControl Grid.Column="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                      Width="30" Margin="0,2,12,10" VerticalAlignment="Top"
+                      Width="30" Margin="0,2,12,10" VerticalAlignment="Stretch"
+                      UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                       AutomationProperties.Name="{l:T ruler.name}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RulerTickViewModel">
-                    <Border Classes="tickrow"
+                    <Border Classes="tickrow" Height="{Binding Pitch}"
                             PointerEntered="OnTickEntered" PointerExited="OnTickExited"
                             PointerPressed="OnTickPressed"
                             AutomationProperties.Name="{Binding AccessibleName}">
                         <Rectangle Classes="tick" Classes.current="{Binding IsCurrent}"
                                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                                   Fill="{Binding SpeakerColor}" />
+                                   IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -363,9 +363,6 @@
                                             </TextBlock.Foreground>
                                         </TextBlock>
                                         <TextBlock Text="{Binding TimeLabel}" FontSize="10.5"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource Ink3}" />
-                                        <TextBlock Text="{Binding FoldBadge}" FontSize="10.5"
                                                    LetterSpacing="1.5"
                                                    Foreground="{DynamicResource Ink3}" />
                                     </StackPanel>
