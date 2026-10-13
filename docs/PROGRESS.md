@@ -15,6 +15,8 @@ Issue #268. The reference is the message navigator of a chat app.
 - **In view.** The view reports the utterance ids of the bubbles on screen to
   `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
   replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **On load.** A column reports its visible rows when it loads. Without this, a room that opens
+  with sentences in it shows no emphasis and no arrows until the first scroll.
 - **Reference column.** The leftmost shown column decides what is on screen. Rows in other
   languages have other heights, so one column must decide. The arrows use the same column.
 - **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next

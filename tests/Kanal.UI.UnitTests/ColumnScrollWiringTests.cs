@@ -110,10 +110,34 @@ public class ColumnScrollWiringTests
         for (var n = 40; n < 120; n++)
             Say(vm, n);
         for (var n = 0; n < 120; n++)
-            vm.Ruler.Observe(new Utterance($"u{n}", "s1", n * 1000, n * 1000 + 900, "zh", $"Zeile {n}", 1,
-                UtteranceState.Final, false, 1.0, new Dictionary<string, string>()));
+            vm.Ruler.Observe(Final(n));
         Settle(window);
         return (window, vm, scrollers);
+    }
+
+    private static Utterance Final(int n) =>
+        new($"u{n}", "s1", n * 1000, n * 1000 + 900, "zh", $"Zeile {n}", 1,
+            UtteranceState.Final, false, 1.0, new Dictionary<string, string>());
+
+    [AvaloniaFact]
+    public void ARoomOpenedWithSentencesInItMarksThemBeforeAnyScroll()
+    {
+        var vm = TestViewModels.Hermetic();
+        foreach (var code in new[] { "zh", "de", "pl" })
+            vm.Columns.Add(new ColumnViewModel(code));
+        for (var n = 0; n < 40; n++)
+        {
+            Say(vm, n);
+            vm.Ruler.Observe(Final(n));
+        }
+
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Settle(window);
+
+        Assert.NotEmpty(InView(vm));
+        Assert.True(vm.Ruler.PageDownCommand.CanExecute(null) || vm.Ruler.PageUpCommand.CanExecute(null));
+        window.Close();
     }
 
     private static List<string> InView(MainViewModel vm) =>

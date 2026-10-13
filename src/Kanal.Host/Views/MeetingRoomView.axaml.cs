@@ -146,10 +146,12 @@ public partial class MeetingRoomView : UserControl
         _columnScrollers.Where(s => s.IsEffectivelyVisible)
             .MinBy(s => s.TranslatePoint(default, this)?.X ?? double.MaxValue);
 
-    private void OnColumnScrolled(object? sender, ScrollChangedEventArgs e)
+    private void OnColumnScrolled(object? sender, ScrollChangedEventArgs e) => ReportVisible(sender);
+
+    private void ReportVisible(object? source)
     {
         if (DataContext is not MainViewModel vm || ReferenceColumn() is not { Content: ItemsControl items } scroller ||
-            !ReferenceEquals(sender, scroller))
+            !ReferenceEquals(source, scroller))
             return;
 
         var top = scroller.Offset.Y + 0.5;
@@ -195,6 +197,7 @@ public partial class MeetingRoomView : UserControl
 
         _columnScrollers.Add(scroller);
         scroller.ScrollChanged += OnColumnScrolled;
+        ReportVisible(scroller);
     }
 
     private void OnColumnScrollDetached(object? sender, VisualTreeAttachmentEventArgs e)
