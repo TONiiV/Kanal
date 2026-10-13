@@ -50,11 +50,11 @@ public partial class IconBarView : UserControl
         }
     }
 
-    private async Task<bool?> AskAsync(bool saveAudio, bool emphasiseRemote)
+    private async Task<bool?> AskAsync(bool saveAudio, bool emphasiseRemote, string? continuing)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
             return null;
 
-        return await new ConsentWindow(saveAudio, emphasiseRemote).ShowDialog<bool?>(owner);
+        return await new ConsentWindow(saveAudio, emphasiseRemote, continuing).ShowDialog<bool?>(owner);
     }
 }

@@ -1,15 +1,21 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Kanal.Host.Localization;
 
 namespace Kanal.Host.Views;
 
 public partial class ConsentWindow : Window
 {
-    public ConsentWindow(bool saveAudio, bool emphasiseRemote)
+    public ConsentWindow(bool saveAudio, bool emphasiseRemote, string? continuing = null)
     {
         InitializeComponent();
         SaveAudio.IsChecked = saveAudio;
+        if (continuing is not null)
+        {
+            Continuing.Text = Localizer.Instance.Format("consent.continue", continuing);
+            Continuing.IsVisible = true;
+        }
         // Emphasised, never a second wording: a hybrid meeting has people in the room and people
         // on the call, and the reminder has to be there for both (ADR 0054, decision 27).
         if (emphasiseRemote)

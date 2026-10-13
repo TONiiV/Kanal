@@ -120,7 +120,7 @@ public class WorkspaceSidebarTests : IDisposable
         await vm.Meetings.Single().ImportCommand.ExecuteAsync(null);
 
         var stored = store.ListMeetings(vm.SelectedWorkspace!.Id).Meetings.Single();
-        Assert.Null(stored.TranscriptPath);
+        Assert.Empty(stored.Runs);
         Assert.True(File.Exists(Path.Combine(
             store.MeetingFolder(stored.WorkspaceId, stored.Id)!, "attachments", "pitch.pptx")));
     }
@@ -316,7 +316,7 @@ public class WorkspaceSidebarTests : IDisposable
         var audio = Path.Combine(folder, "audio.wav");
         File.WriteAllText(transcript, """{"text":"Guten Tag"}""");
         File.WriteAllBytes(audio, [0x52, 0x49, 0x46, 0x46]);
-        store.SaveMeeting(meeting.Record with { TranscriptPath = transcript, AudioPath = audio });
+        store.SaveMeeting(meeting.Record with { Runs = [new(transcript, audio, null, null)] });
         vm.ConfirmDeleteMeeting = _ => Task.FromResult(true);
 
         await meeting.DeleteCommand.ExecuteAsync(null);
@@ -414,8 +414,7 @@ public class WorkspaceSidebarTests : IDisposable
         vm.SaveRecord(meeting.Record with
         {
             Languages = ["de", "zh"],
-            TranscriptPath = Path.Combine(folder, "transcript.jsonl"),
-            AudioPath = Path.Combine(folder, "audio.wav"),
+            Runs = [new(Path.Combine(folder, "transcript.jsonl"), Path.Combine(folder, "audio.wav"), null, null)],
         });
 
         vm.ConfirmExportBundle = _ => Task.FromResult<bool?>(audio);

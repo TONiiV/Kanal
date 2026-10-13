@@ -134,8 +134,9 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         Assert.Equal(new DateTimeOffset(ended), record.EndedAt);
         Assert.Equal(new DateTimeOffset(ended.AddSeconds(-65)), record.StartedAt);
         Assert.Equal(record.StartedAt, record.CreatedAt);
-        Assert.Equal(transcript, record.TranscriptPath);
-        Assert.Equal(Path.Combine(folder, WorkspaceStore.AudioFileName), record.AudioPath);
+        var run = Assert.Single(record.Runs);
+        Assert.Equal(transcript, run.TranscriptPath);
+        Assert.Equal(Path.Combine(folder, WorkspaceStore.AudioFileName), run.AudioPath);
 
         var listing = Store().ListMeetings(workspace.Id);
         Assert.Empty(listing.Problems);
@@ -152,7 +153,29 @@ public class WorkspaceStoreRecoveryTests : IDisposable
 
         var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
 
-        Assert.Null(record.AudioPath);
+        Assert.Null(Assert.Single(record.Runs).AudioPath);
+    }
+
+    [Fact]
+    public void ARebuiltMeetingKeepsEveryRunEvenAfterASkippedNumber()
+    {
+        var store = Store();
+        var workspace = NewWorkspace(store);
+        var folder = Folder(workspace, "lost1");
+        WriteTranscript(folder, Said("u1", "de", 0));
+        var third = Path.Combine(folder, MeetingRun.TranscriptFileName(5));
+        var scratch = Directory.CreateDirectory(Path.Combine(_root, "scratch")).FullName;
+        File.Move(WriteTranscript(scratch, Said("u1", "pl", 0)), third);
+        File.WriteAllBytes(Path.Combine(folder, MeetingRun.AudioFileName(5)), [0x52, 0x49, 0x46, 0x46]);
+
+        var record = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle).Recovered!;
+
+        Assert.Equal(
+            [Path.Combine(folder, TranscriptLog.FileName), third],
+            record.Runs.Select(r => r.TranscriptPath));
+        Assert.Null(record.Runs[0].AudioPath);
+        Assert.Equal(Path.Combine(folder, MeetingRun.AudioFileName(5)), record.Runs[1].AudioPath);
+        Assert.Equal(["de", "pl"], record.Languages);
     }
 
     [Fact]
@@ -440,12 +463,13 @@ public class WorkspaceStoreRecoveryTests : IDisposable
         var folder = Folder(workspace, "lost1");
         WriteTranscript(folder, Said("u1", "de", 0));
         var record = Path.Combine(folder, WorkspaceStore.MeetingFileName);
-        File.WriteAllText(record, """{"schemaVersion":2,"id":"lost1"}""");
+        var newer = $$"""{"schemaVersion":{{WorkspaceStore.MeetingSchemaVersion + 1}},"id":"lost1"}""";
+        File.WriteAllText(record, newer);
 
         var result = store.RecoverMeeting(workspace.Id, folder, _ => BaseTitle);
 
         Assert.Equal(StoreProblemKind.UnsupportedVersion, result.Problem!.Kind);
-        Assert.Equal("""{"schemaVersion":2,"id":"lost1"}""", File.ReadAllText(record));
+        Assert.Equal(newer, File.ReadAllText(record));
         Assert.False(File.Exists(record + ".damaged"));
     }
 

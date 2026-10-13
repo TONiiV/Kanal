@@ -10,8 +10,10 @@ internal sealed record StoredMeeting(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     List<string>? Languages,
-    string? TranscriptFileName,
-    string? AudioFileName) : IStoredRecord
+    List<StoredRun>? Runs,
+    // Schema 1 only: read as one run, never written, so the runs stay the single list of files.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TranscriptFileName,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AudioFileName) : IStoredRecord
 {
     [JsonIgnore]
     public bool Complete =>
@@ -21,19 +23,17 @@ internal sealed record StoredMeeting(
         && Languages is not null
         && Languages.All(language => !string.IsNullOrWhiteSpace(language))
         && StorePaths.IsFileName(TranscriptFileName)
-        && StorePaths.IsFileName(AudioFileName);
+        && StorePaths.IsFileName(AudioFileName)
+        && StoredRun.AllComplete(AllRuns);
+
+    private List<StoredRun> AllRuns =>
+        Runs ?? StoredRun.Legacy(TranscriptFileName, AudioFileName, StartedAt, EndedAt);
 
     internal static StoredMeeting From(MeetingRecord m, string folder) =>
-        new(RecordFile.SchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
-            [.. m.Languages], FileName(m.TranscriptPath, folder), FileName(m.AudioPath, folder));
+        new(RecordFile.MeetingSchemaVersion, m.Id, m.Title, m.CreatedAt, m.StartedAt, m.EndedAt,
+            [.. m.Languages], [.. m.Runs.Select(r => StoredRun.From(r, folder))], null, null);
 
     internal MeetingRecord ToRecord(string workspaceId, string folder) =>
         new(Id!, workspaceId, Title!, CreatedAt, StartedAt, EndedAt,
-            Languages!, ArtifactPath(folder, TranscriptFileName), ArtifactPath(folder, AudioFileName));
-
-    private static string? FileName(string? path, string folder) =>
-        path is null ? null : Path.GetRelativePath(folder, path);
-
-    private static string? ArtifactPath(string folder, string? fileName) =>
-        fileName is null ? null : Path.Combine(folder, fileName);
+            Languages!, [.. AllRuns.Select(r => r.In(folder))]);
 }

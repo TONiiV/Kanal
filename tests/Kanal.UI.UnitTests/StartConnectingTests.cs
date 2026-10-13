@@ -118,7 +118,7 @@ public class StartConnectingTests : IDisposable
             Mt = null,
             CloudTranslation = true,
         };
-        vm.ConfirmConsent = (save, _) => Task.FromResult<bool?>(save);
+        vm.ConfirmConsent = (save, _, _) => Task.FromResult<bool?>(save);
         return vm;
     }
 
@@ -209,7 +209,7 @@ public class StartConnectingTests : IDisposable
         var (store, workspace) = Opened();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var vm = CloudCloud(gate.Task, store, () => new DateTimeOffset(2026, 9, 23, 9, 5, 0, TimeSpan.Zero));
-        vm.ConfirmConsent = (_, _) => Task.FromResult<bool?>(true);
+        vm.ConfirmConsent = (_, _, _) => Task.FromResult<bool?>(true);
 
         var starting = vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(100);
@@ -223,7 +223,7 @@ public class StartConnectingTests : IDisposable
 
         var record = Assert.Single(store.ListMeetings(workspace.Id).Meetings);
         Assert.Equal("Supplier review", record.Title);
-        Assert.False(string.IsNullOrEmpty(record.AudioPath), "the room opened without saving audio.");
+        Assert.False(string.IsNullOrEmpty(record.Runs[0].AudioPath), "the room opened without saving audio.");
     }
 
     [AvaloniaFact]
@@ -329,6 +329,32 @@ public class StartConnectingTests : IDisposable
         Assert.Equal(blank.Title, record.Title);
         Assert.Null(record.StartedAt);
         Assert.Equal(blank.Id, vm.Sidebar.SelectedMeeting?.Id);
+    }
+
+    [AvaloniaFact]
+    public async Task AContinuationThatFailsLeavesTheMeetingAsItWas()
+    {
+        var (store, workspace) = Opened();
+        var (vm, _) = Demo(Task.CompletedTask, store);
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(300);
+        await vm.StopCommand.ExecuteAsync(null);
+        var id = vm.Sidebar.SelectedMeeting!.Id;
+        var folder = store.MeetingFolder(workspace.Id, id)!;
+        var meta = File.ReadAllBytes(Path.Combine(folder, WorkspaceStore.MeetingFileName));
+        var files = Directory.GetFiles(folder);
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vm.PlanFilter = plan => plan with { Asr = new GatedAsr(plan.Asr!, gate.Task) };
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        Assert.Equal(2, Assert.Single(store.ListMeetings(workspace.Id).Meetings).Runs.Count);
+        gate.SetException(new InvalidOperationException("transcriber refused"));
+        await starting;
+
+        Assert.Equal(meta, File.ReadAllBytes(Path.Combine(folder, WorkspaceStore.MeetingFileName)));
+        Assert.Equal(files, Directory.GetFiles(folder));
+        Assert.Equal(id, vm.Sidebar.SelectedMeeting?.Id);
     }
 
     [AvaloniaFact]

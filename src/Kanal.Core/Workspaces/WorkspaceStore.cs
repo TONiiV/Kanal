@@ -5,6 +5,7 @@ namespace Kanal.Core.Workspaces;
 public sealed class WorkspaceStore
 {
     public const int SchemaVersion = RecordFile.SchemaVersion;
+    public const int MeetingSchemaVersion = RecordFile.MeetingSchemaVersion;
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = MeetingRecords.FileName;
     public const string AudioFileName = "audio.wav";

@@ -62,7 +62,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         // uniqueness rule the rename paths carry (ADR 0054, decision 11): every record starts as
         // the same placeholder, and numbering that would survive into the default title.
         var meeting = new MeetingRecord(
-            StorePaths.NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], null, null);
+            StorePaths.NewId(), workspaceId, title.Trim(), DateTimeOffset.UtcNow, null, null, [], []);
         return Save(meeting);
     }
 
@@ -81,8 +81,8 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
             return new MeetingResult(null, problem);
 
         var folder = FolderFor(workspace!, meeting.Id);
-        if (!StorePaths.IsArtifactPath(meeting.TranscriptPath, folder)
-            || !StorePaths.IsArtifactPath(meeting.AudioPath, folder))
+        if (meeting.Runs.Any(r => !StorePaths.IsArtifactPath(r.TranscriptPath, folder)
+                                  || !StorePaths.IsArtifactPath(r.AudioPath, folder)))
             return Refused(meeting.Id, "An artefact path must name a file inside its meeting folder.");
 
         try
@@ -161,15 +161,13 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         if (state.Kind is not (StoreProblemKind.RecordMissing or StoreProblemKind.RecordDamaged))
             return new RecoverResult(null, null, state);
 
-        var name = Path.GetFileName(path!);
-        var utterances = StorePaths.IsFolderName(name)
-            ? TranscriptLog.Read(Path.Combine(path!, TranscriptLog.FileName))
-            : [];
+        var runs = StorePaths.IsFolderName(Path.GetFileName(path!)) ? RunsOnDisk(path!) : [];
+        var utterances = runs.SelectMany(r => TranscriptLog.Read(r.TranscriptPath)).ToList();
         var languages = LanguagesOf(utterances);
         if (languages.Count == 0)
             return SetAside(workspaceId, path!);
 
-        var rebuilt = Rebuilt(workspaceId, path!, utterances, languages);
+        var rebuilt = Rebuilt(workspaceId, path!, runs, utterances, languages);
         var title = titleFor(rebuilt.StartedAt!.Value);
         if (string.IsNullOrWhiteSpace(title))
             return new RecoverResult(null, null, StoreProblems.Invalid(path!, NeedsTitle));
@@ -290,7 +288,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         if (unreachable is not null)
             return (null, unreachable with { Subject = folder });
 
-        var (stored, trouble) = RecordFile.Parse<StoredMeeting>(text!, file);
+        var (stored, trouble) = RecordFile.Parse<StoredMeeting>(text!, file, RecordFile.MeetingSchemaVersion);
         if (trouble is not null)
             return (null, trouble.Kind == StoreProblemKind.Unreadable
                 ? trouble with { Kind = StoreProblemKind.RecordDamaged, Subject = folder }
@@ -329,15 +327,32 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
         !string.IsNullOrWhiteSpace(language)
         && !string.Equals(language, UnknownLanguage, StringComparison.OrdinalIgnoreCase);
 
+    // By file name, not by count: a run number skips a name that is already taken.
+    private static List<MeetingRun> RunsOnDisk(string folder) =>
+        [.. Directory.EnumerateFiles(folder)
+            .Select(path => RunNumber(Path.GetFileName(path)))
+            .OfType<int>()
+            .Order()
+            .Select(n => new MeetingRun(
+                Path.Combine(folder, MeetingRun.TranscriptFileName(n)),
+                Path.Combine(folder, MeetingRun.AudioFileName(n)), null, null))
+            .Select(r => File.Exists(r.AudioPath) ? r : r with { AudioPath = null })];
+
+    private static int? RunNumber(string name) =>
+        name == TranscriptLog.FileName ? 1
+        : name.StartsWith("transcript-", StringComparison.Ordinal)
+          && int.TryParse(Path.GetFileNameWithoutExtension(name)["transcript-".Length..],
+              System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+          && MeetingRun.TranscriptFileName(n) == name
+            ? n
+            : null;
+
     private static MeetingRecord Rebuilt(
-        string workspaceId, string folder, IReadOnlyList<Utterance> utterances,
+        string workspaceId, string folder, List<MeetingRun> runs, IReadOnlyList<Utterance> utterances,
         List<string> languages)
     {
-        var transcript = Path.Combine(folder, TranscriptLog.FileName);
-        var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
-        var hasAudio = File.Exists(audio);
-        var ended = new[] { transcript, audio }
-            .Where(File.Exists)
+        var ended = runs.SelectMany(r => new[] { r.TranscriptPath, r.AudioPath })
+            .OfType<string>()
             .Select(File.GetLastWriteTimeUtc)
             .Max();
         var spanMs = Math.Max(0, utterances.Max(u => u.TEndMs ?? u.TStartMs) - utterances.Min(u => u.TStartMs));
@@ -345,7 +360,7 @@ internal sealed class MeetingRecords(WorkspaceRegistry registry)
 
         return new MeetingRecord(
             Path.GetFileName(folder), workspaceId, "", started, started,
-            new DateTimeOffset(ended), languages, transcript, hasAudio ? audio : null);
+            new DateTimeOffset(ended), languages, runs);
     }
 
     private static string MoveAsideDamagedRecord(string record)

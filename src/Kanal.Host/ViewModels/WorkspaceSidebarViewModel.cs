@@ -198,23 +198,20 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             SelectedMeeting = row;
     }
 
-    /// <summary>
-    /// The record this meeting is written into: the selected one while it has never been
-    /// recorded, otherwise a new one beside it. Null when no workspace is open — the meeting
-    /// still runs, and the host says plainly that nothing is being kept.
-    /// </summary>
-    public MeetingRecord? OpenRecordForMeeting(DateTimeOffset startedAt, IReadOnlyList<string> languages)
+    // No record without a workspace: the meeting still runs, and the host says that nothing is kept.
+    public (MeetingRecord? Record, int Run) OpenRecordForMeeting(
+        DateTimeOffset startedAt, IReadOnlyList<string> languages, MeetingRecord? chosen)
     {
         if (SelectedWorkspace is not { } workspace)
-            return null;
+            return (null, 1);
 
-        var record = SelectedMeeting?.Record is { StartedAt: null } untouched ? untouched : null;
+        var record = chosen;
         var placeholder = L["meeting.untitled"];
         if (record is null)
         {
             var (made, problem) = _store.CreateMeeting(workspace.Id, L["meeting.untitled"]);
             if (Refused(problem))
-                return null;
+                return (null, 1);
 
             record = made!;
             Search = "";
@@ -223,21 +220,28 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         if (FolderOf(record) is not { } folder)
-            return null;
+            return (null, 1);
 
-        return SaveRecord(record with
+        var earlier = record.StartedAt is null ? record with { Runs = [] } : record;
+        var run = earlier.NextRun(folder);
+        var heldFrom = record.StartedAt ?? startedAt;
+        return (SaveRecord(record with
         {
             // The default title names when the meeting was held, to the minute, in the operator's
             // own zone — and only over the placeholder, so a record named before it was recorded
             // keeps the name it was given.
             Title = record.Title == placeholder
-                ? $"{workspace.Name} {startedAt.ToLocalTime():yyyy-MM-dd HH:mm}"
+                ? $"{workspace.Name} {heldFrom.ToLocalTime():yyyy-MM-dd HH:mm}"
                 : record.Title,
-            StartedAt = startedAt,
+            StartedAt = heldFrom,
             EndedAt = null,
             Languages = [.. languages],
-            TranscriptPath = Path.Combine(folder, TranscriptLog.FileName),
-        });
+            Runs =
+            [
+                .. earlier.Runs,
+                new MeetingRun(Path.Combine(folder, MeetingRun.TranscriptFileName(run)), null, startedAt, null),
+            ],
+        }), run);
     }
 
     public void DiscardRecord(MeetingRecord opened, MeetingRecord? selectedBefore)
@@ -263,7 +267,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     public void CloseRecord(string meetingId, DateTimeOffset endedAt)
     {
         if (_held.FirstOrDefault(m => m.Id == meetingId) is { } current)
-            SaveRecord(current with { EndedAt = endedAt });
+            SaveRecord(current.WithLastRun(r => r with { EndedAt = endedAt }) with { EndedAt = endedAt });
     }
 
     // Adopted in place rather than reloaded: rebuilding the list mid-meeting reads as the

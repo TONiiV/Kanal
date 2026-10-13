@@ -9,8 +9,7 @@ namespace Kanal.Host.ViewModels;
 
 public static class StoredTranscript
 {
-    public static IReadOnlyList<Utterance> Utterances(MeetingRecord record) =>
-        record.TranscriptPath is { } path ? TranscriptLog.Read(path) : [];
+    public static IReadOnlyList<Utterance> Utterances(MeetingRecord record) => TranscriptLog.Read(record);
 
     public static IReadOnlyList<ColumnViewModel> Of(MeetingRecord record) =>
         Columns(Utterances(record), record.Languages ?? []);

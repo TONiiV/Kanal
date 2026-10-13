@@ -104,8 +104,8 @@ public class ActiveVersusBrowsedTests : IDisposable
         {
             StartedAt = held,
             EndedAt = held.AddMinutes(40),
-            TranscriptPath = path,
             Languages = ["zh", "de"],
+            Runs = [new(path, null, held, held.AddMinutes(40))],
         }).Meeting!;
     }
 
@@ -155,6 +155,68 @@ public class ActiveVersusBrowsedTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task RecordingIntoAnEndedMeetingCarriesItOnScreenAndInTheExport()
+    {
+        var store = Store();
+        var workspace = Opened(store);
+        var older = Stored(store, workspace, "Vorbesprechung");
+        var vm = Demo(store);
+        vm.Sidebar.SelectedMeeting = Row(vm, older.Id);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(1500);
+
+        Assert.Equal(older.Id, vm.Sidebar.RecordingMeetingId);
+        Assert.False(vm.IsBrowsingRecord);
+        Assert.Equal("Vorbesprechung", vm.MeetingTitle);
+        var german = vm.Columns.Single(c => c.Language == "de");
+        Assert.Equal(
+            ["Toleranz bei KX-4402", "[de] 交期确认"],
+            german.Bubbles.Take(2).Select(b => b.Text));
+        Assert.True(german.Bubbles.Count > 2, "the new run added nothing below the earlier one.");
+
+        var second = Row(vm, older.Id).Record.Runs[1].TranscriptPath;
+        await PumpUntilAsync(() => TranscriptLog.Read(second).Any(u => u.State == UtteranceState.Final));
+        var live = TranscriptLog.Read(second).Where(u => u.State == UtteranceState.Final).ToList();
+        var markdown = vm.BuildMarkdownExport();
+        Assert.Contains("**S1** (de): Toleranz bei KX-4402", markdown);
+        Assert.NotEmpty(live);
+        Assert.True(
+            markdown.IndexOf("交期确认", StringComparison.Ordinal)
+            < markdown.LastIndexOf(live[0].SrcText, StringComparison.Ordinal),
+            "the export does not carry the earlier run ahead of the new one.");
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal("Vorbesprechung", Assert.Single(store.ListMeetings(workspace.Id).Meetings).Title);
+    }
+
+    [AvaloniaFact]
+    public async Task AnEarlierRunStaysOutOfTheLiveSpeakers()
+    {
+        var store = Store();
+        var workspace = Opened(store);
+        var older = Stored(store, workspace, "Vorbesprechung");
+        var vm = Demo(store);
+        vm.Sidebar.SelectedMeeting = Row(vm, older.Id);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        vm.ApplySpeaker(new Speaker("S1", "Anna", [], RoomState.Palette[5]));
+        var german = vm.Columns.Single(c => c.Language == "de");
+        var earlier = german.Bubbles[0];
+        var tick = vm.Ruler.Ticks.First(t => t.AnchorUtteranceId == earlier.UtteranceId);
+
+        Assert.Equal(
+            german.Bubbles.Count(b => b.SpeakerTag == "S1"),
+            vm.Speakers.Single(s => s.Tag == "S1").UtteranceCount);
+        Assert.Equal("S1", earlier.SpeakerName);
+        Assert.Equal(earlier.SpeakerName, tick.SpeakerName);
+        Assert.Equal(earlier.SpeakerColor, tick.SpeakerColor);
+        Assert.NotEqual(RoomState.Palette[5], earlier.SpeakerColor);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
     public async Task BrowsingSwitchesTheBodyAndComingBackRestoresTheLiveOne()
     {
         var store = Store();
@@ -190,6 +252,7 @@ public class ActiveVersusBrowsedTests : IDisposable
         Assert.False(vm.ShowRecordingBanner);
         vm.Sidebar.SelectedMeeting = Row(vm, older.Id);
         Assert.False(vm.ShowRecordingBanner);
+        vm.Sidebar.SelectedMeeting = null;
 
         await vm.StartCommand.ExecuteAsync(null);
         await PumpAsync(1200);

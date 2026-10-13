@@ -49,6 +49,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, string> _tagToCanonical = new();
     private readonly DispatcherTimer _snapshotTimer;
     private MeetingSession? _session;
+    private IReadOnlyList<Utterance> _earlier = [];
+    private Dictionary<string, string> _earlierColours = new();
     /// <summary>Outlives its session: the next Start uses it to redirect phones to the new room.</summary>
     private IRelayPublisher? _relay;
     private CancellationTokenSource? _captureCts;
@@ -190,7 +192,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 return;
             Files.Show(Sidebar.SelectedMeeting?.Record);
             // The sidebar re-creates every row on each search keystroke and re-selects by Id.
-            var shown = (Sidebar.SelectedMeeting?.Id, Sidebar.SelectedMeeting?.Record.TranscriptPath);
+            var shown = (
+                Sidebar.SelectedMeeting?.Id, Sidebar.SelectedMeeting?.Record.Runs.LastOrDefault()?.TranscriptPath);
             if (shown == _shownMeeting)
                 return;
             if (shown.Id != _shownMeeting.Id)
@@ -498,16 +501,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     private static IReadOnlyList<string> StoredFinalLines(MeetingRecord record) =>
-        record.TranscriptPath is { } path
-            ? [.. TranscriptLog.Read(path)
-                .Where(u => u.State == UtteranceState.Final)
-                .Select(u => u.SrcText)]
-            : [];
+        [.. TranscriptLog.Read(record)
+            .Where(u => u.State == UtteranceState.Final)
+            .Select(u => u.SrcText)];
 
     private IReadOnlyList<string> FinalLines() =>
         _session is null
             ? []
-            : [.. _session.Room.Snapshot().Utterances
+            : [.. _earlier.Concat(_session.Room.Snapshot().Utterances)
                 .Where(u => u.State == UtteranceState.Final)
                 .Select(u => u.SrcText)];
 
@@ -767,7 +768,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void DismissCaptureNote() => CaptureNoteDismissed = true;
 
-    public delegate Task<bool?> ConsentPrompt(bool saveAudio, bool emphasiseRemote);
+    public delegate Task<bool?> ConsentPrompt(bool saveAudio, bool emphasiseRemote, string? continuing);
 
     // Unwired (headless, tests) reads as a refusal, never as consent.
     public ConsentPrompt? ConfirmConsent { get; set; }
@@ -1197,6 +1198,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var selectedBefore = Sidebar.SelectedMeeting?.Record;
+        var continuing = selectedBefore is { StartedAt: not null } ? selectedBefore : null;
+
         // Asked before anything is cleared or created, and after the refusals above: a cancelled
         // dialog leaves the screen, the workspace and the last meeting exactly as they were, and
         // nobody is asked to consent to a meeting that could not have run anyway.
@@ -1204,7 +1208,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             var answer = ConfirmConsent is null
                 ? null
-                : await ConfirmConsent(SavesAudioByDefault(profile.Id, settings), online);
+                : await ConfirmConsent(SavesAudioByDefault(profile.Id, settings), online, continuing?.Title);
             if (answer is null)
             {
                 Log.Info(RoomLog, "Start cancelled: the consent dialog was dismissed.");
@@ -1241,9 +1245,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IsPaused = false; // a new room is never inheriting the last one's pause
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
-        foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang));
+        var columns = languages.Take(MaxLanguages).ToList();
+        _earlier = continuing is null ? [] : TranscriptLog.Read(continuing, beforeALiveRun: true);
+        _earlierColours = StoredTranscript.ColoursByTag(_earlier);
+        var carried = StoredTranscript.Columns(_earlier, columns);
+        foreach (var column in carried.Count > 0 ? carried : columns.Select(lang => new ColumnViewModel(lang)))
+            Columns.Add(column);
         FocusedLanguage = null;
+        foreach (var bubble in Columns.SelectMany(c => c.Bubbles))
+            bubble.SpeakerName = ResolveSpeaker(bubble.SpeakerTag).Name;
+        foreach (var u in _earlier)
+            Ruler.Observe(u);
+        if (continuing is not null)
+        {
+            // The record does not say if a person typed its title, so the titler must not replace it.
+            _titleOnRecord = continuing.Title;
+            Titling.Rename(continuing.Title);
+        }
 
         var asr = plan.Asr!;
         var mt = plan.Mt;
@@ -1252,8 +1270,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _titler = plan.Titler;
         OnTitlingChanged();
 
-        var selectedBefore = Sidebar.SelectedMeeting?.Record;
-        var record = Sidebar.OpenRecordForMeeting(_utcNow(), languages);
+        var (record, run) = Sidebar.OpenRecordForMeeting(_utcNow(), languages, selectedBefore);
         _sessionRecordId = record?.Id;
         Sidebar.RecordingMeetingId = record?.Id;
         RefreshBody();
@@ -1402,12 +1419,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             RecordingPathFor(
                 mode, profile.Id, settings,
                 record is null ? null : Sidebar.FolderOf(record),
-                _saveAudioThisMeeting));
+                _saveAudioThisMeeting,
+                run));
 
         // Written after the file is open, not before: a record pointing at a recording that
         // never started reads on screen as an hour of audio nobody can find.
         if (record is not null && RecordingPath.Length > 0)
-            Sidebar.SaveRecord((Sidebar.RecordOf(record.Id) ?? record) with { AudioPath = RecordingPath });
+            Sidebar.SaveRecord(
+                (Sidebar.RecordOf(record.Id) ?? record).WithLastRun(r => r with { AudioPath = RecordingPath }));
         if (record is null)
             Status = $"{Status} {L["status.notsaved"]}";
 
@@ -2103,11 +2122,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         CaptureProfileId captureProfile,
         AppSettings settings,
         string? meetingFolder,
-        bool? consented = null) =>
+        bool? consented = null,
+        int run = 1) =>
         meetingFolder is not null &&
         mode.NeedsMicrophone &&
         (consented ?? SavesAudioByDefault(captureProfile, settings))
-            ? Path.Combine(meetingFolder, WorkspaceStore.AudioFileName)
+            ? Path.Combine(meetingFolder, MeetingRun.AudioFileName(run))
             : null;
 
     /// <summary>What the consent dialog offers pre-ticked; the operator's answer overrides it
@@ -2123,7 +2143,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void StartTranscript(MeetingSession session, MeetingRecord? record)
     {
-        if (record?.TranscriptPath is not { } path)
+        if (record?.Runs.LastOrDefault()?.TranscriptPath is not { } path)
             return;
 
         try
@@ -2300,9 +2320,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             sb.AppendLine($"consent-confirmed-at: {attestation.ConsentConfirmedAt:O}");
         }
         sb.AppendLine();
-        foreach (var u in snapshot.Utterances.Where(u => u.State == UtteranceState.Final))
+        foreach (var u in _earlier.Concat(snapshot.Utterances).Where(u => u.State == UtteranceState.Final))
         {
-            var (_, speaker, _) = ResolveSpeaker(u.SpeakerTag);
+            var speaker = ResolveSpeaker(u.SpeakerTag).Name;
             sb.AppendLine($"**{speaker}** ({u.SrcLang}): {u.SrcText}");
             foreach (var (lang, text) in u.Translations.OrderBy(t => t.Key))
                 sb.AppendLine($"  - {lang}: {text}");
@@ -2414,6 +2434,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private (string Tag, string Name, string Color) ResolveSpeaker(string tag)
     {
+        // An earlier run's tag ("1/S1") came from another ASR session: no rename, merge or count reaches it.
+        if (_earlierColours.TryGetValue(tag, out var stored))
+            return (tag, tag[(tag.IndexOf('/') + 1)..], stored);
         var canonical = _tagToCanonical.TryGetValue(tag, out var c) ? c : tag;
         if (_speakerModels.TryGetValue(canonical, out var speaker))
             return (canonical, speaker.DisplayName ?? speaker.Tag, speaker.Color);
