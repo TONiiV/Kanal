@@ -101,7 +101,7 @@
                                        FontSize="12.5" Foreground="{DynamicResource Ink3}"
                                        IsVisible="{Binding Assistant.ShowNothingFoundYet}" />
                             <ScrollViewer x:Name="InsightList"
-                                          IsVisible="{Binding Assistant.IsAnalystConnected}">
+                                          IsVisible="{Binding Assistant.ShowInsightList}">
                                 <ItemsControl ItemsSource="{Binding Assistant.Topics}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:InsightTopicViewModel">
@@ -146,8 +146,8 @@
                                                                     <Button Classes="ghost" Width="32" Height="32" Padding="0"
                                                                             VerticalAlignment="Center"
                                                                             Command="{Binding DismissCommand}"
-                                                                            ToolTip.Tip="{l:T insight.dismiss.tip}"
-                                                                            AutomationProperties.Name="{l:T insight.dismiss.tip}">
+                                                                            ToolTip.Tip="{Binding DismissTip}"
+                                                                            AutomationProperties.Name="{Binding DismissTip}">
                                                                         <Path Classes="glyph" Data="{c:Icon close}" Width="13" Height="13" />
                                                                     </Button>
                                                                 </StackPanel>

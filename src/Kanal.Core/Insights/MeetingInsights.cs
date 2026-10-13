@@ -6,7 +6,26 @@ public sealed class MeetingInsights(RoomState room)
 {
     private readonly List<MeetingInsight> _items = [];
 
+    public const string PinnedTopic = "pinned";
+
     public IReadOnlyList<MeetingInsight> Items => _items;
+
+    public MeetingInsight? Pin(string utteranceId, string text)
+    {
+        var pinned = _items.Any(item =>
+            item.Topic == PinnedTopic && item.State != InsightState.Dismissed
+            && item.SourceUtteranceIds.Contains(utteranceId));
+        if (pinned || !room.Contains(utteranceId))
+            return null;
+
+        var pin = new MeetingInsight(
+            Guid.NewGuid().ToString("N"), InsightKind.Point, PinnedTopic, text, [utteranceId])
+        {
+            State = InsightState.Confirmed,
+        };
+        _items.Add(pin);
+        return pin;
+    }
 
     // Refused rather than stored and flagged: an item with no source is the very failure the
     // candidate state exists to let a person catch.

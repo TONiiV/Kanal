@@ -75,9 +75,15 @@ public partial class BubbleViewModel : ViewModelBase
         : Text);
 
     [RelayCommand]
-    private Task CopyWithSpeaker()
-    {
-        var time = TimeSpan.FromMilliseconds(Math.Max(0, StartMs)).ToString(@"hh\:mm\:ss");
-        return Clipboard($"[{time}] {SpeakerName}: {Text}");
-    }
+    private Task CopyWithSpeaker() => Clipboard($"[{Clock(StartMs)}] {SpeakerName}: {Text}");
+
+    internal Action<BubbleViewModel>? PinHandler { get; init; }
+
+    [RelayCommand(CanExecute = nameof(CanPin))]
+    private void Pin() => PinHandler?.Invoke(this);
+
+    private bool CanPin() => PinHandler is not null;
+
+    internal static string Clock(long ms) =>
+        TimeSpan.FromMilliseconds(Math.Max(0, ms)).ToString(@"hh\:mm\:ss");
 }

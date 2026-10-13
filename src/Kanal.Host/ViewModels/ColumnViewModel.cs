@@ -13,10 +13,13 @@ public partial class ColumnViewModel : ViewModelBase
     private BubbleViewModel? _jumpTarget;
 
     private readonly Func<string, Task>? _clipboard;
+    private readonly Action<BubbleViewModel>? _pin;
 
-    public ColumnViewModel(string language, Func<string, Task>? clipboard = null)
+    public ColumnViewModel(
+        string language, Func<string, Task>? clipboard = null, Action<BubbleViewModel>? pin = null)
     {
         _clipboard = clipboard;
+        _pin = pin;
         Language = language;
         Code = language.ToUpperInvariant();
         // column heads read as signage: the ISO code large, the language's own name beneath
@@ -57,7 +60,7 @@ public partial class ColumnViewModel : ViewModelBase
         if (_byId.TryGetValue(utteranceId, out var bubble))
             return bubble;
 
-        bubble = new BubbleViewModel { UtteranceId = utteranceId, Clipboard = _clipboard ?? (_ => Task.CompletedTask) };
+        bubble = new BubbleViewModel { UtteranceId = utteranceId, Clipboard = _clipboard ?? (_ => Task.CompletedTask), PinHandler = _pin };
         _byId[utteranceId] = bubble;
         Bubbles.Add(bubble);
 
