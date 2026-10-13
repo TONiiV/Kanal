@@ -46,6 +46,15 @@ public static class LocalModelCatalog
     public static IReadOnlyList<LocalModelInfo> Models { get; } =
     [
         new(
+            Id: "hy-mt2-1.8b",
+            DisplayName: "Hy-MT2 1.8B",
+            Parameters: "1.8B · Q4_K_M",
+            Repo: "tencent/Hy-MT2-1.8B-GGUF",
+            FileName: "Hy-MT2-1.8B-Q4_K_M.gguf",
+            SizeBytes: 1_133_080_448,
+            Sha256: "dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699",
+            License: "Apache-2.0"),
+        new(
             Id: "qwen3.5-4b",
             DisplayName: "Qwen3.5 4B",
             Parameters: "4B · Q4_K_M",

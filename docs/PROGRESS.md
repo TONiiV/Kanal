@@ -6,6 +6,27 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### Hy-MT2 1.8B is the recommended local translation model
+
+`LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448
+bytes, Apache-2.0). The first entry is the recommended model. The other three entries stay.
+
+- **Measured.** The test used the production prompt on 12 zh/de/pl meeting sentences, 2 targets each.
+  chrF: Hy-MT2 55.5, Qwen3.5 2B 42.6, Qwen3.5 4B 57.3. All 12 part numbers stayed correct.
+  Latency per sentence (2 targets) on a Vulkan GPU: Hy-MT2 1.19 s, Qwen3.5 2B 2.05 s, Qwen3.5 4B
+  3.76 s. On an idle CPU: 2.49 s, 2.93 s, 5.96 s.
+- **No reasoning prefill.** `AssistantPrefill` is null. A Qwen-style `<think>` prefill lowered chrF
+  from 55.5 to 48.0.
+- **Runtime.** The architecture is `hunyuan-dense`. It runs on LLamaSharp 0.27.0 without a change.
+- **No change for existing users.** `ActiveTranslationModelId` null means *None* (cloud
+  translation), not the first catalog entry. An existing id still resolves by `Find`. Only the row
+  order in Settings and the *recommended* position change. A new install does not select Hy-MT2
+  by itself.
+- **Not added: HY-MT1.5.** The Tencent HY Community License excludes the EU, the UK and South Korea.
+  Hy-MT2 uses plain Apache-2.0.
+- **Licence list.** `OpenSourceNotices` lists software packages only, not models. The model row in
+  Settings shows the licence of each model, so Hy-MT2 needs no extra entry there.
+
 ### Cloud translation with DeepL (ADR 0060)
 
 *Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
