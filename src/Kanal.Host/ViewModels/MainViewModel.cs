@@ -97,6 +97,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private IMeetingTitler? _titler;
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
     private readonly Func<Action, Task> _offUiThread;
+    private readonly Func<Task>? _yieldToUi;
     private string? _titleOnRecord;
 
     public ModelRows ModelRows { get; }
@@ -108,6 +109,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
             scanOffUiThread: work => Task.Run(work),
+            yieldToUi: () => Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask(),
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -135,12 +137,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
         Func<Action, Task>? scanOffUiThread = null,
+        Func<Task>? yieldToUi = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false,
         PipelinePlanner.KeyResolver? resolveTranslationKey = null)
     {
         _titler = titler;
+        _yieldToUi = yieldToUi;
         Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
         _offUiThread = offUiThread ?? (work =>
         {
@@ -978,13 +982,52 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (version != _bodyVersion)
             return;
 
+        _storedColours = StoredTranscript.ColoursByTag(utterances);
+        var pending = columns.Select(column => column.Detach()).ToList();
         foreach (var column in columns)
             _stored.Add(column);
-        _storedColours = StoredTranscript.ColoursByTag(utterances);
-        foreach (var utterance in utterances)
-            BrowsedRuler.Observe(utterance);
+        BrowsedRuler.Reserve(utterances.Count);
         IsLoadingRecord = false;
         NotifyBody();
+
+        await FillBodyAsync(version, columns, pending, utterances);
+    }
+
+    private const int FirstSliceRows = 3;
+    private const int MaxSliceRows = 60;
+    private const double SliceCycleMs = 30;
+
+    // Controls are made on the UI thread, and a long list takes seconds to lay out. Rows go in
+    // small slices, and each slice is sized from how long the last one took with its layout, so
+    // a slow machine gets smaller slices and the window keeps answering input in between.
+    private async Task FillBodyAsync(
+        int version, IReadOnlyList<ColumnViewModel> columns,
+        IReadOnlyList<IReadOnlyList<BubbleViewModel>> bubbles, IReadOnlyList<Utterance> utterances)
+    {
+        var rows = _yieldToUi is null ? int.MaxValue : FirstSliceRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        for (var next = 0; next < utterances.Count;)
+        {
+            for (var end = (int)Math.Min(utterances.Count, (long)next + rows); next < end; next++)
+            {
+                for (var c = 0; c < columns.Count; c++)
+                    columns[c].Bubbles.Add(bubbles[c][next]);
+                BrowsedRuler.Observe(utterances[next]);
+            }
+
+            if (next >= utterances.Count || _yieldToUi is null)
+                break;
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return;
+
+            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            cycle.Restart();
+            rows = Math.Clamp((int)(rows * SliceCycleMs / took), 1, MaxSliceRows);
+        }
+
+        BrowsedRuler.Release();
     }
 
     private void NotifyBody()

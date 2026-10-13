@@ -56,6 +56,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private int _reserved;
+    private double _appliedPitch = double.NaN;
 
     public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
         _resolve = resolve;
@@ -100,7 +102,24 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _entries[u.Id] = added;
         Write(added);
         Ticks.Add(tick);
-        Layout();
+        var pitch = Pitch();
+        if (Ticks.Count > 1 && pitch == _appliedPitch)
+        {
+            Ticks[^2].IsCurrent = false;
+            tick.Pitch = pitch;
+            tick.IsCurrent = true;
+        }
+        else
+            Layout();
+    }
+
+    public void Reserve(int total) => _reserved = total;
+
+    public void Release()
+    {
+        _reserved = 0;
+        if (Ticks.Count > 0)
+            Layout();
     }
 
     public void Reresolve()
@@ -132,13 +151,18 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     {
         _entries.Clear();
         _originMs = null;
+        _reserved = 0;
+        _appliedPitch = double.NaN;
         HoveredTick = null;
         Ticks.Clear();
     }
 
+    private double Pitch() => Math.Min(MaxPitch, StripHeight / Math.Max(Ticks.Count, _reserved));
+
     private void Layout()
     {
-        var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
+        var pitch = Pitch();
+        _appliedPitch = pitch;
         foreach (var tick in Ticks)
         {
             tick.Pitch = pitch;
