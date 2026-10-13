@@ -64,7 +64,7 @@ public sealed class AppSettings
     /// </summary>
     public string? ActiveTranslationModelId { get; set; }
 
-    // Null keeps transcription on the cloud provider.
+    // Null means the catalog default, so the default follows later catalog changes.
     public string? ActiveTranscriptionModelId { get; set; }
 
     /// <summary>Where the export dialog opens. Null or blank falls back to Documents\Kanal.</summary>

@@ -14,6 +14,42 @@ Part of #103.
 - A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
 - The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
 - When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
+### Nemotron provider (ADR 0053, slice C-4)
+
+`NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
+resolves to it yet. Slice C-5 connects it to `PipelinePlanner`.
+
+Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 20 ms frames, as the
+capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
+took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
+voice for a test clip.
+
+Four things the ADR did not anticipate, all found by running the model:
+
+- **The model does not report the language it heard.** The language is an input (a prompt id).
+  `auto` is the id for decoding without one. So `Caps.AutoLanguageDetect` is `false`.
+  sherpa-onnx filters `<de-DE>`-style tokens out of the result. A patched build recorded the raw
+  token sequence and showed no such token in any frame. That test used `auto`, `de-DE` and `zh-CN`
+  on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
+  language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
+  `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
+  script first. Then it checks distinctive letters and stopwords among the room's Latin languages.
+  It was correct on every test sentence. A short Latin sentence with no signal falls to the room's
+  first Latin language.
+- **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
+  ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
+  second of silence when it is created. Priming again after an endpoint reset made things worse:
+  the padding counts as trailing silence and fired the next endpoint mid-sentence.
+- **Endpointing counts blank frames, not silence.** A stretch the model cannot transcribe — a
+  spoken part number — produces blanks, and with sherpa's 1.2 s rule a German sentence was cut at
+  "für K X", losing the number and the start of the rest. Rules are 2.4 s (nothing heard) and 1.6 s
+  (after speech), 20 s maximum; 1.6 s kept every test sentence whole. A final therefore lands
+  ≈1.6 s after the speaker stops, and translation starts then.
+- **Partial numbers.** On synthesised speech the model still loses digits: German "KX-4402" came
+  out as "Kx", Chinese as "KX47402". These are TTS clips, not a meeting; the stage-3 acceptance run
+  against Gladia on real speech decides whether this is good enough.
+
+Every sentence has one speaker label (`S01`) until diarization lands (#13).
 
 ### Accent themes
 
@@ -35,6 +71,38 @@ Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
    record, hold, alarm, warning, speaker and close-button colours.
 6. A headless render of each theme in both variants shows that a checked box and the settings
    tab marker use the `Brand` of the theme.
+
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
+### Speaker tag management
+
+Part of #110. This slice does not depend on a diarization model.
+
+- The Speakers tab in `SidePanelView.axaml` shows when `MainViewModel.HasSpeakers` is true. Before, `IsVisible="False"` hid it.
+- Each row shows the tag, the utterance count, an inline name box, eight colour swatches and a "merge into" list.
+- The free-text "from tag, into tag" box and the `MergeSpeakersCommand` are gone. The list holds the other canonical speakers. A merged speaker leaves the list. The target row shows `⊇` and the merged tags.
+- `RoomState.SetSpeakerColour` accepts only a colour from `RoomState.Palette`. `MeetingSession.SetSpeakerColour` sends a `speaker.upsert`. The wire already carries `Color`, so the protocol and `web/index.html` stay as they are.
+- A stored meeting keeps no colour (see `RoomState.Palette`). A colour choice does not survive reopening the meeting.
+- Un-merge is not part of this slice. `RoomState` has no support for it.
+- `Utterance.SpeakerConfidence` stays hidden (ADR 0055 decision 20).
 
 ### Speaker names follow the colour scheme
 
@@ -69,6 +137,24 @@ Ticket #206.
 ---
 
 ## 2026-10-12
+
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store makes at most 10 attempts,
+   with 50 ms between them. `RecordFile` logs each of the first 9 failures as a Warning line.
+   The last failure goes to the caller, which logs it and reports `Unwritable`.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
 
 ### The fast-source-clock capture test no longer times out
 
@@ -644,6 +730,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
 
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
@@ -818,6 +910,32 @@ its preservation rules are specified as implementation work after design approva
 ---
 
 ## 2026-10-03
+
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
 
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
