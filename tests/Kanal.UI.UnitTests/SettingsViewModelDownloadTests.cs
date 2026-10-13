@@ -106,7 +106,7 @@ public class SettingsViewModelDownloadTests
         Assert.True(reopened.IsDownloading);
         Assert.Equal(0.4, reopened.Progress);
 
-        reopened.CancelDownloadCommand.Execute(null);
+        reopened.Download.CancelCommand.Execute(null);
 
         await download.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.False(reopened.IsDownloading);

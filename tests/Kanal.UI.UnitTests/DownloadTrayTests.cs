@@ -152,6 +152,51 @@ public class DownloadTrayTests
     }
 
     [AvaloniaFact]
+    public void TheRowAndTheTraySayTheSameProgress()
+    {
+        var (rows, tray, _) = Build();
+        var row = rows.Transcription[0];
+        row.IsDownloading = true;
+
+        row.Progress = 0.5;
+
+        Assert.Matches(@"^50% · [\d.]+ / [\d.]+ MB$", row.ProgressLabel);
+        Assert.Equal($"{row.DisplayName} · {row.ProgressLabel}", Assert.Single(tray.Items).Summary);
+        Assert.Equal(row.ProgressLabel, row.StatusLabel);
+    }
+
+    [AvaloniaFact]
+    public void ARowFailureMessageStillShowsInTheRow()
+    {
+        var (rows, _, _) = Build();
+        var row = rows.Transcription[0];
+
+        Finish(row, error: "network lost");
+
+        Assert.Equal("network lost", row.StatusLabel);
+    }
+
+    [AvaloniaFact]
+    public async Task TheRowRingHasTheTrayIconAndCancelsTheRow()
+    {
+        var (rows, _, _) = Build();
+        var row = rows.Transcription[0];
+        var ring = row.Download;
+        Assert.Equal("transcript", ring.IconName);
+        Assert.Equal("translate", rows.Translation.First(r => r.IsLocal).Download.IconName);
+
+        var download = row.DownloadCommand.ExecuteAsync(null);
+        row.Progress = 0.25;
+        Assert.True(ring.IsRunning);
+        Assert.Equal(90, ring.RingSweep, precision: 6);
+
+        ring.CancelCommand.Execute(null);
+        await download;
+
+        Assert.False(row.IsDownloading);
+    }
+
+    [AvaloniaFact]
     public void TheRingSweepFollowsProgress()
     {
         var (rows, tray, _) = Build();

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Avalonia.Media;
@@ -67,7 +66,7 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
     public string Summary => State switch
     {
         DownloadState.Running =>
-            $"{Name} · {(int)(Row.Progress * 100)}% · {Megabytes(Row.Progress * Row.SizeBytes)} / {Megabytes(Row.SizeBytes)} MB",
+            $"{Name} · {Row.ProgressLabel}",
         DownloadState.Done => $"{Name} · {Localizer.Instance["download.done"]}",
         DownloadState.Cancelled => $"{Name} · {Localizer.Instance["download.cancelled"]}",
         _ => $"{Name} · {Row.Error}",
@@ -90,12 +89,6 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
             OnPropertyChanged(nameof(CancelLabel));
         }
     }
-
-    private static string Megabytes(double bytes)
-    {
-        var mb = bytes / (1024 * 1024);
-        return mb.ToString(mb >= 100 ? "0" : "0.#", CultureInfo.InvariantCulture);
-    }
 }
 
 public sealed class DownloadTray
@@ -111,30 +104,28 @@ public sealed class DownloadTray
     {
         _clock = clock ?? TimeProvider.System;
         _post = post ?? (action => Dispatcher.UIThread.Post(action));
-        foreach (var row in rows.Translation.Where(r => r.IsLocal))
-            Watch(row, "translate");
-        foreach (var row in rows.Transcription)
-            Watch(row, "transcript");
+        foreach (var row in rows.Translation.Where(r => r.IsLocal).Concat(rows.Transcription))
+            Watch(row);
     }
 
     public ObservableCollection<DownloadItemViewModel> Items { get; } = [];
 
-    public void Watch(ModelItemViewModel row, string iconName) =>
+    public void Watch(ModelItemViewModel row) =>
         row.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ModelItemViewModel.IsDownloading))
                 return;
             if (row.IsDownloading)
-                Start(row, iconName);
+                Start(row);
             else
                 Finish(row);
         };
 
-    private void Start(ModelItemViewModel row, string iconName)
+    private void Start(ModelItemViewModel row)
     {
         foreach (var old in Items.Where(i => i.Row == row).ToList())
             Remove(old);
-        Items.Add(new DownloadItemViewModel(row, iconName));
+        Items.Add(new DownloadItemViewModel(row, row.Download.IconName));
     }
 
     private void Finish(ModelItemViewModel row)

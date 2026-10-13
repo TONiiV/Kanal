@@ -67,7 +67,8 @@ public class TranslationModelSettingsTests
 
         item.IsDownloading = true;
         item.Progress = 0.42;
-        Assert.Equal("downloading 42%", item.StatusLabel);
+        Assert.StartsWith("42% · ", item.StatusLabel);
+        Assert.Equal(item.ProgressLabel, item.StatusLabel);
 
         item.IsDownloading = false;
         item.IsDownloaded = true;

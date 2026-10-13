@@ -6,6 +6,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Download ring in the Settings model rows
+
+A Settings model row that downloads shows the same ring as the status bar.
+
+- **One ring control.** `DownloadIndicatorView` has a `Bare` property. With `Bare="True"`, the pill
+  never shows its text. The row uses it in the place of the Download button, 28 DIP, with the model icon.
+- **One view model.** `ModelItemViewModel.Download` is a `DownloadItemViewModel` for the row.
+  The row ring and the tray ring share `RingSweep`, `CancelCommand` and the icon name.
+- **One progress text.** `ModelItemViewModel.ProgressLabel` ("42% · 286 / 682 MB") feeds the tray
+  summary and the row status text. The row error text still replaces it after a failure.
+- **Removed:** the Cancel button of the row, and the `settings.model.cancel` and
+  `settings.model.downloading` strings.
+- **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
+  message, the row ring has the tray icon and cancels the row.
+
 ### Download indicator in the status bar
 
 A running model download shows at the right end of the main window status bar. Design reference:
@@ -14,7 +29,7 @@ A running model download shows at the right end of the main window status bar. D
 - **`DownloadTray` feeds the indicators.** It watches `IsDownloading` on every `ModelRows` row except the None translation row.
   A row that starts downloading adds a `DownloadItemViewModel`. A row that stops downloading sets
   the item to Done, Cancelled or Failed, and a `TimeProvider` timer removes it after 3 s, 2 s or 8 s.
-  A diarization row joins with one more `Watch(row, "people")` call.
+  A diarization row joins with one more `Watch(row)` call. Its icon name comes from `ModelItemViewModel.Download`.
 - **Collapsed:** 28 DIP circle. A progress ring surrounds the model icon (`transcript`, `translate`).
 - **Pointer or keyboard focus:** the ring stays at the right end. Its centre turns into a cross.
   The pill grows to the left and shows "name · 42% · 286 / 682 MB". The cross cancels the row,
