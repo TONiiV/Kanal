@@ -194,6 +194,8 @@ public class MeetingRecordStorageTests : IDisposable
             Assert.Equal(earlier.Select(u => u.Id), column.Bubbles.Take(earlier.Count).Select(b => b.UtteranceId));
             Assert.True(column.Bubbles.Count > earlier.Count, "the new run added nothing below the first.");
         });
+        await PumpUntilAsync(() =>
+            Only(store, workspace.Id).Runs is [_, var second] && TranscriptLog.Read(second.TranscriptPath).Count > 0);
         await vm.StopCommand.ExecuteAsync(null);
 
         var continued = Only(store, workspace.Id);

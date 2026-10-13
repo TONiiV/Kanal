@@ -45,10 +45,10 @@ public static class TranscriptLog
         return [.. order.Select(id => latest[id])];
     }
 
-    // Ids are prefixed with the run: every run's ids restart at u1, and the latest line per id wins.
+    // Every run restarts its ids at u1, so a later run's ids take its position as a prefix ("2/u1").
     public static IReadOnlyList<Utterance> Read(MeetingRecord meeting) =>
         [.. meeting.Runs.SelectMany((run, i) =>
-            Read(run.TranscriptPath).Select(u => u with { Id = $"{i + 1}/{u.Id}" }))];
+            Read(run.TranscriptPath).Select(u => i == 0 ? u : u with { Id = $"{i + 1}/{u.Id}" }))];
 
     // Null, never a throw: a host killed mid-append leaves its last line stopped in the middle
     // of itself, and every completed line above it is still a sentence somebody said.
