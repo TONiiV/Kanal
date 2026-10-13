@@ -286,4 +286,27 @@ public class ColumnScrollWiringTests
         Assert.Equal(above, below, 1);
         window.Close();
     }
+
+    [AvaloniaFact]
+    public void ThePointerOverTheRulerRaisesTheTicksUnderItAndLeavingReleasesThem()
+    {
+        var (window, vm, _) = ShownWithRuler();
+        var ticks = window.GetVisualDescendants().OfType<Rectangle>().Where(r => r.Classes.Contains("tick")).ToList();
+        var target = ticks[60];
+
+        window.MouseMove(CentreOf(target, window));
+        Settle(window);
+
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, vm.Ruler.Ticks[60].Reach, 0);
+        Assert.True(vm.Ruler.Ticks[60].Reach > vm.Ruler.Ticks[58].Reach);
+        Assert.True(vm.Ruler.Ticks[58].Reach > vm.Ruler.Ticks[55].Reach);
+        Assert.Equal(TranscriptRulerViewModel.RestReach, vm.Ruler.Ticks[10].Reach);
+
+        window.MouseMove(new Point(20, 400));
+        Settle(window);
+
+        Assert.All(vm.Ruler.Ticks.Where(t => !t.IsInView), t =>
+            Assert.Equal(TranscriptRulerViewModel.RestReach, t.Reach));
+        window.Close();
+    }
 }
