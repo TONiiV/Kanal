@@ -32,6 +32,10 @@ The first release. Everything below is what Kanal does on the day it ships.
 - Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
   follows the operating system, also during a meeting. Your choice applies at once and stays on
   this computer. Light is the default, so Kanal looks the same until you change it.
+- The Appearance tab has five accent themes: Kanal indigo, Grove, Ocean, Iris and Graphite. A
+  theme changes the colour of buttons, selected items, checked boxes and the settings tab marker.
+  Reading surfaces, text, recording state and speaker colours stay the same. Your choice applies
+  at once and stays on this computer. Kanal indigo is the default.
 - The app language in Settings now saves when you pick it. Kanal shows that language at the next
   start, also when you close Settings without "Save & Close".
 - Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
@@ -90,6 +94,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
 - The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
   centre, most visibly on Save & Close and View open-source acknowledgements.
+- The capture mode In the room is now called Offline meeting. The mode menu shows only the
+  names and icons.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
   vertical centre of the header instead of near its top edge. In full screen, the header content
   moves to the left edge, because the buttons are gone.
@@ -102,6 +108,11 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
   transcription · Cloud translation instead; without an API key, that row says one is needed. To
   test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
+- Pressing record no longer leaves the screen silent while the room opens. Once you confirm the
+  consent dialog, the stop button shows a spinner, the status line says "Connecting…", and the
+  meeting's name is already in the heading and the sidebar. The mobile relay and the transcription
+  service now connect at the same time instead of one after the other, so the room opens sooner.
+  Pressing stop during that wait cancels the start and leaves no meeting behind.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

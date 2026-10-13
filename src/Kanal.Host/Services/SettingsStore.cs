@@ -64,7 +64,7 @@ public sealed class AppSettings
     /// </summary>
     public string? ActiveTranslationModelId { get; set; }
 
-    // Null keeps transcription on the cloud provider.
+    // Null means the catalog default, so the default follows later catalog changes.
     public string? ActiveTranscriptionModelId { get; set; }
 
     /// <summary>Where the export dialog opens. Null or blank falls back to Documents\Kanal.</summary>
@@ -93,6 +93,8 @@ public sealed class AppSettings
 
     [JsonConverter(typeof(ColourSchemeConverter))]
     public ColourScheme ColourScheme { get; set; } = ColourScheme.Light;
+
+    public string AccentTheme { get; set; } = "kanal";
 
     [JsonConverter(typeof(LogLevelConverter))]
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
@@ -194,6 +196,13 @@ public static class SettingsStore
     {
         var settings = Load();
         settings.ColourScheme = scheme;
+        Save(settings);
+    }
+
+    public static void SaveAccentTheme(string id)
+    {
+        var settings = Load();
+        settings.AccentTheme = id;
         Save(settings);
     }
 

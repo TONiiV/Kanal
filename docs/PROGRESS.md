@@ -40,14 +40,58 @@ The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherp
 - **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
 - **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
 - **Speaker count.** `ISpeakerDiarizer` takes a nullable count. The UI passes none, so clustering uses the threshold 0.5. [#110](https://github.com/TONiiV/Kanal/issues/110) adds the operator's count.
-- **Memory.** The run reads the whole recording into one `float[]`: about 230 MB per hour. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
+- **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
+- **Exports.** A `.kl` bundle carries `speakers.json`, and import accepts it. The bundle's `transcript.md` and the Markdown export of the just-stopped meeting use the new tags. `transcript.jsonl` keeps the original tags.
 
 Open items:
 
 1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
-2. A `.kl` bundle does not carry `speakers.json`. Its Markdown uses the original tags.
-3. sherpa-onnx marshals model paths as ANSI on Windows. A user folder with non-ASCII characters can stop the model from loading.
-4. Hugging Face and GitHub release downloads can be blocked in mainland China.
+2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
+3. Hugging Face and GitHub release downloads can be blocked in mainland China.
+4. The speaker tab of the just-stopped meeting still lists the live tags.
+
+### Accent themes
+
+Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
+
+1. The Appearance tab shows five theme cards after the colour scheme cards. Each card shows two
+   orbs: the light and the dark `Brand` of the theme. A click applies the theme at once. The id
+   goes to `settings.json`. An unknown id gives Kanal indigo.
+2. `AccentThemes` holds the five themes. A theme sets `Brand`, `BrandHover`, `BrandPressed`,
+   `BrandWash`, `OnBrand` and the seven `AccentRamp*` colours, in Light and in Dark.
+3. `Appearance.Apply(AccentTheme)` writes these keys into both theme dictionaries. It also writes
+   the twelve glyph keys of check box, radio button and switch, because they repeat `OnBrand`.
+   Then it copies the ramp of the current variant into the root `SystemAccentColor*` keys.
+4. Tests run every theme in both variants. `OnBrand` on `Brand` and `BrandHover` reaches 4.5:1.
+   `Brand` reaches 4.5:1 on `Sheet` and 3:1 on `Paper`. The check glyphs reach 3:1 on
+   `SystemAccentColor`. The glyph test now lists the indeterminate pointer-over and pressed keys.
+5. A test compares every theme dictionary key before and after a theme change. Only the brand
+   family may change. The theme never touches `Sheet`, `Paper`, `Ink*`, `Rule*`, `BrandAccent`,
+   record, hold, alarm, warning, speaker and close-button colours.
+6. A headless render of each theme in both variants shows that a checked box and the settings
+   tab marker use the `Brand` of the theme.
+
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
 
 ### Speaker names follow the colour scheme
 
@@ -78,6 +122,8 @@ Ticket #206.
 - The app language saves to `settings.json` when the operator picks it.
   `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
 - "Save & Close" writes the same value. A failed save writes a warning to the log.
+
+---
 
 ## 2026-10-12
 
@@ -655,6 +701,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
 
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
@@ -990,6 +1042,66 @@ Local needs the same key plus a downloaded model, and both local-transcription m
 Without a key the row states the missing key, which is the operator's next step. The empty-state
 line "Demo needs no key." is dropped in all four languages, and `.vscode/launch.json`'s demo target
 sets `KANAL_ENV=development`.
+
+### Start says it is connecting, connects in parallel, and names the meeting first
+
+Operator report (Cloud/Cloud): after the consent dialog the app sat for about five seconds with
+nothing on screen; was it loading a local model or naming the meeting? Neither. Cloud/Cloud plans no
+local model, so there was no warm-up and no titler. The room id is stamped right after consent
+(`RoomIds.New`, one-second resolution) and "Room … open" landed 4.2–5.7 s later in Cloud/Cloud and
+1.9–3.3 s later in Demo (log of 2026-09-23). In that window Start awaited, one after the other: the
+gateway room creation (`GatewayRelayPublisher.CreateRoomAsync`), on a restart the `room.moved`
+publish on the previous channel, the Gladia session (HTTP init + WebSocket), then the `room.config`
+and `room.transcribing` publishes. `IsStarting` was only set around model warm-up, and the record,
+and with it the name, was opened only after all of that.
+
+- **Starting phase.** `IsStarting` is true from consent until the room opens or the start is
+  abandoned, so the stop mark's spinner shows, and the status line reads "Connecting…" (the
+  model-loading line while a model warms up). One cancellation token reaches warm-up, relay
+  creation (`CreateRoomAsync`'s HttpClient) and the transcriber's connect. Stop during this phase
+  only cancels it; the start tears itself down once it sees the cancellation, rather than Stop
+  disposing providers under a connect still in flight.
+- **Parallel.** Relay room creation starts right after consent, before warm-up, as a task. The
+  session is handed a `PendingRelay`, an `IRelayPublisher` whose publishes wait for that task, so
+  `MeetingSession.StartAsync` connects the transcriber while the relay room is still being created
+  and its first publish (`room.config`) waits for the relay. Chosen over letting `MeetingSession`
+  accept its relay later: its contract (one relay from construction; config, then transcribing,
+  then the pump) is unchanged, and the ordering guarantee stays inside it. The room now opens after
+  the slower of relay and transcriber instead of their sum. A relay failure still resolves to the
+  null publisher with a warning, so the QR goes and transcription does not. `room.moved` on the
+  previous channel is now sent once the new session has started, so a failed restart no longer
+  redirects phones to a room that never opened.
+- **Name first: the record opens at consent (option a).** This is what ADR 0054 decision 2
+  words, and it supersedes the 2026-09-12 note that kept the record at room open. The default name
+  is on screen in the heading and the sidebar at once and is the same string the record holds: one
+  `_utcNow()`, one write. A start that fails or is abandoned hands the record back through
+  `WorkspaceSidebarViewModel.DiscardRecord`. A record created for the start is deleted; a reused
+  blank record is saved back as it was (`StartedAt` null, its old title), so the binding rule
+  still reuses it; the selection returns to where it was. "Cancel or failure leaves nothing behind"
+  holds. Option (b), a heading-only preview with the record written at room open, was rejected.
+  While an ended record is selected, the heading and body show that record, so a preview would need
+  its own override of `MeetingTitle` and would still leave the sidebar without a row. The row carries
+  its Recording mark from consent, which also keeps it from being deleted mid-start.
+- **Log.** `relay`: "Relay room created in N ms." (or the failure, with its elapsed time). `room`:
+  "Transcriber <id> connected in N ms." (from `MeetingSession.StartAsync`). The "Room … open" line
+  now ends with "N ms after Start", counted from consent.
+- The `RelayPublisherFactory` test seam now returns a `Task` and gets the start token, so a test
+  can hold relay creation open and cancel it.
+- Review fixes (2026-10-05):
+  - The room-open step reads the current record before it sets `AudioPath`. A rename typed while
+    the room connects is kept. Before, the step saved the copy from consent and wrote the default
+    name back.
+  - `StartAsync` clears `IsStarting` in a `finally` block. An exception after consent, or during
+    the teardown in `AbandonStartAsync`, no longer leaves Start disabled.
+  - `room.moved` is the commit point of a restart. The start checks for cancellation before it
+    sends `room.moved`. After `room.moved` is sent, the new room opens. A Stop pressed during the
+    publish then stops the new room normally, so the phones that moved get `room.closed`.
+  - `DiscardRecord` deletes the record from its own workspace (`WorkspaceId`), not from the
+    selected workspace. A workspace switch during the start no longer leaves a record behind.
+
+Open: a gateway that hangs still holds the room for up to its 15 s HttpClient timeout, because
+`room.config` waits for the relay. The fix would be to open the room on the transcriber alone and
+let publishes queue behind the relay. Not done here.
 
 ## 2026-09-15
 
