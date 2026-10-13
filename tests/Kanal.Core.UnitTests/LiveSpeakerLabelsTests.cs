@@ -92,6 +92,35 @@ public class LiveSpeakerLabelsTests
     }
 
     [Fact]
+    public void ACentroidFollowsADriftingVoice()
+    {
+        var labels = new LiveSpeakerLabels(new VoiceEmbedder(new()
+        {
+            [1] = [1, 0, 0],
+            [2] = [0.6f, 0.8f, 0],
+            // cosine 0.4 to [1,0,0] alone, about 0.77 to the sum [1.6,0.8,0]
+            [3] = [0.4f, 0.9165f, 0],
+        }));
+
+        Assert.Equal("V01?", labels.Assign(Voice(1, 2)));
+        Assert.Equal("V01?", labels.Assign(Voice(2, 2)));
+        Assert.Equal("V01?", labels.Assign(Voice(3, 2)));
+    }
+
+    [Fact]
+    public void ALabelAfterATranslationKeepsTheTranslation()
+    {
+        var room = new RoomState(new RoomConfig("t", ["zh", "de"]));
+        var final = room.ApplyTranscript(Said("u1", isFinal: true));
+        room.ApplyTranslations("u1", final.Revision, new Dictionary<string, string> { ["de"] = "Hallo" });
+
+        var labelled = room.AssignSpeaker("u1", "V01?").Utterance!;
+
+        Assert.Equal("Hallo", labelled.Translations["de"]);
+        Assert.Equal(final.Revision, labelled.Revision);
+    }
+
+    [Fact]
     public void ALabelKeepsTheAsrTagBesideItAndSurvivesARevision()
     {
         var room = new RoomState(new RoomConfig("t", ["zh"]));

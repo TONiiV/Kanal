@@ -131,8 +131,8 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 - The host is the single authority; clients are projections. Late join and reconnect are served by
   `room.snapshot`.
-- Capability-driven orchestration, no vendor branching. The orchestrator's only decision is
-  `if (!asr.Caps.Translation)` → route finals through `IMtProvider`.
+- Capability-driven orchestration, no vendor branching. The orchestrator's only decisions are
+  `!Caps.Translation` → `IMtProvider` and `!Caps.Diarization` → `LiveSpeakerLabels`.
 - The relay is a replaceable layer (`IRelayPublisher`).
 - Only text crosses the public network (M0 caveat: Gladia receives audio).
 - Merges are non-destructive — utterances keep their original diarization tag; clients resolve via
