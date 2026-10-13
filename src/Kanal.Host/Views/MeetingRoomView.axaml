@@ -89,10 +89,13 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Rectangle.tick">
-            <Setter Property="Height" Value="2" />
-        </Style>
-        <Style Selector="Rectangle.tick.inview">
-            <Setter Property="Height" Value="3" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Width" Duration="0:0:0.14" Easing="CubicEaseOut" />
+                    <DoubleTransition Property="Height" Duration="0:0:0.14" Easing="CubicEaseOut" />
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.14" Easing="CubicEaseOut" />
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="Button.page">
             <Setter Property="Width" Value="22" />
@@ -359,6 +362,7 @@
             </Button>
             <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
                           VerticalAlignment="Stretch"
+                          PointerMoved="OnRulerMoved" PointerExited="OnRulerExited"
                           UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                           AutomationProperties.Name="{l:T ruler.name}">
                 <ItemsControl.ItemTemplate>
@@ -367,8 +371,9 @@
                                 PointerEntered="OnTickEntered" PointerExited="OnTickExited"
                                 PointerPressed="OnTickPressed"
                                 AutomationProperties.Name="{Binding AccessibleName}">
-                            <Rectangle Classes="tick" Classes.inview="{Binding IsInView}"
-                                       Width="{Binding Reach}"
+                            <Rectangle Classes="tick"
+                                       Width="{Binding Reach}" Height="{Binding Thickness}"
+                                       Opacity="{Binding Glow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
                         </Border>

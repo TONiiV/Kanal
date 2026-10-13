@@ -52,6 +52,12 @@ public partial class RulerTickViewModel : ViewModelBase
     [ObservableProperty]
     private double _reach = TranscriptRulerViewModel.RestReach;
 
+    [ObservableProperty]
+    private double _thickness = TranscriptRulerViewModel.RestThickness;
+
+    [ObservableProperty]
+    private double _glow = TranscriptRulerViewModel.RestGlow;
+
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
 
@@ -62,14 +68,21 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double CardHeight = 96;
     public const double RestReach = 10;
     public const double InViewReach = 16;
+    public const double PeakReach = 28;
+    public const double RestThickness = 1;
+    public const double InViewThickness = 2;
+    public const double PeakThickness = 3.5;
+    public const double RestGlow = 0.55;
+    public const double InViewGlow = 0.9;
 
-    private static readonly double[] HoverReach = [28, 21, 15];
+    private const double FocusSpread = 18;
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private double? _pointerY;
     private HashSet<string> _visible = new();
     private HashSet<string>? _whole;
     private int _pageUpTarget = -1;
@@ -151,10 +164,15 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         MarkInView();
     }
 
+    public void PointerAt(double? y)
+    {
+        _pointerY = y;
+        Magnify();
+    }
+
     public void Hover(RulerTickViewModel? tick)
     {
         HoveredTick = tick;
-        Magnify();
         if (tick is null)
             return;
 
@@ -184,6 +202,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _originMs = null;
         _visible = new HashSet<string>();
         _whole = null;
+        _pointerY = null;
         HoveredTick = null;
         Ticks.Clear();
         TrackLength = 0;
@@ -196,6 +215,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         foreach (var tick in Ticks)
             tick.Pitch = pitch;
         TrackLength = pitch * Ticks.Count;
+        Magnify();
     }
 
     private void MarkInView()
@@ -243,16 +263,24 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     private void Magnify()
     {
-        var hovered = HoveredTick is null ? -1 : Ticks.IndexOf(HoveredTick);
         for (var i = 0; i < Ticks.Count; i++)
         {
-            var reach = Ticks[i].IsInView ? InViewReach : RestReach;
-            var distance = hovered < 0 ? int.MaxValue : Math.Abs(i - hovered);
-            if (distance < HoverReach.Length)
-                reach = Math.Max(reach, HoverReach[distance]);
-            Ticks[i].Reach = reach;
+            var tick = Ticks[i];
+            var onScreen = tick.IsInView;
+            var focus = _pointerY is { } y ? Focus(i * tick.Pitch + tick.Pitch / 2 - y) : 0;
+            tick.Reach = Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus);
+            tick.Thickness = Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus);
+            tick.Glow = Lerp(onScreen ? InViewGlow : RestGlow, 1, focus);
         }
     }
+
+    private static double Focus(double distance)
+    {
+        var d = distance / FocusSpread;
+        return Math.Abs(d) > 3 ? 0 : Math.Exp(-d * d);
+    }
+
+    private static double Lerp(double from, double to, double amount) => from + (to - from) * amount;
 
     private void Write(Entry entry)
     {

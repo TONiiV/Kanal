@@ -28,6 +28,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The ruler beside the transcript now shows which sentences are on screen: their ticks are longer
   and thicker. The tick under the pointer and its neighbours grow, so a tick is easier to hit. The
   arrows above and below the ruler show the previous or the next page of the transcript.
+- The ruler ticks now follow the pointer smoothly. The tick under the pointer grows longest, thickest
+  and brightest, and the ticks around it grow less and less. The ticks at rest are thinner and dimmer.
 - The preview card of the ruler no longer has a dark bar on its right edge.
 - Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to

@@ -103,6 +103,15 @@ public partial class MeetingRoomView : UserControl
     private void OnTickExited(object? sender, PointerEventArgs e) =>
         (DataContext as MainViewModel)?.ShownRuler.Hover(null);
 
+    private void OnRulerMoved(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control strip && DataContext is MainViewModel vm)
+            vm.ShownRuler.PointerAt(e.GetPosition(strip).Y);
+    }
+
+    private void OnRulerExited(object? sender, PointerEventArgs e) =>
+        (DataContext as MainViewModel)?.ShownRuler.PointerAt(null);
+
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control row || row.DataContext is not RulerTickViewModel tick ||
