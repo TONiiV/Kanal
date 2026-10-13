@@ -243,4 +243,47 @@ public class ColumnScrollWiringTests
 
         window.Close();
     }
+
+    private static Point CentreOf(Control control, Visual relativeTo) =>
+        control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), relativeTo)!.Value;
+
+    [AvaloniaFact]
+    public void TheRulerArrowsAndEveryTickShareOneCentreLine()
+    {
+        var (window, vm, _) = ShownWithRuler();
+        var ticks = window.GetVisualDescendants().OfType<Rectangle>().Where(r => r.Classes.Contains("tick")).ToList();
+        vm.Ruler.Hover(vm.Ruler.Ticks[60]);
+        Settle(window);
+
+        var axis = CentreOf(RulerArrow(window, "RulerPageUp"), window).X;
+        Assert.Equal(axis, CentreOf(RulerArrow(window, "RulerPageDown"), window).X, 2);
+        Assert.All(ticks, tick => Assert.Equal(axis, CentreOf(tick, window).X, 2));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheDownArrowFollowsTheLastTickAsTheUpArrowLeadsTheFirst()
+    {
+        var vm = TestViewModels.Hermetic();
+        foreach (var code in new[] { "zh", "de", "pl" })
+            vm.Columns.Add(new ColumnViewModel(code));
+        for (var n = 0; n < 5; n++)
+        {
+            Say(vm, n);
+            vm.Ruler.Observe(Final(n));
+        }
+
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Settle(window);
+
+        var ticks = window.GetVisualDescendants().OfType<Rectangle>().Where(r => r.Classes.Contains("tick")).ToList();
+        var up = RulerArrow(window, "RulerPageUp");
+        var down = RulerArrow(window, "RulerPageDown");
+        var above = CentreOf(ticks[0], window).Y - up.TranslatePoint(new Point(0, up.Bounds.Height), window)!.Value.Y;
+        var below = down.TranslatePoint(default, window)!.Value.Y - CentreOf(ticks[^1], window).Y;
+
+        Assert.Equal(above, below, 1);
+        window.Close();
+    }
 }
