@@ -3,6 +3,7 @@
         xmlns:vm="using:Kanal.Host.ViewModels"
         xmlns:l="using:Kanal.Host.Localization"
         xmlns:c="using:Kanal.Host.Controls"
+        xmlns:views="using:Kanal.Host.Views"
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="{l:T settings.title}"
@@ -148,8 +149,9 @@
                                 VerticalAlignment="Center">
                         <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
                                 IsVisible="{Binding CanDownload}" />
-                        <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
-                                IsVisible="{Binding IsDownloading}" />
+                        <Panel IsVisible="{Binding IsDownloading}">
+                            <views:DownloadIndicatorView Bare="True" DataContext="{Binding Download}" />
+                        </Panel>
                         <Button Content="{l:T settings.model.delete}"
                                 Command="{Binding DeleteCommand}"
                                 IsVisible="{Binding CanDelete}" />

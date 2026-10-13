@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Kanal.Host.ViewModels"
              xmlns:c="using:Kanal.Host.Controls"
+             xmlns:views="using:Kanal.Host.Views"
              x:Class="Kanal.Host.Views.DownloadIndicatorView" x:DataType="vm:DownloadItemViewModel">
     <UserControl.Styles>
         <Style Selector="Border.dl">
@@ -14,6 +15,9 @@
         <Style Selector="Border.dl:pointerover, Border.dl:focus-within">
             <Setter Property="Background" Value="{DynamicResource Sheet}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+        </Style>
+        <Style Selector="Border.dl:pointerover.bare TextBlock.info, Border.dl:focus-within.bare TextBlock.info">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
         <Style Selector="Border.dl TextBlock.info">
             <Setter Property="IsVisible" Value="False" />
@@ -79,7 +83,8 @@
     </UserControl.Styles>
 
     <Border Classes="dl" Classes.done="{Binding IsDone}" Classes.cancelled="{Binding IsCancelled}"
-            Classes.failed="{Binding IsFailed}" HorizontalAlignment="Right">
+            Classes.failed="{Binding IsFailed}" HorizontalAlignment="Right"
+            Classes.bare="{Binding Bare, RelativeSource={RelativeSource AncestorType=views:DownloadIndicatorView}}">
         <StackPanel Orientation="Horizontal">
             <TextBlock Classes="info" Text="{Binding Summary}" MaxWidth="420" TextTrimming="CharacterEllipsis" />
             <Grid Width="26" Height="26" VerticalAlignment="Center">

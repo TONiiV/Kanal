@@ -6,6 +6,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Download ring in the Settings model rows
+
+A Settings model row that downloads shows the same ring as the status bar.
+
+- **One ring control.** `DownloadIndicatorView` has a `Bare` property. With `Bare="True"`, the pill
+  never shows its text. The row uses it in the place of the Download button, 28 DIP, with the model icon.
+- **One view model.** `ModelItemViewModel.Download` is a `DownloadItemViewModel` for the row.
+  The row ring and the tray ring share `RingSweep`, `CancelCommand` and the icon name.
+- **One progress text.** `ModelItemViewModel.ProgressLabel` ("42% · 286 / 682 MB") feeds the tray
+  summary and the row status text. The row error text still replaces it after a failure.
+- **Removed:** the Cancel button of the row, and the `settings.model.cancel` and
+  `settings.model.downloading` strings.
+- **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
+  message, the row ring has the tray icon and cancels the row.
+
 ### Download indicator in the status bar
 
 A running model download shows at the right end of the main window status bar. Design reference:

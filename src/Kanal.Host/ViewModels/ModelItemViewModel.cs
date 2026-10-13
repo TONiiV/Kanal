@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ public partial class ModelItemViewModel : ViewModelBase
     private readonly string? _meta;
     private readonly bool _transcription;
     private CancellationTokenSource? _downloadCts;
+    private DownloadItemViewModel? _download;
 
     public ModelItemViewModel()
     {
@@ -91,11 +93,18 @@ public partial class ModelItemViewModel : ViewModelBase
     /// <summary>0..1 while a download runs.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
+    [NotifyPropertyChangedFor(nameof(ProgressLabel))]
     private double _progress;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     private string _error = "";
+
+    public DownloadItemViewModel Download =>
+        _download ??= new DownloadItemViewModel(this, _transcription ? "transcript" : "translate");
+
+    public string ProgressLabel =>
+        $"{(int)(Progress * 100)}% · {Megabytes(Progress * SizeBytes)} / {Megabytes(SizeBytes)} MB";
 
     public bool CanDownload => IsLocal && !IsDownloaded && !IsDownloading;
 
@@ -105,7 +114,7 @@ public partial class ModelItemViewModel : ViewModelBase
     public string StatusLabel =>
         !IsLocal ? "" :
         Error.Length > 0 ? Error :
-        IsDownloading ? Localizer.Instance.Format("settings.model.downloading", (int)(Progress * 100)) :
+        IsDownloading ? ProgressLabel :
         Localizer.Instance[IsDownloaded ? "settings.model.downloaded" : "settings.model.notdownloaded"];
 
     /// <summary>Re-reads this row's strings after the application's language changes.</summary>
@@ -167,5 +176,11 @@ public partial class ModelItemViewModel : ViewModelBase
         IsDownloaded = false;
         Error = "";
         OnPropertyChanged(nameof(CanDelete));
+    }
+
+    private static string Megabytes(double bytes)
+    {
+        var mb = bytes / (1024 * 1024);
+        return mb.ToString(mb >= 100 ? "0" : "0.#", CultureInfo.InvariantCulture);
     }
 }

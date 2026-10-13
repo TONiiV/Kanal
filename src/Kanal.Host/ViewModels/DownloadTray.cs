@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Avalonia.Media;
@@ -67,7 +66,7 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
     public string Summary => State switch
     {
         DownloadState.Running =>
-            $"{Name} · {(int)(Row.Progress * 100)}% · {Megabytes(Row.Progress * Row.SizeBytes)} / {Megabytes(Row.SizeBytes)} MB",
+            $"{Name} · {Row.ProgressLabel}",
         DownloadState.Done => $"{Name} · {Localizer.Instance["download.done"]}",
         DownloadState.Cancelled => $"{Name} · {Localizer.Instance["download.cancelled"]}",
         _ => $"{Name} · {Row.Error}",
@@ -87,12 +86,6 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
             OnPropertyChanged(nameof(RingSweep));
             OnPropertyChanged(nameof(Summary));
         }
-    }
-
-    private static string Megabytes(double bytes)
-    {
-        var mb = bytes / (1024 * 1024);
-        return mb.ToString(mb >= 100 ? "0" : "0.#", CultureInfo.InvariantCulture);
     }
 }
 

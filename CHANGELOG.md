@@ -18,6 +18,9 @@ The first release. Everything below is what Kanal does on the day it ships.
   ring around the model icon. Point at the ring to see the name, the percentage and the
   megabytes, then click the cross to cancel. The ring turns green when the download ends,
   grey when you cancel, and red when it fails.
+- In Settings, a model that downloads now shows the same progress ring as the status bar, in the
+  place of the Download button. Point at the ring and click the cross to cancel. The row shows
+  the percentage and the megabytes next to the ring.
 - A model download keeps running when you close Settings. Open Settings again to see the progress
   or to cancel. The mode list updates when the download completes. Closing Kanal still stops the
   download.
