@@ -5,7 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using Kanal.Core.Models;
 using Kanal.Host.ViewModels;
 using Kanal.Host.Views;
@@ -71,29 +71,39 @@ public class TempRingShots(ITestOutputHelper output)
         var scale = double.Parse(Environment.GetEnvironmentVariable("KANAL_SCALE") ?? "1.5",
             System.Globalization.CultureInfo.InvariantCulture);
 
-        foreach (var (name, item) in items)
+        var board = new Grid
         {
-            var view = new DownloadIndicatorView { DataContext = item, Bare = true, Margin = new Thickness(8) };
-            var window = new Window
+            RowDefinitions = new RowDefinitions("48,48"),
+            ColumnDefinitions = new ColumnDefinitions("48,48"),
+        };
+        var row = 0;
+        foreach (var (_, item) in items)
+        {
+            var column = 0;
+            foreach (var rounding in new[] { true, false })
             {
-                Width = 48, Height = 48, SizeToContent = SizeToContent.Manual,
-                RequestedThemeVariant = ThemeVariant.Dark, Content = view,
-            };
-            if (Application.Current!.TryGetResource("Paper", ThemeVariant.Dark, out var paper) && paper is Color c)
-                window.Background = new SolidColorBrush(c);
-            window.Show();
-            ForceScale(window, scale, output);
-            window.UpdateLayout();
+                var view = new DownloadIndicatorView { DataContext = item, Bare = true, Margin = new Thickness(8) };
+                view.GetLogicalDescendants().OfType<Grid>().First(g => g.Width == 26).UseLayoutRounding = rounding;
+                Grid.SetRow(view, row);
+                Grid.SetColumn(view, column);
+                board.Children.Add(view);
+                column++;
+            }
 
-            var grid = view.GetVisualDescendants().OfType<Grid>().First(g => g.Width == 26);
-            grid.UseLayoutRounding = true;
-            window.UpdateLayout();
-            Dump($"{name}-before", window);
-
-            grid.UseLayoutRounding = false;
-            window.UpdateLayout();
-            Dump($"{name}-after", window);
-            window.Close();
+            row++;
         }
+
+        var window = new Window
+        {
+            Width = 96, Height = 96, SizeToContent = SizeToContent.Manual,
+            RequestedThemeVariant = ThemeVariant.Dark, Content = board,
+        };
+        if (Application.Current!.TryGetResource("Paper", ThemeVariant.Dark, out var paper) && paper is Color c)
+            window.Background = new SolidColorBrush(c);
+        window.Show();
+        ForceScale(window, scale, output);
+        window.UpdateLayout();
+        Dump("board", window);
+        window.Close();
     }
 }
