@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
+  Windows and Linux (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. Without a usable graphics
+  card, it uses the processor as before. To force the processor, set `KANAL_ACCELERATOR=cpu`.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.

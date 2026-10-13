@@ -4,11 +4,13 @@
     <ProjectReference Include="..\Kanal.Core\Kanal.Core.csproj" />
   </ItemGroup>
 
+  <!-- Backend.Cpu also carries Metal for Apple silicon. Vulkan covers NVIDIA, AMD and Intel GPUs with
+       only the GPU driver. CUDA adds about 600 MB and needs the CUDA 12 runtime: build with -p:KanalCuda=true. -->
   <ItemGroup>
-    <!-- In-process llama.cpp bindings. Backend.Cpu covers Windows/Linux/mac CPU
-         plus Metal GPU on mac; swap in LLamaSharp.Backend.Cuda12 for NVIDIA. -->
     <PackageReference Include="LLamaSharp" Version="0.27.0" />
     <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.27.0" Condition="'$(KanalCuda)' == 'true'" />
   </ItemGroup>
 
   <ItemGroup>
