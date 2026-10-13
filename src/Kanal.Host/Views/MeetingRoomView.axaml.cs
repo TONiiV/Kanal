@@ -32,10 +32,15 @@ public partial class MeetingRoomView : UserControl
 
     private static void OnUtteranceMenuOpening(object? sender, EventArgs e)
     {
-        if (sender is not MenuFlyout { Target: SelectableTextBlock line } menu)
+        if (sender is not MenuFlyout { Target: { } target } menu)
             return;
 
-        var text = string.IsNullOrEmpty(line.SelectedText) ? line.Text ?? "" : line.SelectedText;
+        var text = target switch
+        {
+            SelectableTextBlock line => string.IsNullOrEmpty(line.SelectedText) ? line.Text ?? "" : line.SelectedText,
+            { DataContext: BubbleViewModel bubble } => bubble.Text,
+            _ => "",
+        };
         foreach (var item in menu.Items.OfType<MenuItem>())
             item.CommandParameter = text;
     }

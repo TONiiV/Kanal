@@ -4,6 +4,52 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-14
+
+### Cloud translation with DeepL (ADR 0060)
+
+*Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
+`Kanal.Providers.DeepL`. The orchestrator is unchanged. Only `PipelinePlanner` chooses the vendor.
+
+- **The planner resolves the key.** Local transcription with cloud translation needs a stored key
+  or the `DEEPL_API_KEY` variable. Without a key the mode row says *no cloud translation key — add
+  one in Settings*. The row names no vendor. *Cloud · Cloud* is unchanged: Gladia translates
+  inside its own session and ignores the DeepL key.
+- **Settings holds the key.** The *Translation* tab has one masked field. The key is stored in
+  `settings.json` as an `ApiKeyEntry` with provider `deepl`, like the Gladia keys.
+- **One request per target language.** The requests run in parallel. Recent finals go in DeepL's
+  `context` parameter. DeepL does not bill that parameter. A key that ends in `:fx` uses
+  `api-free.deepl.com`. Other keys use `api.deepl.com`.
+- **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
+  A language outside DeepL's target list is skipped, and the other languages still translate.
+- **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
+  accepted*. 429, every 5xx, a timeout and a network error map to *service unavailable*
+  (`mt.unavailable`). `AsrEvent.Error.Code` carries the code to the host. The host shows a message in
+  the operator's language. A 400 keeps the English message.
+- **One warning per meeting for 403 and 456.** After the first 403 or 456, the provider sends no
+  more requests and returns no translations. The planner builds a new provider for the next meeting.
+  A timeout or a 5xx does not latch: the next line tries again.
+- **One shared `HttpClient`.** Every DeepL provider uses one static client with a 15 s timeout.
+- **Not built:** formality setting, glossary, usage and cost display, a second vendor.
+
+### Keypoints
+
+The tab "Points and decisions" and the menu item "Pin to Points" are now **Keypoints** and **Pin to Keypoints**.
+
+- **Names.** English "Keypoints", Chinese "要点", German "Kernpunkte", Polish "Kluczowe punkty".
+- **Strings only.** The i18n keys and the C# identifiers keep their names (`assistant.tab.points`, `PointsTab`, `PinToPoints`).
+- **Item kinds.** The item labels POINT, PROPOSAL and DECISION stay. They name the kind of one item, not the tab.
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
+
 ## 2026-10-13
 
 ### The ruler shows the screen and pages through the transcript
@@ -158,7 +204,7 @@ Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
 is available when a transcription model and a translation model are downloaded. *Local · Cloud*
 stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
-is removed.
+is removed. *Resolved on 2026-10-14: DeepL is the standalone cloud translator (ADR 0060).*
 
 - **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
   the planner uses it too. The mode row says "not downloaded" until every part is on disk.
@@ -541,9 +587,9 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
-- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in sRGB. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
   The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
-  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+  The mobile page uses `color-mix(in srgb, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
@@ -4013,8 +4059,8 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Operator control over the language columns** — selection capped at four with the reason
       stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
       order host-local (#15).
-- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
-      second blocker on `local · cloud`, buildable independently of the local ASR work.
+- [x] Standalone cloud `IMtProvider` — DeepL first, other vendors later behind the same interface
+      (ADR 0060). `local · cloud` runs when a DeepL key exists.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).
