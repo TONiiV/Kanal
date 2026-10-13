@@ -52,6 +52,38 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 
 ## 2026-10-13
 
+### The ruler shows the screen and pages through the transcript
+
+Issue #268. The reference is the message navigator of a chat app.
+
+- **Colour stays.** A tick keeps the colour of its speaker. The emphasis comes from length and
+  thickness, not from opacity. Thus every tick stays at 3:1 or more (`ui-design.md`).
+- **In view.** The view reports the utterance ids of the bubbles on screen to
+  `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
+  replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **On load.** A column reports its visible rows when it loads. Without this, a room that opens
+  with sentences in it shows no emphasis and no arrows until the first scroll.
+- **Reference column.** The leftmost shown column decides what is on screen. Rows in other
+  languages have other heights, so one column must decide. The arrows use the same column.
+- **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
+  ticks 21 and 15. A tick never gets shorter than its in-view reach.
+- **One centre line.** The ticks and the arrows share the centre line of the ruler column. A
+  tick grows from that line to both sides. The down arrow follows the last tick
+  (`TrackLength`), with the same gap as the up arrow above the first tick.
+- **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
+  by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
+  whole rows next to the visible rows. When no row is whole, two cut sentences are the targets.
+  One lone cut sentence is taller than the screen; the arrow then steps past it. A page jump does
+  not mark a jump target.
+- **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
+  final. The current providers finalise sentences in the order they start. A provider that
+  finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.
+- **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
+  not change when an arrow turns on or off.
+- **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
+  `ColumnScrollWiringTests` (scrolling marks the ticks; the arrows page without a skip).
+
 ### Pin to Points
 
 The transcript menu has a third item, **Pin to Points**. It adds the line to the Points tab.

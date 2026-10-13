@@ -101,6 +101,8 @@
   "column.restore.tip": "Show all languages again",
   "transcript.jumplatest.tip": "Jump to the latest line",
   "ruler.name": "Transcript navigation",
+  "ruler.pageup": "Show the previous page",
+  "ruler.pagedown": "Show the next page",
   "status.idle": "Idle.",
   "status.pickalanguage": "Select at least one language.",
   "status.demorunning": "Demo running.",
