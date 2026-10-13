@@ -98,6 +98,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<Action, Task> _offUiThread;
     private string? _titleOnRecord;
 
+    public ModelRows ModelRows { get; }
+
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
@@ -200,6 +202,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
+        ModelRows = new ModelRows(downloads());
+        foreach (var row in ModelRows.Translation.Concat(ModelRows.Transcription))
+        {
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModelItemViewModel.IsDownloaded) && row.IsDownloaded)
+                    RefreshPipelineStatus();
+            };
+        }
+
         _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
@@ -357,6 +369,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        ModelRows.CancelAll();
         if (Application.Current is { } app)
             app.ActualThemeVariantChanged -= OnThemeVariantChanged;
         _captureCts?.Cancel();

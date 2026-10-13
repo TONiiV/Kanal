@@ -6,6 +6,44 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Downloads survive the Settings window
+
+Closing Settings no longer cancels a model download.
+
+- **`ModelRows` owns the model rows.** It holds the translation and transcription
+  `ModelItemViewModel` rows, with the download state, progress and cancellation token of each.
+  `MainViewModel` creates it and exposes it as `ModelRows`, so it lives as long as the application.
+  The sidebar passes it to each `SettingsViewModel`. A reopened window shows the same row
+  instances: live progress, a working Cancel, and no second Download button.
+- **The mode list follows a finished download.** `MainViewModel` watches `IsDownloaded` on every
+  row. When it turns true, `MainViewModel` calls `RefreshPipelineStatus()`. The local modes and
+  "Generate title" become available without opening Settings again.
+- **Explicit Cancel and app exit still cancel.** `MainViewModel.Dispose()` calls
+  `ModelRows.CancelAll()`.
+- **`CancelDownloads` is now `OnWindowClosed`.** It stops the microphone test, the device
+  listener and the language subscription. It no longer touches downloads.
+- **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
+  the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
+  makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
+
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
+### Project icon chooser (PR #251)
+
+Choosing an icon in Project settings did nothing. The icon now changes.
+
+Cause, proven by CI run 38342718637: the glyph button had a `Command` bound through `$parent[Window]`.
+That binding resolved while the flyout was open. The test asserted a non-null `Command` before the click.
+The click still left `Glyph` null. Avalonia raises `Click` before it reads `Command`.
+The `Click` handler called `Hide()`. `Hide()` removed the popup from the logical tree and unbound `Command`.
+No command ran.
+
+Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
+Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
+
 ### Local transcription runs (ADR 0053, slice C-5)
 
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
@@ -20,6 +58,7 @@ is removed.
   those models. The two "unknown transcription model" strings are removed.
 - **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
   Each load has its own status line. A failed load of either model stops the Start.
+
 
 ### The ruler draws one tick per sentence
 
@@ -3829,10 +3868,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   — the first then died at `File.Move` after however many gigabytes had transferred (on Windows
   the delete itself failed with a sharing violation and masked the original error). Each call now
   streams into its own `<file>.<guid>.part` and only removes the one it created; `Delete` sweeps
-  any leftovers. The reachable trigger is fixed too: `SettingsWindow.OnClosed` cancels outstanding
-  downloads, since MainWindow builds a fresh window and view model each time Settings opens, and a
-  download left running behind a closed dialog was invisible, uncancellable, and collided with the
-  Download button the next dialog offered.
+  any leftovers. The reachable trigger was fixed too: `SettingsWindow.OnClosed` cancelled outstanding
+  downloads. That rule is replaced: a download now survives the window (see "Downloads survive the
+  Settings window", 2026-10-13).
 
 - **`MtOutputCleaner` mangled two quoted spans.** A quote at each end is not the same as a quoted
   line: `"ISO 7599" gilt auch für "KX-4402"` came out as `ISO 7599" gilt auch für "KX-4402`,

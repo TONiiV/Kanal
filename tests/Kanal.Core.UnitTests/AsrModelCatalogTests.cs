@@ -27,9 +27,7 @@ public class AsrModelCatalogTests
     [Fact]
     public void EveryEntryIsComplete()
     {
-        Assert.Equal(
-            ["nemotron-3.5-asr-560ms-int8", "nemotron-3.5-asr-160ms-int8", "nemotron-3.5-asr-1120ms-int8"],
-            AsrModelCatalog.Models.Select(m => m.Id));
+        Assert.Equal(["nemotron-3.5-asr-560ms-int8"], AsrModelCatalog.Models.Select(m => m.Id));
         foreach (var m in AsrModelCatalog.Models)
         {
             Assert.False(string.IsNullOrWhiteSpace(m.Id));
@@ -73,6 +71,8 @@ public class AsrModelCatalogTests
     {
         Assert.NotNull(AsrModelCatalog.Find("nemotron-3.5-asr-560ms-int8"));
         Assert.Null(AsrModelCatalog.Find("no-such-model"));
+        Assert.Null(AsrModelCatalog.Find("nemotron-3.5-asr-160ms-int8"));
+        Assert.Null(AsrModelCatalog.Find("nemotron-3.5-asr-1120ms-int8"));
         Assert.Null(AsrModelCatalog.Find(null));
     }
 }
