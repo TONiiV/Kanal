@@ -67,6 +67,18 @@ cancel, delete, and the OpenMDW-1.1 review note.
 - **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
   its group name from the view model.
 
+### Speaker tag management
+
+Part of #110. This slice does not depend on a diarization model.
+
+- The Speakers tab in `SidePanelView.axaml` shows when `MainViewModel.HasSpeakers` is true. Before, `IsVisible="False"` hid it.
+- Each row shows the tag, the utterance count, an inline name box, eight colour swatches and a "merge into" list.
+- The free-text "from tag, into tag" box and the `MergeSpeakersCommand` are gone. The list holds the other canonical speakers. A merged speaker leaves the list. The target row shows `⊇` and the merged tags.
+- `RoomState.SetSpeakerColour` accepts only a colour from `RoomState.Palette`. `MeetingSession.SetSpeakerColour` sends a `speaker.upsert`. The wire already carries `Color`, so the protocol and `web/index.html` stay as they are.
+- A stored meeting keeps no colour (see `RoomState.Palette`). A colour choice does not survive reopening the meeting.
+- Un-merge is not part of this slice. `RoomState` has no support for it.
+- `Utterance.SpeakerConfidence` stays hidden (ADR 0055 decision 20).
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).

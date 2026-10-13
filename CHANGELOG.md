@@ -17,6 +17,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - A model download keeps running when you close Settings. Open Settings again to see the progress
   or to cancel. The mode list updates when the download completes. Closing Kanal still stops the
   download.
+- The Speakers tab shows when the room has a speaker. Each speaker row has a name box, a colour
+  choice, the number of utterances and a "merge into" list. A colour change also reaches the phones.
 - Kanal no longer damages a meeting record when the computer stops during a save. A meeting folder
   that Kanal cannot open now shows as unreadable, not as a meeting without a record.
 - Each settings tab shows an icon next to its name.
