@@ -15,7 +15,8 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
-  own language. Before, an English sentence in a Chinese, German and Polish meeting showed as PL.
+  own language and is translated into every meeting language. Before, an English sentence in a
+  Chinese, German and Polish meeting showed as PL and was not translated into Polish.
 - Right-click a transcript line and choose Pin to Points. The line shows in the Points tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to
   unpin it. Pinned points are not saved with the meeting record yet.

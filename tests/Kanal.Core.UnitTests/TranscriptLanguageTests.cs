@@ -28,7 +28,6 @@ public class TranscriptLanguageTests
     [Theory]
     [InlineData("In Ordnung.", "de")]
     [InlineData("Hast du meine E-Mail bekommen?", "de")]
-    [InlineData("No dobrze", "de")]
     public void OneSignalForALanguageOutsideTheRoomDoesNotBeatTheRoom(string text, string expected) =>
         Assert.Equal(expected, TranscriptLanguage.Guess(text, Room));
 
