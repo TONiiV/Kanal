@@ -94,17 +94,16 @@
             <Setter Property="Height" Value="3" />
         </Style>
         <Style Selector="Button.page">
-            <Setter Property="Width" Value="30" />
+            <Setter Property="Width" Value="22" />
             <Setter Property="Height" Value="22" />
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="HorizontalContentAlignment" Value="Right" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.page Path.glyph">
             <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="12" />
-            <Setter Property="Margin" Value="0,0,2,0" />
         </Style>
         <Style Selector="Button.page:disabled Path.glyph">
             <Setter Property="Opacity" Value="0" />
@@ -349,7 +348,7 @@
             <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="16" Height="16" />
         </Button>
 
-        <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Width="30" Margin="0,2,12,10">
+        <Grid Grid.Column="1" RowDefinitions="Auto,*,22" Width="30" Margin="0,2,12,10">
             <Button x:Name="RulerPageUp" Grid.Row="0" Classes="ghost page"
                     Command="{Binding ShownRuler.PageUpCommand}"
                     ToolTip.Tip="{l:T ruler.pageup}" AutomationProperties.Name="{l:T ruler.pageup}">
@@ -367,17 +366,20 @@
                                 AutomationProperties.Name="{Binding AccessibleName}">
                             <Rectangle Classes="tick" Classes.inview="{Binding IsInView}"
                                        Width="{Binding Reach}"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button x:Name="RulerPageDown" Grid.Row="2" Classes="ghost page"
-                    Command="{Binding ShownRuler.PageDownCommand}"
-                    ToolTip.Tip="{l:T ruler.pagedown}" AutomationProperties.Name="{l:T ruler.pagedown}">
-                <Path Classes="glyph" Data="{c:Icon chevron-down}" />
-            </Button>
+            <Canvas Grid.Row="1" Grid.RowSpan="2">
+                <Button x:Name="RulerPageDown" Classes="ghost page"
+                        Canvas.Left="4" Canvas.Top="{Binding ShownRuler.TrackLength}"
+                        Command="{Binding ShownRuler.PageDownCommand}"
+                        ToolTip.Tip="{l:T ruler.pagedown}" AutomationProperties.Name="{l:T ruler.pagedown}">
+                    <Path Classes="glyph" Data="{c:Icon chevron-down}" />
+                </Button>
+            </Canvas>
         </Grid>
 
         <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,24,12,32" IsHitTestVisible="False"

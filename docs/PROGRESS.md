@@ -21,8 +21,9 @@ Issue #268. The reference is the message navigator of a chat app.
   languages have other heights, so one column must decide. The arrows use the same column.
 - **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
   ticks 21 and 15. A tick never gets shorter than its in-view reach.
-- **Ticks grow towards the transcript.** The ticks are right-aligned, so they grow to the left,
-  towards the text and the preview card.
+- **One centre line.** The ticks and the arrows share the centre line of the ruler column. A
+  tick grows from that line to both sides. The down arrow follows the last tick
+  (`TrackLength`), with the same gap as the up arrow above the first tick.
 - **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
   screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
   by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the

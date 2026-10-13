@@ -89,6 +89,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     [ObservableProperty]
     private double _previewTop;
 
+    [ObservableProperty]
+    private double _trackLength;
+
     public bool IsPreviewOpen => HoveredTick is not null;
 
     public event Action<string>? JumpRequested;
@@ -183,6 +186,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _whole = null;
         HoveredTick = null;
         Ticks.Clear();
+        TrackLength = 0;
         MarkInView();
     }
 
@@ -191,6 +195,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
         foreach (var tick in Ticks)
             tick.Pitch = pitch;
+        TrackLength = pitch * Ticks.Count;
     }
 
     private void MarkInView()
