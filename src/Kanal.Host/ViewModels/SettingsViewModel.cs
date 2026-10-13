@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -44,6 +46,39 @@ public sealed partial class ColourSchemeOption(ColourScheme scheme) : ViewModelB
     public override string ToString() => Name;
 }
 
+public sealed class AccentThemeOption(AccentTheme theme) : ViewModelBase
+{
+    public AccentTheme Theme { get; } = theme;
+
+    public string Name => Localizer.Instance[$"appearance.theme.{Theme.Id}"];
+
+    public IBrush LightOrb { get; } = Orb(theme.Light.BrandColour);
+
+    public IBrush DarkOrb { get; } = Orb(theme.Dark.BrandColour);
+
+    private static RadialGradientBrush Orb(Color brand) => new()
+    {
+        Center = new RelativePoint(0.35, 0.3, RelativeUnit.Relative),
+        GradientOrigin = new RelativePoint(0.35, 0.3, RelativeUnit.Relative),
+        RadiusX = RelativeScalar.Parse("75%"),
+        RadiusY = RelativeScalar.Parse("75%"),
+        GradientStops =
+        [
+            new GradientStop(Mix(brand, Colors.White, 0.4), 0),
+            new GradientStop(brand, 0.7),
+        ],
+    };
+
+    private static Color Mix(Color from, Color to, double t) => Color.FromRgb(
+        (byte)Math.Round(from.R + (to.R - from.R) * t),
+        (byte)Math.Round(from.G + (to.G - from.G) * t),
+        (byte)Math.Round(from.B + (to.B - from.B) * t));
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+
+    public override string ToString() => Name;
+}
+
 public partial class ApiKeyItemViewModel : ViewModelBase
 {
     [ObservableProperty]
@@ -68,6 +103,7 @@ public partial class SettingsViewModel : ViewModelBase
             SettingsStore.Load(),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             saveColourScheme: SettingsStore.SaveColourScheme,
+            saveAccentTheme: SettingsStore.SaveAccentTheme,
             saveAppLanguage: SettingsStore.SaveAppLanguage)
     {
     }
@@ -90,10 +126,12 @@ public partial class SettingsViewModel : ViewModelBase
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
         Action<string>? openFolder = null,
         Action<ColourScheme>? saveColourScheme = null,
-        Action<string>? saveAppLanguage = null)
+        Action<string>? saveAppLanguage = null,
+        Action<string>? saveAccentTheme = null)
     {
         _saveAppLanguage = saveAppLanguage ?? (_ => { });
         _saveColourScheme = saveColourScheme ?? (_ => { });
+        _saveAccentTheme = saveAccentTheme ?? (_ => { });
         _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
@@ -147,6 +185,7 @@ public partial class SettingsViewModel : ViewModelBase
                        ?? Localizer.Available[0];
 
         _scheme = Schemes.First(o => o.Scheme == settings.ColourScheme);
+        _theme = Themes.First(o => o.Theme == AccentThemes.Find(settings.AccentTheme));
         _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
         _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
@@ -174,6 +213,8 @@ public partial class SettingsViewModel : ViewModelBase
             level.RefreshText();
         foreach (var scheme in Schemes)
             scheme.RefreshText();
+        foreach (var theme in Themes)
+            theme.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -258,8 +299,16 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private ColourSchemeOption _scheme;
 
-    partial void OnSchemeChanged(ColourSchemeOption value)
+    // A Ctrl+click on the selected card clears the selection; restore it instead of
+    // AlwaysSelected, which selects the first card before the binding lands.
+    partial void OnSchemeChanged(ColourSchemeOption? oldValue, ColourSchemeOption value)
     {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Scheme = oldValue!);
+            return;
+        }
+
         Appearance.Apply(value.Scheme);
         try
         {
@@ -268,6 +317,32 @@ public partial class SettingsViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log.Warning("settings", "The colour scheme could not be saved.", ex);
+        }
+    }
+
+    public IReadOnlyList<AccentThemeOption> Themes { get; } = [.. AccentThemes.All.Select(t => new AccentThemeOption(t))];
+
+    private readonly Action<string> _saveAccentTheme;
+
+    [ObservableProperty]
+    private AccentThemeOption _theme;
+
+    partial void OnThemeChanged(AccentThemeOption? oldValue, AccentThemeOption value)
+    {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Theme = oldValue!);
+            return;
+        }
+
+        Appearance.Apply(value.Theme);
+        try
+        {
+            _saveAccentTheme(value.Theme.Id);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The accent theme could not be saved.", ex);
         }
     }
 
@@ -620,6 +695,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
         settings.ColourScheme = Scheme.Scheme;
+        settings.AccentTheme = Theme.Theme.Id;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
             ? _lastLogSize
