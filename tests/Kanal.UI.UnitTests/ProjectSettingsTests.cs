@@ -432,7 +432,6 @@ public class ProjectSettingsTests : IDisposable
         var glyph = Assert.IsAssignableFrom<Control>(flyout.Content).GetVisualDescendants().OfType<Button>()
             .Single(b => Avalonia.Automation.AutomationProperties.GetName(b) == Localizer.Instance["workspace.glyph.people"]);
         Assert.True(glyph.IsEffectivelyEnabled);
-        Assert.NotNull(glyph.Command);
         var popup = Assert.IsAssignableFrom<TopLevel>(TopLevel.GetTopLevel(glyph));
         var at = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), popup)!.Value;
         popup.MouseDown(at, MouseButton.Left);

@@ -65,8 +65,6 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="x:String">
                                             <Button Classes="ghost icon" Click="OnGlyphClick"
-                                                    Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).ChooseGlyphCommand}"
-                                                    CommandParameter="{Binding}"
                                                     ToolTip.Tip="{Binding Converter={x:Static c:ProjectIcons.Label}}"
                                                     AutomationProperties.Name="{Binding Converter={x:Static c:ProjectIcons.Label}}">
                                                 <Path Classes="glyph" Width="18" Height="18"

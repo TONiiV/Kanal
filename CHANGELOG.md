@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Project settings: choosing an icon from the Choose icon list now changes the project icon.
 - Each settings tab shows an icon next to its name.
 - The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
   installer, the window and the splash use it. The logo in the sidebar, the settings and the
