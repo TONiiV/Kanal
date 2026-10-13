@@ -6,6 +6,26 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-13
 
+### Download indicator in the status bar
+
+A running model download shows at the right end of the main window status bar. Design reference:
+`design/download-indicator-demo.html`.
+
+- **`DownloadTray` feeds the indicators.** It watches `IsDownloading` on every `ModelRows` row except the None translation row.
+  A row that starts downloading adds a `DownloadItemViewModel`. A row that stops downloading sets
+  the item to Done, Cancelled or Failed, and a `TimeProvider` timer removes it after 3 s, 2 s or 8 s.
+  A diarization row joins with one more `Watch(row, "people")` call.
+- **Collapsed:** 28 DIP circle. A progress ring surrounds the model icon (`transcript`, `translate`).
+- **Pointer or keyboard focus:** the ring stays at the right end. Its centre turns into a cross.
+  The pill grows to the left and shows "name · 42% · 286 / 682 MB". The cross cancels the row,
+  like Cancel in Settings. The expansion snaps; it has no width animation.
+- **Done, cancelled, failed:** green ring with a tick, grey ring with a dash, red ring with "!".
+  A failed item shows the reason on hover. The row shows its Download button again in Settings.
+- **Settings open:** the indicator stays visible. Settings is modal, so it only shows progress.
+- **New brush `Done`** (Light and Dark) in `App.axaml` and the colour table of `ui-design.md`.
+- **Tests.** `DownloadTrayTests` use a manual `TimeProvider`: item appears, summary text, cancel
+  through the indicator, the three end states and their auto-hide, restart replaces the item.
+
 ### Downloads survive the Settings window
 
 Closing Settings no longer cancels a model download.

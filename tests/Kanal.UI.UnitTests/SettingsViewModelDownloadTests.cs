@@ -11,7 +11,7 @@ namespace Kanal.UI.UnitTests;
 public class SettingsViewModelDownloadTests
 {
     /// <summary>A response body that never yields until the request is cancelled.</summary>
-    private sealed class StalledHandler : HttpMessageHandler
+    internal sealed class StalledHandler : HttpMessageHandler
     {
         private readonly TaskCompletionSource _started =
             new(TaskCreationOptions.RunContinuationsAsynchronously);

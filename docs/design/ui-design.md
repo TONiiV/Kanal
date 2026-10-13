@@ -79,6 +79,7 @@ Conversation K 继续提供品牌资产生成规则；meeting-workspace 继续�
 | Rule | `#CEC9C0` | `#485165` | 内容分隔；不独立承担控件可识别性 |
 | RuleFaint | `#E9E3D9` | `#303748` | 进度条底、深色下不可用下拉框的底色 |
 | Alarm / AlarmWash | `#8B2F2F` / `#EEDDD9` | `#E28A83` / `#1E1416` | 错误文字、危险操作；问题横幅的警报状态（记录损坏） |
+| Done | `#2F8A57` | `#5CC48A` | 下载完成的进度环与对勾；仅用于状态栏下载指示器 |
 | Warning / WarningWash | `#9A6B00` / `#F2E6C6` | `#D9A53A` / `#3A3020` | 问题横幅与项目下拉标记的提醒状态（仅文件夹缺失）；不与暂停黄混用 |
 | Record / RecordWash | `#C42B22` / `#F2CFCC` | `#EF6A60` / `#4A2528` | 录制圆点、结束方块及圆底 |
 | Hold / HoldWash | `#C08A12` / `#F2E6C6` | `#E3AE3C` / `#433820` | 暂停/继续及圆底 |
@@ -251,7 +252,7 @@ HTML 磨砂是视觉模拟，原生 Avalonia 的平台材质仍需实施时验�
 | `IconBarView.axaml` | 复用模式、帮助、收音、Start/Pause/Stop、设备和二维码绑定；仅重排 |
 | `WorkspaceSidebarView.axaml` | 使用真实品牌资产，区分两种添加图形，保留现有菜单 |
 | `MeetingRoomView.axaml` | 保留语言列及语言选择器，添加单列呈现状态与恢复入口 |
-| `StatusBarView.axaml` | 保留 Status、录音路径/状态和输入电平 |
+| `StatusBarView.axaml` | 保留 Status、录音路径/状态和输入电平；最右侧显示模型下载指示器（`DownloadIndicatorView`，参考 `design/download-indicator-demo.html`） |
 | `SidePanelView.axaml` | 保留分析器空状态、候选确认/忽略、来源、文件树及导入；不开放隐藏 SpeakersTab |
 | 各设置/确认窗口 | 相同排版、按钮、输入与磨砂弹层规范；保留各自业务限制 |
 
