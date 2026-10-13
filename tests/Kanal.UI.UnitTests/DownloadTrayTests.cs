@@ -1,5 +1,7 @@
+using System.Globalization;
 using Avalonia.Headless.XUnit;
 using Kanal.Core.Models;
+using Kanal.Host.Localization;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -112,15 +114,41 @@ public class DownloadTrayTests
     public void TheSummaryNamesTheModelThePercentAndTheMegabytes()
     {
         var (rows, tray, _) = Build();
-        var row = rows.Transcription[0];
+        var row = rows.Translation.First(r => r.IsLocal);
         row.IsDownloading = true;
 
         row.Progress = 0.5;
 
-        var summary = Assert.Single(tray.Items).Summary;
-        Assert.StartsWith($"{row.DisplayName} · 50% · ", summary);
-        Assert.Contains(" / ", summary);
-        Assert.EndsWith(" MB", summary);
+        var total = row.SizeBytes / (1024.0 * 1024);
+        var expected = string.Create(CultureInfo.InvariantCulture,
+            $"{row.DisplayName} · 50% · {Math.Round(total / 2, MidpointRounding.AwayFromZero)} / {Math.Round(total, MidpointRounding.AwayFromZero)} MB");
+        Assert.Equal(expected, Assert.Single(tray.Items).Summary);
+    }
+
+    [AvaloniaFact]
+    public void ALanguageChangeRefreshesTheCancelLabelAndTheSummary()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var (rows, tray, _) = Build();
+            var row = rows.Transcription[0];
+            row.IsDownloading = true;
+            var item = Assert.Single(tray.Items);
+            var raised = new List<string?>();
+            item.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+            Localizer.Instance.Current = "de";
+            row.RefreshText();
+
+            Assert.Contains(nameof(DownloadItemViewModel.CancelLabel), raised);
+            Assert.Contains(nameof(DownloadItemViewModel.Summary), raised);
+            Assert.StartsWith("Download abbrechen", item.CancelLabel);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
     }
 
     [AvaloniaFact]
