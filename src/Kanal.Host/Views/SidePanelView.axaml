@@ -164,13 +164,18 @@
                     </Border>
                 </TabItem>
 
-                <TabItem x:Name="SpeakersTab" IsVisible="{Binding HasSpeakers}"
+                <TabItem x:Name="SpeakersTab"
                          AutomationProperties.Name="{l:T assistant.tab.speakers}">
                     <TabItem.Header>
                         <TextBlock Text="{l:T assistant.tab.speakers}" Margin="0,0,0,7" />
                     </TabItem.Header>
                     <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
+                        <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" x:Name="NoSpeakersNote"
+                                   Text="{l:T assistant.nospeakers}" TextWrapping="Wrap"
+                                   FontSize="12.5" LineHeight="19" Foreground="{DynamicResource Ink3}"
+                                   IsVisible="{Binding ShowNoSpeakersNote}" />
                         <ScrollViewer>
                             <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
                                 <ItemsControl.ItemTemplate>
@@ -245,6 +250,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
+                        </DockPanel>
                     </Border>
                 </TabItem>
 

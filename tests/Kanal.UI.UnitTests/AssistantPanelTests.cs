@@ -122,7 +122,7 @@ public class AssistantPanelTests
             .Where(control => control.Name == name).Distinct().Single();
 
     [AvaloniaFact]
-    public void TheSpeakersTabStaysHiddenUntilTheRoomHasASpeaker()
+    public void TheSpeakersTabIsThereWithoutASpeakerAndSaysSo()
     {
         var panel = Panel(out var window, out var vm);
         var tabs = panel.GetLogicalDescendants().OfType<TabControl>().Single();
@@ -138,12 +138,13 @@ public class AssistantPanelTests
 
         Assert.True(points.IsVisible);
         Assert.True(points.IsSelected);
-        Assert.False(speakers.IsVisible);
+        Assert.True(speakers.IsVisible);
+        Assert.True(Named(panel, "NoSpeakersNote").IsVisible);
 
         vm.ApplySpeaker(new Speaker("S01", null, [], RoomState.Palette[0]));
         Dispatcher.UIThread.RunJobs();
 
-        Assert.True(speakers.IsVisible);
+        Assert.False(Named(panel, "NoSpeakersNote").IsVisible);
 
         window.Close();
     }

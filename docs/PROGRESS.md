@@ -117,7 +117,7 @@ cancel, delete, and the OpenMDW-1.1 review note.
 
 Part of #110. This slice does not depend on a diarization model.
 
-- The Speakers tab in `SidePanelView.axaml` shows when `MainViewModel.HasSpeakers` is true. Before, `IsVisible="False"` hid it.
+- The Speakers tab in `SidePanelView.axaml` is always present. With no speaker it shows `assistant.nospeakers`, bound to `MainViewModel.ShowNoSpeakersNote`. `HasSpeakers` is gone. The tab lists the live room's speakers, also while the operator browses a stored meeting.
 - Each row shows the tag, the utterance count, an inline name box, eight colour swatches and a "merge into" list.
 - The free-text "from tag, into tag" box and the `MergeSpeakersCommand` are gone. The list holds the other canonical speakers. A merged speaker leaves the list. The target row shows `⊇` and the merged tags.
 - `RoomState.SetSpeakerColour` accepts only a colour from `RoomState.Palette`. `MeetingSession.SetSpeakerColour` sends a `speaker.upsert`. The wire already carries `Color`, so the protocol and `web/index.html` stay as they are.
