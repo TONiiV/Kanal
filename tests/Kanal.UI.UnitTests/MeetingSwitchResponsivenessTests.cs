@@ -196,6 +196,49 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
     }
 
     [AvaloniaFact]
+    public async Task TheCostOfOpeningAMeetingGrowsLinearlyWithItsLength()
+    {
+        var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
+        var folder = Path.Combine(_root, "acme");
+        Directory.CreateDirectory(folder);
+        var workspace = store.CreateWorkspace("ACME", folder).Workspace!;
+        var small = Stored(store, workspace, "Kurz", 5);
+        var sizes = new[] { 100, 200, 400, 800 };
+        var meetings = sizes.Select(n => (N: n, Record: Stored(store, workspace, $"Lang {n}", n))).ToList();
+
+        var vm = TestViewModels.Hermetic(workspaces: () => store, offUiThread: work => Task.Run(work));
+        var window = new MainWindow { DataContext = vm, Width = 1320, Height = 820 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        foreach (var (n, record) in meetings)
+        {
+            var addClock = Stopwatch.StartNew();
+            vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single(m => m.Id == record.Id);
+            await PumpUntil(
+                () => vm.ShownColumns.Count == 3 && vm.ShownColumns.All(c => c.Bubbles.Count == n), $"{n} utterances");
+            var addMs = addClock.Elapsed.TotalMilliseconds;
+
+            var layoutClock = Stopwatch.StartNew();
+            window.UpdateLayout();
+            var layoutMs = layoutClock.Elapsed.TotalMilliseconds;
+
+            var leaveClock = Stopwatch.StartNew();
+            vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single(m => m.Id == small.Id);
+            await PumpUntil(
+                () => vm.ShownColumns.Count == 3 && vm.ShownColumns.All(c => c.Bubbles.Count == 5), "the short meeting");
+            window.UpdateLayout();
+            var leaveMs = leaveClock.Elapsed.TotalMilliseconds;
+
+            Report($"METRIC scaling n={n,4} bubbles={n * 3,5} add={addMs,7:F0} ms layout={layoutMs,7:F0} ms " +
+                   $"({layoutMs / (n * 3),5:F2} ms/bubble) leave={leaveMs,7:F0} ms");
+        }
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheRulerOfALongMeetingFillsInLinearTime()
     {
         var utterances = Enumerable.Range(0, LongMeetingUtterances).Select(Said).ToList();
