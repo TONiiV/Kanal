@@ -93,6 +93,24 @@ Ticket #206.
 
 ## 2026-10-12
 
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store makes at most 10 attempts,
+   with 50 ms between them. `RecordFile` logs each of the first 9 failures as a Warning line.
+   The last failure goes to the caller, which logs it and reports `Unwritable`.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
+
 ### The fast-source-clock capture test no longer times out
 
 `ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
@@ -847,6 +865,32 @@ its preservation rules are specified as implementation work after design approva
 ---
 
 ## 2026-10-03
+
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
 
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
