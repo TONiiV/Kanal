@@ -1,5 +1,6 @@
 using Kanal.Core.Providers;
 using Kanal.Host.Services;
+using Kanal.Providers.DeepL;
 using Kanal.Core.Models;
 using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
@@ -302,18 +303,67 @@ public class PipelineModeTests
     }
 
     [Fact]
-    public void LocalCloudStatesTheMissingStandaloneCloudTranslator()
+    public void LocalCloudStatesTheMissingTranslationKey()
     {
         var (downloads, dir) = TempDownloads();
         WithParts(downloads, AsrModelCatalog.Models[0].Parts);
 
         var status = PipelinePlanner.Describe(
-            PipelineMode.Of(PipelineModeId.LocalCloud), new AppSettings(), downloads, SomeKey);
+            PipelineMode.Of(PipelineModeId.LocalCloud), new AppSettings(), downloads, NoKey, NoKey);
 
         Assert.NotNull(status.Unavailable);
         Assert.DoesNotContain("local transcription", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cloud translation", status.Unavailable!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Settings", status.Unavailable!, StringComparison.Ordinal);
         Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void LocalCloudRunsOnceATranslationKeyExists()
+    {
+        var (downloads, dir) = TempDownloads();
+        WithParts(downloads, AsrModelCatalog.Models[0].Parts);
+
+        var plan = PipelinePlanner.Plan(
+            PipelineMode.Of(PipelineModeId.LocalCloud), new AppSettings(), downloads, NoKey, SomeKey);
+
+        Assert.Null(plan.Status.Unavailable);
+        Assert.IsType<NemotronAsrProvider>(plan.Asr);
+        Assert.IsType<DeepLMtProvider>(plan.Mt);
+        Assert.False(plan.Asr!.Caps.Translation);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void CloudCloudStillTranslatesInsideTheTranscriptionSession()
+    {
+        var (downloads, dir) = TempDownloads();
+
+        foreach (var translationKey in new[] { NoKey, SomeKey })
+        {
+            var plan = PipelinePlanner.Plan(
+                PipelineMode.Of(PipelineModeId.CloudCloud), new AppSettings(), downloads, SomeKey, translationKey);
+
+            Assert.Null(plan.Status.Unavailable);
+            Assert.Null(plan.Mt);
+            Assert.True(plan.Asr!.Caps.Translation);
+            (plan.Asr as IDisposable)?.Dispose();
+        }
+
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void AStoredTranslationKeyIsFoundByItsProvider()
+    {
+        var settings = new AppSettings();
+        Assert.Null(SettingsStore.ResolveStoredDeepLKey(settings));
+
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "g"));
+        settings.ApiKeys.Add(new ApiKeyEntry("DeepL", "deepl", " d:fx "));
+
+        Assert.Equal("d:fx", SettingsStore.ResolveStoredDeepLKey(settings)!.Value.Key);
+        Assert.Equal("g", SettingsStore.ResolveStoredGladiaKey(settings)!.Value.Key);
     }
 
     /// <summary>
