@@ -19,9 +19,11 @@ animation, and all ticks had the same thickness and brightness.
 - **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
   from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9. Peak:
   28, 3.5, 1. A tick on screen is never weaker than its on-screen value.
-- **Animation in the view.** Width, height and opacity of a tick have a 140 ms `CubicEaseOut`
-  transition. A pointer that moves fast makes each new target restart the transition, so the motion
-  stays smooth. The view sends the pointer position (`PointerMoved`) and the exit (`PointerExited`).
+- **Animation in the view.** A tick is a fixed 28 x 3.5 rectangle. Its length and thickness are a scale
+  transform (`TickScale`) from `Reach` and `Thickness`, so an animation never starts a layout pass. The
+  transform and the opacity have a 140 ms `CubicEaseOut` transition. A pointer that moves fast makes
+  each new target restart the transition, so the motion stays smooth. The view sends the pointer
+  position (`PointerMoved`) and the exit (`PointerExited`).
 - **Contrast trade-off.** The operator asked for dim resting ticks. A resting tick has 1.8–2.3:1
   contrast, below the 3:1 of `ui-design.md`. The design document now records this as the one
   exception. On-screen ticks reach 2.8–4.1:1 and the tick under the pointer 3.2:1 or more.

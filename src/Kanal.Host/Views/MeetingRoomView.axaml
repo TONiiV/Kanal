@@ -91,8 +91,7 @@
         <Style Selector="Rectangle.tick">
             <Setter Property="Transitions">
                 <Transitions>
-                    <DoubleTransition Property="Width" Duration="0:0:0.14" Easing="CubicEaseOut" />
-                    <DoubleTransition Property="Height" Duration="0:0:0.14" Easing="CubicEaseOut" />
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14" Easing="CubicEaseOut" />
                     <DoubleTransition Property="Opacity" Duration="0:0:0.14" Easing="CubicEaseOut" />
                 </Transitions>
             </Setter>
@@ -372,10 +371,18 @@
                                 PointerPressed="OnTickPressed"
                                 AutomationProperties.Name="{Binding AccessibleName}">
                             <Rectangle Classes="tick"
-                                       Width="{Binding Reach}" Height="{Binding Thickness}"
+                                       Width="{x:Static vm:TranscriptRulerViewModel.PeakReach}"
+                                       Height="{x:Static vm:TranscriptRulerViewModel.PeakThickness}"
                                        Opacity="{Binding Glow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
+                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}">
+                                <Rectangle.RenderTransform>
+                                    <MultiBinding Converter="{x:Static conv:TickScale.Of}">
+                                        <Binding Path="Reach" />
+                                        <Binding Path="Thickness" />
+                                    </MultiBinding>
+                                </Rectangle.RenderTransform>
+                            </Rectangle>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
