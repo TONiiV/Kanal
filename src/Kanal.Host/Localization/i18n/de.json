@@ -1,6 +1,6 @@
 {
   "input.label": "EINGANG",
-  "capture.inroom.name": "Im Raum",
+  "capture.inroom.name": "Präsenzbesprechung",
   "capture.online.macosversion": "Online-Audioaufnahme erfordert macOS 13 oder neuer.",
   "capture.online.windowsversion": "Online-Audioaufnahme erfordert Windows 10 Version 2004 oder neuer.",
   "capture.device.lost": "Das Mikrofon wurde getrennt oder geändert. Bitte erneut auswählen.",
