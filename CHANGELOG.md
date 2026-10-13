@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- You can now select text in the transcript. Select text in one line and press Ctrl+C to copy it. Press
+  Ctrl+A to select the whole line. Right-click a line for Copy and Copy with speaker and time.
 - A model download now shows in the status bar. Each running download is a small progress
   ring around the model icon. Point at the ring to see the name, the percentage and the
   megabytes, then click the cross to cancel. The ring turns green when the download completes,

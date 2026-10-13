@@ -968,7 +968,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await _offUiThread(() =>
         {
             utterances = StoredTranscript.Utterances(record);
-            columns = StoredTranscript.Columns(utterances, record.Languages ?? []);
+            columns = StoredTranscript.Columns(utterances, record.Languages ?? [], CopyToClipboard);
         });
         if (version != _bodyVersion)
             return;
@@ -1258,7 +1258,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang));
+            Columns.Add(new ColumnViewModel(lang, CopyToClipboard));
         FocusedLanguage = null;
 
         var asr = plan.Asr!;
@@ -2248,6 +2248,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public Func<string, string, Task<string?>>? ChooseExportPath { get; set; }
 
+    public Func<string, Task> WriteClipboard { get; set; } = _ => Task.CompletedTask;
+
+    private Task CopyToClipboard(string text) => WriteClipboard(text);
+
     private sealed record MeetingAttestation(
         CaptureProfile CaptureProfile,
         DateTimeOffset ConsentConfirmedAt);
@@ -2343,6 +2347,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var translation = u.Translations.TryGetValue(column.Language, out var t) ? t : null;
 
             var bubble = column.GetOrAdd(u.Id);
+            bubble.StartMs = u.TStartMs;
             bubble.SpeakerTag = u.SpeakerTag;
             bubble.SpeakerName = speakerName;
             bubble.SpeakerColor = speakerColor;

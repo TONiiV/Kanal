@@ -165,6 +165,24 @@ public class TranscriptCopyTests
     }
 
     [AvaloniaFact]
+    public void OpeningTheMenuOnALineBindsItsItemsToThatUtterance()
+    {
+        var (window, blocks) = Shown();
+        var block = blocks[0];
+        var bubble = Assert.IsType<BubbleViewModel>(block.DataContext);
+        var flyout = Assert.IsType<MenuFlyout>(block.ContextFlyout);
+
+        flyout.ShowAt(block);
+        Settle(window);
+
+        var items = flyout.Items.OfType<MenuItem>().ToList();
+        Assert.Same(bubble.CopyCommand, items.Single(i => i.Name == "CopyLine").Command);
+        Assert.Same(bubble.CopyWithSpeakerCommand, items.Single(i => i.Name == "CopyWithSpeaker").Command);
+        flyout.Hide();
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void SelectingInALineReachesTheUtteranceViewModel()
     {
         var (window, blocks) = Shown();

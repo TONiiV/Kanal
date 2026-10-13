@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Kanal.Host.ViewModels;
@@ -11,8 +12,11 @@ public partial class ColumnViewModel : ViewModelBase
     private BubbleViewModel? _live;
     private BubbleViewModel? _jumpTarget;
 
-    public ColumnViewModel(string language)
+    private readonly Func<string, Task>? _clipboard;
+
+    public ColumnViewModel(string language, Func<string, Task>? clipboard = null)
     {
+        _clipboard = clipboard;
         Language = language;
         Code = language.ToUpperInvariant();
         // column heads read as signage: the ISO code large, the language's own name beneath
@@ -53,7 +57,7 @@ public partial class ColumnViewModel : ViewModelBase
         if (_byId.TryGetValue(utteranceId, out var bubble))
             return bubble;
 
-        bubble = new BubbleViewModel { UtteranceId = utteranceId };
+        bubble = new BubbleViewModel { UtteranceId = utteranceId, Clipboard = _clipboard ?? (_ => Task.CompletedTask) };
         _byId[utteranceId] = bubble;
         Bubbles.Add(bubble);
 
