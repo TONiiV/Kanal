@@ -30,18 +30,18 @@ public class SpeakerManagementTests
         column.GetOrAdd(id).SpeakerTag = tag;
 
     [AvaloniaFact]
-    public void TheSpeakersTabAppearsWithTheFirstSpeaker()
+    public void TheNoSpeakersNoteGoesWithTheFirstSpeaker()
     {
         var vm = TestViewModels.Hermetic();
         var changes = new List<string?>();
         vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
-        Assert.False(vm.HasSpeakers);
+        Assert.True(vm.ShowNoSpeakersNote);
 
         vm.ApplySpeaker(Person("S01"));
 
-        Assert.True(vm.HasSpeakers);
-        Assert.Contains(nameof(MainViewModel.HasSpeakers), changes);
+        Assert.False(vm.ShowNoSpeakersNote);
+        Assert.Contains(nameof(MainViewModel.ShowNoSpeakersNote), changes);
     }
 
     [AvaloniaFact]

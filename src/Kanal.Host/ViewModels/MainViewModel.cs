@@ -139,7 +139,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         bool development = false)
     {
         _titler = titler;
-        Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSpeakers));
+        Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
         _offUiThread = offUiThread ?? (work =>
         {
             work();
@@ -549,7 +549,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
 
-    public bool HasSpeakers => Speakers.Count > 0;
+    public bool ShowNoSpeakersNote => Speakers.Count == 0;
 
     public AssistantViewModel Assistant { get; } = new();
 
