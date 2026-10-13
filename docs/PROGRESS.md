@@ -27,6 +27,26 @@ Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
 6. A headless render of each theme in both variants shows that a checked box and the settings
    tab marker use the `Brand` of the theme.
 
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).
