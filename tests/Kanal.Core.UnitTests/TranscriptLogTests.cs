@@ -177,6 +177,9 @@ public class TranscriptLogTests
         Assert.Equal(
             ["vor der Pause", "KX-4402 geprüft", "nach der Pause", "Liefertermin bestätigt"],
             read.Select(u => u.SrcText));
-        Assert.Equal(4, read.Select(u => u.Id).Distinct().Count());
+        Assert.Equal(["u1", "u2", "2/u1", "2/u2"], read.Select(u => u.Id));
+        Assert.Equal(
+            ["1/u1", "1/u2", "2/u1", "2/u2"],
+            TranscriptLog.Read(meeting, beforeALiveRun: true).Select(u => u.Id));
     }
 }

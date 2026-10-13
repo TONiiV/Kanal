@@ -182,7 +182,7 @@ public class MeetingRecordStorageTests : IDisposable
         await vm.StopCommand.ExecuteAsync(null);
         var first = Only(store, workspace.Id);
         var firstRun = File.ReadAllBytes(first.Runs[0].TranscriptPath);
-        var earlier = TranscriptLog.Read(first);
+        var earlier = TranscriptLog.Read(first, beforeALiveRun: true);
         Assert.NotEmpty(earlier);
 
         await vm.StartCommand.ExecuteAsync(null);

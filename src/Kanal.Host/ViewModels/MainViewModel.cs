@@ -1231,7 +1231,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         var columns = languages.Take(MaxLanguages).ToList();
-        _earlier = continuing is null ? [] : TranscriptLog.Read(continuing);
+        _earlier = continuing is null ? [] : TranscriptLog.Read(continuing, beforeALiveRun: true);
         var carried = StoredTranscript.Columns(_earlier, columns);
         foreach (var column in carried.Count > 0 ? carried : columns.Select(lang => new ColumnViewModel(lang)))
             Columns.Add(column);

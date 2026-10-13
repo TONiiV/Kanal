@@ -46,9 +46,11 @@ public static class TranscriptLog
     }
 
     // Every run restarts its ids at u1, so a later run's ids take its position as a prefix ("2/u1").
-    public static IReadOnlyList<Utterance> Read(MeetingRecord meeting) =>
+    // A live run also restarts at u1, so the runs before it all take the prefix, run 1 too.
+    public static IReadOnlyList<Utterance> Read(MeetingRecord meeting, bool beforeALiveRun = false) =>
         [.. meeting.Runs.SelectMany((run, i) =>
-            Read(run.TranscriptPath).Select(u => i == 0 ? u : u with { Id = $"{i + 1}/{u.Id}" }))];
+            Read(run.TranscriptPath).Select(u =>
+                i == 0 && !beforeALiveRun ? u : u with { Id = $"{i + 1}/{u.Id}" }))];
 
     // Null, never a throw: a host killed mid-append leaves its last line stopped in the middle
     // of itself, and every completed line above it is still a sentence somebody said.
