@@ -25,6 +25,42 @@ Closing Settings no longer cancels a model download.
 - **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
   the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
   makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
+### Nemotron provider (ADR 0053, slice C-4)
+
+`NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
+resolves to it yet. Slice C-5 connects it to `PipelinePlanner`.
+
+Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 20 ms frames, as the
+capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
+took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
+voice for a test clip.
+
+Four things the ADR did not anticipate, all found by running the model:
+
+- **The model does not report the language it heard.** The language is an input (a prompt id).
+  `auto` is the id for decoding without one. So `Caps.AutoLanguageDetect` is `false`.
+  sherpa-onnx filters `<de-DE>`-style tokens out of the result. A patched build recorded the raw
+  token sequence and showed no such token in any frame. That test used `auto`, `de-DE` and `zh-CN`
+  on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
+  language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
+  `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
+  script first. Then it checks distinctive letters and stopwords among the room's Latin languages.
+  It was correct on every test sentence. A short Latin sentence with no signal falls to the room's
+  first Latin language.
+- **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
+  ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
+  second of silence when it is created. Priming again after an endpoint reset made things worse:
+  the padding counts as trailing silence and fired the next endpoint mid-sentence.
+- **Endpointing counts blank frames, not silence.** A stretch the model cannot transcribe — a
+  spoken part number — produces blanks, and with sherpa's 1.2 s rule a German sentence was cut at
+  "für K X", losing the number and the start of the rest. Rules are 2.4 s (nothing heard) and 1.6 s
+  (after speech), 20 s maximum; 1.6 s kept every test sentence whole. A final therefore lands
+  ≈1.6 s after the speaker stops, and translation starts then.
+- **Partial numbers.** On synthesised speech the model still loses digits: German "KX-4402" came
+  out as "Kx", Chinese as "KX47402". These are TTS clips, not a meeting; the stage-3 acceptance run
+  against Gladia on real speech decides whether this is good enough.
+
+Every sentence has one speaker label (`S01`) until diarization lands (#13).
 
 ### Accent themes
 
