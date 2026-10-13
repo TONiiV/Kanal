@@ -176,6 +176,32 @@ public class DeepLMtProviderTests
     }
 
     [Fact]
+    public async Task OverlappingRefusalsRaiseOnlyOneError()
+    {
+        var arrived = 0;
+        var both = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new FakeHandler(async (_, _) =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+                both.SetResult();
+            await both.Task;
+            return Json(HttpStatusCode.Forbidden, new JsonObject());
+        });
+        var provider = new DeepLMtProvider("k", new HttpClient(handler));
+
+        var calls = new[]
+        {
+            Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken),
+            Translate(provider, "zh", ["pl"], ct: TestContext.Current.CancellationToken),
+        };
+        await Task.WhenAny(Task.WhenAll(calls.Select(c => c.ContinueWith(_ => { }))))
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, calls.Count(c => c.IsFaulted));
+        Assert.Equal(1, calls.Count(c => c.IsCompletedSuccessfully && c.Result.Count == 0));
+    }
+
+    [Fact]
     public async Task AnUnavailableServiceIsRetriedOnTheNextCall()
     {
         var handler = new FakeHandler((_, _) => Task.FromResult(Json(HttpStatusCode.ServiceUnavailable, new JsonObject())));
