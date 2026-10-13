@@ -44,7 +44,7 @@ public class TranslationKeySettingsTests
     [InlineData("pl")]
     public void EveryTranslationErrorCodeHasAMessageInEveryLanguage(string code)
     {
-        foreach (var errorCode in new[] { MtProviderException.QuotaExceeded, MtProviderException.InvalidKey })
+        foreach (var errorCode in new[] { MtProviderException.QuotaExceeded, MtProviderException.InvalidKey, MtProviderException.Unavailable })
             Assert.False(string.IsNullOrWhiteSpace(Strings.Tables[code]["error." + errorCode]));
     }
 }

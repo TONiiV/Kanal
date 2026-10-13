@@ -9,7 +9,8 @@ namespace Kanal.Core.UnitTests;
 
 public class DeepLMtProviderTests
 {
-    private sealed record Seen(string Host, string? Auth, JsonNode Body);
+    private sealed record Seen(
+        string Method, string Host, string Path, string? ContentType, string? Auth, JsonNode Body);
 
     private sealed class FakeHandler(Func<Seen, CancellationToken, Task<HttpResponseMessage>>? respond = null)
         : HttpMessageHandler
@@ -19,7 +20,13 @@ public class DeepLMtProviderTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!;
-            var seen = new Seen(request.RequestUri!.Host, request.Headers.Authorization?.ToString(), body);
+            var seen = new Seen(
+                request.Method.Method,
+                request.RequestUri!.Host,
+                request.RequestUri.AbsolutePath,
+                request.Content.Headers.ContentType?.MediaType,
+                request.Headers.Authorization?.ToString(),
+                body);
             lock (Requests)
                 Requests.Add(seen);
             return await (respond ?? Echo)(seen, ct);
@@ -59,6 +66,9 @@ public class DeepLMtProviderTests
 
         var seen = Assert.Single(handler.Requests);
         Assert.Equal(host, seen.Host);
+        Assert.Equal("POST", seen.Method);
+        Assert.Equal("/v2/translate", seen.Path);
+        Assert.Equal("application/json", seen.ContentType);
         Assert.Equal($"DeepL-Auth-Key {key}", seen.Auth);
     }
 
@@ -134,7 +144,10 @@ public class DeepLMtProviderTests
     [Theory]
     [InlineData(403, MtProviderException.InvalidKey)]
     [InlineData(456, MtProviderException.QuotaExceeded)]
-    [InlineData(500, null)]
+    [InlineData(429, MtProviderException.Unavailable)]
+    [InlineData(500, MtProviderException.Unavailable)]
+    [InlineData(503, MtProviderException.Unavailable)]
+    [InlineData(400, null)]
     public async Task AFailedRequestThrowsWithTheCodeTheHostLocalises(int status, string? code)
     {
         var handler = new FakeHandler((_, _) => Task.FromResult(Json((HttpStatusCode)status, new JsonObject())));
@@ -144,6 +157,63 @@ public class DeepLMtProviderTests
             () => Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken));
 
         Assert.Equal(code, ex.Code);
+    }
+
+    [Theory]
+    [InlineData(403)]
+    [InlineData(456)]
+    public async Task ARefusedKeyOrQuotaStopsAllFurtherRequests(int status)
+    {
+        var handler = new FakeHandler((_, _) => Task.FromResult(Json((HttpStatusCode)status, new JsonObject())));
+        var provider = new DeepLMtProvider("k", new HttpClient(handler));
+
+        await Assert.ThrowsAsync<MtProviderException>(
+            () => Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken));
+        var later = await Translate(provider, "zh", ["de", "pl"], ct: TestContext.Current.CancellationToken);
+
+        Assert.Empty(later);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task AnUnavailableServiceIsRetriedOnTheNextCall()
+    {
+        var handler = new FakeHandler((_, _) => Task.FromResult(Json(HttpStatusCode.ServiceUnavailable, new JsonObject())));
+        var provider = new DeepLMtProvider("k", new HttpClient(handler));
+
+        for (var i = 0; i < 2; i++)
+            await Assert.ThrowsAsync<MtProviderException>(
+                () => Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ATimeoutIsReportedNotSwallowedAsACancellation()
+    {
+        var handler = new FakeHandler(async (_, ct) =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return null!;
+        });
+        var provider = new DeepLMtProvider("k", new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(50) });
+
+        var ex = await Assert.ThrowsAsync<MtProviderException>(
+            () => Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken));
+
+        Assert.Equal(MtProviderException.Unavailable, ex.Code);
+    }
+
+    [Fact]
+    public async Task ANetworkErrorIsReportedAsUnavailable()
+    {
+        var handler = new FakeHandler((_, _) => throw new HttpRequestException("no route"));
+        var provider = new DeepLMtProvider("k", new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<MtProviderException>(
+            () => Translate(provider, "zh", ["de"], ct: TestContext.Current.CancellationToken));
+
+        Assert.Equal(MtProviderException.Unavailable, ex.Code);
     }
 
     [Fact]
