@@ -27,6 +27,26 @@ Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
 6. A headless render of each theme in both variants shows that a checked box and the settings
    tab marker use the `Brand` of the theme.
 
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
 ### Speaker tag management
 
 Part of #110. This slice does not depend on a diarization model.
@@ -646,6 +666,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
   36 px minimum height. Before: 10 px above, 18 px below.
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
+
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
 
 ### macOS window buttons centred in the header and enlarged
 
