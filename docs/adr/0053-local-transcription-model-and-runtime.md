@@ -1,6 +1,6 @@
 # ADR 0053: Nemotron 3.5 ASR Streaming on sherpa-onnx for local transcription
 
-**Status:** Proposed  
+**Status:** Accepted — implemented 2026-10-04; deviations found on the real model are in `docs/PROGRESS.md`  
 **Date:** 2026-09-08  
 **Issues:** [#72](https://github.com/TONiiV/Kanal/issues/72), [#49](https://github.com/TONiiV/Kanal/issues/49)
 
@@ -92,8 +92,10 @@ A model that is not ready never silently changes what the meeting does — the `
 **6. Translation stays post-processing, explicitly.** `Caps.Translation` is `false` and finals flow
 to whatever `IMtProvider` the mode resolved. This is the existing capability route; the orchestrator
 does not change. The rest of `Caps` is
-`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: true`, `Latency: Near`, and a
-`Languages` set taken from the model's own prompt dictionary rather than hand-written.
+`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: false`, `Latency: Near`, and a
+`Languages` set of 33 codes. The code lists them by hand, from the model's prompt dictionary.
+The model takes the language as input and reports none, so `AutoLanguageDetect` is `false`.
+`TranscriptLanguage` reads the source language back from the text (see `docs/PROGRESS.md`).
 
 **7. Chunk size is a catalog entry, with a default.** Each chunk size ships a different encoder
 file, so a change of chunk size is a new download and not a runtime switch. The catalog has one
@@ -113,7 +115,8 @@ can return as catalog entries if a measurement asks for them.
 - The OpenMDW-1.1 licence needs a review note in the catalog and a look before any redistribution.
 - A second native dependency (`org.k2fsa.sherpa.onnx`) joins LLamaSharp, with the same
   per-platform-runtime packaging question. Windows + NVIDIA is verified first; CPU and Apple Silicon
-  are investigated and their status recorded rather than assumed.
+  are investigated and their status recorded rather than assumed. The NVIDIA path is deferred:
+  the `win-x64` runtime package ships a CPU-only ONNX Runtime, so the provider runs on CPU.
 - Language conditioning is per stream. A room whose source language is set explicitly should pass
   it; a room that is not should pass `auto`, which the model supports and which matches the
   unconstrained-recognition decision already taken for Gladia.
