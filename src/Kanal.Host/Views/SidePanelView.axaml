@@ -172,84 +172,84 @@
                     <Border Margin="0,0,20,0" Padding="0,16,0,16" BorderBrush="{DynamicResource Rule}"
                             BorderThickness="0,1,0,0">
                         <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" x:Name="NoSpeakersNote"
-                                   Text="{l:T assistant.nospeakers}" TextWrapping="Wrap"
-                                   FontSize="12.5" LineHeight="19" Foreground="{DynamicResource Ink3}"
-                                   IsVisible="{Binding ShowNoSpeakersNote}" />
-                        <ScrollViewer>
-                            <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:SpeakerItemViewModel">
-                                        <Grid ColumnDefinitions="3,*" Margin="0,0,0,18">
-                                            <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
-                                                       VerticalAlignment="Stretch" />
-                                            <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="6">
-                                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                                    <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
-                                                               LetterSpacing="1.2">
-                                                        <TextBlock.Foreground>
-                                                            <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
-                                                                <Binding Path="Color" />
-                                                                <Binding Path="$self.ActualThemeVariant" />
-                                                            </MultiBinding>
-                                                        </TextBlock.Foreground>
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
-                                                               Foreground="{DynamicResource Ink3}" />
-                                                    <TextBlock Text="{l:T speaker.count}" FontSize="10.5"
-                                                               Foreground="{DynamicResource Ink3}" />
-                                                    <TextBlock Text="{Binding UtteranceCount}" FontSize="10.5"
-                                                               Foreground="{DynamicResource Ink3}" />
+                            <TextBlock DockPanel.Dock="Top" x:Name="NoSpeakersNote"
+                                       Text="{l:T assistant.nospeakers}" TextWrapping="Wrap"
+                                       FontSize="12.5" LineHeight="19" Foreground="{DynamicResource Ink3}"
+                                       IsVisible="{Binding ShowNoSpeakersNote}" />
+                            <ScrollViewer>
+                                <ItemsControl x:Name="SpeakerList" ItemsSource="{Binding Speakers}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SpeakerItemViewModel">
+                                            <Grid ColumnDefinitions="3,*" Margin="0,0,0,18">
+                                                <Rectangle Grid.Column="0" Width="3" Fill="{Binding Color}"
+                                                           VerticalAlignment="Stretch" />
+                                                <StackPanel Grid.Column="1" Margin="11,0,0,0" Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                                        <TextBlock Text="{Binding Tag}" FontSize="10.5" FontWeight="Bold"
+                                                                   LetterSpacing="1.2">
+                                                            <TextBlock.Foreground>
+                                                                <MultiBinding Converter="{x:Static conv:SpeakerTones.Name}">
+                                                                    <Binding Path="Color" />
+                                                                    <Binding Path="$self.ActualThemeVariant" />
+                                                                </MultiBinding>
+                                                            </TextBlock.Foreground>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding MergedFromLabel}" FontSize="10.5"
+                                                                   Foreground="{DynamicResource Ink3}" />
+                                                        <TextBlock Text="{l:T speaker.count}" FontSize="10.5"
+                                                                   Foreground="{DynamicResource Ink3}" />
+                                                        <TextBlock Text="{Binding UtteranceCount}" FontSize="10.5"
+                                                                   Foreground="{DynamicResource Ink3}" />
+                                                    </StackPanel>
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
+                                                            <TextBox.KeyBindings>
+                                                                <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
+                                                            </TextBox.KeyBindings>
+                                                        </TextBox>
+                                                        <Button Grid.Column="1" Content="✓" Classes="ghost" Padding="10,5"
+                                                                Command="{Binding RenameCommand}"
+                                                                ToolTip.Tip="{l:T speaker.apply.tip}" />
+                                                    </Grid>
+                                                    <ItemsControl x:Name="SpeakerColours" ItemsSource="{Binding Colours}"
+                                                                  AutomationProperties.Name="{l:T speaker.colour}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:ColourChoice">
+                                                                <Button Classes="ghost" Padding="0" Width="26" Height="26"
+                                                                        HorizontalContentAlignment="Center"
+                                                                        VerticalContentAlignment="Center"
+                                                                        Command="{Binding PickCommand}"
+                                                                        AutomationProperties.Name="{Binding Value}">
+                                                                    <Border Classes="swatch" Classes.selected="{Binding IsSelected}"
+                                                                            Width="20" Height="20" CornerRadius="10"
+                                                                            BorderThickness="2">
+                                                                        <Ellipse Fill="{Binding Value}" Margin="2" />
+                                                                    </Border>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanMerge}">
+                                                        <ComboBox x:Name="MergeInto" ItemsSource="{Binding MergeTargets}"
+                                                                  SelectedItem="{Binding SelectedMergeTarget}"
+                                                                  PlaceholderText="{l:T merge.into}"
+                                                                  HorizontalAlignment="Stretch"
+                                                                  AutomationProperties.Name="{l:T merge.label}" />
+                                                        <Button x:Name="MergeSpeaker" Grid.Column="1" Margin="7,0,0,0"
+                                                                Content="{l:T merge.button}"
+                                                                Command="{Binding MergeCommand}" />
+                                                    </Grid>
                                                 </StackPanel>
-                                                <Grid ColumnDefinitions="*,Auto">
-                                                    <TextBox Text="{Binding Name}" PlaceholderText="{l:T speaker.placeholder}">
-                                                        <TextBox.KeyBindings>
-                                                            <KeyBinding Gesture="Enter" Command="{Binding RenameCommand}" />
-                                                        </TextBox.KeyBindings>
-                                                    </TextBox>
-                                                    <Button Grid.Column="1" Content="✓" Classes="ghost" Padding="10,5"
-                                                            Command="{Binding RenameCommand}"
-                                                            ToolTip.Tip="{l:T speaker.apply.tip}" />
-                                                </Grid>
-                                                <ItemsControl x:Name="SpeakerColours" ItemsSource="{Binding Colours}"
-                                                              AutomationProperties.Name="{l:T speaker.colour}">
-                                                    <ItemsControl.ItemsPanel>
-                                                        <ItemsPanelTemplate>
-                                                            <WrapPanel Orientation="Horizontal" />
-                                                        </ItemsPanelTemplate>
-                                                    </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate x:DataType="vm:ColourChoice">
-                                                            <Button Classes="ghost" Padding="0" Width="26" Height="26"
-                                                                    HorizontalContentAlignment="Center"
-                                                                    VerticalContentAlignment="Center"
-                                                                    Command="{Binding PickCommand}"
-                                                                    AutomationProperties.Name="{Binding Value}">
-                                                                <Border Classes="swatch" Classes.selected="{Binding IsSelected}"
-                                                                        Width="20" Height="20" CornerRadius="10"
-                                                                        BorderThickness="2">
-                                                                    <Ellipse Fill="{Binding Value}" Margin="2" />
-                                                                </Border>
-                                                            </Button>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanMerge}">
-                                                    <ComboBox x:Name="MergeInto" ItemsSource="{Binding MergeTargets}"
-                                                              SelectedItem="{Binding SelectedMergeTarget}"
-                                                              PlaceholderText="{l:T merge.into}"
-                                                              HorizontalAlignment="Stretch"
-                                                              AutomationProperties.Name="{l:T merge.label}" />
-                                                    <Button x:Name="MergeSpeaker" Grid.Column="1" Margin="7,0,0,0"
-                                                            Content="{l:T merge.button}"
-                                                            Command="{Binding MergeCommand}" />
-                                                </Grid>
-                                            </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
                         </DockPanel>
                     </Border>
                 </TabItem>
