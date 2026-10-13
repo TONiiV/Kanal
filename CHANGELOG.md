@@ -14,6 +14,7 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The preview card of the ruler no longer has a dark bar on its right edge.
 - Right-click a transcript line and choose Pin to Points. The line shows in the Points tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to
   unpin it. Pinned points are not saved with the meeting record yet.
