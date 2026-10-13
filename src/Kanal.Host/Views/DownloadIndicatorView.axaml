@@ -16,9 +16,6 @@
             <Setter Property="Background" Value="{DynamicResource Sheet}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
         </Style>
-        <Style Selector="Border.dl:pointerover.bare TextBlock.info, Border.dl:focus-within.bare TextBlock.info">
-            <Setter Property="IsVisible" Value="False" />
-        </Style>
         <Style Selector="Border.dl TextBlock.info">
             <Setter Property="IsVisible" Value="False" />
             <Setter Property="Margin" Value="12,0,6,0" />
@@ -79,6 +76,9 @@
         </Style>
         <Style Selector="Border.dl:pointerover Button.cancel, Border.dl:focus-within Button.cancel">
             <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Border.dl:pointerover.bare TextBlock.info, Border.dl:focus-within.bare TextBlock.info">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
     </UserControl.Styles>
 
