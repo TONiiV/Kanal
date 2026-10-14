@@ -196,6 +196,28 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
+    public void TheTickUnderThePointerIsAtLeastFortyDipLong()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Assert.True(ruler.Ticks[4].Reach >= 40, $"the tick under the pointer is only {ruler.Ticks[4].Reach:F1} DIP long");
+    }
+
+    [AvaloniaFact]
+    public void ThePeakIsSharperThanAGaussianAndTheTailHeavier()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        double Rise(int index) => ruler.Ticks[index].Reach - TranscriptRulerViewModel.RestReach;
+        Assert.True(Rise(5) < 0.70 * Rise(4), $"the next tick keeps {Rise(5) / Rise(4):P0} of the rise; a Gaussian keeps 78%");
+        Assert.True(Rise(8) > 0.05 * Rise(4), $"four ticks away only {Rise(8) / Rise(4):P1} of the rise is left; a Gaussian leaves 1.8%");
+    }
+
+    [AvaloniaFact]
     public void APointerBetweenTwoTicksRaisesBothAlike()
     {
         var ruler = NineTicks();
@@ -225,7 +247,7 @@ public class TranscriptRulerTests
         Assert.True(reach[0] < reach[1] && reach[1] < reach[2] && reach[2] < reach[3] && reach[3] < reach[4]);
         Assert.True(reach[4] > reach[5] && reach[5] > reach[6] && reach[6] > reach[7] && reach[7] > reach[8]);
         Assert.All(reach.Zip(reach.Skip(1)), pair =>
-            Assert.True(Math.Abs(pair.Second - pair.First) < 2.5, "a quarter pitch of travel must not jump a tick"));
+            Assert.True(Math.Abs(pair.Second - pair.First) < 3.5, "a quarter pitch of travel must not jump a tick"));
     }
 
     [AvaloniaFact]
