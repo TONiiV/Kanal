@@ -360,7 +360,7 @@
                 <Path Classes="glyph" Data="{c:Icon chevron-up}" />
             </Button>
             <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                          VerticalAlignment="Stretch"
+                          VerticalAlignment="Stretch" Background="Transparent"
                           PointerMoved="OnRulerMoved" PointerExited="OnRulerExited"
                           UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                           AutomationProperties.Name="{l:T ruler.name}">
@@ -375,14 +375,8 @@
                                        Height="{x:Static vm:TranscriptRulerViewModel.PeakThickness}"
                                        Opacity="{Binding Glow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}">
-                                <Rectangle.RenderTransform>
-                                    <MultiBinding Converter="{x:Static conv:TickScale.Of}">
-                                        <Binding Path="Reach" />
-                                        <Binding Path="Thickness" />
-                                    </MultiBinding>
-                                </Rectangle.RenderTransform>
-                            </Rectangle>
+                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}"
+                                       RenderTransform="{Binding Shape, Converter={x:Static conv:TickScale.Of}}" />
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

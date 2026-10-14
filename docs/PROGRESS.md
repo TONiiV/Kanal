@@ -13,20 +13,26 @@ animation, and all ticks had the same thickness and brightness.
 
 - **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
   strip. Each tick gets a weight from a bell curve (`exp(-(d/18)^2)`, `d` in DIP) of its distance to
-  the pointer. The weight is 1 at the pointer and falls smoothly. A tick farther than 3 spreads is 0.
+  the pointer. The weight is 1 at the pointer and falls smoothly. A tick farther than 54 DIP (3 times
+  the spread of 18) has weight 0.
   The tick under the pointer is no longer decided by the hovered row, so the curve moves between two
   ticks without a jump. `Hover(tick)` now only drives the preview card.
 - **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
-  from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9. Peak:
+  from the resting value to the peak by the weight. `Reach` and `Thickness` travel in one value,
+  `TickShape`, so one pointer move restarts one transform transition for each tick. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9. Peak:
   28, 3.5, 1. A tick on screen is never weaker than its on-screen value.
 - **Animation in the view.** A tick is a fixed 28 x 3.5 rectangle. Its length and thickness are a scale
   transform (`TickScale`) from `Reach` and `Thickness`, so an animation never starts a layout pass. The
   transform and the opacity have a 140 ms `CubicEaseOut` transition. A pointer that moves fast makes
   each new target restart the transition, so the motion stays smooth. The view sends the pointer
   position (`PointerMoved`) and the exit (`PointerExited`).
-- **Contrast trade-off.** The operator asked for dim resting ticks. A resting tick has 1.8–2.3:1
-  contrast, below the 3:1 of `ui-design.md`. The design document now records this as the one
-  exception. On-screen ticks reach 2.8–4.1:1 and the tick under the pointer 3.2:1 or more.
+- **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet. There
+  a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design document now
+  records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick under the pointer
+  3.5:1 or more.
+- **Known limit.** The ruler that is not shown keeps its last pointer position. This matters only if
+  the shown ruler switches by keyboard while the pointer rests on the strip. The next pointer move
+  or leave corrects it.
 - **Tests.** `TranscriptRulerTests` (resting values, peak at the pointer, symmetric fall-off, no jump
   between ticks, far ticks at rest, leave, on-screen floor, resize) and `ColumnScrollWiringTests`
   (the pointer in the real view raises and releases the ticks).

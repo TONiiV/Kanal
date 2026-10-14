@@ -50,16 +50,20 @@ public partial class RulerTickViewModel : ViewModelBase
     private bool _isInView;
 
     [ObservableProperty]
-    private double _reach = TranscriptRulerViewModel.RestReach;
-
-    [ObservableProperty]
-    private double _thickness = TranscriptRulerViewModel.RestThickness;
+    [NotifyPropertyChangedFor(nameof(Reach), nameof(Thickness))]
+    private TickShape _shape = new(TranscriptRulerViewModel.RestReach, TranscriptRulerViewModel.RestThickness);
 
     [ObservableProperty]
     private double _glow = TranscriptRulerViewModel.RestGlow;
 
+    public double Reach => Shape.Reach;
+
+    public double Thickness => Shape.Thickness;
+
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
+
+public readonly record struct TickShape(double Reach, double Thickness);
 
 public sealed partial class TranscriptRulerViewModel : ViewModelBase
 {
@@ -268,8 +272,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             var tick = Ticks[i];
             var onScreen = tick.IsInView;
             var focus = _pointerY is { } y ? Focus(i * tick.Pitch + tick.Pitch / 2 - y) : 0;
-            tick.Reach = Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus);
-            tick.Thickness = Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus);
+            tick.Shape = new TickShape(
+                Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus),
+                Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus));
             tick.Glow = Lerp(onScreen ? InViewGlow : RestGlow, 1, focus);
         }
     }

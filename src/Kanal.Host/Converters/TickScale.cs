@@ -1,8 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
+using Avalonia.Data;
 using Avalonia.Data.Converters;
-using Avalonia.Media;
 using Avalonia.Media.Transformation;
 using Kanal.Host.ViewModels;
 
@@ -10,18 +9,21 @@ namespace Kanal.Host.Converters;
 
 public static class TickScale
 {
-    public static readonly IMultiValueConverter Of = new Scale();
+    public static readonly IValueConverter Of = new Scale();
 
-    private sealed class Scale : IMultiValueConverter
+    private sealed class Scale : IValueConverter
     {
-        public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (values is not [double reach, double thickness])
-                return null;
+            if (value is not TickShape shape)
+                return BindingOperations.DoNothing;
 
             var builder = TransformOperations.CreateBuilder(1);
-            builder.AppendScale(reach / TranscriptRulerViewModel.PeakReach, thickness / TranscriptRulerViewModel.PeakThickness);
+            builder.AppendScale(shape.Reach / TranscriptRulerViewModel.PeakReach, shape.Thickness / TranscriptRulerViewModel.PeakThickness);
             return builder.Build();
         }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            BindingOperations.DoNothing;
     }
 }
