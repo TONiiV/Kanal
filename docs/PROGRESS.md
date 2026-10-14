@@ -12,10 +12,10 @@ Issue #273. The first version of the hover effect had 5 steps around the hovered
 animation, and all ticks had the same thickness and brightness.
 
 - **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
-  strip. Each tick gets a weight from a bell curve (`exp(-(d/18)^2)`, `d` in DIP) of its distance to
-  the pointer. The weight is 1 at the pointer and falls smoothly. A tick more than 3 spreads away has
-  weight 0. The hovered row no longer decides the tick under the pointer, so the curve moves between
-  two ticks without a jump. `Hover(tick)` now only drives the preview card.
+  strip. Each tick gets a weight from a bell curve (`exp(-(d/18)^2)`, `d` in DIP) of its distance
+  to the pointer. The weight is 1 at the pointer and falls smoothly. A tick more than 3 spreads
+  away has weight 0. The hovered row no longer decides the tick under the pointer, so the curve
+  moves between two ticks without a jump. `Hover(tick)` now only drives the preview card.
 - **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
   from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
   Peak: 28, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and
@@ -50,7 +50,8 @@ animation, and all ticks had the same thickness and brightness.
 - **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
   symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
   resize, one notification for each tick, the skew in both directions, a slow move, the settling,
-  the reset, and the drawn values (grow, shrink, settle, leave, a fast move). `ColumnScrollWiringTests` cover the pointer in the real view.
+  the reset, and the drawn values (grow, shrink, settle, leave, a fast move).
+  `ColumnScrollWiringTests` cover the pointer in the real view.
 
 ### Cloud translation with DeepL (ADR 0060)
 
