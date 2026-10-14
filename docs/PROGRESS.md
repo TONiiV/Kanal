@@ -140,6 +140,8 @@ A Settings model row that downloads shows the same ring as the status bar.
   `settings.model.downloading` strings.
 - **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
   message, the row ring has the tray icon and cancels the row.
+- **Centred glyph.** The ring grid sets `UseLayoutRounding="False"`. At 150% scale, layout rounding moved
+  the glyph 1 px up and left of the ring centre. Pixel position has no test; the fix is checked by eye.
 
 ### Download indicator in the status bar
 
