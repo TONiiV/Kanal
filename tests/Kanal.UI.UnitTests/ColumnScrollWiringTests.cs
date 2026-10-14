@@ -310,4 +310,56 @@ public class ColumnScrollWiringTests
             Assert.Equal(TranscriptRulerViewModel.RestReach, t.Reach));
         window.Close();
     }
+
+    private static void Frames(Window window, Func<bool> done)
+    {
+        for (var i = 0; i < 200 && !done(); i++)
+        {
+            Thread.Sleep(16);
+            Dispatcher.UIThread.RunJobs();
+            Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            window.UpdateLayout();
+        }
+    }
+
+    private static double DrawnLength(Avalonia.Controls.Shapes.Rectangle tick) =>
+        tick.RenderTransform is Avalonia.Media.Transformation.TransformOperations { Operations.Count: > 0 } ops
+            ? ops.Operations[0].Data.Scale.X * TranscriptRulerViewModel.TickWidth
+            : double.NaN;
+
+    [AvaloniaFact]
+    public void ThePointerDrawsTheRulerThroughAnimationFramesAndTheFramesStopWhenItIsDrawn()
+    {
+        var (window, vm, _) = ShownWithRuler();
+        var room = window.GetLogicalDescendants().OfType<MeetingRoomView>().Single();
+        var tick = window.GetVisualDescendants().OfType<Rectangle>().Where(r => r.Classes.Contains("tick")).ElementAt(60);
+        var pitch = vm.Ruler.Ticks[0].Pitch;
+
+        room.MoveRulerPointer(60 * pitch + pitch / 2);
+        Assert.True(vm.Ruler.IsSettling);
+        Frames(window, () => !vm.Ruler.IsSettling);
+
+        Assert.False(vm.Ruler.IsSettling);
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, vm.Ruler.Ticks[60].DrawnShape.Reach, 3);
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, DrawnLength(tick), 2);
+
+        room.MoveRulerPointer(null);
+        Frames(window, () => !vm.Ruler.IsSettling);
+
+        Assert.Equal(TranscriptRulerViewModel.RestReach, DrawnLength(tick), 2);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void NothingBetweenATickAndTheRoomClipsATickThatIsLongerThanItsColumn()
+    {
+        var (window, _, _) = ShownWithRuler();
+        var tick = window.GetVisualDescendants().OfType<Rectangle>().First(r => r.Classes.Contains("tick"));
+
+        var clipping = tick.GetVisualAncestors().TakeWhile(a => a is not MeetingRoomView)
+            .OfType<Visual>().Where(v => v.ClipToBounds).Select(v => v.GetType().Name).ToList();
+
+        Assert.True(clipping.Count == 0, "these ancestors clip: " + string.Join(", ", clipping));
+        window.Close();
+    }
 }

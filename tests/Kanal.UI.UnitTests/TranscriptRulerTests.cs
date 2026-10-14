@@ -582,6 +582,77 @@ public class TranscriptRulerTests
     }
 
     [AvaloniaFact]
+    public void ANewSentenceWhileTheBumpIsMovingDoesNotMakeItJump()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Frames(ruler, time, 1);
+        var drawn = ruler.Ticks[4].DrawnShape.Reach;
+        Assert.True(drawn > TranscriptRulerViewModel.RestReach && drawn < TranscriptRulerViewModel.PeakReach);
+
+        ruler.Observe(Said("u10", "s1", "line 10"));
+
+        Assert.Equal(drawn, ruler.Ticks[4].DrawnShape.Reach);
+        Assert.True(ruler.IsSettling);
+    }
+
+    [AvaloniaFact]
+    public void AChangeOfWhatIsOnScreenWhileTheBumpIsMovingSnapsOnlyTheTicksThatChanged()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Frames(ruler, time, 1);
+        var drawn = ruler.Ticks[4].DrawnShape.Reach;
+
+        ruler.SetVisible(["u9"]);
+
+        Assert.Equal(drawn, ruler.Ticks[4].DrawnShape.Reach);
+        Assert.Equal(TranscriptRulerViewModel.InViewReach, ruler.Ticks[9].DrawnShape.Reach);
+    }
+
+    [AvaloniaFact]
+    public void TheRulerAsksForAFrameWheneverSomethingNeedsDrawing()
+    {
+        var (ruler, _) = RulerWithTenTicks();
+        var asked = 0;
+        ruler.NeedsFrame += () => asked++;
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Assert.True(asked > 0, "a pointer move must ask for a frame");
+
+        asked = 0;
+        ruler.SetVisible(["u9"]);
+        Assert.True(asked > 0, "a change under a bump that is still drawing must ask for a frame");
+    }
+
+    [AvaloniaFact]
+    public void TheTimeBetweenFramesDoesNotChangeTheSpeedTheRulerReads()
+    {
+        (double Behind, double Ahead) Drive(bool framesBetweenEvents)
+        {
+            var time = new ManualTime();
+            var ruler = TwentyOneTicks(Ruler(time), (id, i) => Said(id, "s1", $"line {i}"));
+            var y = CentreOf(ruler, 2);
+            ruler.PointerAt(y);
+            for (var step = 0; step < 40; step++)
+            {
+                time.Advance(TimeSpan.FromMilliseconds(8));
+                y += 1.2;
+                ruler.PointerAt(y);
+                if (framesBetweenEvents && step % 2 == 1)
+                    ruler.Relax();
+            }
+
+            return TwoTicksFromThePointer(ruler, 1);
+        }
+
+        var quiet = Drive(framesBetweenEvents: false);
+        var busy = Drive(framesBetweenEvents: true);
+
+        Assert.Equal(quiet.Behind - quiet.Ahead, busy.Behind - busy.Ahead, 0.75);
+    }
+
+    [AvaloniaFact]
     public void TheUpArrowPagesToTheLastSentenceAboveTheScreen()
     {
         var ruler = Ruler();
