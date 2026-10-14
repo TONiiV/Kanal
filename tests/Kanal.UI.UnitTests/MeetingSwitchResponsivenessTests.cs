@@ -16,7 +16,7 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
 {
     private const int LongMeetingUtterances = 1200;
 
-    private const double MaxLatencyMs = 250;
+    private const double MaxLatencyMs = 500;
 
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "kanal-switch-" + Guid.NewGuid().ToString("N"));

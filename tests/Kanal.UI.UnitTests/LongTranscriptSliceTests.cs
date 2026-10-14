@@ -137,7 +137,7 @@ public class LongTranscriptSliceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void AnOldMeetingIsHiddenAtOnceAndTakenOutInSlices()
+    public void AnOldMeetingIsTakenOutInSlices()
     {
         var (store, first, second) = TwoLongMeetings();
         var yields = new HeldYields();
@@ -149,7 +149,7 @@ public class LongTranscriptSliceTests : IDisposable
         Open(vm, second);
 
         Assert.True(vm.IsLoadingRecord);
-        Assert.All(old, column => Assert.False(column.IsShown));
+        Assert.All(old, column => Assert.True(column.IsShown));
         Assert.All(old, column => Assert.InRange(column.Bubbles.Count, 1, Rows - 1));
         Assert.Equal(old, vm.ShownColumns);
 

@@ -1000,14 +1000,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const int MaxRetireRows = 150;
 
     // Taking thousands of controls out of the window at once is as long a stop as putting them in.
-    // The old columns are hidden first, so nothing is laid out, and then emptied in slices.
+    // The old columns are emptied in slices instead. Hiding them first costs as much as it saves:
+    // IsVisible is passed down to every control inside.
     private async Task<bool> RetireStoredAsync(int version)
     {
         if (_stored.Count == 0 || _yieldToUi is null)
             return true;
-
-        foreach (var column in _stored)
-            column.IsShown = false;
 
         var rows = FirstRetireRows;
         var cycle = System.Diagnostics.Stopwatch.StartNew();
