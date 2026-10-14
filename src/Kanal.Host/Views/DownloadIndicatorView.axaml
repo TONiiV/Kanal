@@ -87,7 +87,9 @@
             Classes.bare="{Binding Bare, RelativeSource={RelativeSource AncestorType=views:DownloadIndicatorView}}">
         <StackPanel Orientation="Horizontal">
             <TextBlock Classes="info" Text="{Binding Summary}" MaxWidth="420" TextTrimming="CharacterEllipsis" />
-            <Grid Width="26" Height="26" VerticalAlignment="Center">
+            <!-- No layout rounding: at 150% scale the ring offset (1.5 px) rounds up and the glyph
+                 offset (10.5 px) rounds down, which moves the glyph 1 px off the ring centre. -->
+            <Grid Width="26" Height="26" VerticalAlignment="Center" UseLayoutRounding="False">
                 <Ellipse Classes="track" Width="24" Height="24" StrokeThickness="2.5" />
                 <Arc Classes="bar" Width="24" Height="24" StrokeThickness="2.5" StartAngle="-90"
                      SweepAngle="{Binding RingSweep}" StrokeLineCap="Round" />

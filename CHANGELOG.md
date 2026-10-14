@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
+  1 pixel up and left of the centre on screens with 150% scaling.
 - The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
   Settings, in the Translation tab. Kanal sends only text to the translation service, never audio.
   If the quota is used up or the key is wrong, the status line says so once and translation stops
