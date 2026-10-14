@@ -964,10 +964,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private async void RefreshBody()
     {
         var version = ++_bodyVersion;
-        _stored.Clear();
-        BrowsedRuler.Clear();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
         IsLoadingRecord = record is not null;
+        if (!await RetireStoredAsync(version))
+            return;
+
+        _stored.Clear();
+        BrowsedRuler.Clear();
         NotifyBody();
         if (record is null)
             return;
@@ -991,6 +994,39 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         NotifyBody();
 
         await FillBodyAsync(version, columns, pending, utterances);
+    }
+
+    private const int FirstRetireRows = 20;
+    private const int MaxRetireRows = 400;
+
+    // Taking thousands of controls out of the window at once is as long a stop as putting them in.
+    // The old columns are hidden first, so nothing is laid out, and then emptied in slices.
+    private async Task<bool> RetireStoredAsync(int version)
+    {
+        if (_stored.Count == 0 || _yieldToUi is null)
+            return true;
+
+        foreach (var column in _stored)
+            column.IsShown = false;
+
+        var rows = FirstRetireRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        while (_stored.Any(column => column.Bubbles.Count > 0))
+        {
+            foreach (var column in _stored)
+                for (var n = Math.Min(rows, column.Bubbles.Count); n > 0; n--)
+                    column.Bubbles.RemoveAt(column.Bubbles.Count - 1);
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return false;
+
+            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            cycle.Restart();
+            rows = Math.Clamp((int)(rows * SliceCycleMs / took), 1, MaxRetireRows);
+        }
+
+        return true;
     }
 
     public static Task YieldToInput() =>

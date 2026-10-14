@@ -74,4 +74,24 @@ public class RealViewCostDiagnostics(ITestOutputHelper output)
         Run("only 'Microsoft YaHei', Chinese text", (w, _, _) => w.FontFamily = new Avalonia.Media.FontFamily("Microsoft YaHei"));
         Run("no view-level styles, Chinese text", (_, room, _) => room.Styles.Clear());
     }
+
+    [AvaloniaFact]
+    public void WhichOfTheDeclaredFontsDoesThisMachineReallyHave()
+    {
+        var current = (Avalonia.Media.FontFamily)Avalonia.Application.Current!.Resources["Sans"]!;
+        Report($"METRIC fonts  stack in use: {string.Join(" | ", current.FamilyNames)}");
+        var systemNames = Avalonia.Media.FontManager.Current.SystemFonts.Select(f => f.Name).ToList();
+        Report($"METRIC fonts  system families: {systemNames.Count}, first: {string.Join(" | ", systemNames.Take(12))}");
+        foreach (var name in new[]
+                 {
+                     "Helvetica Neue", "Helvetica", "Segoe UI Variable Text", "Segoe UI", "Arial",
+                     "Microsoft YaHei", "PingFang SC", "No Such Font Family",
+                 })
+        {
+            var found = Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(
+                new Avalonia.Media.Typeface(name), out var glyphs);
+            var listed = systemNames.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+            Report($"METRIC fonts  {name,-24} tryGet={found,-5} gives='{glyphs?.FamilyName}' listed={listed}");
+        }
+    }
 }
