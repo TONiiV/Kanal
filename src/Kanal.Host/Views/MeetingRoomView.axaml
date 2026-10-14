@@ -352,7 +352,7 @@
                 <Path Classes="glyph" Data="{c:Icon chevron-up}" />
             </Button>
             <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                          VerticalAlignment="Stretch" Background="Transparent"
+                          VerticalAlignment="Stretch" Background="Transparent" ClipToBounds="False"
                           PointerMoved="OnRulerMoved" PointerExited="OnRulerExited"
                           UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                           AutomationProperties.Name="{l:T ruler.name}">
@@ -363,8 +363,8 @@
                                 PointerPressed="OnTickPressed"
                                 AutomationProperties.Name="{Binding AccessibleName}">
                             <Rectangle Classes="tick"
-                                       Width="{x:Static vm:TranscriptRulerViewModel.PeakReach}"
-                                       Height="{x:Static vm:TranscriptRulerViewModel.PeakThickness}"
+                                       Width="{x:Static vm:TranscriptRulerViewModel.TickWidth}"
+                                       Height="{x:Static vm:TranscriptRulerViewModel.TickHeight}"
                                        Opacity="{Binding DrawnGlow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" Fill="{Binding SpeakerColor}"

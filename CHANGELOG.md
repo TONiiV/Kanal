@@ -29,7 +29,7 @@ The first release. Everything below is what Kanal does on the day it ships.
   and thicker. The ticks follow the pointer smoothly, like the macOS Dock. The tick under the pointer
   grows longest, thickest and brightest, and the ticks around it grow less and less. When the pointer
   moves up or down, the swell trails behind it. When the pointer stops, the swell settles to an even
-  bell shape. The ticks at rest are thin and dim. The arrows above and below the ruler show the
+  shape. The ticks at rest are thin and dim. The arrows above and below the ruler show the
   previous or the next page of the transcript.
 - The preview card of the ruler no longer has a dark bar on its right edge.
 - Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its

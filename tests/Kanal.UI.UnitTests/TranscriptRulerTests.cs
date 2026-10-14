@@ -600,13 +600,14 @@ public class TranscriptRulerTests
     public void AChangeOfWhatIsOnScreenWhileTheBumpIsMovingSnapsOnlyTheTicksThatChanged()
     {
         var (ruler, time) = RulerWithTenTicks();
-        ruler.PointerAt(CentreOf(ruler, 4));
+        ruler.PointerAt(CentreOf(ruler, 0));
         Frames(ruler, time, 1);
-        var drawn = ruler.Ticks[4].DrawnShape.Reach;
+        var drawn = ruler.Ticks[0].DrawnShape.Reach;
+        Assert.True(drawn > TranscriptRulerViewModel.RestReach && drawn < TranscriptRulerViewModel.PeakReach);
 
         ruler.SetVisible(["u9"]);
 
-        Assert.Equal(drawn, ruler.Ticks[4].DrawnShape.Reach);
+        Assert.Equal(drawn, ruler.Ticks[0].DrawnShape.Reach);
         Assert.Equal(TranscriptRulerViewModel.InViewReach, ruler.Ticks[9].DrawnShape.Reach);
     }
 
@@ -636,11 +637,12 @@ public class TranscriptRulerTests
             ruler.PointerAt(y);
             for (var step = 0; step < 40; step++)
             {
-                time.Advance(TimeSpan.FromMilliseconds(8));
+                time.Advance(TimeSpan.FromMilliseconds(4));
+                if (framesBetweenEvents)
+                    ruler.Relax();
+                time.Advance(TimeSpan.FromMilliseconds(4));
                 y += 1.2;
                 ruler.PointerAt(y);
-                if (framesBetweenEvents && step % 2 == 1)
-                    ruler.Relax();
             }
 
             return TwoTicksFromThePointer(ruler, 1);

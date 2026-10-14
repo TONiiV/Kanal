@@ -20,15 +20,13 @@ public partial class MeetingRoomView : UserControl
 
     private readonly ColumnScrollSync _scroll = new();
     private readonly List<ScrollViewer> _columnScrollers = [];
-    private readonly DispatcherTimer _relax;
+    private bool _framePending;
     private MainViewModel? _bound;
     private double _rulerHeight;
 
     public MeetingRoomView()
     {
         InitializeComponent();
-        _relax = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnRelaxTick);
-        _relax.Stop();
         _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.OffersJump;
         ((MenuFlyout)Resources["UtteranceMenu"]!).Opening += OnUtteranceMenuOpening;
     }
@@ -56,6 +54,8 @@ public partial class MeetingRoomView : UserControl
             _bound.BrowsedRuler.JumpRequested -= ScrollTo;
             _bound.Ruler.PageRequested -= ScrollPage;
             _bound.BrowsedRuler.PageRequested -= ScrollPage;
+            _bound.Ruler.NeedsFrame -= RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame -= RequestRulerFrame;
             _bound.Sidebar.PropertyChanged -= OnSelectedMeetingChanged;
         }
 
@@ -66,6 +66,8 @@ public partial class MeetingRoomView : UserControl
             _bound.BrowsedRuler.JumpRequested += ScrollTo;
             _bound.Ruler.PageRequested += ScrollPage;
             _bound.BrowsedRuler.PageRequested += ScrollPage;
+            _bound.Ruler.NeedsFrame += RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame += RequestRulerFrame;
             _bound.Sidebar.PropertyChanged += OnSelectedMeetingChanged;
             ApplyRulerHeight();
         }
@@ -120,17 +122,25 @@ public partial class MeetingRoomView : UserControl
             return;
 
         vm.ShownRuler.PointerAt(y);
-        _relax.Start();
     }
 
-    private void OnRelaxTick(object? sender, EventArgs e)
+    private void RequestRulerFrame()
     {
-        if (DataContext is not MainViewModel vm)
+        if (_framePending || TopLevel.GetTopLevel(this) is not { } top)
             return;
 
-        vm.ShownRuler.Relax();
-        if (!vm.ShownRuler.IsSettling)
-            _relax.Stop();
+        _framePending = true;
+        top.RequestAnimationFrame(_ =>
+        {
+            _framePending = false;
+            if (DataContext is not MainViewModel vm)
+                return;
+
+            vm.Ruler.Relax();
+            vm.BrowsedRuler.Relax();
+            if (vm.Ruler.IsSettling || vm.BrowsedRuler.IsSettling)
+                RequestRulerFrame();
+        });
     }
 
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)

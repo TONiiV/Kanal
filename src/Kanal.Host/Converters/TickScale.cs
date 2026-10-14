@@ -19,7 +19,7 @@ public static class TickScale
                 return BindingOperations.DoNothing;
 
             var builder = TransformOperations.CreateBuilder(1);
-            builder.AppendScale(shape.Reach / TranscriptRulerViewModel.PeakReach, shape.Thickness / TranscriptRulerViewModel.PeakThickness);
+            builder.AppendScale(shape.Reach / TranscriptRulerViewModel.TickWidth, shape.Thickness / TranscriptRulerViewModel.TickHeight);
             return builder.Build();
         }
 

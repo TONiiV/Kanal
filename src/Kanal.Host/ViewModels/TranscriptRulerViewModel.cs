@@ -62,6 +62,8 @@ public partial class RulerTickViewModel : ViewModelBase
     [ObservableProperty]
     private double _drawnGlow = TranscriptRulerViewModel.RestGlow;
 
+    internal bool DrawnInView { get; set; }
+
     public double Reach => Shape.Reach;
 
     public double Thickness => Shape.Thickness;
@@ -78,7 +80,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double CardHeight = 96;
     public const double RestReach = 10;
     public const double InViewReach = 16;
-    public const double PeakReach = 28;
+    public const double PeakReach = 40;
+    public const double TickWidth = 28;
+    public const double TickHeight = 3.5;
     public const double RestThickness = 1;
     public const double InViewThickness = 2;
     public const double PeakThickness = 3.5;
@@ -86,12 +90,14 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double InViewGlow = 0.9;
 
     private const double FocusSpread = 18;
+    private const double FocusShape = 1.3;
     private const double SkewSpeed = 350;
     private const double SkewTime = 0.09;
     private const double SkewFloor = 0.005;
     private const double LeadShrink = 0.4;
     private const double TrailGrow = 1.4;
     private const double MinStep = 0.001;
+    private const double StillAfter = 0.05;
     private const double DrawAttack = 0.015;
     private const double DrawRelease = 0.06;
     private const double DrawStepCap = 0.1;
@@ -106,7 +112,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private readonly TimeProvider _time;
     private double? _pointerY;
     private double? _lastY;
-    private long _lastStamp;
+    private long _moveStamp;
+    private long _skewStamp;
     private long _stepStamp;
     private int _unsettled;
     private double _skew;
@@ -142,6 +149,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public event Action<string>? JumpRequested;
 
     public event Action<string, PageDirection>? PageRequested;
+
+    public event Action? NeedsFrame;
 
     public bool CanPageUp => _pageUpTarget >= 0;
 
@@ -210,17 +219,18 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         }
         else if (_lastY is { } last)
         {
-            var seconds = Elapsed();
+            var seconds = Seconds(_moveStamp);
             if (seconds >= MinStep)
             {
-                Follow((y.Value - last) / seconds / SkewSpeed, seconds);
+                Follow((y.Value - last) / seconds / SkewSpeed);
                 _lastY = y;
+                _moveStamp = _time.GetTimestamp();
             }
         }
         else
         {
             _lastY = y;
-            _lastStamp = _time.GetTimestamp();
+            _moveStamp = _skewStamp = _time.GetTimestamp();
         }
 
         Magnify();
@@ -228,9 +238,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     public void Relax()
     {
-        if (_pointerY is not null && IsSkewed)
+        if (_pointerY is not null && IsSkewed && Seconds(_moveStamp) > StillAfter)
         {
-            Follow(0, Elapsed());
+            Follow(0);
             Magnify();
         }
 
@@ -269,14 +279,15 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _unsettled = unsettled;
     }
 
-    private double Elapsed() => (_time.GetTimestamp() - _lastStamp) / (double)_time.TimestampFrequency;
+    private double Seconds(long since) => (_time.GetTimestamp() - since) / (double)_time.TimestampFrequency;
 
-    private void Follow(double target, double seconds)
+    private void Follow(double target)
     {
+        var seconds = Seconds(_skewStamp);
         _skew += (Math.Clamp(target, -1, 1) - _skew) * (1 - Math.Exp(-seconds / SkewTime));
         if (!IsSkewed)
             _skew = 0;
-        _lastStamp = _time.GetTimestamp();
+        _skewStamp = _time.GetTimestamp();
     }
 
     public void Hover(RulerTickViewModel? tick)
@@ -327,7 +338,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         foreach (var tick in Ticks)
             tick.Pitch = pitch;
         TrackLength = pitch * Ticks.Count;
-        Magnify(snap: true);
+        Magnify();
     }
 
     private void MarkInView()
@@ -366,14 +377,14 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _pageUpTarget = up >= 0 ? up : -1;
         _pageDownTarget = down >= 0 && down < Ticks.Count ? down : -1;
 
-        Magnify(snap: true);
+        Magnify();
         OnPropertyChanged(nameof(CanPageUp));
         OnPropertyChanged(nameof(CanPageDown));
         PageUpCommand.NotifyCanExecuteChanged();
         PageDownCommand.NotifyCanExecuteChanged();
     }
 
-    private void Magnify(bool snap = false)
+    private void Magnify()
     {
         var unsettled = 0;
         for (var i = 0; i < Ticks.Count; i++)
@@ -385,8 +396,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
                 Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus),
                 Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus));
             tick.Glow = Lerp(onScreen ? InViewGlow : RestGlow, 1, focus);
-            if (snap)
+            if (onScreen != tick.DrawnInView)
             {
+                tick.DrawnInView = onScreen;
                 tick.DrawnShape = tick.Shape;
                 tick.DrawnGlow = tick.Glow;
             }
@@ -396,17 +408,19 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
             }
         }
 
-        if (!snap && _unsettled == 0 && unsettled > 0)
+        if (_unsettled == 0 && unsettled > 0)
             _stepStamp = _time.GetTimestamp();
         _unsettled = unsettled;
+        if (IsSettling)
+            NeedsFrame?.Invoke();
     }
 
     private double Focus(double distance)
     {
         var ahead = distance * Math.Sign(_skew) > 0;
         var spread = FocusSpread * (ahead ? 1 - LeadShrink * Math.Abs(_skew) : 1 + TrailGrow * Math.Abs(_skew));
-        var d = distance / spread;
-        return Math.Abs(d) > 3 ? 0 : Math.Exp(-d * d);
+        var d = Math.Abs(distance) / spread;
+        return d > 4 ? 0 : Math.Exp(-Math.Pow(d, FocusShape));
     }
 
     private static double Lerp(double from, double to, double amount) => from + (to - from) * amount;
