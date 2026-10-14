@@ -996,8 +996,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await FillBodyAsync(version, columns, pending, utterances);
     }
 
-    private const int FirstRetireRows = 20;
-    private const int MaxRetireRows = 400;
+    private const int FirstRetireRows = 10;
+    private const int MaxRetireRows = 150;
 
     // Taking thousands of controls out of the window at once is as long a stop as putting them in.
     // The old columns are hidden first, so nothing is laid out, and then emptied in slices.
@@ -1023,7 +1023,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
             cycle.Restart();
-            rows = Math.Clamp((int)(rows * SliceCycleMs / took), 1, MaxRetireRows);
+            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxRetireRows);
         }
 
         return true;
@@ -1063,7 +1063,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
             cycle.Restart();
-            rows = Math.Clamp((int)(rows * SliceCycleMs / took), 1, MaxSliceRows);
+            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxSliceRows);
         }
 
         BrowsedRuler.Release();

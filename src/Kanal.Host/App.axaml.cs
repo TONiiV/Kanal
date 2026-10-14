@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -19,9 +18,6 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (Resources.TryGetValue("Sans", out var declared) && declared is FontFamily sans)
-            Resources["Sans"] = FontStack.Resolve(sans);
-
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Before the first window, so nothing is built in one language or scheme and shown in another.
