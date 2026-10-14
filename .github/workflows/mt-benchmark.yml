@@ -23,6 +23,9 @@ jobs:
   benchmark:
     runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
     env:
       STREAMS: ${{ inputs.streams || '1' }}
       KANAL_ACCELERATOR: ${{ (inputs.accelerator || 'cpu') == 'cpu' && 'cpu' || '' }}
@@ -63,5 +66,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mt-benchmark-macos
+          name: mt-benchmark-${{ inputs.runner || 'macos-latest' }}
           path: kanal-benchmark-*.md
