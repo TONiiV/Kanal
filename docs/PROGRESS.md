@@ -25,15 +25,21 @@ animation, and all ticks had the same thickness and brightness.
   speed. The speed that gives a full skew is 350 DIP/s. A filter with a time constant of 90 ms
   smooths the skew. On the side the pointer moves towards, the spread shrinks to 60% of 18 DIP at a
   full skew. On the side the pointer left, it grows to 240%. The tick under the pointer has weight 1
-  at any skew. `Relax()` pulls the skew to 0, and the view calls it every 16 ms while `IsSkewed`.
-  A pointer that stops thus gives the even bell shape in about 0.3 s. A move shorter than 1 ms
+  at any skew. `Relax()` pulls the skew to 0. A pointer that stops thus gives the even bell shape
+  in about 0.3 s. A move shorter than 1 ms
   after the last one gives no speed. A pointer that leaves the strip resets the skew. The tests
   give the view model a `TimeProvider` they control.
-- **Animation in the view.** A tick is a fixed 28 x 3.5 rectangle. Its length and thickness are a
-  scale transform (`TickScale`) from `TickShape`, so an animation never starts a layout pass. The
-  transform and the opacity have a 140 ms `CubicEaseOut` transition. A pointer that moves fast
-  makes each new target restart the transition, so the motion stays smooth. The view sends the
-  pointer position (`PointerMoved`) and the exit (`PointerExited`).
+- **Drawn values, no transition.** Each tick has target values (`Shape`, `Glow`) and drawn values
+  (`DrawnShape`, `DrawnGlow`). The view draws the drawn values. `Relax()` moves them towards the
+  targets with an exponential filter. The time constant is 15 ms to grow and 60 ms to shrink, so a
+  tick grows fast and eases back. The filter does not depend on the event rate. A XAML transition
+  does: each pointer event restarts it. A recording with transitions showed the bump 100 DIP behind
+  a fast pointer, with the tick under the pointer still at its resting length. The view runs
+  `Relax()` every 16 ms while `IsSettling`. A change of what is on screen, and a new tick, are drawn
+  at once.
+- **Drawing.** A tick is a fixed 28 x 3.5 rectangle. Its length and thickness are a scale
+  transform (`TickScale`) from `DrawnShape`, so an animation never starts a layout pass. The view
+  sends the pointer position (`PointerMoved`) and the exit (`PointerExited`).
 - **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet.
   There a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design
   document now records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick
@@ -43,8 +49,8 @@ animation, and all ticks had the same thickness and brightness.
   move or leave corrects it.
 - **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
   symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
-  resize, one notification for each tick, the skew in both directions, a slow move, the settling
-  and the reset. `ColumnScrollWiringTests` cover the pointer in the real view.
+  resize, one notification for each tick, the skew in both directions, a slow move, the settling,
+  the reset, and the drawn values (grow, shrink, settle, leave, a fast move). `ColumnScrollWiringTests` cover the pointer in the real view.
 
 ### Cloud translation with DeepL (ADR 0060)
 

@@ -120,10 +120,7 @@ public partial class MeetingRoomView : UserControl
             return;
 
         vm.ShownRuler.PointerAt(y);
-        if (y is null)
-            _relax.Stop();
-        else
-            _relax.Start();
+        _relax.Start();
     }
 
     private void OnRelaxTick(object? sender, EventArgs e)
@@ -132,7 +129,7 @@ public partial class MeetingRoomView : UserControl
             return;
 
         vm.ShownRuler.Relax();
-        if (!vm.ShownRuler.IsSkewed)
+        if (!vm.ShownRuler.IsSettling)
             _relax.Stop();
     }
 

@@ -88,14 +88,6 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
-        <Style Selector="Rectangle.tick">
-            <Setter Property="Transitions">
-                <Transitions>
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14" Easing="CubicEaseOut" />
-                    <DoubleTransition Property="Opacity" Duration="0:0:0.14" Easing="CubicEaseOut" />
-                </Transitions>
-            </Setter>
-        </Style>
         <Style Selector="Button.page">
             <Setter Property="Width" Value="22" />
             <Setter Property="Height" Value="22" />
@@ -373,10 +365,10 @@
                             <Rectangle Classes="tick"
                                        Width="{x:Static vm:TranscriptRulerViewModel.PeakReach}"
                                        Height="{x:Static vm:TranscriptRulerViewModel.PeakThickness}"
-                                       Opacity="{Binding Glow}"
+                                       Opacity="{Binding DrawnGlow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False" Fill="{Binding SpeakerColor}"
-                                       RenderTransform="{Binding Shape, Converter={x:Static conv:TickScale.Of}}" />
+                                       RenderTransform="{Binding DrawnShape, Converter={x:Static conv:TickScale.Of}}" />
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

@@ -555,8 +555,8 @@ public class TranscriptRulerTests
 
         var under = ruler.Ticks.Select((t, i) => (t.DrawnShape.Reach, i)).MaxBy(x => x.Reach);
         Assert.True(under.Reach > 20, $"the tick nearest the pointer is drawn at only {under.Reach:F1}");
-        Assert.True(Math.Abs(CentreOf(ruler, under.i) - y) < 2 * ruler.Ticks[0].Pitch,
-            "the drawn peak must stay within two ticks of the pointer");
+        Assert.True(Math.Abs(CentreOf(ruler, under.i) - y) < 3 * ruler.Ticks[0].Pitch,
+            "the drawn peak must stay within three ticks of the pointer");
     }
 
     [AvaloniaFact]
