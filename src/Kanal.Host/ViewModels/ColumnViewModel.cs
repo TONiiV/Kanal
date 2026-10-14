@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -71,6 +72,13 @@ public partial class ColumnViewModel : ViewModelBase
         bubble.IsLive = true;
 
         return bubble;
+    }
+
+    public IReadOnlyList<BubbleViewModel> Detach()
+    {
+        var detached = Bubbles.ToList();
+        Bubbles.Clear();
+        return detached;
     }
 
     public void MarkJumpTarget(string? utteranceId)

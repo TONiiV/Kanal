@@ -97,6 +97,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private IMeetingTitler? _titler;
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
     private readonly Func<Action, Task> _offUiThread;
+    private readonly Func<Task>? _yieldToUi;
     private string? _titleOnRecord;
 
     public ModelRows ModelRows { get; }
@@ -108,6 +109,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
             scanOffUiThread: work => Task.Run(work),
+            yieldToUi: YieldToInput,
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -135,12 +137,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
         Func<Action, Task>? scanOffUiThread = null,
+        Func<Task>? yieldToUi = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false,
         PipelinePlanner.KeyResolver? resolveTranslationKey = null)
     {
         _titler = titler;
+        _yieldToUi = yieldToUi;
         Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
         _offUiThread = offUiThread ?? (work =>
         {
@@ -960,10 +964,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private async void RefreshBody()
     {
         var version = ++_bodyVersion;
-        _stored.Clear();
-        BrowsedRuler.Clear();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
         IsLoadingRecord = record is not null;
+        if (!await RetireStoredAsync(version))
+            return;
+
+        _stored.Clear();
+        BrowsedRuler.Clear();
         NotifyBody();
         if (record is null)
             return;
@@ -978,13 +985,82 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (version != _bodyVersion)
             return;
 
+        _storedColours = StoredTranscript.ColoursByTag(utterances);
+        var pending = columns.Select(column => column.Detach()).ToList();
         foreach (var column in columns)
             _stored.Add(column);
-        _storedColours = StoredTranscript.ColoursByTag(utterances);
-        foreach (var utterance in utterances)
-            BrowsedRuler.Observe(utterance);
+        BrowsedRuler.Reserve(utterances.Count);
         IsLoadingRecord = false;
         NotifyBody();
+
+        await FillBodyAsync(version, columns, pending, utterances);
+    }
+
+    private const int FirstRetireRows = 10;
+    private const int MaxRetireRows = 150;
+
+    // Hiding the old columns first costs as much as it saves: IsVisible passes to every control inside.
+    private async Task<bool> RetireStoredAsync(int version)
+    {
+        if (_stored.Count == 0 || _yieldToUi is null)
+            return true;
+
+        var rows = FirstRetireRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        while (_stored.Any(column => column.Bubbles.Count > 0))
+        {
+            foreach (var column in _stored)
+                for (var n = Math.Min(rows, column.Bubbles.Count); n > 0; n--)
+                    column.Bubbles.RemoveAt(column.Bubbles.Count - 1);
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return false;
+
+            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            cycle.Restart();
+            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxRetireRows);
+        }
+
+        return true;
+    }
+
+    public static Task YieldToInput() =>
+        Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask();
+
+    private const int FirstSliceRows = 3;
+    private const int MaxSliceRows = 60;
+    private const double SliceCycleMs = 30;
+
+    // Slice size follows the time of the last cycle, layout included: a slow machine gets smaller slices.
+    private async Task FillBodyAsync(
+        int version, IReadOnlyList<ColumnViewModel> columns,
+        IReadOnlyList<IReadOnlyList<BubbleViewModel>> bubbles, IReadOnlyList<Utterance> utterances)
+    {
+        var rows = _yieldToUi is null ? int.MaxValue : FirstSliceRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        for (var next = 0; next < utterances.Count;)
+        {
+            for (var end = (int)Math.Min(utterances.Count, (long)next + rows); next < end; next++)
+            {
+                for (var c = 0; c < columns.Count; c++)
+                    columns[c].Bubbles.Add(bubbles[c][next]);
+                BrowsedRuler.Observe(utterances[next]);
+            }
+
+            if (next >= utterances.Count || _yieldToUi is null)
+                break;
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return;
+
+            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            cycle.Restart();
+            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxSliceRows);
+        }
+
+        BrowsedRuler.Release();
     }
 
     private void NotifyBody()

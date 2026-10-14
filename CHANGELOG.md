@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The window no longer freezes when you open a long meeting in the sidebar. Before, a meeting with
+  1200 sentences blocked the window for 30 to 40 seconds in our test. Now the window answers a click
+  within half a second. The transcript fills in over a few seconds, and the ruler fills with it. Leaving
+  a long meeting no longer blocks the window either.
 - The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
   1 pixel up and left of the centre on screens with 150% scaling.
 - The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in

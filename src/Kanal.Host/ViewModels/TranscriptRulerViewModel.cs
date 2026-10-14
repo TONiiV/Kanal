@@ -74,6 +74,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private HashSet<string>? _whole;
     private int _pageUpTarget = -1;
     private int _pageDownTarget = -1;
+    private int _reserved;
+    private double _appliedPitch = double.NaN;
 
     public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
         _resolve = resolve;
@@ -127,6 +129,27 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _entries[u.Id] = added;
         Write(added);
         Ticks.Add(tick);
+        var pitch = Pitch();
+        if (Ticks.Count > 1 && pitch == _appliedPitch)
+        {
+            tick.Pitch = pitch;
+            TrackLength = pitch * Ticks.Count;
+        }
+        else
+            Layout();
+
+        if (_reserved == 0)
+            MarkInView();
+    }
+
+    public void Reserve(int total) => _reserved = total;
+
+    public void Release()
+    {
+        _reserved = 0;
+        if (Ticks.Count == 0)
+            return;
+
         Layout();
         MarkInView();
     }
@@ -182,6 +205,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     {
         _entries.Clear();
         _originMs = null;
+        _reserved = 0;
+        _appliedPitch = double.NaN;
         _visible = new HashSet<string>();
         _whole = null;
         HoveredTick = null;
@@ -190,9 +215,12 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         MarkInView();
     }
 
+    private double Pitch() => Math.Min(MaxPitch, StripHeight / Math.Max(Ticks.Count, _reserved));
+
     private void Layout()
     {
-        var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
+        var pitch = Pitch();
+        _appliedPitch = pitch;
         foreach (var tick in Ticks)
             tick.Pitch = pitch;
         TrackLength = pitch * Ticks.Count;
