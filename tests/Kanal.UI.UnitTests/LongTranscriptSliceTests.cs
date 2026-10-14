@@ -28,9 +28,9 @@ public class LongTranscriptSliceTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private static Utterance Said(int n) =>
-        new($"u{n}", "S01", n * 4000L, n * 4000L + 3500, "de", $"Punkt {n}", 1, UtteranceState.Final, false, 1.0,
-            new Dictionary<string, string> { ["zh"] = $"第{n}条", ["de"] = $"Punkt {n}" });
+    private static Utterance Said(string id, int n) =>
+        new($"{id}{n}", "S01", n * 4000L, n * 4000L + 3500, "de", $"{id} Punkt {n}", 1, UtteranceState.Final, false, 1.0,
+            new Dictionary<string, string> { ["zh"] = $"{id} 第{n}条", ["de"] = $"{id} Punkt {n}" });
 
     private (WorkspaceStore Store, MeetingRecord First, MeetingRecord Second) TwoLongMeetings()
     {
@@ -38,17 +38,17 @@ public class LongTranscriptSliceTests : IDisposable
         var folder = Path.Combine(_root, "acme");
         Directory.CreateDirectory(folder);
         var workspace = store.CreateWorkspace("ACME", folder).Workspace!;
-        return (store, Stored(store, workspace, "Erste"), Stored(store, workspace, "Zweite"));
+        return (store, Stored(store, workspace, "Erste", "a"), Stored(store, workspace, "Zweite", "b"));
     }
 
-    private static MeetingRecord Stored(WorkspaceStore store, Workspace workspace, string title)
+    private static MeetingRecord Stored(WorkspaceStore store, Workspace workspace, string title, string id)
     {
         var record = store.CreateMeeting(workspace.Id, title).Meeting!;
         var path = Path.Combine(store.MeetingFolder(workspace.Id, record.Id)!, TranscriptLog.FileName);
         using (var log = new TranscriptLogWriter(path, _ => { }))
         {
             for (var n = 0; n < Rows; n++)
-                log.Append(Said(n));
+                log.Append(Said(id, n));
         }
 
         return store.SaveMeeting(record with
@@ -115,8 +115,11 @@ public class LongTranscriptSliceTests : IDisposable
         Assert.All(vm.ShownColumns, column => Assert.Equal(Rows, column.Bubbles.Count));
         Assert.Equal(Rows, vm.ShownRuler.Ticks.Count);
         Assert.Equal(
-            Enumerable.Range(0, Rows).Select(n => $"u{n}"),
+            Enumerable.Range(0, Rows).Select(n => $"a{n}"),
             vm.ShownColumns[0].Bubbles.Select(b => b.UtteranceId));
+        Assert.Equal(
+            Enumerable.Range(0, Rows).Select(n => $"a{n}"),
+            vm.ShownRuler.Ticks.Select(t => t.AnchorUtteranceId));
     }
 
     [AvaloniaFact]
@@ -129,11 +132,24 @@ public class LongTranscriptSliceTests : IDisposable
         var firstColumns = vm.ShownColumns.ToList();
 
         Open(vm, second);
+        var added = 0;
+        foreach (var column in firstColumns)
+            column.Bubbles.CollectionChanged += (_, e) =>
+            {
+                if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+                    added++;
+            };
         yields.ReleaseAll();
 
+        Assert.Equal(0, added);
         Assert.DoesNotContain(vm.ShownColumns[0], firstColumns);
-        Assert.All(firstColumns, column => Assert.True(column.Bubbles.Count < Rows, "the first fill went on"));
         Assert.All(vm.ShownColumns, column => Assert.Equal(Rows, column.Bubbles.Count));
+        Assert.Equal(
+            Enumerable.Range(0, Rows).Select(n => $"b{n}"),
+            vm.ShownRuler.Ticks.Select(t => t.AnchorUtteranceId));
+        Assert.Equal(
+            Enumerable.Range(0, Rows).Select(n => $"b Punkt {n}"),
+            vm.ShownRuler.Ticks.Select(t => t.Preview));
     }
 
     [AvaloniaFact]
@@ -168,7 +184,7 @@ public class LongTranscriptSliceTests : IDisposable
         ruler.Reserve(200);
 
         for (var n = 0; n < 100; n++)
-            ruler.Observe(Said(n));
+            ruler.Observe(Said("u", n));
 
         var reserved = ruler.StripHeight / 200;
         Assert.All(ruler.Ticks, tick => Assert.Equal(reserved, tick.Pitch));
@@ -186,7 +202,7 @@ public class LongTranscriptSliceTests : IDisposable
         var ruler = new TranscriptRulerViewModel(tag => (tag, tag, "#336699"));
 
         for (var n = 0; n < 100; n++)
-            ruler.Observe(Said(n));
+            ruler.Observe(Said("u", n));
 
         var pitch = Math.Min(TranscriptRulerViewModel.MaxPitch, ruler.StripHeight / 100);
         Assert.All(ruler.Ticks, tick => Assert.Equal(pitch, tick.Pitch));

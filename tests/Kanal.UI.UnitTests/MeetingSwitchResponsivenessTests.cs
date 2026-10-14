@@ -129,6 +129,7 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Metric")]
     public async Task OpeningAndLeavingALongMeetingNeverBlocksTheWindowForLong()
     {
         var store = new WorkspaceStore(Path.Combine(_root, "workspaces.json"));
@@ -167,13 +168,15 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
             openProbes = probe.Probes;
         }
 
+        var longColumns = vm.ShownColumns.ToList();
         double leaveMs;
         double leaveStallMs;
         using (var probe = new InputProbe(window))
         {
             vm.Sidebar.SelectedMeeting = vm.Sidebar.Meetings.Single(m => m.Id == small.Id);
             leaveMs = await PumpUntil(
-                () => vm.ShownColumns.Count == 3 && vm.ShownColumns.All(c => c.Bubbles.Count == 30), "the short meeting again");
+                () => !vm.ShownColumns.Intersect(longColumns).Any() && vm.ShownColumns.Count == 3
+                      && vm.ShownColumns.All(c => c.Bubbles.Count == 30), "the short meeting again");
             Dispatcher.UIThread.RunJobs();
             leaveStallMs = probe.MaxMs;
         }

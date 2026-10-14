@@ -966,7 +966,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var version = ++_bodyVersion;
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
         IsLoadingRecord = record is not null;
-        if (!await RetireStoredAsync(version))
+        if (_yieldToUi is not null && _stored.Count > 0)
+            NotifyChrome();
+        if (!await RetireStoredAsync(version) || version != _bodyVersion)
             return;
 
         _stored.Clear();
@@ -1019,7 +1021,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
             cycle.Restart();
-            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxRetireRows);
+            rows = Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxRetireRows);
         }
 
         return true;
@@ -1057,10 +1059,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
             cycle.Restart();
-            rows = Math.Clamp((int)(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxSliceRows);
+            rows = Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxSliceRows);
         }
 
         BrowsedRuler.Release();
+    }
+
+    private void NotifyChrome()
+    {
+        OnPropertyChanged(nameof(IsViewingAnotherRecord));
+        OnPropertyChanged(nameof(IsTitleReadOnly));
+        OnPropertyChanged(nameof(ShowRecordingBanner));
+        OnPropertyChanged(nameof(RecordingBannerText));
+        OnPropertyChanged(nameof(MeetingTitle));
+        OnPropertyChanged(nameof(CanNameMeeting));
+        OnPropertyChanged(nameof(CanRegenerateTitle));
+        RegenerateTitleCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyBody()
