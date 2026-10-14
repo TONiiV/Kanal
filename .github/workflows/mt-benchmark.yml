@@ -6,7 +6,7 @@ on:
       runner:
         description: Runner. Standard macOS runners have no GPU acceleration; xlarge M1 runners do (billed).
         type: choice
-        options: [macos-latest, macos-latest-xlarge, self-hosted]
+        options: [macos-latest, macos-latest-xlarge]
         default: macos-latest
       accelerator:
         description: KANAL_ACCELERATOR value
