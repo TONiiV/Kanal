@@ -16,9 +16,10 @@ animation, and all ticks had the same thickness and brightness.
   `exp(-(|d|/18)^1.3)`. An exponent of 2 gives a Gaussian. An exponent of 1 gives an exponential.
   The value 1.3 leans to the exponential: a sharper peak and a heavier tail. The next tick keeps
   67% of the rise, where a Gaussian keeps 78%. A tick four ticks away keeps 8%, where a Gaussian
-  keeps 2%. The weight is 1 at the pointer. A tick more than 4 spreads away has weight 0. The
-  hovered row no longer decides the tick under the pointer, so the curve moves between two ticks
-  without a jump. `Hover(tick)` now only drives the preview card.
+  keeps 2%. The weight is 1 at the pointer. The spread is the 18 DIP in the formula. A tick more
+  than 4 spreads (72 DIP) away has weight 0. The hovered row no longer decides the tick under the
+  pointer, so the curve moves between two ticks without a jump. `Hover(tick)` now only drives the
+  preview card.
 - **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
   from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
   Peak: 40, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and

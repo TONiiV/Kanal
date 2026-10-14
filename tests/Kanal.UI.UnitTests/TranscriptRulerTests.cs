@@ -637,10 +637,10 @@ public class TranscriptRulerTests
             ruler.PointerAt(y);
             for (var step = 0; step < 40; step++)
             {
-                time.Advance(TimeSpan.FromMilliseconds(4));
+                time.Advance(TimeSpan.FromMilliseconds(7));
                 if (framesBetweenEvents)
                     ruler.Relax();
-                time.Advance(TimeSpan.FromMilliseconds(4));
+                time.Advance(TimeSpan.FromMilliseconds(1));
                 y += 1.2;
                 ruler.PointerAt(y);
             }
