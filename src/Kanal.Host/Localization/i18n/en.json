@@ -203,6 +203,7 @@
   "settings.model.none.note": "No local model — the local-translation modes stay unavailable.",
   "settings.model.downloaded": "downloaded",
   "settings.model.notdownloaded": "not downloaded",
+  "settings.model.recommended": "Recommended",
   "settings.model.downloadfailed": "download failed: {0}",
   "download.cancel": "Cancel download: {0}",
   "download.done": "done",

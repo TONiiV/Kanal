@@ -6,6 +6,19 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### Recommended badge on the Translation tab
+
+The model row shows a *Recommended* pill next to the name of the first `LocalModelCatalog` entry.
+
+- **No catalog field.** `ModelItemViewModel.IsRecommended` is true when the row id equals
+  `LocalModelCatalog.Models[0].Id`. The catalog already states the rule: the first entry is the
+  recommended default. A second source of truth could drift from the row order.
+- **Translation rows only.** The *None* row and the transcription (ASR) rows never show the pill.
+  Only the `LocalModelInfo` constructor sets `IsRecommended`. The ASR list has no recommendation.
+- **Colours.** The pill uses `BrandWash` for the fill and `Brand` for the text. Both exist in the Light
+  and Dark variants, so no new resource is needed.
+- **Text.** The key `settings.model.recommended` exists in en, zh, de and pl.
+
 ### Hy-MT2 1.8B is the recommended local translation model
 
 `LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448
