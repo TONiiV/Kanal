@@ -16,8 +16,6 @@ on:
       streams:
         description: Levels of sentences in flight, comma-separated
         default: '1'
-  push:
-    branches: [feat/llama-gpu]
 
 jobs:
   benchmark:
