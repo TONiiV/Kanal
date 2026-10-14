@@ -2,7 +2,6 @@ using Kanal.Core.Models;
 
 namespace Kanal.Providers.LocalMt;
 
-/// <summary>One downloadable translation model. All values verified against the HF API 2026-07-31.</summary>
 /// <param name="AssistantPrefill">
 /// Text injected after the chat template's assistant header, before the model writes a token.
 /// This is how a reasoning model is told not to reason: Qwen3.x opens a <c>&lt;think&gt;</c>
