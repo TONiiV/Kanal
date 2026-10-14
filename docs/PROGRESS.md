@@ -29,10 +29,12 @@ text "Loading the transcript…", a busy cursor and a dropdown that did not answ
 
 | Longest wait of one click, 1200 sentences × 3 languages | Before | After |
 |---|---|---|
-| Windows, open | 39 076 ms | 162 ms |
-| Windows, leave | 2 152 ms | 204 ms |
-| Linux, open | 34 634 ms | 131 ms |
-| macOS, open | 38 880 ms | 180 ms |
+| Windows, open a long meeting | 39 076 ms | 162 ms |
+| Windows, leave a long meeting | 2 152 ms | 204 ms |
+| macOS, open (an earlier commit of this change) | 38 880 ms | 180 ms |
+| Linux, open (an earlier commit of this change) | 34 634 ms | 131 ms |
+
+All three platforms pass the 500 ms limit in the last CI run.
 
 - **Open.** The whole transcript takes longer to appear than before, because the work is the same and it now
   shares the thread with input. The test numbers for this are not real: the test posts a layout pass every 4 ms,
