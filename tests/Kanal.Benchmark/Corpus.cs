@@ -26,7 +26,7 @@ internal static class Corpus
         S("zh", "请把材料从 S235JR 换成 X5CrNi18-10，客户要求防护等级达到 IP67。",
             de: "Bitte stellen Sie das Material von S235JR auf X5CrNi18-10 um, der Kunde verlangt Schutzart IP67.",
             pl: "Proszę zmienić materiał z S235JR na X5CrNi18-10, klient wymaga stopnia ochrony IP67.",
-            en: "Please change the material from S235JR to X5CrNi18-10, the customer requires protection class IP67."),
+            en: "Please change the material from S235JR to X5CrNi18-10. The customer requires protection class IP67."),
 
         S("de", "Die Bohrung für die Schraube M10 liegt 0,3 mm außerhalb der Toleranz.",
             zh: "M10 螺栓的孔位超出公差 0.3 毫米。",

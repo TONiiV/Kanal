@@ -4,6 +4,7 @@ using Kanal.Core.Meetings;
 using Kanal.Core.Providers;
 using Kanal.Core.Providers.Testing;
 using Kanal.Host.Localization;
+using Kanal.Providers.DeepL;
 using Kanal.Providers.Gladia;
 using Kanal.Core.Models;
 using Kanal.Providers.LocalAsr;
@@ -53,13 +54,17 @@ public static class PipelinePlanner
     private static Localizer L => Localizer.Instance;
 
     public static PipelineStatus Describe(
-        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver? key = null) =>
-        Resolve(mode, settings, downloads, key ?? SettingsStore.ResolveGladiaKey).Status;
+        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver? key = null,
+        KeyResolver? translationKey = null) =>
+        Resolve(mode, settings, downloads, key ?? SettingsStore.ResolveGladiaKey,
+            translationKey ?? SettingsStore.ResolveDeepLKey).Status;
 
     public static PipelinePlan Plan(
-        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver? key = null)
+        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver? key = null,
+        KeyResolver? translationKey = null)
     {
-        var resolved = Resolve(mode, settings, downloads, key ?? SettingsStore.ResolveGladiaKey);
+        var resolved = Resolve(mode, settings, downloads, key ?? SettingsStore.ResolveGladiaKey,
+            translationKey ?? SettingsStore.ResolveDeepLKey);
         if (resolved.Status.Unavailable is not null)
             return new PipelinePlan(resolved.Status, null, null, false, null, null);
 
@@ -83,9 +88,11 @@ public static class PipelinePlanner
         var generator = resolved.Model is not null
             ? new LlamaSharpTextGenerator(downloads.GetPath(resolved.Model), resolved.Model.AssistantPrefill)
             : null;
-        var mt = generator is not null
+        IMtProvider? mt = generator is not null
             ? new LlamaSharpMtProvider(generator)
-            : mode.Translation == StageKind.Cloud ? null : (IMtProvider)new FakeMtProvider();
+            : mode.Translation == StageKind.Cloud
+                ? resolved.TranslationKey is { } deepl ? new DeepLMtProvider(deepl) : null
+                : new FakeMtProvider();
 
         return new PipelinePlan(
             resolved.Status,
@@ -97,24 +104,26 @@ public static class PipelinePlanner
     }
 
     private sealed record Resolution(
-        PipelineStatus Status, string? Key, AsrModelInfo? Transcriber, LocalModelInfo? Model, string? Substitution);
+        PipelineStatus Status, string? Key, AsrModelInfo? Transcriber, LocalModelInfo? Model, string? Substitution,
+        string? TranslationKey);
 
     private static Resolution Resolve(
-        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver key)
+        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver key,
+        KeyResolver translationKey)
     {
         var reasons = new List<string>();
 
         var (transcriptionLabel, apiKey, transcriber) =
             ResolveTranscription(mode, settings, downloads, key, reasons);
-        var (translationLabel, model, substitution) =
-            ResolveTranslation(mode, settings, downloads, reasons);
+        var (translationLabel, model, substitution, mtKey) =
+            ResolveTranslation(mode, settings, downloads, translationKey, reasons);
 
         var status = new PipelineStatus(
             mode,
             reasons.Count == 0 ? null : string.Join("; ", reasons),
             transcriptionLabel,
             translationLabel);
-        return new Resolution(status, apiKey, transcriber, model, substitution);
+        return new Resolution(status, apiKey, transcriber, model, substitution, mtKey);
     }
 
     private static (string Label, string? Key, AsrModelInfo? Model) ResolveTranscription(
@@ -155,20 +164,22 @@ public static class PipelinePlanner
         }
     }
 
-    private static (string Label, LocalModelInfo? Model, string? Substitution) ResolveTranslation(
-        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, List<string> reasons)
+    private static (string Label, LocalModelInfo? Model, string? Substitution, string? Key) ResolveTranslation(
+        PipelineMode mode, AppSettings settings, ModelDownloadManager downloads, KeyResolver translationKey,
+        List<string> reasons)
     {
         if (mode.Translation == StageKind.Cloud)
         {
-            // Cloud translation exists only bundled inside the cloud ASR session; paired with a
-            // local transcriber there is nothing to call. That is a missing provider, not a setting.
-            if (mode.Transcription != StageKind.Cloud)
+            if (mode.Transcription == StageKind.Cloud)
+                return (L["stage.translation.cloud"], null, null, null);
+
+            if (translationKey(settings) is not { } resolved)
             {
-                reasons.Add(L["reason.cloudmt"]);
-                return (L["stage.translation.cloudsoon"], null, null);
+                reasons.Add(L["reason.nomtkey"]);
+                return (L["stage.translation.nokey"], null, null, null);
             }
 
-            return (L["stage.translation.cloud"], null, null);
+            return (L["stage.translation.cloud"], null, null, resolved.Key);
         }
 
         // A scripted pipeline translates with whatever is on this machine: a downloaded model if
@@ -179,9 +190,9 @@ public static class PipelinePlanner
         if (id is null)
         {
             if (optional)
-                return (L["stage.translation.scripted"], null, null);
+                return (L["stage.translation.scripted"], null, null, null);
             reasons.Add(L["reason.nomodel"]);
-            return (L["stage.translation.nomodel"], null, null);
+            return (L["stage.translation.nomodel"], null, null, null);
         }
 
         var model = LocalModelCatalog.Find(id);
@@ -190,9 +201,9 @@ public static class PipelinePlanner
             var reason = L.Format("reason.unknownmodel", id);
             var label = L.Format("stage.translation.unknown", id);
             if (optional)
-                return (label, null, L.Format("reason.substitute", reason));
+                return (label, null, L.Format("reason.substitute", reason), null);
             reasons.Add(reason);
-            return (label, null, null);
+            return (label, null, null, null);
         }
 
         if (!downloads.IsDownloaded(model))
@@ -200,11 +211,11 @@ public static class PipelinePlanner
             var reason = L.Format("reason.notdownloaded", model.DisplayName);
             var label = L.Format("stage.translation.notdownloaded", model.DisplayName);
             if (optional)
-                return (label, null, L.Format("reason.substitute", reason));
+                return (label, null, L.Format("reason.substitute", reason), null);
             reasons.Add(reason);
-            return (label, null, null);
+            return (label, null, null, null);
         }
 
-        return (L.Format("stage.translation.local", model.DisplayName), model, null);
+        return (L.Format("stage.translation.local", model.DisplayName), model, null, null);
     }
 }

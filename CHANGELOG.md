@@ -14,6 +14,16 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
+  1 pixel up and left of the centre on screens with 150% scaling.
+- The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
+  Settings, in the Translation tab. Kanal sends only text to the translation service, never audio.
+  If the quota is used up or the key is wrong, the status line says so once and translation stops
+  for that meeting. If the service does not answer, the status line says so.
+- The "Points and decisions" tab is now called **Keypoints**. The menu item is now Pin to Keypoints.
+  The names change in Chinese, English, German and Polish.
+- Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
+  A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
 - Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
   Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
   to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the
@@ -21,10 +31,13 @@ The first release. Everything below is what Kanal does on the day it ships.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.
+- The ruler beside the transcript now shows which sentences are on screen: their ticks are longer
+  and thicker. The tick under the pointer and its neighbours grow, so a tick is easier to hit. The
+  arrows above and below the ruler show the previous or the next page of the transcript.
 - The preview card of the ruler no longer has a dark bar on its right edge.
-- Right-click a transcript line and choose Pin to Points. The line shows in the Points tab with its
+- Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to
-  unpin it. Pinned points are not saved with the meeting record yet.
+  unpin it. Pinned keypoints are not saved with the meeting record yet.
 - You can now select text in the transcript. Select text in one line and press Ctrl+C to copy it. Press
   Ctrl+A to select the whole line. Right-click a line for Copy and Copy with speaker and time.
 - A model download now shows in the status bar. Each running download is a small progress

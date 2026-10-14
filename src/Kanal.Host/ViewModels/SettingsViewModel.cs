@@ -163,6 +163,8 @@ public partial class SettingsViewModel : ViewModelBase
         if (Keys.Count > 0 && !Keys.Any(k => k.IsActive))
             Keys[0].IsActive = true;
 
+        _deepLKey = SettingsStore.ResolveStoredDeepLKey(settings)?.Key ?? "";
+
         _envVarIsSet = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null;
 
         var rows = modelRows ?? new ModelRows(new ModelDownloadManager(SettingsStore.ModelsPath));
@@ -245,6 +247,9 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
+
+    [ObservableProperty]
+    private string _deepLKey = "";
 
     public ObservableCollection<ModelItemViewModel> TranslationModels { get; } = new();
 
@@ -686,6 +691,9 @@ public partial class SettingsViewModel : ViewModelBase
             .Where(k => !string.IsNullOrWhiteSpace(k.Name) && !string.IsNullOrWhiteSpace(k.Key))
             .Select(k => new ApiKeyEntry(k.Name.Trim(), "gladia", k.Key.Trim())));
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
+        settings.ApiKeys.RemoveAll(k => k.Provider == SettingsStore.DeepLProvider);
+        if (!string.IsNullOrWhiteSpace(DeepLKey))
+            settings.ApiKeys.Add(new ApiKeyEntry("DeepL", SettingsStore.DeepLProvider, DeepLKey.Trim()));
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
         var asrId = TranscriptionModels.FirstOrDefault(m => m.IsActive)?.ModelId;

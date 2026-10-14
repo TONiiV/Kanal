@@ -21,6 +21,7 @@
             <Setter Property="SelectionForegroundBrush" Value="{DynamicResource OnBrand}" />
         </Style>
         <Style Selector="Border.rec">
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="0,0,0,19" />
@@ -88,15 +89,26 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Rectangle.tick">
-            <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="2" />
         </Style>
-        <Style Selector="Rectangle.tick.current">
-            <Setter Property="Width" Value="20" />
+        <Style Selector="Rectangle.tick.inview">
             <Setter Property="Height" Value="3" />
         </Style>
-        <Style Selector="Border.tickrow:pointerover Rectangle.tick">
-            <Setter Property="Width" Value="20" />
+        <Style Selector="Button.page">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.page Path.glyph">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+        </Style>
+        <Style Selector="Button.page:disabled Path.glyph">
+            <Setter Property="Opacity" Value="0" />
         </Style>
     </UserControl.Styles>
 
@@ -279,7 +291,8 @@
                                 <ItemsControl Classes="bubbles" ItemsSource="{Binding Bubbles}" Margin="12,0,26,40" ClipToBounds="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BubbleViewModel">
-                                            <Border Classes="rec" Classes.jump="{Binding IsJumpTarget}">
+                                            <Border Classes="rec" Classes.jump="{Binding IsJumpTarget}"
+                                                    ContextFlyout="{StaticResource UtteranceMenu}">
                                                 <StackPanel Spacing="5">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <TextBlock Classes="who" Text="{Binding SpeakerName}"
@@ -338,25 +351,41 @@
             <Path Classes="glyph" Data="{c:Icon arrow-down}" Width="16" Height="16" />
         </Button>
 
-        <ItemsControl Grid.Column="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                      Width="30" Margin="0,2,12,10" VerticalAlignment="Stretch"
-                      UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
-                      AutomationProperties.Name="{l:T ruler.name}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:RulerTickViewModel">
-                    <Border Classes="tickrow" Height="{Binding Pitch}"
-                            PointerEntered="OnTickEntered" PointerExited="OnTickExited"
-                            PointerPressed="OnTickPressed"
-                            AutomationProperties.Name="{Binding AccessibleName}">
-                        <Rectangle Classes="tick" Classes.current="{Binding IsCurrent}"
-                                   HorizontalAlignment="Left" VerticalAlignment="Center"
-                                   IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <Grid Grid.Column="1" RowDefinitions="Auto,*,22" Width="30" Margin="0,2,12,10">
+            <Button x:Name="RulerPageUp" Grid.Row="0" Classes="ghost page"
+                    Command="{Binding ShownRuler.PageUpCommand}"
+                    ToolTip.Tip="{l:T ruler.pageup}" AutomationProperties.Name="{l:T ruler.pageup}">
+                <Path Classes="glyph" Data="{c:Icon chevron-up}" />
+            </Button>
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
+                          VerticalAlignment="Stretch"
+                          UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
+                          AutomationProperties.Name="{l:T ruler.name}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RulerTickViewModel">
+                        <Border Classes="tickrow" Height="{Binding Pitch}"
+                                PointerEntered="OnTickEntered" PointerExited="OnTickExited"
+                                PointerPressed="OnTickPressed"
+                                AutomationProperties.Name="{Binding AccessibleName}">
+                            <Rectangle Classes="tick" Classes.inview="{Binding IsInView}"
+                                       Width="{Binding Reach}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Canvas Grid.Row="1" Grid.RowSpan="2">
+                <Button x:Name="RulerPageDown" Classes="ghost page"
+                        Canvas.Left="4" Canvas.Top="{Binding ShownRuler.TrackLength}"
+                        Command="{Binding ShownRuler.PageDownCommand}"
+                        ToolTip.Tip="{l:T ruler.pagedown}" AutomationProperties.Name="{l:T ruler.pagedown}">
+                    <Path Classes="glyph" Data="{c:Icon chevron-down}" />
+                </Button>
+            </Canvas>
+        </Grid>
 
-        <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,2,12,10" IsHitTestVisible="False"
+        <Canvas Grid.Column="0" Grid.ColumnSpan="2" Margin="0,24,12,32" IsHitTestVisible="False"
                 IsVisible="{Binding ShownRuler.IsPreviewOpen}">
             <ContentControl Canvas.Right="40" Canvas.Top="{Binding ShownRuler.PreviewTop}"
                             Content="{Binding ShownRuler.HoveredTick}">
