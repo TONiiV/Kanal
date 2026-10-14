@@ -10,8 +10,7 @@ using Kanal.Host.Views;
 
 namespace Kanal.UI.UnitTests;
 
-// Metric for "the window freezes when I open a long meeting". An Input-priority job stands for a
-// click or key press. Its latency is how long the operator waits for the window to answer.
+// An Input-priority job stands for a click: its latency is how long the window takes to answer.
 public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDisposable
 {
     private const int LongMeetingUtterances = 1200;

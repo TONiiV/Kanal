@@ -999,9 +999,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const int FirstRetireRows = 10;
     private const int MaxRetireRows = 150;
 
-    // Taking thousands of controls out of the window at once is as long a stop as putting them in.
-    // The old columns are emptied in slices instead. Hiding them first costs as much as it saves:
-    // IsVisible is passed down to every control inside.
+    // Hiding the old columns first costs as much as it saves: IsVisible passes to every control inside.
     private async Task<bool> RetireStoredAsync(int version)
     {
         if (_stored.Count == 0 || _yieldToUi is null)
@@ -1034,9 +1032,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private const int MaxSliceRows = 60;
     private const double SliceCycleMs = 30;
 
-    // Controls are made on the UI thread, and a long list takes seconds to lay out. Rows go in
-    // small slices, and each slice is sized from how long the last one took with its layout, so
-    // a slow machine gets smaller slices and the window keeps answering input in between.
+    // Slice size follows the time of the last cycle, layout included: a slow machine gets smaller slices.
     private async Task FillBodyAsync(
         int version, IReadOnlyList<ColumnViewModel> columns,
         IReadOnlyList<IReadOnlyList<BubbleViewModel>> bubbles, IReadOnlyList<Utterance> utterances)
