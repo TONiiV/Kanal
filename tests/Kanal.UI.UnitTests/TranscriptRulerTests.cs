@@ -370,7 +370,7 @@ public class TranscriptRulerTests
     [AvaloniaFact]
     public void ASlowMoveBarelySkewsTheBump()
     {
-        var (ruler, _) = RulerAfterAMove(dipPerSecond: 20, direction: 1);
+        var (ruler, _) = RulerAfterAMove(dipPerSecond: 10, direction: 1);
 
         var (behind, ahead) = TwoTicksFromThePointer(ruler, 1);
 

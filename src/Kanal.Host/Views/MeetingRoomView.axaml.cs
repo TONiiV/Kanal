@@ -20,12 +20,15 @@ public partial class MeetingRoomView : UserControl
 
     private readonly ColumnScrollSync _scroll = new();
     private readonly List<ScrollViewer> _columnScrollers = [];
+    private readonly DispatcherTimer _relax;
     private MainViewModel? _bound;
     private double _rulerHeight;
 
     public MeetingRoomView()
     {
         InitializeComponent();
+        _relax = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnRelaxTick);
+        _relax.Stop();
         _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.OffersJump;
         ((MenuFlyout)Resources["UtteranceMenu"]!).Opening += OnUtteranceMenuOpening;
     }
@@ -105,12 +108,33 @@ public partial class MeetingRoomView : UserControl
 
     private void OnRulerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is Control strip && DataContext is MainViewModel vm)
-            vm.ShownRuler.PointerAt(e.GetPosition(strip).Y);
+        if (sender is Control strip)
+            MoveRulerPointer(e.GetPosition(strip).Y);
     }
 
-    private void OnRulerExited(object? sender, PointerEventArgs e) =>
-        (DataContext as MainViewModel)?.ShownRuler.PointerAt(null);
+    private void OnRulerExited(object? sender, PointerEventArgs e) => MoveRulerPointer(null);
+
+    internal void MoveRulerPointer(double? y)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.ShownRuler.PointerAt(y);
+        if (y is null)
+            _relax.Stop();
+        else
+            _relax.Start();
+    }
+
+    private void OnRelaxTick(object? sender, EventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.ShownRuler.Relax();
+        if (!vm.ShownRuler.IsSkewed)
+            _relax.Stop();
+    }
 
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)
     {

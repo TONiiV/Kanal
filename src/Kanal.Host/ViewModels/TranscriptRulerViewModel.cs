@@ -80,20 +80,34 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double InViewGlow = 0.9;
 
     private const double FocusSpread = 18;
+    private const double SkewSpeed = 350;
+    private const double SkewTime = 0.09;
+    private const double SkewFloor = 0.005;
+    private const double LeadShrink = 0.4;
+    private const double TrailGrow = 1.4;
+    private const double MinStep = 0.001;
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private readonly TimeProvider _time;
     private double? _pointerY;
+    private double? _lastY;
+    private long _lastStamp;
+    private double _skew;
     private HashSet<string> _visible = new();
     private HashSet<string>? _whole;
     private int _pageUpTarget = -1;
     private int _pageDownTarget = -1;
 
-    public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
+    public TranscriptRulerViewModel(
+        Func<string, (string Tag, string Name, string Color)> resolve, TimeProvider? time = null)
+    {
         _resolve = resolve;
+        _time = time ?? TimeProvider.System;
+    }
 
     public ObservableCollection<RulerTickViewModel> Ticks { get; } = new();
 
@@ -168,10 +182,51 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         MarkInView();
     }
 
+    public bool IsSkewed => Math.Abs(_skew) > SkewFloor;
+
     public void PointerAt(double? y)
     {
         _pointerY = y;
+        if (y is null)
+        {
+            _skew = 0;
+            _lastY = null;
+        }
+        else if (_lastY is { } last)
+        {
+            var seconds = Elapsed();
+            if (seconds >= MinStep)
+            {
+                Follow((y.Value - last) / seconds / SkewSpeed, seconds);
+                _lastY = y;
+            }
+        }
+        else
+        {
+            _lastY = y;
+            _lastStamp = _time.GetTimestamp();
+        }
+
         Magnify();
+    }
+
+    public void Relax()
+    {
+        if (_pointerY is null || !IsSkewed)
+            return;
+
+        Follow(0, Elapsed());
+        Magnify();
+    }
+
+    private double Elapsed() => (_time.GetTimestamp() - _lastStamp) / (double)_time.TimestampFrequency;
+
+    private void Follow(double target, double seconds)
+    {
+        _skew += (Math.Clamp(target, -1, 1) - _skew) * (1 - Math.Exp(-seconds / SkewTime));
+        if (!IsSkewed)
+            _skew = 0;
+        _lastStamp = _time.GetTimestamp();
     }
 
     public void Hover(RulerTickViewModel? tick)
@@ -207,6 +262,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _visible = new HashSet<string>();
         _whole = null;
         _pointerY = null;
+        _lastY = null;
+        _skew = 0;
         HoveredTick = null;
         Ticks.Clear();
         TrackLength = 0;
@@ -279,9 +336,11 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         }
     }
 
-    private static double Focus(double distance)
+    private double Focus(double distance)
     {
-        var d = distance / FocusSpread;
+        var ahead = distance * Math.Sign(_skew) > 0;
+        var spread = FocusSpread * (ahead ? 1 - LeadShrink * Math.Abs(_skew) : 1 + TrailGrow * Math.Abs(_skew));
+        var d = distance / spread;
         return Math.Abs(d) > 3 ? 0 : Math.Exp(-d * d);
     }
 
