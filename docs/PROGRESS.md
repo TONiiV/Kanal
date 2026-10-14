@@ -6,6 +6,49 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### Cloud translation with DeepL (ADR 0060)
+
+*Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
+`Kanal.Providers.DeepL`. The orchestrator is unchanged. Only `PipelinePlanner` chooses the vendor.
+
+- **The planner resolves the key.** Local transcription with cloud translation needs a stored key
+  or the `DEEPL_API_KEY` variable. Without a key the mode row says *no cloud translation key — add
+  one in Settings*. The row names no vendor. *Cloud · Cloud* is unchanged: Gladia translates
+  inside its own session and ignores the DeepL key.
+- **Settings holds the key.** The *Translation* tab has one masked field. The key is stored in
+  `settings.json` as an `ApiKeyEntry` with provider `deepl`, like the Gladia keys.
+- **One request per target language.** The requests run in parallel. Recent finals go in DeepL's
+  `context` parameter. DeepL does not bill that parameter. A key that ends in `:fx` uses
+  `api-free.deepl.com`. Other keys use `api.deepl.com`.
+- **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
+  A language outside DeepL's target list is skipped, and the other languages still translate.
+- **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
+  accepted*. 429, every 5xx, a timeout and a network error map to *service unavailable*
+  (`mt.unavailable`). `AsrEvent.Error.Code` carries the code to the host. The host shows a message in
+  the operator's language. A 400 keeps the English message.
+- **One warning per meeting for 403 and 456.** After the first 403 or 456, the provider sends no
+  more requests and returns no translations. The planner builds a new provider for the next meeting.
+  A timeout or a 5xx does not latch: the next line tries again.
+- **One shared `HttpClient`.** Every DeepL provider uses one static client with a 15 s timeout.
+- **Not built:** formality setting, glossary, usage and cost display, a second vendor.
+
+### Keypoints
+
+The tab "Points and decisions" and the menu item "Pin to Points" are now **Keypoints** and **Pin to Keypoints**.
+
+- **Names.** English "Keypoints", Chinese "要点", German "Kernpunkte", Polish "Kluczowe punkty".
+- **Strings only.** The i18n keys and the C# identifiers keep their names (`assistant.tab.points`, `PointsTab`, `PinToPoints`).
+- **Item kinds.** The item labels POINT, PROPOSAL and DECISION stay. They name the kind of one item, not the tab.
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
 ### Local translation benchmark
 
 `tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
@@ -26,8 +69,9 @@ Two different kinds of load:
 
 - **Target languages.** Each sentence goes to every other meeting language. The provider translates
   them one after the other, so the latency of one sentence grows with the number of targets. The
-  corpus has English references too, so the third target is English. The quality columns use the
-  two meeting targets only.
+  corpus has English references too. They serve the 3-target latency sweep, where the third target
+  is English. The benchmark does not score English output. The quality columns use the two meeting
+  targets only.
 - **Sentences in flight.** N streams copy a meeting where a new final arrives while earlier finals
   still translate. Each stream sends its next sentence when the previous one is done, so the model
   is always busy. The generator runs one request at a time. Thus the latency with N sentences in
@@ -65,9 +109,39 @@ Smaller candidates to measure (HF API, 2026-10-14):
 Rejected: LFM2.5 1.2B, SmolLM3 3B and Llama 3.2 1B do not support Polish. TranslateGemma has no model
 below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
 
----
-
 ## 2026-10-13
+
+### The ruler shows the screen and pages through the transcript
+
+Issue #268. The reference is the message navigator of a chat app.
+
+- **Colour stays.** A tick keeps the colour of its speaker. The emphasis comes from length and
+  thickness, not from opacity. Thus every tick stays at 3:1 or more (`ui-design.md`).
+- **In view.** The view reports the utterance ids of the bubbles on screen to
+  `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
+  replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **On load.** A column reports its visible rows when it loads. Without this, a room that opens
+  with sentences in it shows no emphasis and no arrows until the first scroll.
+- **Reference column.** The leftmost shown column decides what is on screen. Rows in other
+  languages have other heights, so one column must decide. The arrows use the same column.
+- **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
+  ticks 21 and 15. A tick never gets shorter than its in-view reach.
+- **One centre line.** The ticks and the arrows share the centre line of the ruler column. A
+  tick grows from that line to both sides. The down arrow follows the last tick
+  (`TrackLength`), with the same gap as the up arrow above the first tick.
+- **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
+  by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
+  whole rows next to the visible rows. When no row is whole, two cut sentences are the targets.
+  One lone cut sentence is taller than the screen; the arrow then steps past it. A page jump does
+  not mark a jump target.
+- **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
+  final. The current providers finalise sentences in the order they start. A provider that
+  finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.
+- **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
+  not change when an arrow turns on or off.
+- **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
+  `ColumnScrollWiringTests` (scrolling marks the ticks; the arrows page without a skip).
 
 ### Pin to Points
 
@@ -125,6 +199,8 @@ A Settings model row that downloads shows the same ring as the status bar.
   `settings.model.downloading` strings.
 - **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
   message, the row ring has the tray icon and cancels the row.
+- **Centred glyph.** The ring grid sets `UseLayoutRounding="False"`. At 150% scale, layout rounding moved
+  the glyph 1 px up and left of the ring centre. Pixel position has no test; the fix is checked by eye.
 
 ### Download indicator in the status bar
 
@@ -189,7 +265,7 @@ Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
 `PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
 is available when a transcription model and a translation model are downloaded. *Local · Cloud*
 stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
-is removed.
+is removed. *Resolved on 2026-10-14: DeepL is the standalone cloud translator (ADR 0060).*
 
 - **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
   the planner uses it too. The mode row says "not downloaded" until every part is on disk.
@@ -572,9 +648,9 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
-- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in sRGB. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
   The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
-  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+  The mobile page uses `color-mix(in srgb, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
@@ -4044,8 +4120,8 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Operator control over the language columns** — selection capped at four with the reason
       stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
       order host-local (#15).
-- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
-      second blocker on `local · cloud`, buildable independently of the local ASR work.
+- [x] Standalone cloud `IMtProvider` — DeepL first, other vendors later behind the same interface
+      (ADR 0060). `local · cloud` runs when a DeepL key exists.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).
