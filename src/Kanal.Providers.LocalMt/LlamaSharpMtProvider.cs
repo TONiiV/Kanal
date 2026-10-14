@@ -30,6 +30,8 @@ public sealed class LlamaSharpMtProvider : IMtProvider, IWarmupProvider, IDispos
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var empty = new List<string>();
         var targets = to.Where(t => !string.Equals(t, from, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (targets.Count == 0)
+            return result;
 
         ct.ThrowIfCancellationRequested();
         var raw = await _generator.GenerateAsync(targets.Select(t => MtPrompt.Build(text, t)).ToList(), ct);

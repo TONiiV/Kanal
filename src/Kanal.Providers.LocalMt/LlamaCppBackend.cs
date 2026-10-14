@@ -9,16 +9,11 @@ using LLama.Sampling;
 
 namespace Kanal.Providers.LocalMt;
 
-/// <summary>
-/// The real llama.cpp backend. Deliberately thin and untested: it holds no rules of its
-/// own, only the LLamaSharp calls. Everything with a decision in it — when weights load,
-/// how calls are serialized, when the weights are freed — lives in
-/// <see cref="LlamaSharpTextGenerator"/>, in front of <see cref="ILlamaBackend"/>.
-/// </summary>
+// Unit tests cannot load llama.cpp. The benchmark (tests/Kanal.Benchmark) is the regression check for the sequence-id budget.
 public sealed class LlamaCppBackend : ILlamaBackend
 {
     private const int MaxTokens = 512;
-    private const int SeqMax = 16;
+    private const int SeqMax = 8;
 
     private ModelParams? _params;
     private LLamaWeights? _weights;
@@ -47,16 +42,18 @@ public sealed class LlamaCppBackend : ILlamaBackend
     public async Task<IReadOnlyList<string>> InferAsync(IReadOnlyList<string> prompts, CancellationToken ct)
     {
         var executor = ExecutorFor(prompts.Count);
-        var runs = prompts.Select(prompt =>
-        {
-            var conversation = executor.Create();
-            conversation.Prompt(executor.Context.Tokenize(ApplyChatTemplate(prompt), special: true));
-            return new Run(conversation, new DefaultSamplingPipeline { Temperature = 0.2f },
-                new StreamingTokenDecoder(executor.Context));
-        }).ToList();
+        var runs = new List<Run>();
 
         try
         {
+            foreach (var prompt in prompts)
+            {
+                var conversation = executor.Create();
+                runs.Add(new Run(conversation, new DefaultSamplingPipeline { Temperature = 0.2f },
+                    new StreamingTokenDecoder(executor.Context)));
+                conversation.Prompt(executor.Context.Tokenize(ApplyChatTemplate(prompt), special: true));
+            }
+
             while (runs.Any(r => !r.Done))
             {
                 var decoded = await executor.Infer(ct);
@@ -67,12 +64,19 @@ public sealed class LlamaCppBackend : ILlamaBackend
                 foreach (var run in runs.Where(r => !r.Done && r.Conversation.RequiresSampling))
                 {
                     var token = run.Conversation.Sample(run.Sampler);
-                    if (token.IsEndOfGeneration(_weights!.Vocab) || ++run.Tokens >= MaxTokens)
+                    if (token.IsEndOfGeneration(_weights!.Vocab))
                     {
                         run.Done = true;
                         continue;
                     }
+
                     run.Decoder.Add(token);
+                    if (++run.Tokens >= MaxTokens)
+                    {
+                        run.Done = true;
+                        continue;
+                    }
+
                     run.Conversation.Prompt(token);
                 }
             }
@@ -94,8 +98,8 @@ public sealed class LlamaCppBackend : ILlamaBackend
         }
     }
 
-    // BatchedExecutor never reuses a sequence id, and llama.cpp rejects an id at or above SeqMax
-    // (hybrid models such as Qwen3.5 at once). A fresh executor starts again at id 0.
+    // BatchedExecutor never reuses a sequence id. llama.cpp rejects an id >= SeqMax for recurrent and
+    // hybrid models (Qwen3.5), and an id >= 256 for the others. A new executor starts again at id 0.
     private BatchedExecutor ExecutorFor(int sequences)
     {
         if (_executor is null || _sequencesUsed + sequences > SeqMax)

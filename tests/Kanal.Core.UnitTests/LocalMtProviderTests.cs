@@ -477,16 +477,18 @@ public class LlamaSharpMtProviderTests
     [Fact]
     public async Task NoTargetsToTranslateIsNotAFailure()
     {
-        var provider = new LlamaSharpMtProvider(new FakeTextGenerator());
+        var generator = new FakeTextGenerator();
+        var provider = new LlamaSharpMtProvider(generator);
 
         var result = await provider.TranslateAsync(
             "text", "zh", ["zh"], NoContext, CancellationToken.None);
 
         Assert.Empty(result);
+        Assert.Empty(generator.BatchSizes);
     }
 
     [Fact]
-    public async Task CancellationStopsTheLoop()
+    public async Task CancellationThrowsBeforeTheGeneratorRuns()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
