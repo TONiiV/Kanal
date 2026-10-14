@@ -6,6 +6,69 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-14
 
+### The ruler magnifies like a Dock
+
+Issue #273. The first version of the hover effect had 5 steps around the hovered tick, with no
+animation, and all ticks had the same thickness and brightness.
+
+- **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
+  strip. Each tick gets a weight of its distance `d` (in DIP) to the pointer. The curve is
+  `exp(-(|d|/18)^1.3)`. An exponent of 2 gives a Gaussian. An exponent of 1 gives an exponential.
+  The value 1.3 leans to the exponential: a sharper peak and a heavier tail. The next tick keeps
+  67% of the rise, where a Gaussian keeps 78%. A tick four ticks away keeps 8%, where a Gaussian
+  keeps 2%. The weight is 1 at the pointer. The spread is the 18 DIP in the formula. A tick more
+  than 4 spreads (72 DIP) away has weight 0. The hovered row no longer decides the tick under the
+  pointer, so the curve moves between two ticks without a jump. `Hover(tick)` now only drives the
+  preview card.
+- **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
+  from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
+  Peak: 40, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and
+  `Thickness` travel in one value, `TickShape`. One pointer move notifies each tick once.
+- **Skew while the pointer moves.** The view model keeps a skew between -1 and 1 from the pointer
+  speed. The speed that gives a full skew is 350 DIP/s. A filter with a time constant of 90 ms
+  smooths the skew. On the side the pointer moves towards, the spread shrinks to 60% of 18 DIP at a
+  full skew. On the side the pointer left, it grows to 240%. The tick under the pointer has weight 1
+  at any skew. A pointer that stops thus gives the even shape in about 0.3 s.
+  - `Relax()` pulls the skew to 0 only when the pointer has been still for 50 ms. A frame between
+    two pointer events must not pull a moving pointer's skew down, or the skew would depend on
+    where the frames fall between the events.
+  - The speed and the decay use two time stamps. A move after the last one by less than 1 ms gives
+    no speed. A pointer that leaves the strip resets the skew.
+  - A move of 10 DIP/s counts as slow: the skew is 0.03 and the two sides differ by 0.7 DIP.
+  - The tests give the view model a `TimeProvider` they control.
+- **Drawn values, no transition.** Each tick has target values (`Shape`, `Glow`) and drawn values
+  (`DrawnShape`, `DrawnGlow`). The view draws the drawn values. `Relax()` moves them towards the
+  targets with an exponential filter. The time constant is 15 ms to grow and 60 ms to shrink, so a
+  tick grows fast and eases back. The filter does not depend on the event rate. A XAML transition
+  does: each pointer event restarts it. A recording with transitions showed the bump 100 DIP behind
+  a fast pointer, with the tick under the pointer still at its resting length.
+  - The ruler raises `NeedsFrame` whenever it is settling. The view then calls
+    `TopLevel.RequestAnimationFrame`, and each frame calls `Relax()` on both rulers. The frames
+    stop when no tick is settling. A timer would run when nothing needs drawing, and it would keep
+    the view alive.
+  - A tick whose on-screen state changes is drawn at once. The rest of the bump keeps easing, so a
+    new sentence or a scroll does not make it jump.
+- **Drawing.** A tick is a fixed 28 x 3.5 rectangle (`TickWidth`, `TickHeight`). Its length and
+  thickness are a scale transform (`TickScale`) from `DrawnShape`, so a frame never starts a layout
+  pass. The peak of 40 DIP is wider than the 30 DIP column. The scale draws outside the layout
+  box, 5 DIP on each side. The `ItemsControl` of the ruler clips by default, and it cut the peak to
+  30 DIP in a render of the whole window. It has `ClipToBounds="False"` now, and a test checks that
+  no ancestor of a tick clips. The view sends the pointer position (`PointerMoved`) and the exit
+  (`PointerExited`).
+- **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet.
+  There a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design
+  document now records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick
+  under the pointer 3.5:1 or more.
+- **Known limit.** The ruler that is not shown keeps its last pointer position. This matters only
+  if the shown ruler switches by keyboard while the pointer rests on the strip. The next pointer
+  move or leave corrects it.
+- **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
+  symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
+  resize, one notification for each tick, the skew in both directions, a slow move, the settling,
+  the reset, the drawn values (grow, shrink, settle, leave, a fast move), no jump on a new
+  sentence or a scroll, the frame request, and a steady speed reading. `ColumnScrollWiringTests`
+  cover the pointer in the real view, the animation frames, and the clipping.
+
 ### Hy-MT2 1.8B is the recommended local translation model
 
 `LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448

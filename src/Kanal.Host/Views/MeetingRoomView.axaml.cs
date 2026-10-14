@@ -20,6 +20,7 @@ public partial class MeetingRoomView : UserControl
 
     private readonly ColumnScrollSync _scroll = new();
     private readonly List<ScrollViewer> _columnScrollers = [];
+    private bool _framePending;
     private MainViewModel? _bound;
     private double _rulerHeight;
 
@@ -53,6 +54,8 @@ public partial class MeetingRoomView : UserControl
             _bound.BrowsedRuler.JumpRequested -= ScrollTo;
             _bound.Ruler.PageRequested -= ScrollPage;
             _bound.BrowsedRuler.PageRequested -= ScrollPage;
+            _bound.Ruler.NeedsFrame -= RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame -= RequestRulerFrame;
             _bound.Sidebar.PropertyChanged -= OnSelectedMeetingChanged;
         }
 
@@ -63,6 +66,8 @@ public partial class MeetingRoomView : UserControl
             _bound.BrowsedRuler.JumpRequested += ScrollTo;
             _bound.Ruler.PageRequested += ScrollPage;
             _bound.BrowsedRuler.PageRequested += ScrollPage;
+            _bound.Ruler.NeedsFrame += RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame += RequestRulerFrame;
             _bound.Sidebar.PropertyChanged += OnSelectedMeetingChanged;
             ApplyRulerHeight();
         }
@@ -102,6 +107,41 @@ public partial class MeetingRoomView : UserControl
 
     private void OnTickExited(object? sender, PointerEventArgs e) =>
         (DataContext as MainViewModel)?.ShownRuler.Hover(null);
+
+    private void OnRulerMoved(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control strip)
+            MoveRulerPointer(e.GetPosition(strip).Y);
+    }
+
+    private void OnRulerExited(object? sender, PointerEventArgs e) => MoveRulerPointer(null);
+
+    internal void MoveRulerPointer(double? y)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.ShownRuler.PointerAt(y);
+    }
+
+    private void RequestRulerFrame()
+    {
+        if (_framePending || TopLevel.GetTopLevel(this) is not { } top)
+            return;
+
+        _framePending = true;
+        top.RequestAnimationFrame(_ =>
+        {
+            _framePending = false;
+            if (DataContext is not MainViewModel vm)
+                return;
+
+            vm.Ruler.Relax();
+            vm.BrowsedRuler.Relax();
+            if (vm.Ruler.IsSettling || vm.BrowsedRuler.IsSettling)
+                RequestRulerFrame();
+        });
+    }
 
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)
     {
