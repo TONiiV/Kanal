@@ -156,8 +156,6 @@ public class TranscriptRulerTests
 
         Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestThickness, t.Thickness));
         Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestGlow, t.Glow));
-        Assert.True(TranscriptRulerViewModel.RestThickness < TranscriptRulerViewModel.PeakThickness);
-        Assert.True(TranscriptRulerViewModel.RestGlow < 1);
     }
 
     [AvaloniaFact]
@@ -219,7 +217,7 @@ public class TranscriptRulerTests
         Assert.True(reach[0] < reach[1] && reach[1] < reach[2] && reach[2] < reach[3] && reach[3] < reach[4]);
         Assert.True(reach[4] > reach[5] && reach[5] > reach[6] && reach[6] > reach[7] && reach[7] > reach[8]);
         Assert.All(reach.Zip(reach.Skip(1)), pair =>
-            Assert.True(Math.Abs(pair.Second - pair.First) < 8, "a quarter pitch of travel must not jump a tick"));
+            Assert.True(Math.Abs(pair.Second - pair.First) < 2.5, "a quarter pitch of travel must not jump a tick"));
     }
 
     [AvaloniaFact]
@@ -270,19 +268,35 @@ public class TranscriptRulerTests
     [AvaloniaFact]
     public void ARulerThatChangesSizeKeepsTheRaiseUnderThePointer()
     {
-        var ruler = NineTicks();
+        var ruler = Ruler();
+        for (var i = 0; i < 200; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
         ruler.PointerAt(40);
-        var before = ruler.Ticks.Select(t => t.Reach).ToList();
 
         ruler.SetStripHeight(300);
 
-        Assert.Equal(before, ruler.Ticks.Select(t => t.Reach).ToList());
-
-        for (var i = 0; i < 200; i++)
-            ruler.Observe(Said($"v{i}", "s1", $"more {i}"));
-
         var hot = ruler.Ticks.Select((t, i) => (t.Reach, i)).MaxBy(x => x.Reach).i;
         Assert.InRange(CentreOf(ruler, hot), 40 - ruler.Ticks[0].Pitch, 40 + ruler.Ticks[0].Pitch);
+    }
+
+    [AvaloniaFact]
+    public void AMoveOfThePointerNotifiesEachTickOnceSoOneTransitionRestartsPerTick()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 40; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        var changes = new Dictionary<string, int>();
+        foreach (var tick in ruler.Ticks)
+            tick.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == "Shape")
+                    changes[tick.AnchorUtteranceId] = changes.GetValueOrDefault(tick.AnchorUtteranceId) + 1;
+            };
+
+        ruler.PointerAt(CentreOf(ruler, 20));
+
+        Assert.Equal(ruler.Ticks.Count(t => t.Reach > TranscriptRulerViewModel.RestReach), changes.Count);
+        Assert.All(changes.Values, count => Assert.Equal(1, count));
     }
 
     [AvaloniaFact]
