@@ -114,6 +114,8 @@ public static class SettingsStore
 {
     public const string GladiaEnvVar = "GLADIA_API_KEY";
 
+    public const string DeepLEnvVar = "DEEPL_API_KEY";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -250,6 +252,24 @@ public static class SettingsStore
             ? (active.Key.Trim(), active.Name)
             : null;
     }
+
+    public static (string Key, string? Name)? ResolveDeepLKey(AppSettings settings)
+    {
+        if (ResolveStoredDeepLKey(settings) is { } stored)
+            return stored;
+
+        var fromEnv = ReadEnvAllScopes(DeepLEnvVar);
+        return fromEnv is null ? null : (fromEnv, null);
+    }
+
+    public static (string Key, string? Name)? ResolveStoredDeepLKey(AppSettings settings)
+    {
+        var stored = settings.ApiKeys.FirstOrDefault(k =>
+            k.Provider.Equals(DeepLProvider, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(k.Key));
+        return stored is null ? null : (stored.Key.Trim(), stored.Name);
+    }
+
+    public const string DeepLProvider = "deepl";
 
     public static string? ReadEnvAllScopes(string name)
     {
