@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Kanal.Core.Meetings;
 using Kanal.Core.Workspaces;
 
 namespace Kanal.Core.UnitTests;
@@ -102,6 +103,29 @@ public class MeetingBundleTests : IDisposable
 
         // Listed, not merely written: a record the sidebar cannot show did not arrive.
         Assert.Contains(there.ListMeetings(theirs.Id).Meetings, m => m.Id == meeting.Id);
+    }
+
+    [Fact]
+    public void ReidentifiedSpeakersTravelWithTheBundleEvenWithoutAudio()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var source = here.MeetingFolder(mine.Id, meeting.Id)!;
+        SpeakerReidentification.Write(source, new Dictionary<string, string> { ["u1"] = "D01", ["u2"] = "D02" });
+        var bundle = Bundle("speakers");
+
+        Assert.Null(MeetingBundle.Write(here, meeting, includeAudio: false, bundle));
+
+        var (there, theirs) = Opened("supplier");
+        var record = MeetingBundle.Import(there, theirs.Id, bundle, asNewRecord: false).Meeting!;
+        var folder = there.MeetingFolder(theirs.Id, record.Id)!;
+
+        var markdown = File.ReadAllText(Path.Combine(folder, MeetingBundle.TranscriptFileName));
+        Assert.Contains("**D01** (de)", markdown);
+        Assert.Contains("**D02** (zh)", markdown);
+        Assert.DoesNotContain("**S1**", markdown);
+        Assert.Equal(["D01", "D02"], SpeakerReidentification.Read(folder).Values.Order());
+        Assert.Contains("\"speakerTag\":\"S1\"", File.ReadAllText(Path.Combine(folder, TranscriptLog.FileName)));
     }
 
     [Fact]

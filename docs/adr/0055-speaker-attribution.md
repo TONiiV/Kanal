@@ -1,6 +1,6 @@
 # 发言人分离：实时暂定标签，会后权威重算
 
-状态：proposed，2026-09-08。落地 [#13](https://github.com/TONiiV/Kanal/issues/13) 与
+状态：proposed，2026-09-08。切片 3 已实现（2026-10-13，[#108](https://github.com/TONiiV/Kanal/issues/108)）：会后分离写入会议文件夹的 `speakers.json`，`transcript.jsonl` 不改写；原始标签不经 `Speaker.MergedFrom` 保留，因为一个标签拆成多人无法用合并表达。暂不分块：整段录音一次读入内存（约 230 MB/小时），产品经理 2026-10-13 接受；重算进行中允许开始新会议（见 `docs/PROGRESS.md` 2026-10-13）。落地 [#13](https://github.com/TONiiV/Kanal/issues/13) 与
 [`docs/design/meeting-evidence.md`](../design/meeting-evidence.md) 一直悬着的「发言人识别」范围问题。
 运行时选择继承 [ADR 0053](0053-local-transcription-model-and-runtime.md)。
 
