@@ -72,6 +72,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private Task? _captureStopping;
     private string? _activeMicrophoneId;
     private bool _activeOnline;
+    private bool _refreshingDevices;
+    private string _liveStatus = "";
+    private string? _audioFaultStatus;
     private SignalState _microphoneSignal;
     private SignalState _systemSignal;
     private string? _statusBeforePushFailure;
@@ -80,6 +83,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private IAudioDeviceWatcher? _deviceWatcher;
     /// <summary>Null means the planner's default: stored key first, then the environment.</summary>
     private readonly PipelinePlanner.KeyResolver? _resolveKey;
+    private readonly PipelinePlanner.KeyResolver? _resolveTranslationKey;
 
     /// <summary>
     /// Presentation order of the language codes, seeded from <see cref="LanguageCatalog"/> and
@@ -96,6 +100,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<string, string, ISpeakerDiarizer> _makeDiarizer;
     private readonly Func<Action, Task> _offUiThread;
     private string? _titleOnRecord;
+
+    public ModelRows ModelRows { get; }
+
+    public DownloadTray DownloadTray { get; }
 
     public MainViewModel()
         : this(SettingsStore.Load, () => new ModelDownloadManager(SettingsStore.ModelsPath),
@@ -132,17 +140,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false,
+        PipelinePlanner.KeyResolver? resolveTranslationKey = null,
         Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
     {
         _titler = titler;
         _makeDiarizer = diarizerFactory ?? ((segmentation, embedding) =>
             new SherpaSpeakerDiarizer(segmentation, embedding));
+        Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
         _offUiThread = offUiThread ?? (work =>
         {
             work();
             return Task.CompletedTask;
         });
         Ruler = new TranscriptRulerViewModel(ResolveSpeaker);
+        Assistant.SpeakerName = tag => ResolveSpeaker(tag).Name;
         BrowsedRuler = new TranscriptRulerViewModel(tag =>
             (tag, tag, _storedColours.TryGetValue(tag, out var colour) ? colour : ThemeColours.SpeakerFallback));
         Ruler.JumpRequested += MarkJumpTarget;
@@ -202,9 +213,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         };
         _loadSettings = loadSettings;
         _downloads = downloads;
+        ModelRows = new ModelRows(downloads());
+        DownloadTray = new DownloadTray(ModelRows);
+        foreach (var row in ModelRows.Translation.Concat(ModelRows.Transcription))
+        {
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModelItemViewModel.IsDownloaded) && row.IsDownloaded)
+                    RefreshPipelineStatus();
+            };
+        }
+
         _makeTitler = titlerFactory ?? (model => new GeneratedMeetingTitler(
             new LlamaSharpTextGenerator(_downloads().GetPath(model), model.AssistantPrefill)));
         _resolveKey = resolveKey;
+        _resolveTranslationKey = resolveTranslationKey;
         _captureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
         _systemCaptureFactory = systemCaptureFactory ?? SystemAudioCaptureFactory.TryCreate;
         _signalClock = signalClock ?? TimeProvider.System;
@@ -266,6 +289,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 option.RefreshText();
             foreach (var option in CaptureProfiles)
                 option.RefreshText();
+            Assistant.Refresh();
             OnPropertyChanged(nameof(SelectedLanguageSummary));
             OnPropertyChanged(nameof(LanguageLimitNotice));
             OnPropertyChanged(nameof(PauseLabel));
@@ -310,10 +334,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Re-enumerates into <see cref="Devices"/>. The selection survives by its stable id —
-    /// enumeration builds fresh instances every time — and an unplugged selection falls back
-    /// to the list head, which the backends already order default-first. A capture already
-    /// running keeps the device id it was started with: the dropdown updates, the meeting
-    /// does not switch microphones mid-sentence.
+    /// enumeration builds fresh instances every time. Idle, an unplugged selection falls back to
+    /// the list head, which the backends already order default-first; live, a refresh never moves
+    /// the capture — only the operator's pick does.
     /// </summary>
     private void RefreshDevices()
     {
@@ -330,11 +353,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // The active ids, not the selections: clearing a bound ComboBox's items nulls its selection.
         var lost = IsRunning && !IsStopping && _activeOnline && IsMissing(_activeMicrophoneId, fresh);
 
-        var selectedId = SelectedDevice?.Id;
-        Devices.Clear();
-        foreach (var device in fresh)
-            Devices.Add(device);
-        SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? Devices.FirstOrDefault();
+        _refreshingDevices = true;
+        try
+        {
+            // Live, show the device in use or none: re-picking the item already shown raises no change.
+            var live = IsRunning && !IsStopping;
+            var selectedId = live ? _activeMicrophoneId : SelectedDevice?.Id;
+            Devices.Clear();
+            foreach (var device in fresh)
+                Devices.Add(device);
+            SelectedDevice = fresh.FirstOrDefault(d => d.Id == selectedId) ?? (live ? null : Devices.FirstOrDefault());
+        }
+        finally
+        {
+            _refreshingDevices = false;
+        }
 
         if (lost)
         {
@@ -350,6 +383,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Called from MainWindow.OnClosed: the native listener must not outlive the window.</summary>
     public void Dispose()
     {
+        ModelRows.CancelAll();
         if (Application.Current is { } app)
             app.ActualThemeVariantChanged -= OnThemeVariantChanged;
         _captureCts?.Cancel();
@@ -597,6 +631,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     public ObservableCollection<SpeakerItemViewModel> Speakers { get; } = new();
+
+    public bool ShowNoSpeakersNote => Speakers.Count == 0;
 
     public AssistantViewModel Assistant { get; } = new();
 
@@ -897,19 +933,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(CanChooseAudio))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isOpening;
 
     public bool CanChooseAudio => !IsRunning && !IsOpening;
 
+    // Devices stay pickable while recording; the capture profile does not — consent was given for it.
+    public bool CanChooseDevice => !IsOpening && !IsStopping;
+
     public bool ShowMicLevel => IsRunning && NeedsMicrophone;
 
     public bool ShowComputerLevel => ShowMicLevel && NeedsComputerAudio;
-
-    [ObservableProperty]
-    private string _mergeFromTag = "";
-
-    [ObservableProperty]
-    private string _mergeIntoTag = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasJoinInfo))]
@@ -1017,7 +1051,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await _offUiThread(() =>
         {
             utterances = StoredTranscript.Utterances(record);
-            columns = StoredTranscript.Columns(utterances, record.Languages ?? []);
+            columns = StoredTranscript.Columns(utterances, record.Languages ?? [], CopyToClipboard);
         });
         if (version != _bodyVersion)
             return;
@@ -1096,9 +1130,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         foreach (var option in Modes)
             option.Unavailable = PipelinePlanner
-                .Describe(option.Mode, settings, downloads, _resolveKey).Unavailable;
+                .Describe(option.Mode, settings, downloads, _resolveKey, _resolveTranslationKey).Unavailable;
 
-        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey);
+        var status = PipelinePlanner.Describe(SelectedMode.Mode, settings, downloads, _resolveKey, _resolveTranslationKey);
         TranscriptionStatus = status.TranscriptionLabel;
         TranslationStatus = status.TranslationLabel;
         Sidebar.TitleModelReady = NamingModel() is not null;
@@ -1113,6 +1147,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
+    [NotifyPropertyChangedFor(nameof(CanChooseDevice))]
     private bool _isStopping;
 
     /// <summary>
@@ -1244,7 +1279,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
         var settings = _loadSettings();
-        var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey);
+        var plan = PipelinePlanner.Plan(mode, settings, _downloads(), _resolveKey, _resolveTranslationKey);
         if (PlanFilter is not null)
             plan = PlanFilter(plan);
         TranscriptionStatus = plan.Status.TranscriptionLabel;
@@ -1306,7 +1341,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // the selection is already capped at MaxLanguages; this reads the same constant so the
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
-            Columns.Add(new ColumnViewModel(lang));
+            Columns.Add(new ColumnViewModel(lang, CopyToClipboard, PinToPoints));
         FocusedLanguage = null;
 
         var asr = plan.Asr!;
@@ -1328,15 +1363,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var signingKey = RelaySigningKey.Create();
         var connecting = ConnectRelayAsync(config.RoomId, relaySettings, signingKey, ct);
 
-        // A local translation model loads to a working state *before* the room opens. Loading
-        // it on the first final — which is what lazy loading did — meant the meeting's opening
-        // sentences waited out a multi-gigabyte load with nothing on screen saying why.
-        // Capability-checked, not vendor-checked: whatever declares a warm-up gets one. The
-        // load runs off the UI thread; Stop cancels it; a load that fails stops the Start
-        // rather than opening a room that cannot translate.
-        if (mt is IWarmupProvider warmable)
+        // Load before the room opens: loading on first use left the opening sentences waiting with no status.
+        foreach (var (warmable, loading, failed, label) in new[]
+                 {
+                     (asr as IWarmupProvider, "status.loadingasrmodel", "status.asrmodelloadfailed",
+                         plan.Status.TranscriptionLabel),
+                     (mt as IWarmupProvider, "status.loadingmodel", "status.modelloadfailed",
+                         plan.Status.TranslationLabel),
+                 })
         {
-            Status = L.Format("status.loadingmodel", plan.Status.TranslationLabel);
+            if (warmable is null)
+                continue;
+
+            Status = L.Format(loading, label);
             try
             {
                 await Task.Run(() => warmable.WarmUpAsync(ct));
@@ -1351,8 +1390,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
-                Status = L.Format("status.modelloadfailed", ex.Message);
-                Log.Error(RoomLog, "The translation model failed to load; the room was not opened.", ex);
+                Status = L.Format(failed, ex.Message);
+                Log.Error(RoomLog, $"A local model failed to load ({label}); the room was not opened.", ex);
                 return;
             }
 
@@ -1371,7 +1410,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Log.Write(
                 e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
             Dispatcher.UIThread.Post(() =>
-                Status = L.Format(e.Fatal ? "status.fatal" : "status.warning", e.Message));
+                Status = L.Format(
+                    e.Fatal ? "status.fatal" : "status.warning", e.Code is null ? e.Message : L["error." + e.Code]));
         };
         session.SessionEnded += reason =>
         {
@@ -1482,6 +1522,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _snapshotTimer.Start();
         }
 
+        _liveStatus = Status;
+        _audioFaultStatus = null;
         if (mode.NeedsMicrophone)
             await StartCaptureAsync(session);
 
@@ -1531,6 +1573,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsPaused = false;
             _activeOnline = false;
             _activeMicrophoneId = null;
+            SelectedDevice ??= Devices.FirstOrDefault();
             ResetAudioHints();
             _pendingConsentConfirmedAt = null;
             _saveAudioThisMeeting = null;
@@ -1772,6 +1815,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _captureTask = Task.Run(() => PumpCaptureAsync(session, microphoneId, online, cts.Token));
     }
 
+    partial void OnSelectedDeviceChanged(AudioDeviceInfo? value)
+    {
+        if (!IsLivePick(value, _activeMicrophoneId))
+            return;
+        _activeMicrophoneId = value!.Id;
+        _ = MoveCaptureAsync();
+    }
+
+    // A list refresh re-selects (or falls back) on its own; only the operator's pick moves a live capture.
+    private bool IsLivePick(AudioDeviceInfo? picked, string? activeId) =>
+        !_refreshingDevices && picked is not null && picked.Id != activeId &&
+        IsRunning && !IsStopping && NeedsMicrophone;
+
+    private async Task MoveCaptureAsync()
+    {
+        if (_session is not { } session || IsPaused)
+            return;
+        Log.Info(AudioLog, $"capture_device_switched source={OnlineMeetingCapture.MicrophoneSource}");
+        await StopCaptureAsync();
+        await StartCaptureAsync(session);
+        if (!IsStale(session) && !IsPaused && Status == _audioFaultStatus)
+            Status = _liveStatus;
+    }
+
     private Task StopCaptureAsync()
     {
         if (_captureStopping is { IsCompleted: false } pending)
@@ -2005,7 +2072,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = message;
+            Status = _audioFaultStatus = message;
         }
     }
 
@@ -2022,7 +2089,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            Status = L.Format("status.audiofailed", message);
+            Status = _audioFaultStatus = L.Format("status.audiofailed", message);
         }
     }
 
@@ -2120,16 +2187,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _session.RenameSpeaker(item.Tag, name);
     }
 
-    [RelayCommand]
-    private void MergeSpeakers()
-    {
-        if (_session is null ||
-            string.IsNullOrWhiteSpace(MergeFromTag) || string.IsNullOrWhiteSpace(MergeIntoTag))
-            return;
-        _session.MergeSpeakers(MergeFromTag.Trim(), MergeIntoTag.Trim());
-        MergeFromTag = "";
-        MergeIntoTag = "";
-    }
+    private void ApplyMerge(SpeakerItemViewModel item, string intoTag) =>
+        _session?.MergeSpeakers(item.Tag, intoTag);
+
+    private void ApplyColour(SpeakerItemViewModel item, string colour) =>
+        _session?.SetSpeakerColour(item.Tag, colour);
 
     /// <summary>
     /// Where a meeting's audio is written, or null when it is not being recorded — scripted
@@ -2271,6 +2333,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public Func<string, string, Task<string?>>? ChooseExportPath { get; set; }
 
+    public Func<string, Task> WriteClipboard { get; set; } = _ => Task.CompletedTask;
+
+    private Task CopyToClipboard(string text) => WriteClipboard(text);
+
+    private void PinToPoints(BubbleViewModel bubble, string text) => Assistant.Pin(bubble.UtteranceId, text);
+
     private sealed record MeetingAttestation(
         CaptureProfile CaptureProfile,
         DateTimeOffset ConsentConfirmedAt);
@@ -2353,7 +2421,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         return sb.ToString();
     }
 
-    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename) { Tag = tag };
+    internal SpeakerItemViewModel CreateSpeakerItem(string tag) => new(ApplyRename, ApplyMerge, ApplyColour) { Tag = tag };
 
     private void ApplyUtterance(Utterance u)
     {
@@ -2369,6 +2437,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var translation = u.Translations.TryGetValue(column.Language, out var t) ? t : null;
 
             var bubble = column.GetOrAdd(u.Id);
+            bubble.StartMs = u.TStartMs;
             bubble.SpeakerTag = u.SpeakerTag;
             bubble.SpeakerName = speakerName;
             bubble.SpeakerColor = speakerColor;
@@ -2383,6 +2452,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bubble.Text = isSourceColumn ? u.SrcText : translation ?? "…";
             bubble.SourceText = isSourceColumn || translation is null ? "" : u.SrcText;
         }
+
+        RefreshUtteranceCounts();
     }
 
     // "und" is Gladia's answer when it could not place the language; printed raw it reads like an
@@ -2392,6 +2463,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     internal void ApplySpeaker(Speaker speaker)
     {
+        var storedName = _speakerModels.TryGetValue(speaker.Tag, out var previous) ? previous.DisplayName : null;
         _speakerModels[speaker.Tag] = speaker;
         _tagToCanonical[speaker.Tag] = speaker.Tag;
         foreach (var merged in speaker.MergedFrom)
@@ -2404,6 +2476,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         var item = Speakers.FirstOrDefault(s => s.Tag == speaker.Tag);
+        var isNew = item is null;
         if (item is null)
         {
             item = CreateSpeakerItem(speaker.Tag);
@@ -2411,7 +2484,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         item.Color = speaker.Color;
-        item.Name = speaker.DisplayName ?? "";
+        if (isNew || storedName != speaker.DisplayName)
+            item.Name = speaker.DisplayName ?? "";
         item.MergedFromLabel = speaker.MergedFrom.Count > 0
             ? $"⊇ {string.Join(", ", speaker.MergedFrom)}"
             : "";
@@ -2425,6 +2499,29 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         Ruler.Reresolve();
+        Assistant.Refresh();
+        RefreshMergeTargets();
+        RefreshUtteranceCounts();
+    }
+
+    private void RefreshUtteranceCounts()
+    {
+        var counts = (Columns.FirstOrDefault()?.Bubbles ?? [])
+            .GroupBy(b => ResolveSpeaker(b.SpeakerTag).Tag)
+            .ToDictionary(g => g.Key, g => g.Count());
+        foreach (var item in Speakers)
+            item.UtteranceCount = counts.GetValueOrDefault(item.Tag);
+    }
+
+    private void RefreshMergeTargets()
+    {
+        string Label(SpeakerItemViewModel o) =>
+            _speakerModels.TryGetValue(o.Tag, out var m) && m.DisplayName is { Length: > 0 } name
+                ? $"{o.Tag} · {name}"
+                : o.Tag;
+
+        foreach (var item in Speakers)
+            item.MergeTargets = Speakers.Where(o => o != item).Select(o => new MergeTarget(o.Tag, Label(o))).ToList();
     }
 
     private (string Tag, string Name, string Color) ResolveSpeaker(string tag)

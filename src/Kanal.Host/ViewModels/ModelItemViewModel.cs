@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ public partial class ModelItemViewModel : ViewModelBase
     private readonly string? _meta;
     private readonly bool _transcription;
     private CancellationTokenSource? _downloadCts;
+    private DownloadItemViewModel? _download;
 
     public ModelItemViewModel()
     {
@@ -27,21 +29,22 @@ public partial class ModelItemViewModel : ViewModelBase
 
     public ModelItemViewModel(LocalModelInfo model, ModelDownloadManager downloads)
         : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
-            model.LicenseNote, [model], downloads, transcription: false)
+            model.LicenseNote, [model], downloads, transcription: false, model.SizeBytes)
     {
     }
 
     public ModelItemViewModel(AsrModelInfo model, ModelDownloadManager downloads)
         : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
-            model.LicenseNote, model.Parts, downloads, transcription: true)
+            model.LicenseNote, model.Parts, downloads, transcription: true, model.SizeBytes)
     {
     }
 
     private ModelItemViewModel(
         string id, string name, string parameters, string size, string license, string? licenseNote,
-        IReadOnlyList<IDownloadableFile> parts, ModelDownloadManager downloads, bool transcription)
+        IReadOnlyList<IDownloadableFile> parts, ModelDownloadManager downloads, bool transcription, long sizeBytes)
     {
         _transcription = transcription;
+        SizeBytes = sizeBytes;
         ModelId = id;
         _name = name;
         _meta = $"{parameters} · {size} · {license}";
@@ -55,11 +58,15 @@ public partial class ModelItemViewModel : ViewModelBase
 
     public string? ModelId { get; }
 
+    public long SizeBytes { get; }
+
     public string DisplayName => _name ?? Localizer.Instance["settings.model.none"];
 
     public string MetaLabel => _meta ?? Localizer.Instance["settings.model.none.note"];
 
     public string? LicenseNote { get; }
+
+    public bool HasChoice { get; set; } = true;
 
     public bool HasLicenseNote => !string.IsNullOrEmpty(LicenseNote);
 
@@ -86,11 +93,18 @@ public partial class ModelItemViewModel : ViewModelBase
     /// <summary>0..1 while a download runs.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
+    [NotifyPropertyChangedFor(nameof(ProgressLabel))]
     private double _progress;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     private string _error = "";
+
+    public DownloadItemViewModel Download =>
+        _download ??= new DownloadItemViewModel(this, _transcription ? "transcript" : "translate");
+
+    public string ProgressLabel =>
+        $"{(int)(Progress * 100)}% · {Megabytes(Progress * SizeBytes)} / {Megabytes(SizeBytes)} MB";
 
     public bool CanDownload => IsLocal && !IsDownloaded && !IsDownloading;
 
@@ -100,7 +114,7 @@ public partial class ModelItemViewModel : ViewModelBase
     public string StatusLabel =>
         !IsLocal ? "" :
         Error.Length > 0 ? Error :
-        IsDownloading ? Localizer.Instance.Format("settings.model.downloading", (int)(Progress * 100)) :
+        IsDownloading ? ProgressLabel :
         Localizer.Instance[IsDownloaded ? "settings.model.downloaded" : "settings.model.notdownloaded"];
 
     /// <summary>Re-reads this row's strings after the application's language changes.</summary>
@@ -144,10 +158,13 @@ public partial class ModelItemViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Also called when the Settings window closes — a download nobody can see
-    /// or cancel any more must not keep running against a discarded view model.</summary>
-    [RelayCommand]
     public void CancelDownload() => _downloadCts?.Cancel();
+
+    public void RefreshDownloaded()
+    {
+        if (_downloads is not null && !IsDownloading)
+            IsDownloaded = _downloads.IsDownloaded(_parts);
+    }
 
     [RelayCommand]
     private void Delete()
@@ -158,5 +175,11 @@ public partial class ModelItemViewModel : ViewModelBase
         IsDownloaded = false;
         Error = "";
         OnPropertyChanged(nameof(CanDelete));
+    }
+
+    private static string Megabytes(double bytes)
+    {
+        var mb = bytes / (1024 * 1024);
+        return mb.ToString(mb >= 100 ? "0" : "0.#", CultureInfo.InvariantCulture);
     }
 }

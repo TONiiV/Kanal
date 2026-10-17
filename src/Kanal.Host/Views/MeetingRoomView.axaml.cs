@@ -19,12 +19,31 @@ public partial class MeetingRoomView : UserControl
         DataFormat.CreateStringApplicationFormat("kanal-column");
 
     private readonly ColumnScrollSync _scroll = new();
+    private readonly List<ScrollViewer> _columnScrollers = [];
+    private bool _framePending;
     private MainViewModel? _bound;
+    private double _rulerHeight;
 
     public MeetingRoomView()
     {
         InitializeComponent();
         _scroll.Changed += () => JumpToLatest.IsVisible = _scroll.OffersJump;
+        ((MenuFlyout)Resources["UtteranceMenu"]!).Opening += OnUtteranceMenuOpening;
+    }
+
+    private static void OnUtteranceMenuOpening(object? sender, EventArgs e)
+    {
+        if (sender is not MenuFlyout { Target: { } target } menu)
+            return;
+
+        var text = target switch
+        {
+            SelectableTextBlock line => string.IsNullOrEmpty(line.SelectedText) ? line.Text ?? "" : line.SelectedText,
+            { DataContext: BubbleViewModel bubble } => bubble.Text,
+            _ => "",
+        };
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.CommandParameter = text;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -33,6 +52,10 @@ public partial class MeetingRoomView : UserControl
         {
             _bound.Ruler.JumpRequested -= ScrollTo;
             _bound.BrowsedRuler.JumpRequested -= ScrollTo;
+            _bound.Ruler.PageRequested -= ScrollPage;
+            _bound.BrowsedRuler.PageRequested -= ScrollPage;
+            _bound.Ruler.NeedsFrame -= RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame -= RequestRulerFrame;
             _bound.Sidebar.PropertyChanged -= OnSelectedMeetingChanged;
         }
 
@@ -41,7 +64,12 @@ public partial class MeetingRoomView : UserControl
         {
             _bound.Ruler.JumpRequested += ScrollTo;
             _bound.BrowsedRuler.JumpRequested += ScrollTo;
+            _bound.Ruler.PageRequested += ScrollPage;
+            _bound.BrowsedRuler.PageRequested += ScrollPage;
+            _bound.Ruler.NeedsFrame += RequestRulerFrame;
+            _bound.BrowsedRuler.NeedsFrame += RequestRulerFrame;
             _bound.Sidebar.PropertyChanged += OnSelectedMeetingChanged;
+            ApplyRulerHeight();
         }
 
         base.OnDataContextChanged(e);
@@ -51,6 +79,21 @@ public partial class MeetingRoomView : UserControl
     {
         if (e.PropertyName == nameof(WorkspaceSidebarViewModel.SelectedMeeting))
             _scroll.ScrollToLatest();
+    }
+
+    private void OnRulerSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        _rulerHeight = e.NewSize.Height;
+        ApplyRulerHeight();
+    }
+
+    private void ApplyRulerHeight()
+    {
+        if (_bound is null || _rulerHeight <= 0)
+            return;
+
+        _bound.Ruler.SetStripHeight(_rulerHeight);
+        _bound.BrowsedRuler.SetStripHeight(_rulerHeight);
     }
 
     private void OnJumpToLatestClick(object? sender, RoutedEventArgs e) => _scroll.ScrollToLatest();
@@ -64,6 +107,41 @@ public partial class MeetingRoomView : UserControl
 
     private void OnTickExited(object? sender, PointerEventArgs e) =>
         (DataContext as MainViewModel)?.ShownRuler.Hover(null);
+
+    private void OnRulerMoved(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control strip)
+            MoveRulerPointer(e.GetPosition(strip).Y);
+    }
+
+    private void OnRulerExited(object? sender, PointerEventArgs e) => MoveRulerPointer(null);
+
+    internal void MoveRulerPointer(double? y)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.ShownRuler.PointerAt(y);
+    }
+
+    private void RequestRulerFrame()
+    {
+        if (_framePending || TopLevel.GetTopLevel(this) is not { } top)
+            return;
+
+        _framePending = true;
+        top.RequestAnimationFrame(_ =>
+        {
+            _framePending = false;
+            if (DataContext is not MainViewModel vm)
+                return;
+
+            vm.Ruler.Relax();
+            vm.BrowsedRuler.Relax();
+            if (vm.Ruler.IsSettling || vm.BrowsedRuler.IsSettling)
+                RequestRulerFrame();
+        });
+    }
 
     private void OnTickPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -91,6 +169,60 @@ public partial class MeetingRoomView : UserControl
         }
     }
 
+    private void ScrollPage(string utteranceId, PageDirection direction)
+    {
+        if (ReferenceColumn() is not { Content: ItemsControl items } scroller ||
+            items.ItemsSource?.OfType<BubbleViewModel>().FirstOrDefault(b => b.UtteranceId == utteranceId)
+                is not { } bubble ||
+            items.ContainerFromItem(bubble) is not Control row ||
+            row.TranslatePoint(default, items) is not { } top)
+            return;
+
+        _scroll.StopFollowing();
+        var y = direction == PageDirection.Up
+            ? top.Y + row.Bounds.Height - scroller.Viewport.Height
+            : top.Y;
+        scroller.Offset = new Vector(
+            scroller.Offset.X, Math.Clamp(y, 0, Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height)));
+    }
+
+    // The leftmost shown column decides what counts as on screen, so the ruler and the arrows agree.
+    private ScrollViewer? ReferenceColumn() =>
+        _columnScrollers.Where(s => s.IsEffectivelyVisible)
+            .MinBy(s => s.TranslatePoint(default, this)?.X ?? double.MaxValue);
+
+    private void OnColumnScrolled(object? sender, ScrollChangedEventArgs e) => ReportVisible(sender);
+
+    private void ReportVisible(object? source)
+    {
+        if (DataContext is not MainViewModel vm || ReferenceColumn() is not { Content: ItemsControl items } scroller ||
+            !ReferenceEquals(source, scroller))
+            return;
+
+        var top = scroller.Offset.Y + 0.5;
+        var bottom = scroller.Offset.Y + scroller.Viewport.Height - 0.5;
+        var visible = new List<string>();
+        var whole = new List<string>();
+        for (var i = 0; i < items.ItemCount; i++)
+        {
+            if (items.ContainerFromIndex(i) is not Control row ||
+                row.DataContext is not BubbleViewModel bubble ||
+                row.TranslatePoint(default, items) is not { } at)
+                continue;
+
+            if (at.Y >= bottom)
+                break;
+            if (at.Y + row.Bounds.Height <= top)
+                continue;
+
+            visible.Add(bubble.UtteranceId);
+            if (at.Y >= top - 1 && at.Y + row.Bounds.Height <= bottom + 1)
+                whole.Add(bubble.UtteranceId);
+        }
+
+        vm.ShownRuler.SetVisible(visible, whole);
+    }
+
     private async void OnLanguagesClick(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
@@ -101,14 +233,26 @@ public partial class MeetingRoomView : UserControl
 
     private void OnColumnScrollLoaded(object? sender, RoutedEventArgs e)
     {
-        if (sender is ScrollViewer scroller)
-            _scroll.Attach(scroller);
+        if (sender is not ScrollViewer scroller)
+            return;
+
+        _scroll.Attach(scroller);
+        if (_columnScrollers.Contains(scroller))
+            return;
+
+        _columnScrollers.Add(scroller);
+        scroller.ScrollChanged += OnColumnScrolled;
+        ReportVisible(scroller);
     }
 
     private void OnColumnScrollDetached(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        if (sender is ScrollViewer scroller)
-            _scroll.Detach(scroller);
+        if (sender is not ScrollViewer scroller)
+            return;
+
+        _scroll.Detach(scroller);
+        _columnScrollers.Remove(scroller);
+        scroller.ScrollChanged -= OnColumnScrolled;
     }
 
     private void OnColumnFocusClick(object? sender, RoutedEventArgs e)

@@ -108,6 +108,42 @@ public class RoomStateTests
     }
 
     [Fact]
+    public void SetSpeakerColourSurvivesSnapshotAndRaisesUpsert()
+    {
+        var room = NewRoom();
+        room.ApplyTranscript(Transcript("u1", "a", speaker: "S01"));
+        Speaker? raised = null;
+        room.SpeakerUpserted += s => raised = s;
+
+        room.SetSpeakerColour("S01", RoomState.Palette[5]);
+
+        Assert.Equal(RoomState.Palette[5], room.Snapshot().Speakers.Single().Color);
+        Assert.Equal(RoomState.Palette[5], raised?.Color);
+    }
+
+    [Fact]
+    public void SetSpeakerColourOnAMergedTagColoursTheCanonicalSpeaker()
+    {
+        var room = NewRoom();
+        room.ApplyTranscript(Transcript("u1", "a", speaker: "S01"));
+        room.ApplyTranscript(Transcript("u2", "b", speaker: "S02"));
+        room.MergeSpeakers("S02", "S01");
+
+        room.SetSpeakerColour("S02", RoomState.Palette[7]);
+
+        Assert.Equal(RoomState.Palette[7], room.Snapshot().Speakers.Single().Color);
+    }
+
+    [Fact]
+    public void SetSpeakerColourRefusesAColourOutsideThePalette()
+    {
+        var room = NewRoom();
+        room.ApplyTranscript(Transcript("u1", "a", speaker: "S01"));
+
+        Assert.Throws<ArgumentException>(() => room.SetSpeakerColour("S01", "#123456"));
+    }
+
+    [Fact]
     public void RecentFinalsSkipsPartialsAndExcludedId()
     {
         var room = NewRoom();

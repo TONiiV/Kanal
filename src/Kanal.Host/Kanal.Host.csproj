@@ -44,6 +44,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Kanal.Core\Kanal.Core.csproj" />
     <ProjectReference Include="..\Kanal.Audio\Kanal.Audio.csproj" />
+    <ProjectReference Include="..\Kanal.Providers.DeepL\Kanal.Providers.DeepL.csproj" />
     <ProjectReference Include="..\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalDiarization\Kanal.Providers.LocalDiarization.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalAsr\Kanal.Providers.LocalAsr.csproj" />

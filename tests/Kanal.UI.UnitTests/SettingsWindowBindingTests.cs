@@ -5,6 +5,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Kanal.Host.Controls;
+using Kanal.Core.Models;
 using Kanal.Core.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -35,6 +36,43 @@ public class SettingsWindowBindingTests
         Assert.Equal(SettingsStore.MaxLogMaxFileSizeMb, size.Maximum);
         Assert.True(size.ClipValueToMinMax);
 
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ADownloadingModelRowShowsTheBareRingInPlaceOfTheButtons()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N"));
+        var rows = new ModelRows(new ModelDownloadManager(dir));
+        var vm = new SettingsViewModel(
+            new AppSettings(), () => null, isMacOs: false, deviceWatcherFactory: null,
+            openFolder: _ => { }, modelRows: rows);
+        var row = vm.TranslationModels.First(r => r.IsLocal && r.CanDownload);
+        var window = new SettingsWindow(vm);
+        window.Show();
+        var list = window.GetLogicalDescendants().OfType<ItemsControl>().First(c => c.Name == "TranslationModels");
+        var tab = list.GetLogicalAncestors().OfType<TabItem>().First();
+        ((TabControl)tab.GetLogicalParent()!).SelectedItem = tab;
+        Dispatcher.UIThread.RunJobs();
+
+        IEnumerable<Control> Row() => window.GetVisualDescendants().OfType<Control>()
+            .Where(c => ReferenceEquals(c.DataContext, row));
+        var downloadLabel = Localizer.Instance["settings.model.download"];
+        Assert.Contains(Row().OfType<Button>(), b => b.IsEffectivelyVisible && Equals(b.Content, downloadLabel));
+
+        row.IsDownloading = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var ring = window.GetVisualDescendants().OfType<DownloadIndicatorView>()
+            .Single(v => ReferenceEquals(v.DataContext, row.Download));
+        Assert.True(ring.Bare);
+        Assert.True(ring.IsEffectivelyVisible);
+        Assert.DoesNotContain(Row().OfType<Button>(), b => b.GetType() == typeof(Button) && b.IsEffectivelyVisible);
+
+        row.IsDownloading = false;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(ring.IsEffectivelyVisible);
         window.Close();
     }
 

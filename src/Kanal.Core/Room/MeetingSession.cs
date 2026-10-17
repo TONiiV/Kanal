@@ -150,6 +150,13 @@ public sealed class MeetingSession : IAsyncDisposable
         return speaker;
     }
 
+    public Speaker SetSpeakerColour(string tag, string colour)
+    {
+        var speaker = Room.SetSpeakerColour(tag, colour);
+        _ = PublishSafeAsync(new SpeakerUpsert(speaker));
+        return speaker;
+    }
+
     public Speaker MergeSpeakers(string fromTag, string intoTag)
     {
         var speaker = Room.MergeSpeakers(fromTag, intoTag);
@@ -288,7 +295,8 @@ public sealed class MeetingSession : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            ErrorOccurred?.Invoke(new AsrEvent.Error($"Translation failed: {ex.Message}", Fatal: false));
+            ErrorOccurred?.Invoke(new AsrEvent.Error(
+                $"Translation failed: {ex.Message}", Fatal: false, (ex as MtProviderException)?.Code));
         }
     }
 

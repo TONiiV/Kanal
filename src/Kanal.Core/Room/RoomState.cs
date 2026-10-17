@@ -153,6 +153,26 @@ public sealed class RoomState
         return updated;
     }
 
+    public Speaker SetSpeakerColour(string tag, string colour)
+    {
+        if (!Colours.Contains(colour))
+            throw new ArgumentException("Colour is not in the speaker palette.", nameof(colour));
+
+        Speaker updated;
+        lock (_gate)
+        {
+            var canonical = ResolveTag(tag);
+            var existing = _speakers.TryGetValue(canonical, out var s)
+                ? s
+                : new Speaker(canonical, null, [], Colours[_speakers.Count % Colours.Length]);
+            updated = existing with { Color = colour };
+            _speakers[canonical] = updated;
+        }
+
+        SpeakerUpserted?.Invoke(updated);
+        return updated;
+    }
+
     /// <summary>
     /// Merge <paramref name="fromTag"/> into <paramref name="intoTag"/>. Non-destructive:
     /// utterances keep their original tag; clients resolve via MergedFrom.

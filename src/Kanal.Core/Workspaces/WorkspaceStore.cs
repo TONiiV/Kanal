@@ -160,6 +160,7 @@ public sealed class WorkspaceStore
                 Directory.Delete(meetingsFolder, recursive: true);
             WorkspaceIcons.DeleteFiles(root);
             File.Delete(marker);
+            File.Delete(RecordFile.TemporaryPathFor(marker));
             if (!Directory.EnumerateFileSystemEntries(root).Any())
                 Directory.Delete(root);
         }
@@ -289,8 +290,8 @@ public sealed class WorkspaceStore
     public StoreProblem? DeleteMeeting(string workspaceId, string meetingId) =>
         meetings.Delete(workspaceId, meetingId);
 
-    public RecoverResult RecoverMeeting(string workspaceId, string folder, string baseTitle) =>
-        meetings.Recover(workspaceId, folder, baseTitle);
+    public RecoverResult RecoverMeeting(string workspaceId, string folder, Func<DateTimeOffset, string> titleFor) =>
+        meetings.Recover(workspaceId, folder, titleFor);
 
     public RecoverResult ReidentifyMeeting(string workspaceId, string folder) =>
         meetings.Reidentify(workspaceId, folder);
