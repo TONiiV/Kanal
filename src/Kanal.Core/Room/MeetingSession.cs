@@ -9,8 +9,8 @@ namespace Kanal.Core.Room;
 
 /// <summary>
 /// Orchestrator: pumps ASR events into <see cref="RoomState"/>, publishes to the relay,
-/// and — the one capability decision — routes finals through <see cref="IMtProvider"/>
-/// when the ASR provider does not translate itself.
+/// and makes the two capability decisions: finals go through <see cref="IMtProvider"/> when the
+/// ASR provider does not translate, and through <see cref="LiveSpeakerLabels"/> when it does not diarize.
 /// </summary>
 public sealed class MeetingSession : IAsyncDisposable
 {
@@ -28,6 +28,9 @@ public sealed class MeetingSession : IAsyncDisposable
     private int _paused;
     private int _transcribing;
     private readonly bool _announceTranscription;
+    private readonly LiveSpeakerLabels? _speakerLabels;
+    private Task _labelling = Task.CompletedTask;
+    private int _labellingFailed;
 
     /// <summary>How long shutdown waits for translations already in flight before cancelling them.</summary>
     public static readonly TimeSpan DefaultTranslationGrace = TimeSpan.FromSeconds(2);
@@ -38,13 +41,15 @@ public sealed class MeetingSession : IAsyncDisposable
         IRelayPublisher relay,
         RoomConfig config,
         TimeSpan? translationGrace = null,
-        bool announceTranscription = true)
+        bool announceTranscription = true,
+        LiveSpeakerLabels? speakerLabels = null)
     {
         _asr = asr;
         _mt = mt;
         _relay = relay;
         _translationGrace = translationGrace ?? DefaultTranslationGrace;
         _announceTranscription = announceTranscription;
+        _speakerLabels = speakerLabels;
         Room = new RoomState(config);
 
         if (!asr.Caps.Translation && mt is null)
@@ -199,6 +204,8 @@ public sealed class MeetingSession : IAsyncDisposable
                         await PublishSafeAsync(new UtteranceUpsert(utterance));
                         if (t.IsFinal && !_asr.Caps.Translation && _mt is not null)
                             TrackTranslation(() => TranslateAsync(utterance, ct));
+                        if (t.IsFinal && !_asr.Caps.Diarization && _speakerLabels is not null)
+                            LabelSpeaker(utterance.Id, ct);
                         break;
 
                     case AsrEvent.Error error:
@@ -227,6 +234,41 @@ public sealed class MeetingSession : IAsyncDisposable
                 await PublishSafeAsync(new RoomTranscribingMessage(false));
                 TranscribingChanged?.Invoke(false);
             }
+        }
+    }
+
+    private void LabelSpeaker(string utteranceId, CancellationToken ct)
+    {
+        var audio = Timeline.TakeRecentAudio(utteranceId);
+        if (audio.Availability != AudioAvailability.Available)
+            return;
+
+        lock (_gate)
+            _labelling = _labelling
+                .ContinueWith(_ => LabelSpeakerAsync(utteranceId, audio.Pcm16, ct), TaskScheduler.Default)
+                .Unwrap();
+    }
+
+    private async Task LabelSpeakerAsync(string utteranceId, ReadOnlyMemory<byte> pcm16, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || Volatile.Read(ref _labellingFailed) == 1)
+            return;
+
+        try
+        {
+            if (_speakerLabels!.Assign(pcm16.Span) is not { } tag)
+                return;
+
+            var (utterance, newSpeaker) = Room.AssignSpeaker(utteranceId, tag);
+            if (newSpeaker is not null)
+                await PublishSafeAsync(new SpeakerUpsert(newSpeaker));
+            if (utterance is not null)
+                await PublishSafeAsync(new UtteranceUpsert(utterance));
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Exchange(ref _labellingFailed, 1);
+            Log.Warning("speakers", "Live speaker labels stopped for this meeting; the transcript goes on.", ex);
         }
     }
 
@@ -418,6 +460,12 @@ public sealed class MeetingSession : IAsyncDisposable
         catch
         {
         }
+
+        Task labelling;
+        lock (_gate)
+            labelling = _labelling;
+        await labelling;
+        _speakerLabels?.Dispose();
 
         _cts.Dispose();
     }
