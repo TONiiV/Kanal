@@ -524,7 +524,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private async Task ReidentifySpeakersAsync(MeetingItemViewModel item)
+    private async Task ReidentifySpeakersAsync(MeetingItemViewModel item, int? people)
     {
         if (IsRunning || IsStarting || Sidebar.ReidentifyingMeetingId is not null
             || item.Record is not { TranscriptPath: { } transcript, AudioPath: { } audio })
@@ -542,7 +542,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             item.ReidentifyNote = L.Format("meeting.reidentify.working", 0);
             var speakers = await SpeakerReidentification.RunAsync(
                 _makeDiarizer(downloads.GetPath(segmentation), downloads.GetPath(embedding)),
-                transcript, audio, speakerCount: null,
+                transcript, audio, speakerCount: people,
                 ReidentifyProgress(item, "meeting.reidentify.working"), CancellationToken.None);
             Status = L.Format("meeting.reidentify.done", speakers);
             ShowReidentified(item);

@@ -145,7 +145,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     [ObservableProperty]
     private string? _reidentifyingMeetingId;
 
-    public Func<MeetingItemViewModel, Task>? ReidentifySpeakersFor { get; set; }
+    public Func<MeetingItemViewModel, int?, Task>? ReidentifySpeakersFor { get; set; }
 
     public event Action<string, string>? MeetingRenamed;
 
@@ -593,8 +593,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private Task GenerateTitleAsync(MeetingItemViewModel item) =>
         GenerateTitleFor?.Invoke(item) ?? Task.CompletedTask;
 
-    private Task ReidentifySpeakersAsync(MeetingItemViewModel item) =>
-        ReidentifySpeakersFor?.Invoke(item) ?? Task.CompletedTask;
+    private Task ReidentifySpeakersAsync(MeetingItemViewModel item, int? people) =>
+        ReidentifySpeakersFor?.Invoke(item, people) ?? Task.CompletedTask;
 
     private async Task ImportIntoAsync(MeetingItemViewModel item)
     {

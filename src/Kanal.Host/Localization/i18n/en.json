@@ -359,6 +359,8 @@
   "meeting.generatetitle.running": "Generate title (not while a meeting is running)",
   "meeting.generatetitle.empty": "Nothing has been said in this meeting to name it from.",
   "meeting.reidentify": "Re-identify speakers",
+  "meeting.reidentify.ask": "How many people spoke?",
+  "meeting.reidentify.guess": "Not sure: let Kanal guess",
   "meeting.reidentify.noaudio": "Re-identify speakers (no recording of this meeting)",
   "meeting.reidentify.running": "Re-identify speakers (not while a meeting is running)",
   "meeting.reidentify.downloading": "Downloading the speaker model… {0}%",

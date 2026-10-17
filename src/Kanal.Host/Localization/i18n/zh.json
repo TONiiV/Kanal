@@ -359,6 +359,8 @@
   "meeting.generatetitle.running": "生成标题（会议进行中不可用）",
   "meeting.generatetitle.empty": "这场会议还没有可用于命名的内容。",
   "meeting.reidentify": "重新识别发言人",
+  "meeting.reidentify.ask": "有几个人发言？",
+  "meeting.reidentify.guess": "不确定，让 Kanal 估计",
   "meeting.reidentify.noaudio": "重新识别发言人（这场会议没有录音）",
   "meeting.reidentify.running": "重新识别发言人（会议进行中不可用）",
   "meeting.reidentify.downloading": "正在下载发言人模型… {0}%",

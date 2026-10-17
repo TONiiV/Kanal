@@ -11,7 +11,7 @@ public sealed partial class MeetingItemViewModel(
     MeetingRecord record,
     Func<MeetingItemViewModel, string, bool> rename,
     Func<MeetingItemViewModel, Task> generateTitle,
-    Func<MeetingItemViewModel, Task> reidentifySpeakers,
+    Func<MeetingItemViewModel, int?, Task> reidentifySpeakers,
     Func<MeetingItemViewModel, Task> import,
     Func<MeetingItemViewModel, Task> exportBundle,
     Func<MeetingItemViewModel, Task> openFolder,
@@ -94,7 +94,8 @@ public sealed partial class MeetingItemViewModel(
     public string ReidentifySpeakersHeader => Localizer.Instance[ReidentifyBlockedBy ?? "meeting.reidentify"];
 
     [RelayCommand(CanExecute = nameof(CanReidentifySpeakers))]
-    private Task ReidentifySpeakers() => reidentifySpeakers(this);
+    private Task ReidentifySpeakers(string? people) =>
+        reidentifySpeakers(this, int.TryParse(people, out var count) ? count : null);
 
     public void OnLanguageChanged()
     {
