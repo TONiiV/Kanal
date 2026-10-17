@@ -19,9 +19,10 @@ The first release. Everything below is what Kanal does on the day it ships.
   speaker models are on this computer: run *Re-identify speakers* on a recorded meeting once.
   Kanal keeps no voiceprint after the meeting ends.
 - A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
-  choose *Re-identify speakers*. Kanal runs speaker separation on the recording on this computer
-  and gives each person their own tag and colour. The first run downloads a 34 MB model. The
-  original tags stay in the transcript file.
+  choose *Re-identify speakers*, then the number of people who spoke. Kanal runs speaker separation
+  on the recording on this computer and gives each person their own tag and colour. If you choose
+  *Not sure*, Kanal guesses the number, and it often finds too many people. The first run
+  downloads a 34 MB model. The original tags stay in the transcript file.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
   and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
   the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,

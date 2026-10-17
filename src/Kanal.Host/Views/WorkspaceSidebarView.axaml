@@ -316,10 +316,21 @@
                                                         </MenuItem>
                                                         <MenuItem Name="ReidentifySpeakers"
                                                                   Header="{Binding ReidentifySpeakersHeader}"
-                                                                  Command="{Binding ReidentifySpeakersCommand}">
+                                                                  IsEnabled="{Binding CanReidentifySpeakers}">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon people}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
+                                                            <MenuItem Header="{l:T meeting.reidentify.ask}" IsEnabled="False" />
+                                                            <MenuItem Header="2" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="2" />
+                                                            <MenuItem Header="3" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="3" />
+                                                            <MenuItem Header="4" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="4" />
+                                                            <MenuItem Header="5" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="5" />
+                                                            <MenuItem Header="6" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="6" />
+                                                            <MenuItem Header="7" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="7" />
+                                                            <MenuItem Header="8" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="8" />
+                                                            <Separator />
+                                                            <MenuItem Name="ReidentifyGuess" Header="{l:T meeting.reidentify.guess}"
+                                                                      Command="{Binding ReidentifySpeakersCommand}" />
                                                         </MenuItem>
                                                         <Separator />
                                                         <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"

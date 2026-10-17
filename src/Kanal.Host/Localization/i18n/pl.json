@@ -359,6 +359,8 @@
   "meeting.generatetitle.running": "Wygeneruj tytuł (niedostępne w trakcie spotkania)",
   "meeting.generatetitle.empty": "W tym spotkaniu nie padło jeszcze nic, z czego można by nadać nazwę.",
   "meeting.reidentify": "Rozpoznaj mówców ponownie",
+  "meeting.reidentify.ask": "Ile osób mówiło?",
+  "meeting.reidentify.guess": "Nie wiem: Kanal oszacuje",
   "meeting.reidentify.noaudio": "Rozpoznaj mówców ponownie (brak nagrania tego spotkania)",
   "meeting.reidentify.running": "Rozpoznaj mówców ponownie (niedostępne w trakcie spotkania)",
   "meeting.reidentify.downloading": "Pobieranie modelu mówców… {0}%",

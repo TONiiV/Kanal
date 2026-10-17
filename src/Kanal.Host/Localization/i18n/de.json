@@ -359,6 +359,8 @@
   "meeting.generatetitle.running": "Titel erzeugen (nicht während einer laufenden Besprechung)",
   "meeting.generatetitle.empty": "In dieser Besprechung wurde noch nichts gesagt, woraus sich ein Titel ergäbe.",
   "meeting.reidentify": "Sprecher neu erkennen",
+  "meeting.reidentify.ask": "Wie viele Personen haben gesprochen?",
+  "meeting.reidentify.guess": "Unsicher: Kanal schätzt",
   "meeting.reidentify.noaudio": "Sprecher neu erkennen (keine Aufnahme dieser Besprechung)",
   "meeting.reidentify.running": "Sprecher neu erkennen (nicht während einer laufenden Besprechung)",
   "meeting.reidentify.downloading": "Sprechermodell wird geladen… {0} %",

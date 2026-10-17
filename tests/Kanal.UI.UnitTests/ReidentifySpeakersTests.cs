@@ -21,6 +21,18 @@ public class ReidentifySpeakersTests : IDisposable
             Task.FromResult<IReadOnlyList<SpeakerTurn>>([new(0, 1.0, 4), new(1.0, 2.0, 9)]);
     }
 
+    private sealed class CountingDiarizer : ISpeakerDiarizer
+    {
+        public List<int?> Counts { get; } = [];
+
+        public Task<IReadOnlyList<SpeakerTurn>> DiarizeAsync(
+            string wavPath, int? speakerCount, IProgress<double>? progress, CancellationToken ct)
+        {
+            Counts.Add(speakerCount);
+            return Task.FromResult<IReadOnlyList<SpeakerTurn>>([new(0, 2.0, 0)]);
+        }
+    }
+
     private sealed class OneSpeaker : ISpeakerDiarizer
     {
         public Task<IReadOnlyList<SpeakerTurn>> DiarizeAsync(
@@ -169,5 +181,25 @@ public class ReidentifySpeakersTests : IDisposable
         Assert.All(finals, b => Assert.Equal("D01", b.SpeakerTag));
         Assert.Contains("**D01**", vm.BuildMarkdownExport());
         Assert.DoesNotContain("**S", vm.BuildMarkdownExport());
+    }
+
+    [AvaloniaTheory]
+    [InlineData("3", 3)]
+    [InlineData("8", 8)]
+    [InlineData(null, null)]
+    public async Task TheChosenNumberOfPeopleReachesTheDiarizer(string? chosen, int? expected)
+    {
+        var (store, record) = Stored(recorded: true);
+        var diarizer = new CountingDiarizer();
+        var vm = TestViewModels.Hermetic(
+            modelsDir: ModelsWithDefaultPair(),
+            workspaces: () => store,
+            diarizerFactory: (_, _) => diarizer);
+        var row = vm.Sidebar.Meetings.Single(m => m.Id == record.Id);
+
+        await row.ReidentifySpeakersCommand.ExecuteAsync(chosen);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal([expected], diarizer.Counts);
     }
 }
