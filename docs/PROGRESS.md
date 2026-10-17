@@ -94,7 +94,9 @@ by the audio fed, and it reports the peak minus the baseline before the load. Th
 re-measures the full matrix. It adds English, a Gladia cloud baseline and number-normalised scoring.
 The real-time columns come from 9 clips, so p95 is the maximum. Offline models give their first text
 only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
-partial 0.84 s after the onset.
+partial 0.84 s after the onset. The loose part-number counts below were recorded before the
+word-boundary fix. The old check could match across word boundaries. The follow-up PR re-measures
+them. Whisper's strict count is 1 of 4 in German and Polish: 1 of 2 in German, 0 of 2 in Polish.
 
 Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 45 % slower (RTF 0.12).
 4 threads is best (8 threads: RTF 0.118). FLEURS zh CER 21.1, de WER 11.6, pl WER 20.0.
@@ -102,8 +104,8 @@ Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 
 CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
 RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
 0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
-the run stopped there. CUDA is slower than the CPU here. This is an inference. It is not measured.
-The CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
+the run stopped there. CUDA is slower than the CPU here. The cause is not measured. Probably the
+CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
 move between the devices for each chunk.
 
 Findings:
