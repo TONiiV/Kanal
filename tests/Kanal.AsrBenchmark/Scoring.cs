@@ -18,7 +18,7 @@ internal static partial class Scoring
     public static string[] Words(string text) =>
         NotWordChar().Split(Compat(text).ToLowerInvariant()).Where(w => w.Length > 0).ToArray();
 
-    public static (int Errors, int ReferenceLength) Errors(string lang, string hypothesis, string reference)
+    public static (int Errors, int ReferenceLength) Errors(string lang, string hypothesis, string reference, bool numbers = false)
     {
         if (lang == "zh")
         {
