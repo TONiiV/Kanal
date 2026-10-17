@@ -312,7 +312,7 @@ internal sealed class GladiaEngine : Engine
 
     public override void Dispose() => _provider.Dispose();
 
-    // GladiaAsrSession.DisposeAsync closes the socket right after stop_recording, so it waits for the last final first.
+    // GladiaAsrSession.DisposeAsync closes the socket right after stop_recording, so this waits for the last final first.
     [ExcludeFromCodeCoverage]
     private sealed class Settled(GladiaAsrProvider inner) : IAsrProvider
     {
@@ -346,7 +346,7 @@ internal sealed class GladiaEngine : Engine
                         Interlocked.Exchange(ref _last, Stopwatch.GetTimestamp());
                     }
 
-                    await _events.Writer.WriteAsync(e);
+                    _events.Writer.TryWrite(e);
                 }
 
                 _events.Writer.TryComplete();
@@ -363,8 +363,17 @@ internal sealed class GladiaEngine : Engine
             while (Stopwatch.GetTimestamp() < deadline
                    && (_partial || Stopwatch.GetElapsedTime(Interlocked.Read(ref _last)) < TimeSpan.FromSeconds(1.5)))
                 await Task.Delay(100);
-            await _inner.DisposeAsync();
-            await _pump;
+            try
+            {
+                await _inner.DisposeAsync();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            // A close during the reconnect backoff leaves the inner event stream open for good.
+            _events.Writer.TryComplete();
+            await Task.WhenAny(_pump, Task.Delay(TimeSpan.FromSeconds(2)));
         }
     }
 }
