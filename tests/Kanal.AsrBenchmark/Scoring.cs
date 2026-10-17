@@ -20,6 +20,8 @@ internal static partial class Scoring
 
     public static (int Errors, int ReferenceLength) Errors(string lang, string hypothesis, string reference, bool numbers = false)
     {
+        if (numbers)
+            (hypothesis, reference) = (Numbers.Normalize(lang, hypothesis), Numbers.Normalize(lang, reference));
         if (lang == "zh")
         {
             var r = NormalizeChinese(reference);
