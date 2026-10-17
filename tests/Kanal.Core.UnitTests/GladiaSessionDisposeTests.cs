@@ -59,10 +59,11 @@ public class GladiaSessionDisposeTests
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
             ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
         {
-            _written.TrySetResult();
-            return ValueTask.CompletedTask;
+            // The close frame waits, as on a real network, so the receive loop sees the hang-up before DisposeAsync cancels it.
+            if (!_written.TrySetResult())
+                await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
