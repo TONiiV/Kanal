@@ -88,6 +88,44 @@ CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Offline models give
 only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
 partial 0.84 s after the onset.
 
+Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 45 % slower (RTF 0.12).
+4 threads is best (8 threads: RTF 0.118). FLEURS zh CER 21.1, de WER 11.6, pl WER 20.0.
+
+CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
+RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
+0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
+the run stopped there. CUDA is slower than the CPU here. Inference, not measured: the int8 graphs use
+quantized operators that the CUDA provider does not run, so they fall back to the CPU and copy
+tensors between the devices for each chunk.
+
+Findings:
+
+- **Nemotron writes numbers as words.** "KB-4471" becomes "KB cztery tysiące czterysta siedemdziesiąt
+  jeden"; "M10" becomes "M zehn". No part number survived, also with the loose check (0 of 8).
+  Whisper kept 4 of 4 in German and Polish (loose). This costs Nemotron WER points on FLEURS too.
+- **Nemotron emits Thai letters on Chinese.** 3 of 24 zh clips contain runs of "อ" where a foreign
+  name was spoken (both rooms).
+- **Whisper drops Chinese characters** ("摩尔多瓦的首都" → "多的首都"). Its zh CER of 33 is too high
+  for this model. The cause is not investigated; the sherpa-onnx Whisper token decoding is a suspect.
+- **Qwen3-ASR 0.6B is weak on Polish** (WER 44–51) but best on Chinese (CER 7.9).
+- **The 160 ms chunk does not pay.** It is 3× slower than 560 ms, and it is less accurate. The final
+  comes only 0.5 s earlier, because the endpoint rules dominate.
+- **The final comes 2.7 s after the speech end** (p50), not 1.6 s. The rule counts blank frames, and
+  the last chunk must fill first.
+- **Run-to-run variance is about 25 %.** The same 6 clips at 4 threads gave RTF 0.178 and 0.228 in
+  one run. Other applications ran on the machine.
+
+Recommendations (no product change in this PR):
+
+- Keep `NumThreads = clamp(ProcessorCount / 2, 1, 4)`. 4 threads was best on both machines; 8 threads
+  was slower (RTF 0.260 against 0.228 here).
+- Keep the 560 ms model and the CPU provider. Do not ship CUDA for transcription.
+- Add inverse text normalisation (number words to digits) or a code-aware post-pass before the
+  translation stage. Part numbers are the meeting's key content.
+- Filter Thai-script runs from Nemotron output in a zh/de/pl room.
+- Re-test Whisper large-v3-turbo after the Chinese character loss is explained. It is the only
+  candidate that keeps part numbers, but it has no partials and needs 2.7 GB.
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock
