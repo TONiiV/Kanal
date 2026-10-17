@@ -61,7 +61,8 @@ internal static partial class Scoring
 
     public static int SpeechEnd(short[] samples, int frame)
     {
-        throw new NotImplementedException();
+        var loud = Loud(samples, frame);
+        return loud.Count == 0 ? samples.Length : (loud.LastIndexOf(true) + 1) * frame;
     }
 
     private static List<bool> Loud(short[] samples, int frame)

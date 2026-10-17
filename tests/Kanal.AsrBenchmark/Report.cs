@@ -57,9 +57,9 @@ internal static class Report
             md.AppendLine().AppendLine($"Parity: the product `NemotronAsrProvider` and the benchmark engine gave identical text on {parity.Value:F0} of {V(r => r.Room == parity.Room, "parity_clips", "F0")} meeting clips.");
 
         md.AppendLine().AppendLine("## Real-time feed (auto room, 20 ms frames at real-time pace, 4 s of silence after each clip)").AppendLine()
-            .AppendLine("Decode: one call that ran the model, about one chunk. Final: last final transcript after the last clip sample. First partial: first transcript after the speech onset (first frame within 20 dB of the loudest frame).")
+            .AppendLine("Decode: one call that ran the model, about one chunk. Final: last final transcript after the speech end (end of the last frame within 20 dB of the loudest frame). First partial: first transcript after the speech onset (first frame within 20 dB of the loudest frame).")
             .AppendLine()
-            .AppendLine("| Model | Provider | Threads | Clips | Chunk ms | Decode p50/p95/max ms | Decodes over chunk % | Final after audio end p50/p95 s | First partial after onset p50/p95 s |")
+            .AppendLine("| Model | Provider | Threads | Clips | Chunk ms | Decode p50/p95/max ms | Decodes over chunk % | Final after speech end p50/p95 s | First partial after onset p50/p95 s |")
             .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var (model, provider, threads) in engines)
         {
@@ -67,7 +67,7 @@ internal static class Report
             if (!rows.Any(R))
                 continue;
             md.AppendLine($"| {model} | {provider} | {threads} | {V(R, "clips", "F0")} | {V(R, "chunk_ms", "F0")} | {V(R, "decode_p50_ms", "F0")}/{V(R, "decode_p95_ms", "F0")}/{V(R, "decode_max_ms", "F0")} | " +
-                          $"{V(R, "decode_over_chunk_pct", "F1")} | {V(R, "final_after_audio_end_p50_s")}/{V(R, "final_after_audio_end_p95_s")} | {V(R, "first_partial_after_onset_p50_s")}/{V(R, "first_partial_after_onset_p95_s")} |");
+                          $"{V(R, "decode_over_chunk_pct", "F1")} | {V(R, "final_after_speech_end_p50_s")}/{V(R, "final_after_speech_end_p95_s")} | {V(R, "first_partial_after_onset_p50_s")}/{V(R, "first_partial_after_onset_p95_s")} |");
         }
 
         md.AppendLine().AppendLine("## Concurrent streams (offline feed, auto room, each stream its own clip order)").AppendLine()
@@ -95,6 +95,8 @@ internal static class Report
                 md.AppendLine($"- {note}");
         }
 
+        md.AppendLine().AppendLine(Research);
+
         md.AppendLine().AppendLine("## Meeting sentences").AppendLine()
             .AppendLine("| Model | Provider | Room | Clip | Reference | Hypothesis | Errors / length |")
             .AppendLine("|---|---|---|---|---|---|---:|");
@@ -103,6 +105,28 @@ internal static class Report
 
         return md.ToString();
     }
+
+    // Researched on 2026-10-17 from the sherpa-onnx asr-models release, the HF model cards and the licence texts.
+    private const string Research = """
+        ## Candidate models that sherpa-onnx 1.13.8 can run
+
+        | Model | Params | int8 download | zh | de | pl | Mode | Licence | Repo | Measured |
+        |---|---:|---:|:-:|:-:|:-:|---|---|---|:-:|
+        | Nemotron 3.5 ASR Streaming 560 ms (default) | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1, no regional clause | csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11 | ✓ |
+        | Nemotron 3.5 ASR Streaming 160 ms | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1 | csukuangfj2/…-160ms-int8-2026-06-11 (also 80, 320, 1120 ms) | ✓ |
+        | Whisper large-v3-turbo | 809M | 1036 MB | ✓ | ✓ | ✓ | offline, 30 s window | MIT | csukuangfj/sherpa-onnx-whisper-turbo | ✓ |
+        | Qwen3-ASR 0.6B | 0.6B | 985 MB | ✓ | ✓ | ✓ | offline in sherpa-onnx (upstream also streams) | Apache-2.0 | csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25 | ✓ |
+        | Whisper small | 244M | 375 MB | ✓ | ✓ | ✓ | offline, 30 s window | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-small | – |
+        | Whisper tiny / base | 39M / 74M | 116 / 208 MB archive | ✓ | ✓ | ✓ | offline | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-tiny, -base | – |
+        | Cohere Transcribe 03-2026 | 2.1B | 2888 MB | ✓ | ✓ | ✓ | offline | Apache-2.0, HF repo gated | csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01 | – |
+        | Omnilingual ASR CTC 300M v2 | 300M | 292 MB archive | ✓ | ✓ | ✓ | offline CTC, 1600 languages | Apache-2.0 | GitHub release asr-models (facebook/omniASR-CTC-300M) | – |
+        | Parakeet TDT 0.6B v3 | 0.6B | 670 MB | – | ✓ | ✓ | offline | CC-BY-4.0 | csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8 | – |
+        | NeMo FastConformer transducer be/de/en/es/fr/hr/it/pl/ru/uk | ~115M | 107 MB archive | – | ✓ | ✓ | offline | not checked | GitHub release asr-models | – |
+        | Canary 180M flash | 180M | 154 MB archive | – | ✓ | – | offline | CC-BY-4.0 | GitHub release asr-models | – |
+        | SenseVoice small, Fun-ASR-Nano 2512, Dolphin, Moonshine zh | 0.2–0.8B | 0.1–0.9 GB | ✓ | – | – | offline | mixed | – | – |
+
+        The measured set is capped at 3 extra models and 3 GB. Offline models use Silero VAD segments (500 ms minimum silence, 20 s maximum segment).
+        """;
 
     private static bool Match(Row r, string model, string provider, int threads, string set, string lang, string room) =>
         r.Model == model && r.Provider == provider && r.Threads == threads && r.Set == set && r.Language == lang && r.Room == room;

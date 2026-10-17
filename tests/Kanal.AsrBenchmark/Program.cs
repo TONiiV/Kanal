@@ -18,6 +18,15 @@ var data = Arg("--data")
 var modelsDir = Arg("--models")
     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
 
+var native = Path.Combine(AppContext.BaseDirectory, "runtimes", RuntimeInformation.RuntimeIdentifier, "native");
+Environment.SetEnvironmentVariable("PATH", native + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"));
+
+if (args.FirstOrDefault() == "probe")
+{
+    using var probe = Engine.Load(Engine.Default(modelsDir), args[1], 1, data);
+    return 0;
+}
+
 if (args.FirstOrDefault() == "fetch")
 {
     var model = AsrModelCatalog.Models[0];
@@ -29,7 +38,10 @@ if (args.FirstOrDefault() == "fetch")
         await downloads.DownloadAsync(missing, null, CancellationToken.None);
     }
 
-    await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"));
+    if (Arg("--candidates") is { } candidates)
+        await Engine.FetchCandidatesAsync(data, candidates.Split(','));
+    if (!args.Contains("--no-clips"))
+        await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"));
     return 0;
 }
 
@@ -50,21 +62,29 @@ var streamLevels = List("--streams", "1,2,4").Select(int.Parse).ToArray();
 var phases = List("--phases", "accuracy,realtime,streams,threads");
 var rtPerLanguage = int.Parse(Arg("--rt-clips") ?? "3");
 var os = OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "macos" : "linux";
-var machine = $"{CpuName()} · {Environment.ProcessorCount} logical CPUs · {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})";
+var burn = int.Parse(Arg("--burn") ?? "0");
+var machine = $"{CpuName()} · {Environment.ProcessorCount} logical CPUs · {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})"
+              + (burn > 0 ? $" · {burn} busy background threads" : "");
+for (var i = 0; i < burn; i++)
+    new Thread(() => { var x = 1.0; while (true) x = Math.Sqrt(x + 1); }) { IsBackground = true }.Start();
 string[] autoRoom = [.. Corpus.Languages];
 
 var fleurs = clips.Where(c => c.Set == "fleurs").ToList();
 var sample = Corpus.Languages.SelectMany(l => fleurs.Where(c => c.Lang == l).Take(2)).ToList();
 var realtimeClips = Corpus.Languages.SelectMany(l => fleurs.Where(c => c.Lang == l).Take(rtPerLanguage)).ToList();
 
-var models = new List<BenchModel> { Engine.Default(modelsDir) };
+var only = Arg("--model")?.Split(',');
+var models = new[] { Engine.Default(modelsDir) }.Concat(Engine.Downloaded(data))
+    .Where(m => only is null || only.Contains(m.Id))
+    .ToList();
 var rows = new List<Row>();
 var clipRows = new List<ClipRow>();
 var notes = new List<string>();
+var probes = new Dictionary<string, string?>();
 
 void Add(string model, string provider, int threads, int streams, string set, string lang, string room,
     string metric, double value, string unit) =>
-    rows.Add(new Row(os, machine, model, provider, threads, streams, set, lang, room, metric, Math.Round(value, 4), unit));
+    rows.Add(new Row(os, machine, model, provider, threads, streams, burn, set, lang, room, metric, Math.Round(value, 4), unit));
 
 Console.WriteLine(machine);
 Console.WriteLine($"{clips.Count} clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()}"))}");
@@ -73,13 +93,22 @@ foreach (var model in models)
 foreach (var provider in providers)
 {
     var threads = Engine.DefaultThreads;
+    if (provider != "cpu" && !probes.ContainsKey(provider))
+        probes[provider] = Probe(provider);
+    if (provider != "cpu" && probes[provider] is { } fallback)
+    {
+        notes.Add($"{model.Id} · {provider}: {fallback}");
+        Console.WriteLine($"   {provider}: {fallback}");
+        continue;
+    }
+
     Console.WriteLine($"== {model.Id} · {provider} · {threads} threads");
     using var memory = new PeakMemory();
     var load = Stopwatch.StartNew();
     Engine engine;
     try
     {
-        engine = Engine.Load(model, provider, threads);
+        engine = Engine.Load(model, provider, threads, data);
     }
     catch (Exception e)
     {
@@ -116,13 +145,17 @@ foreach (var provider in providers)
         var partials = runs.Where(r => r.FirstAfterOnset is not null).Select(r => r.FirstAfterOnset!.Value).ToList();
         void Rt(string metric, double value, string unit) =>
             Add(model.Id, provider, threads, 1, "fleurs", "all", "auto-realtime", metric, value, unit);
-        Rt("chunk_ms", model.ChunkSeconds * 1000, "ms");
+        if (model.ChunkSeconds > 0)
+            Rt("chunk_ms", model.ChunkSeconds * 1000, "ms");
+        else
+            Rt("vad_min_silence_ms", OfflineEngine.MinSilenceSeconds * 1000, "ms");
         Rt("decode_p50_ms", Scoring.Percentile(decode, 0.5), "ms");
         Rt("decode_p95_ms", Scoring.Percentile(decode, 0.95), "ms");
         Rt("decode_max_ms", decode.DefaultIfEmpty().Max(), "ms");
-        Rt("decode_over_chunk_pct", 100.0 * decode.Count(d => d > model.ChunkSeconds * 1000) / Math.Max(1, decode.Count), "%");
-        Rt("final_after_audio_end_p50_s", Scoring.Percentile(finals, 0.5), "s");
-        Rt("final_after_audio_end_p95_s", Scoring.Percentile(finals, 0.95), "s");
+        if (model.ChunkSeconds > 0)
+            Rt("decode_over_chunk_pct", 100.0 * decode.Count(d => d > model.ChunkSeconds * 1000) / Math.Max(1, decode.Count), "%");
+        Rt("final_after_speech_end_p50_s", Scoring.Percentile(finals, 0.5), "s");
+        Rt("final_after_speech_end_p95_s", Scoring.Percentile(finals, 0.95), "s");
         Rt("first_partial_after_onset_p50_s", Scoring.Percentile(partials, 0.5), "s");
         Rt("first_partial_after_onset_p95_s", Scoring.Percentile(partials, 0.95), "s");
         Rt("clips", runs.Count, "n");
@@ -136,18 +169,18 @@ foreach (var provider in providers)
     engine.Dispose();
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_working_set_mb", memory.PeakMb, "MB");
 
-    if (phases.Contains("accuracy") && model == models[0] && provider == "cpu")
+    if (phases.Contains("accuracy") && model.Id == AsrModelCatalog.Models[0].Id && provider == "cpu")
         await ParityAsync(model, clips.Where(c => c.Set == "meeting").ToList());
 }
 
 if (phases.Contains("threads"))
 {
-    var model = models[0];
+    var model = Engine.Default(modelsDir);
     foreach (var threads in threadLevels)
     {
         Console.WriteLine($"== {model.Id} · cpu · {threads} threads");
         var load = Stopwatch.StartNew();
-        using var engine = Engine.Load(model, "cpu", threads);
+        using var engine = Engine.Load(model, "cpu", threads, data);
         Add(model.Id, "cpu", threads, 1, "-", "-", "threads", "load_s", load.Elapsed.TotalSeconds, "s");
         Func<List<double>, IAsrProvider> make = ms => new NemotronAsrProvider(lang => engine.Open(lang, ms));
         await RunClipAsync(make, sample[0], autoRoom, realtime: false);
@@ -268,6 +301,7 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
 
     var samples = clip.Samples;
     var onset = Scoring.SpeechOnset(samples, frame);
+    var end = Scoring.SpeechEnd(samples, frame);
     var total = samples.Length + (realtime ? 4 * Corpus.Rate : 0);
     double onsetAt = 0, endAt = 0;
     for (var i = 0; i < total; i += frame)
@@ -285,7 +319,7 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
             ? PcmBytes(samples.AsSpan(i, Math.Min(frame, samples.Length - i)))
             : new byte[frame * 2];
         await session.PushAudioAsync(chunk);
-        if (i < samples.Length && i + frame >= samples.Length)
+        if (i + frame == end || (i < end && i + frame > end))
             endAt = clock.Elapsed.TotalSeconds;
     }
 
@@ -301,6 +335,20 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
         decodeMs,
         realtime && events.Count > 0 ? events[0].At - onsetAt : null,
         realtime && finals.Count > 0 ? finals[^1].At - endAt : null);
+}
+
+string? Probe(string provider)
+{
+    var info = new ProcessStartInfo(Environment.ProcessPath!, ["probe", provider, "--models", modelsDir, "--data", data])
+    {
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+    };
+    using var process = Process.Start(info)!;
+    var output = process.StandardError.ReadToEnd() + process.StandardOutput.ReadToEnd();
+    process.WaitForExit();
+    var line = output.Split('\n').FirstOrDefault(l => l.Contains("Fallback") || l.Contains("not available") || l.Contains("rror"));
+    return process.ExitCode != 0 ? $"probe exited with {process.ExitCode}: {output.Trim()}" : line?.Trim();
 }
 
 static byte[] PcmBytes(ReadOnlySpan<short> samples) => Kanal.Audio.PcmConvert.ShortsToBytes(samples);
@@ -339,7 +387,7 @@ internal sealed record ClipRun(
     double? FinalAfterEnd);
 
 internal sealed record Row(
-    string Os, string Machine, string Model, string Provider, int Threads, int Streams,
+    string Os, string Machine, string Model, string Provider, int Threads, int Streams, int BackgroundThreads,
     string Set, string Language, string Room, string Metric, double Value, string Unit);
 
 internal sealed record ClipRow(

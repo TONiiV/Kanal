@@ -17,4 +17,12 @@
     <InternalsVisibleTo Include="Kanal.Core.UnitTests" />
   </ItemGroup>
 
+  <!-- The NuGet runtime is CPU only. -p:SherpaNative=<folder> replaces it with a GPU build of the same version. -->
+  <Target Name="CopySherpaNative" AfterTargets="Build" Condition="'$(SherpaNative)' != ''">
+    <ItemGroup>
+      <SherpaNativeFile Include="$(SherpaNative)/*.dll;$(SherpaNative)/*.dylib;$(SherpaNative)/*.so*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SherpaNativeFile)" DestinationFolder="$(OutDir)runtimes/$(NETCoreSdkRuntimeIdentifier)/native" />
+  </Target>
+
 </Project>
