@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Channels;
 using Kanal.Core.Models;
+using Kanal.Core.Providers;
+using Kanal.Providers.Gladia;
 using Kanal.Providers.LocalAsr;
 using SherpaOnnx;
 
@@ -17,6 +20,10 @@ internal sealed record BenchModel(
 internal abstract class Engine : IDisposable
 {
     public virtual double PaddingSeconds => 0;
+
+    public virtual bool Cloud => false;
+
+    public virtual IAsrProvider Provider(List<double> decodeMs) => new NemotronAsrProvider(lang => Open(lang, decodeMs));
 
     public abstract IRecognizerStream Open(string language, List<double> decodeMs);
 
@@ -73,9 +80,12 @@ internal abstract class Engine : IDisposable
         File.Move(path + ".part", path, overwrite: true);
     }
 
+    public static BenchModel Gladia { get; } = new("gladia", "gladia", 0, new Dictionary<string, string>());
+
     public static Engine Load(BenchModel model, string provider, int threads, string data) => model.Kind switch
     {
         "nemotron" => new NemotronEngine(model, provider, threads),
+        "gladia" => new GladiaEngine(),
         _ => new OfflineEngine(model, provider, threads, Path.Combine(data, "models", "silero_vad.onnx")),
     };
 }
@@ -270,5 +280,100 @@ internal sealed class NemotronEngine : Engine
         }
 
         public void Dispose() => _stream.Dispose();
+    }
+}
+
+
+// The product sends no room languages to Gladia (GladiaAsrProvider.BuildInitBody), so every room is the auto room.
+[ExcludeFromCodeCoverage]
+internal sealed class GladiaEngine : Engine
+{
+    private readonly GladiaAsrProvider _provider;
+
+    public GladiaEngine()
+    {
+        var key = Environment.GetEnvironmentVariable("GLADIA_API_KEY")
+                  ?? (OperatingSystem.IsWindows()
+                      ? Environment.GetEnvironmentVariable("GLADIA_API_KEY", EnvironmentVariableTarget.User)
+                        ?? Environment.GetEnvironmentVariable("GLADIA_API_KEY", EnvironmentVariableTarget.Machine)
+                      : null);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("GLADIA_API_KEY is not set.");
+        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = key.Trim(), EnableTranslation = false });
+    }
+
+    public override bool Cloud => true;
+
+    public override double PaddingSeconds => 1;
+
+    public override IAsrProvider Provider(List<double> decodeMs) => new Settled(_provider);
+
+    public override IRecognizerStream Open(string language, List<double> decodeMs) => throw new NotSupportedException();
+
+    public override void Dispose() => _provider.Dispose();
+
+    // GladiaAsrSession.DisposeAsync closes the socket right after stop_recording, so this waits for the last final first.
+    [ExcludeFromCodeCoverage]
+    private sealed class Settled(GladiaAsrProvider inner) : IAsrProvider
+    {
+        public string Id => inner.Id;
+
+        public AsrCapabilities Caps => inner.Caps;
+
+        public async Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            new Session(await inner.StartAsync(options, ct));
+    }
+
+    [ExcludeFromCodeCoverage]
+    private sealed class Session : IAsrSession
+    {
+        private readonly IAsrSession _inner;
+        private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
+        private readonly Task _pump;
+        private long _last = Stopwatch.GetTimestamp();
+        private volatile bool _partial;
+
+        public Session(IAsrSession inner)
+        {
+            _inner = inner;
+            _pump = Task.Run(async () =>
+            {
+                await foreach (var e in inner.Events)
+                {
+                    if (e is AsrEvent.Transcript t)
+                    {
+                        _partial = !t.IsFinal;
+                        Interlocked.Exchange(ref _last, Stopwatch.GetTimestamp());
+                    }
+
+                    _events.Writer.TryWrite(e);
+                }
+
+                _events.Writer.TryComplete();
+            });
+        }
+
+        public IAsyncEnumerable<AsrEvent> Events => _events.Reader.ReadAllAsync();
+
+        public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default) => _inner.PushAudioAsync(pcm16, ct);
+
+        public async ValueTask DisposeAsync()
+        {
+            var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10;
+            while (Stopwatch.GetTimestamp() < deadline
+                   && (_partial || Stopwatch.GetElapsedTime(Interlocked.Read(ref _last)) < TimeSpan.FromSeconds(1.5)))
+                await Task.Delay(100);
+            try
+            {
+                await _inner.DisposeAsync();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            // A close during the reconnect backoff leaves the inner event stream open for good.
+            _events.Writer.TryComplete();
+            await Task.WhenAny(_pump, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
     }
 }
