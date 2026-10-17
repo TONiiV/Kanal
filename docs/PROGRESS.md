@@ -20,12 +20,15 @@ a final. Offline models give no partials.
 
 It measures, per model and execution provider:
 
-- the load time, the working set after the load and the peak working set;
-- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room;
+- the load time, the working set after the load, the peak working set and the peak minus the working
+  set before the load;
+- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room, also over
+  the clips whose reference has no digit;
 - the share of finals that `TranscriptLanguage.Guess` labels correctly in the zh/de/pl room;
 - how many part numbers (`KB-4471`, `X5CrNi18-10`, `IP67`) survive: strict (verbatim) and loose
   (case and separators ignored);
-- the real-time factor (RTF) with the audio fed as fast as possible;
+- the real-time factor (RTF) with the audio fed as fast as possible. RTF is the session wall time
+  divided by the audio fed. For Nemotron the audio fed includes 2 s of silence padding per clip;
 - with real-time pace: the decode time per chunk, the time from the speech end to the final, and
   the time from the speech onset to the first partial;
 - 1, 2 and 4 concurrent sessions on one recognizer;
@@ -77,14 +80,19 @@ and the report names it. For CUDA:
 
 Results on a Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 2026-10-17:
 
-| Model | Load s | Peak MB | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s | 4 streams mean RTF |
+| Model | Load s | Peak MB (process) | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s (n=9) | 4 streams mean RTF (offline feed) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Nemotron 560 ms (default) | 2.2 | 958 | 22.3 | 12.0 | 22.5 | 0.18 | 2.67/3.74 | 0.32 |
 | Nemotron 160 ms | 2.1 | 962 | 25.2 | 14.2 | 24.9 | 0.53 | 2.16/2.62 | 1.26 |
 | Whisper large-v3-turbo | 2.5 | 2744 | 33.0 | 6.9 | 13.5 | 0.25 | 2.50/3.13 | 0.63 |
 | Qwen3-ASR 0.6B | 3.7 | 2804 | 7.9 | 9.6 | 50.5 | 0.20 | 1.88/2.64 | 0.30 |
 
-CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Offline models give their first text
+CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Two limits of these recorded numbers:
+the Nemotron RTF includes 2 s of silence padding per clip, so it is higher than the true RTF; and
+"Peak MB" is the working set of the whole process, not of one model. The benchmark code now divides
+by the audio fed, and it reports the peak minus the baseline before the load. The follow-up PR
+re-measures the full matrix. It adds English, a Gladia cloud baseline and number-normalised scoring.
+The real-time columns come from 9 clips, so p95 is the maximum. Offline models give their first text
 only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
 partial 0.84 s after the onset.
 
@@ -94,15 +102,17 @@ Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 
 CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
 RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
 0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
-the run stopped there. CUDA is slower than the CPU here. Inference, not measured: the int8 graphs use
-quantized operators that the CUDA provider does not run, so they fall back to the CPU and copy
-tensors between the devices for each chunk.
+the run stopped there. CUDA is slower than the CPU here. This is an inference. It is not measured.
+The CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
+move between the devices for each chunk.
 
 Findings:
 
 - **Nemotron writes numbers as words.** "KB-4471" becomes "KB cztery tysiące czterysta siedemdziesiąt
   jeden"; "M10" becomes "M zehn". No part number survived, also with the loose check (0 of 8).
-  Whisper kept 4 of 4 in German and Polish (loose). This costs Nemotron WER points on FLEURS too.
+  Whisper kept 4 of 4 in German and Polish (loose). FLEURS references hold digits, so this probably
+  costs Nemotron WER points there too. The recorded numbers do not separate the two faults. The
+  benchmark now also scores the clips without digits; the follow-up re-run gives that number.
 - **Nemotron emits Thai letters on Chinese.** 3 of 24 zh clips contain runs of "อ" where a foreign
   name was spoken (both rooms).
 - **Whisper drops Chinese characters** ("摩尔多瓦的首都" → "多的首都"). Its zh CER of 33 is too high
@@ -118,13 +128,14 @@ Findings:
 Recommendations (no product change in this PR):
 
 - Keep `NumThreads = clamp(ProcessorCount / 2, 1, 4)`. 4 threads was best on both machines; 8 threads
-  was slower (RTF 0.260 against 0.228 here).
+  gave no gain over 4 (RTF 0.260 against 0.228 here, inside the run-to-run variance).
 - Keep the 560 ms model and the CPU provider. Do not ship CUDA for transcription.
 - Add inverse text normalisation (number words to digits) or a code-aware post-pass before the
   translation stage. Part numbers are the meeting's key content.
 - Filter Thai-script runs from Nemotron output in a zh/de/pl room.
 - Re-test Whisper large-v3-turbo after the Chinese character loss is explained. It is the only
-  candidate that keeps part numbers, but it has no partials and needs 2.7 GB.
+  candidate that keeps part numbers, but it has no partials and its process peaked at 2.7 GB working
+  set.
 
 ## 2026-10-14
 
