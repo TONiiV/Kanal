@@ -45,6 +45,8 @@ internal static partial class Scoring
         return Codes(source).Count(c => flat.Contains(Flat(c)));
     }
 
+    public static bool HasDigit(string text) => throw new NotImplementedException();
+
     public static double Percentile(IReadOnlyList<double> values, double p)
     {
         if (values.Count == 0)

@@ -52,6 +52,37 @@ public class AsrBenchmarkScoringTests
     }
 
     [Fact]
+    public void Loose_code_check_does_not_join_neighbouring_words()
+    {
+        Assert.Equal(0, Scoring.CodesKept("Schraube M10", "zum 10", loose: true));
+        Assert.Equal(0, Scoring.CodesKept("Schraube M10", "M100", loose: true));
+        Assert.Equal(1, Scoring.CodesKept("Schraube M10", "Schraube M 10.", loose: true));
+    }
+
+    [Fact]
+    public void Full_width_text_counts_as_ascii()
+    {
+        Assert.Equal("2000次", Scoring.NormalizeChinese("２０００次"));
+        Assert.Equal(1, Scoring.CodesKept("支架 KB-4471", "支架 ＫＢ－４４７１", loose: true));
+        Assert.Equal(1, Scoring.CodesKept("支架 KB-4471", "支架 ＫＢ－４４７１", loose: false));
+    }
+
+    [Fact]
+    public void Decomposed_polish_letters_stay_in_one_word()
+    {
+        Assert.Equal(["mąka"], Scoring.Words("mąka"));
+        Assert.Equal((0, 1), Scoring.Errors("pl", "mąka", "mąka"));
+    }
+
+    [Fact]
+    public void A_reference_has_a_digit_when_it_holds_any_number_character()
+    {
+        Assert.True(Scoring.HasDigit("KB-4471"));
+        Assert.True(Scoring.HasDigit("２０００次"));
+        Assert.False(Scoring.HasDigit("Die Bohrung liegt außerhalb."));
+    }
+
+    [Fact]
     public void Percentile_uses_the_nearest_rank()
     {
         double[] values = [5, 1, 4, 2, 3, 6, 7, 8, 9, 10];
