@@ -36,7 +36,17 @@ public sealed class GladiaAsrSession : IAsrSession
     internal async Task ConnectAsync(CancellationToken ct)
     {
         _socket = await _openSocket(ct);
-        _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token), CancellationToken.None);
+        _receiveLoop = Task.Run(async () =>
+        {
+            try
+            {
+                await ReceiveLoopAsync(_cts.Token);
+            }
+            finally
+            {
+                _events.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
     }
 
     private static async Task<WebSocket> OpenSocketAsync(Uri url, CancellationToken ct)
@@ -137,8 +147,6 @@ public sealed class GladiaAsrSession : IAsrSession
                 }
             }
         }
-
-        _events.Writer.TryComplete();
     }
 
     public async ValueTask DisposeAsync()
