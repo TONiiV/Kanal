@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\src\Kanal.Providers.LocalAsr\Kanal.Providers.LocalAsr.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Host\Kanal.Host.csproj" />
+    <ProjectReference Include="..\Kanal.DiarizationBenchmark\Kanal.DiarizationBenchmark.csproj" />
   </ItemGroup>
 
 </Project>

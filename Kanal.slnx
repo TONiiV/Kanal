@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj" />
+    <Project Path="tests/Kanal.DiarizationBenchmark/Kanal.DiarizationBenchmark.csproj" />
     <Project Path="tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tools/">
