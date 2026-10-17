@@ -55,6 +55,17 @@ internal static partial class Scoring
 
     public static int SpeechOnset(short[] samples, int frame)
     {
+        var loud = Loud(samples, frame);
+        return loud.Count == 0 ? 0 : loud.IndexOf(true) * frame;
+    }
+
+    public static int SpeechEnd(short[] samples, int frame)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static List<bool> Loud(short[] samples, int frame)
+    {
         var rms = new List<double>();
         for (var i = 0; i + frame <= samples.Length; i += frame)
         {
@@ -64,10 +75,8 @@ internal static partial class Scoring
             rms.Add(Math.Sqrt(sum / frame));
         }
 
-        if (rms.Count == 0)
-            return 0;
-        var threshold = rms.Max() / 10;
-        return rms.FindIndex(r => r >= threshold) * frame;
+        var threshold = rms.DefaultIfEmpty().Max() / 10;
+        return rms.Select(r => r >= threshold).ToList();
     }
 
     private static int Distance<T>(IReadOnlyList<T> a, IReadOnlyList<T> b)

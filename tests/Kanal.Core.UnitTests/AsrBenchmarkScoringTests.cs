@@ -69,4 +69,14 @@ public class AsrBenchmarkScoringTests
         samples[100] = 200;
         Assert.Equal(8_000, Scoring.SpeechOnset(samples, 320));
     }
+
+    [Fact]
+    public void Speech_end_is_the_end_of_the_last_frame_within_20_dB_of_the_loudest_frame()
+    {
+        var samples = new short[16_000];
+        for (var i = 3_200; i < 8_000; i++)
+            samples[i] = (short)(i % 2 == 0 ? 8_000 : -8_000);
+        samples[12_000] = 200;
+        Assert.Equal(8_000, Scoring.SpeechEnd(samples, 320));
+    }
 }
