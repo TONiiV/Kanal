@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Kanal.Host.ViewModels"
+             xmlns:c="using:Kanal.Host.Controls"
+             xmlns:views="using:Kanal.Host.Views"
+             x:Class="Kanal.Host.Views.DownloadIndicatorView" x:DataType="vm:DownloadItemViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.dl">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.dl:pointerover, Border.dl:focus-within">
+            <Setter Property="Background" Value="{DynamicResource Sheet}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+        </Style>
+        <Style Selector="Border.dl TextBlock.info">
+            <Setter Property="IsVisible" Value="False" />
+            <Setter Property="Margin" Value="12,0,6,0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource Ink2}" />
+        </Style>
+        <Style Selector="Border.dl:pointerover TextBlock.info, Border.dl:focus-within TextBlock.info">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+
+        <Style Selector="Border.dl Ellipse.track">
+            <Setter Property="Stroke" Value="{DynamicResource RuleFaint}" />
+        </Style>
+        <Style Selector="Border.dl Arc.bar">
+            <Setter Property="Stroke" Value="{DynamicResource Brand}" />
+        </Style>
+        <Style Selector="Border.dl.done Arc.bar">
+            <Setter Property="Stroke" Value="{DynamicResource Done}" />
+        </Style>
+        <Style Selector="Border.dl.cancelled Arc.bar">
+            <Setter Property="Stroke" Value="{DynamicResource Ink3}" />
+        </Style>
+        <Style Selector="Border.dl.failed Arc.bar, Border.dl.failed Ellipse.track">
+            <Setter Property="Stroke" Value="{DynamicResource Alarm}" />
+        </Style>
+
+        <Style Selector="Border.dl Path.mark">
+            <Setter Property="Fill" Value="{DynamicResource Brand}" />
+        </Style>
+        <Style Selector="Border.dl Path.stroke">
+            <Setter Property="Stroke" Value="{DynamicResource Ink3}" />
+            <Setter Property="StrokeThickness" Value="1.8" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+        </Style>
+        <Style Selector="Border.dl.done Path.stroke">
+            <Setter Property="Stroke" Value="{DynamicResource Done}" />
+        </Style>
+        <Style Selector="Border.dl.failed Path.stroke">
+            <Setter Property="Stroke" Value="{DynamicResource Alarm}" />
+        </Style>
+
+        <Style Selector="Border.dl:pointerover Path.mark, Border.dl:focus-within Path.mark">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Border.dl Button.cancel">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="13" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.dl:pointerover Button.cancel, Border.dl:focus-within Button.cancel">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Border.dl:pointerover.bare TextBlock.info, Border.dl:focus-within.bare TextBlock.info">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="dl" Classes.done="{Binding IsDone}" Classes.cancelled="{Binding IsCancelled}"
+            Classes.failed="{Binding IsFailed}" HorizontalAlignment="Right"
+            Classes.bare="{Binding Bare, RelativeSource={RelativeSource AncestorType=views:DownloadIndicatorView}}">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Classes="info" Text="{Binding Summary}" MaxWidth="420" TextTrimming="CharacterEllipsis" />
+            <!-- No layout rounding: at 150% scale the ring offset (1.5 px) rounds up and the glyph
+                 offset (10.5 px) rounds down, which moves the glyph 1 px off the ring centre. -->
+            <Grid Width="26" Height="26" VerticalAlignment="Center" UseLayoutRounding="False">
+                <Ellipse Classes="track" Width="24" Height="24" StrokeThickness="2.5" />
+                <Arc Classes="bar" Width="24" Height="24" StrokeThickness="2.5" StartAngle="-90"
+                     SweepAngle="{Binding RingSweep}" StrokeLineCap="Round" />
+                <Path Classes="glyph mark" Width="12" Height="12" Data="{Binding Icon}"
+                      IsVisible="{Binding IsRunning}" />
+                <Path Classes="stroke" Data="M0,0 M16,16 M3.5,8.5 L7,12 L12.5,4.5" IsVisible="{Binding IsDone}" />
+                <Path Classes="stroke" Data="M0,0 M16,16 M4,8 L12,8" IsVisible="{Binding IsCancelled}" />
+                <Path Classes="stroke" Data="M0,0 M16,16 M8,3 L8,9.5 M8,12.8 L8,12.9" IsVisible="{Binding IsFailed}" />
+                <Button Classes="ghost cancel" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}"
+                        ToolTip.Tip="{Binding CancelLabel}" AutomationProperties.Name="{Binding CancelLabel}">
+                    <Path Classes="glyph" Data="{c:Icon close}" Width="12" Height="12" />
+                </Button>
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

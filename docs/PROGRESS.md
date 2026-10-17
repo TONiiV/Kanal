@@ -4,6 +4,136 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-14
+
+### The ruler magnifies like a Dock
+
+Issue #273. The first version of the hover effect had 5 steps around the hovered tick, with no
+animation, and all ticks had the same thickness and brightness.
+
+- **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
+  strip. Each tick gets a weight of its distance `d` (in DIP) to the pointer. The curve is
+  `exp(-(|d|/18)^1.3)`. An exponent of 2 gives a Gaussian. An exponent of 1 gives an exponential.
+  The value 1.3 leans to the exponential: a sharper peak and a heavier tail. The next tick keeps
+  67% of the rise, where a Gaussian keeps 78%. A tick four ticks away keeps 8%, where a Gaussian
+  keeps 2%. The weight is 1 at the pointer. The spread is the 18 DIP in the formula. A tick more
+  than 4 spreads (72 DIP) away has weight 0. The hovered row no longer decides the tick under the
+  pointer, so the curve moves between two ticks without a jump. `Hover(tick)` now only drives the
+  preview card.
+- **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
+  from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
+  Peak: 40, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and
+  `Thickness` travel in one value, `TickShape`. One pointer move notifies each tick once.
+- **Skew while the pointer moves.** The view model keeps a skew between -1 and 1 from the pointer
+  speed. The speed that gives a full skew is 350 DIP/s. A filter with a time constant of 90 ms
+  smooths the skew. On the side the pointer moves towards, the spread shrinks to 60% of 18 DIP at a
+  full skew. On the side the pointer left, it grows to 240%. The tick under the pointer has weight 1
+  at any skew. A pointer that stops thus gives the even shape in about 0.3 s.
+  - `Relax()` pulls the skew to 0 only when the pointer has been still for 50 ms. A frame between
+    two pointer events must not pull a moving pointer's skew down, or the skew would depend on
+    where the frames fall between the events.
+  - The speed and the decay use two time stamps. A move after the last one by less than 1 ms gives
+    no speed. A pointer that leaves the strip resets the skew.
+  - A move of 10 DIP/s counts as slow: the skew is 0.03 and the two sides differ by 0.7 DIP.
+  - The tests give the view model a `TimeProvider` they control.
+- **Drawn values, no transition.** Each tick has target values (`Shape`, `Glow`) and drawn values
+  (`DrawnShape`, `DrawnGlow`). The view draws the drawn values. `Relax()` moves them towards the
+  targets with an exponential filter. The time constant is 15 ms to grow and 60 ms to shrink, so a
+  tick grows fast and eases back. The filter does not depend on the event rate. A XAML transition
+  does: each pointer event restarts it. A recording with transitions showed the bump 100 DIP behind
+  a fast pointer, with the tick under the pointer still at its resting length.
+  - The ruler raises `NeedsFrame` whenever it is settling. The view then calls
+    `TopLevel.RequestAnimationFrame`, and each frame calls `Relax()` on both rulers. The frames
+    stop when no tick is settling. A timer would run when nothing needs drawing, and it would keep
+    the view alive.
+  - A tick whose on-screen state changes is drawn at once. The rest of the bump keeps easing, so a
+    new sentence or a scroll does not make it jump.
+- **Drawing.** A tick is a fixed 28 x 3.5 rectangle (`TickWidth`, `TickHeight`). Its length and
+  thickness are a scale transform (`TickScale`) from `DrawnShape`, so a frame never starts a layout
+  pass. The peak of 40 DIP is wider than the 30 DIP column. The scale draws outside the layout
+  box, 5 DIP on each side. The `ItemsControl` of the ruler clips by default, and it cut the peak to
+  30 DIP in a render of the whole window. It has `ClipToBounds="False"` now, and a test checks that
+  no ancestor of a tick clips. The view sends the pointer position (`PointerMoved`) and the exit
+  (`PointerExited`).
+- **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet.
+  There a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design
+  document now records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick
+  under the pointer 3.5:1 or more.
+- **Known limit.** The ruler that is not shown keeps its last pointer position. This matters only
+  if the shown ruler switches by keyboard while the pointer rests on the strip. The next pointer
+  move or leave corrects it.
+- **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
+  symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
+  resize, one notification for each tick, the skew in both directions, a slow move, the settling,
+  the reset, the drawn values (grow, shrink, settle, leave, a fast move), no jump on a new
+  sentence or a scroll, the frame request, and a steady speed reading. `ColumnScrollWiringTests`
+  cover the pointer in the real view, the animation frames, and the clipping.
+
+### Hy-MT2 1.8B is the recommended local translation model
+
+`LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448
+bytes, Apache-2.0). The first entry is the recommended model. The other three entries stay.
+
+- **Measured.** The test used the production prompt on 12 zh/de/pl meeting sentences, 2 targets each.
+  chrF: Hy-MT2 55.5, Qwen3.5 2B 42.6, Qwen3.5 4B 57.3. All 12 part numbers stayed correct.
+  Latency per sentence (2 targets) on a Vulkan GPU: Hy-MT2 1.19 s, Qwen3.5 2B 2.05 s, Qwen3.5 4B
+  3.76 s. On an idle CPU: 2.49 s, 2.93 s, 5.96 s.
+- **No reasoning prefill.** `AssistantPrefill` is null. A Qwen-style `<think>` prefill lowered chrF
+  from 55.5 to 48.0.
+- **Runtime.** The architecture is `hunyuan-dense`. It runs on LLamaSharp 0.27.0 without a change.
+- **No change for existing users.** `ActiveTranslationModelId` null means *None* (cloud
+  translation), not the first catalog entry. An existing id still resolves by `Find`. Only the row
+  order in Settings and the *recommended* position change. A new install does not select Hy-MT2
+  by itself.
+- **Not added: HY-MT1.5.** The Tencent HY Community License excludes the EU, the UK and South Korea.
+  Hy-MT2 uses plain Apache-2.0.
+- **Licence list.** `OpenSourceNotices` lists software packages only, not models. The model row in
+  Settings shows the licence of each model, so Hy-MT2 needs no extra entry there.
+
+### Cloud translation with DeepL (ADR 0060)
+
+*Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
+`Kanal.Providers.DeepL`. The orchestrator is unchanged. Only `PipelinePlanner` chooses the vendor.
+
+- **The planner resolves the key.** Local transcription with cloud translation needs a stored key
+  or the `DEEPL_API_KEY` variable. Without a key the mode row says *no cloud translation key — add
+  one in Settings*. The row names no vendor. *Cloud · Cloud* is unchanged: Gladia translates
+  inside its own session and ignores the DeepL key.
+- **Settings holds the key.** The *Translation* tab has one masked field. The key is stored in
+  `settings.json` as an `ApiKeyEntry` with provider `deepl`, like the Gladia keys.
+- **One request per target language.** The requests run in parallel. Recent finals go in DeepL's
+  `context` parameter. DeepL does not bill that parameter. A key that ends in `:fx` uses
+  `api-free.deepl.com`. Other keys use `api.deepl.com`.
+- **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
+  A language outside DeepL's target list is skipped, and the other languages still translate.
+- **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
+  accepted*. 429, every 5xx, a timeout and a network error map to *service unavailable*
+  (`mt.unavailable`). `AsrEvent.Error.Code` carries the code to the host. The host shows a message in
+  the operator's language. A 400 keeps the English message.
+- **One warning per meeting for 403 and 456.** After the first 403 or 456, the provider sends no
+  more requests and returns no translations. The planner builds a new provider for the next meeting.
+  A timeout or a 5xx does not latch: the next line tries again.
+- **One shared `HttpClient`.** Every DeepL provider uses one static client with a 15 s timeout.
+- **Not built:** formality setting, glossary, usage and cost display, a second vendor.
+
+### Keypoints
+
+The tab "Points and decisions" and the menu item "Pin to Points" are now **Keypoints** and **Pin to Keypoints**.
+
+- **Names.** English "Keypoints", Chinese "要点", German "Kernpunkte", Polish "Kluczowe punkty".
+- **Strings only.** The i18n keys and the C# identifiers keep their names (`assistant.tab.points`, `PointsTab`, `PinToPoints`).
+- **Item kinds.** The item labels POINT, PROPOSAL and DECISION stay. They name the kind of one item, not the tab.
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
+
 ## 2026-10-13
 
 ### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
@@ -30,6 +160,224 @@ Open items:
 2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
 3. Hugging Face and GitHub release downloads can be blocked in mainland China.
 4. The speaker tab of the just-stopped meeting still lists the live tags.
+
+### The ruler shows the screen and pages through the transcript
+
+Issue #268. The reference is the message navigator of a chat app.
+
+- **Colour stays.** A tick keeps the colour of its speaker. The emphasis comes from length and
+  thickness, not from opacity. Thus every tick stays at 3:1 or more (`ui-design.md`).
+- **In view.** The view reports the utterance ids of the bubbles on screen to
+  `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
+  replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **On load.** A column reports its visible rows when it loads. Without this, a room that opens
+  with sentences in it shows no emphasis and no arrows until the first scroll.
+- **Reference column.** The leftmost shown column decides what is on screen. Rows in other
+  languages have other heights, so one column must decide. The arrows use the same column.
+- **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
+  ticks 21 and 15. A tick never gets shorter than its in-view reach.
+- **One centre line.** The ticks and the arrows share the centre line of the ruler column. A
+  tick grows from that line to both sides. The down arrow follows the last tick
+  (`TrackLength`), with the same gap as the up arrow above the first tick.
+- **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
+  by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
+  whole rows next to the visible rows. When no row is whole, two cut sentences are the targets.
+  One lone cut sentence is taller than the screen; the arrow then steps past it. A page jump does
+  not mark a jump target.
+- **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
+  final. The current providers finalise sentences in the order they start. A provider that
+  finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.
+- **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
+  not change when an arrow turns on or off.
+- **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
+  `ColumnScrollWiringTests` (scrolling marks the ticks; the arrows page without a skip).
+
+### Pin to Points
+
+The transcript menu has a third item, **Pin to Points**. It adds the line to the Points tab.
+
+- **Core.** `MeetingInsights.Pin(utteranceId, text)` records a confirmed `Point` in the topic
+  `PinnedTopic`. The utterance is the source. A second pin of a pinned utterance returns null. A
+  dismissed (unpinned) pin allows a new pin. An analyst point on the same utterance does not block it.
+- **Host authority, text only.** Pins live in `MeetingInsights` in memory on the host, like analyst
+  points. They do not reach the relay, the room snapshot or the meeting record.
+  **Open decision:** saving pins in the meeting record changes the record schema. A human must decide this.
+- **Panel.** `AssistantViewModel.Pin` refreshes the list. A pinned item shows "PINNED", the speaker
+  and the time of the utterance, and the pinned text. Its cross button unpins. The list shows
+  without a connected analyst when at least one point exists. `ShowNoAnalystNote` hides then.
+- **Menu.** `ColumnViewModel` takes a pin handler. A browsed transcript passes none, so the item is disabled.
+  The item gets the same `CommandParameter` as the copy items: the selection of the clicked line, or the whole line.
+  The pin keeps that text.
+- **Final lines only.** `CanPin` needs a final line (`!IsPartial`) with its translation (`!AwaitingTranslation`).
+  The pin text never updates, so a partial line or a "…" placeholder cannot be pinned.
+- **Reserved topic.** `MeetingInsights.Record` refuses the topic `PinnedTopic`. The topic alone marks a pin.
+- **Language switch.** `MainViewModel` calls `Assistant.Refresh()`, so the pinned labels change language.
+- **Not here.** "Ask the agent" waits for the meeting agent PR (#248).
+- **Tests.** `PinnedPointTests` (Core) and `PinToPointsTests` (UI).
+
+### Selectable transcript lines
+
+The translation line and the source line of every utterance are selectable text.
+
+- **`SelectableTextBlock`.** Both lines use it in `MeetingRoomView`. The styles keep the same fonts,
+  sizes, line heights and muted partial colour. Selection stays inside one line. It does not cross utterances.
+- **One shared menu.** The `UtteranceMenu` resource is a `MenuFlyout`. It replaces the default menu of the
+  control. A new item is one `MenuItem` in the resource plus one command on `BubbleViewModel`.
+- **Menu text.** The `Opening` handler of the flyout reads the clicked line from `FlyoutBase.Target`.
+  It gives the selection of that line, or the whole line, to every item as `CommandParameter`.
+  A new item needs no code for this.
+- **Copy.** It copies the text of the menu. **Copy with speaker and time** writes
+  `[hh:mm:ss] Speaker: text` with the same text. The time is `TStartMs` of the utterance.
+- **Keys.** The control itself handles Ctrl+C and Ctrl+A.
+- **Clipboard seam.** `MainWindow` sets `MainViewModel.WriteClipboard`. Columns pass it to bubbles.
+  Tests use a fake.
+- **Tests.** `TranscriptCopyTests`: the text of the menu on the translation line and on the source line,
+  the speaker-and-time format, the menu items, and Ctrl+A.
+
+### Download ring in the Settings model rows
+
+A Settings model row that downloads shows the same ring as the status bar.
+
+- **One ring control.** `DownloadIndicatorView` has a `Bare` property. With `Bare="True"`, the pill
+  never shows its text. The row uses it in the place of the Download button, 28 DIP, with the model icon.
+- **One view model.** `ModelItemViewModel.Download` is a `DownloadItemViewModel` for the row.
+  The row ring and the tray ring share `RingSweep`, `CancelCommand` and the icon name.
+- **One progress text.** `ModelItemViewModel.ProgressLabel` ("42% · 286 / 682 MB") feeds the tray
+  summary and the row status text. The row error text still replaces it after a failure.
+- **Removed:** the Cancel button of the row, and the `settings.model.cancel` and
+  `settings.model.downloading` strings.
+- **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
+  message, the row ring has the tray icon and cancels the row.
+- **Centred glyph.** The ring grid sets `UseLayoutRounding="False"`. At 150% scale, layout rounding moved
+  the glyph 1 px up and left of the ring centre. Pixel position has no test; the fix is checked by eye.
+
+### Download indicator in the status bar
+
+A running model download shows at the right end of the main window status bar. Design reference:
+`design/download-indicator-demo.html`.
+
+- **`DownloadTray` feeds the indicators.** It watches `IsDownloading` on every `ModelRows` row except the None translation row.
+  A row that starts downloading adds a `DownloadItemViewModel`. A row that stops downloading sets
+  the item to Done, Cancelled or Failed, and a `TimeProvider` timer removes it after 3 s, 2 s or 8 s.
+  A diarization row joins with one more `Watch(row)` call. Its icon name comes from `ModelItemViewModel.Download`.
+- **Collapsed:** 28 DIP circle. A progress ring surrounds the model icon (`transcript`, `translate`).
+- **Pointer or keyboard focus:** the ring stays at the right end. Its centre turns into a cross.
+  The pill grows to the left and shows "name · 42% · 286 / 682 MB". The cross cancels the row,
+  like Cancel in Settings. The expansion snaps; it has no width animation.
+- **Done, cancelled, failed:** green ring with a tick, grey ring with a dash, red ring with "!".
+  A failed item shows the reason on hover. The row shows its Download button again in Settings.
+- **Settings open:** the indicator stays visible. Settings is modal, so it only shows progress.
+- **New brush `Done`** (Light and Dark) in `App.axaml` and the colour table of `ui-design.md`.
+- **Tests.** `DownloadTrayTests` use a manual `TimeProvider`: item appears, summary text, cancel
+  through the indicator, the three end states and their auto-hide, restart replaces the item.
+
+### Downloads survive the Settings window
+
+Closing Settings no longer cancels a model download.
+
+- **`ModelRows` owns the model rows.** It holds the translation and transcription
+  `ModelItemViewModel` rows, with the download state, progress and cancellation token of each.
+  `MainViewModel` creates it and exposes it as `ModelRows`, so it lives as long as the application.
+  The sidebar passes it to each `SettingsViewModel`. A reopened window shows the same row
+  instances: live progress, a working Cancel, and no second Download button.
+- **The mode list follows a finished download.** `MainViewModel` watches `IsDownloaded` on every
+  row. When it turns true, `MainViewModel` calls `RefreshPipelineStatus()`. The local modes and
+  "Generate title" become available without opening Settings again.
+- **Explicit Cancel and app exit still cancel.** `MainViewModel.Dispose()` calls
+  `ModelRows.CancelAll()`.
+- **`CancelDownloads` is now `OnWindowClosed`.** It stops the microphone test, the device
+  listener and the language subscription. It no longer touches downloads.
+- **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
+  the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
+  makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
+
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
+### Project icon chooser (PR #251)
+
+Choosing an icon in Project settings did nothing. The icon now changes.
+
+Cause, proven by CI run 38342718637: the glyph button had a `Command` bound through `$parent[Window]`.
+That binding resolved while the flyout was open. The test asserted a non-null `Command` before the click.
+The click still left `Glyph` null. Avalonia raises `Click` before it reads `Command`.
+The `Click` handler called `Hide()`. `Hide()` removed the popup from the logical tree and unbound `Command`.
+No command ran.
+
+Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
+Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
+
+### Local transcription runs (ADR 0053, slice C-5)
+
+`PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
+is available when a transcription model and a translation model are downloaded. *Local · Cloud*
+stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
+is removed. *Resolved on 2026-10-14: DeepL is the standalone cloud translator (ADR 0060).*
+
+- **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
+  the planner uses it too. The mode row says "not downloaded" until every part is on disk.
+- **A saved model id that the catalog no longer lists is the recommended model.** The planner does
+  not report an unknown model. A saved 160 ms or 1120 ms id therefore works after the catalog drops
+  those models. The two "unknown transcription model" strings are removed.
+- **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
+  Each load has its own status line. A failed load of either model stops the Start.
+
+
+### The ruler draws one tick per sentence
+
+Part of #103.
+
+- The transcript ruler draws one tick for each final utterance. Partial utterances get no tick. The tick uses the colour of its speaker.
+- A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
+- The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
+- When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
+
+### Nemotron provider (ADR 0053, slice C-4)
+
+`NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
+resolves to it yet. Slice C-5 connects it to `PipelinePlanner`.
+
+Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 20 ms frames, as the
+capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
+took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
+voice for a test clip.
+
+`doctor asr <wav> [modelsDir]` downloads the default model if needed, transcribes the WAV and prints
+a Markdown report. `local-asr-windows.yml` runs the Core tests and `doctor asr` on a hosted Windows
+runner for every PR that touches the provider. The workflow posts the report as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`.
+
+Four things the ADR did not anticipate, all found by running the model:
+
+- **The model does not report the language it heard.** The language is an input (a prompt id).
+  `auto` is the id for decoding without one. So `Caps.AutoLanguageDetect` is `false`.
+  sherpa-onnx filters `<de-DE>`-style tokens out of the result. A patched build recorded the raw
+  token sequence and showed no such token in any frame. That test used `auto`, `de-DE` and `zh-CN`
+  on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
+  language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
+  `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
+  script first. Then it checks distinctive letters and stopwords in every Latin language it knows.
+  A room language wins a tie. A language outside the room needs two signals (a score of 4). It was correct on every test sentence. A short Latin sentence with no
+  signal falls to the room's first Latin language. 2026-10-14: the check first counted only the
+  room's languages. An English sentence in a zh/de/pl room was labelled Polish, because "to" is a
+  Polish stopword.
+- **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
+  ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
+  second of silence when it is created. Priming again after an endpoint reset made things worse:
+  the padding counts as trailing silence and fired the next endpoint mid-sentence.
+- **Endpointing counts blank frames, not silence.** A stretch the model cannot transcribe — a
+  spoken part number — produces blanks, and with sherpa's 1.2 s rule a German sentence was cut at
+  "für K X", losing the number and the start of the rest. Rules are 2.4 s (nothing heard) and 1.6 s
+  (after speech), 20 s maximum; 1.6 s kept every test sentence whole. A final therefore lands
+  ≈1.6 s after the speaker stops, and translation starts then.
+- **Partial numbers.** On synthesised speech the model still loses digits: German "KX-4402" came
+  out as "Kx", Chinese as "KX47402". These are TTS clips, not a meeting; the stage-3 acceptance run
+  against Gladia on real speech decides whether this is good enough.
+
+Every sentence has one speaker label (`S01`) until diarization lands (#13).
 
 ### Accent themes
 
@@ -72,6 +420,18 @@ cancel, delete, and the OpenMDW-1.1 review note.
 - **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
   its group name from the view model.
 
+### Speaker tag management
+
+Part of #110. This slice does not depend on a diarization model.
+
+- The Speakers tab in `SidePanelView.axaml` is always present. With no speaker it shows `assistant.nospeakers`, bound to `MainViewModel.ShowNoSpeakersNote`. `HasSpeakers` is gone. The tab lists the live room's speakers, also while the operator browses a stored meeting.
+- Each row shows the tag, the utterance count, an inline name box, eight colour swatches and a "merge into" list.
+- The free-text "from tag, into tag" box and the `MergeSpeakersCommand` are gone. The list holds the other canonical speakers. A merged speaker leaves the list. The target row shows `⊇` and the merged tags.
+- `RoomState.SetSpeakerColour` accepts only a colour from `RoomState.Palette`. `MeetingSession.SetSpeakerColour` sends a `speaker.upsert`. The wire already carries `Color`, so the protocol and `web/index.html` stay as they are.
+- A stored meeting keeps no colour (see `RoomState.Palette`). A colour choice does not survive reopening the meeting.
+- Un-merge is not part of this slice. `RoomState` has no support for it.
+- `Utterance.SpeakerConfidence` stays hidden (ADR 0055 decision 20).
+
 ### Speaker names follow the colour scheme
 
 Ticket #240 of the Appearance spec (#187).
@@ -106,6 +466,24 @@ Ticket #206.
 
 ## 2026-10-12
 
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store makes at most 10 attempts,
+   with 50 ms between them. `RecordFile` logs each of the first 9 failures as a Warning line.
+   The last failure goes to the caller, which logs it and reports `Unwritable`.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
+
 ### The fast-source-clock capture test no longer times out
 
 `ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
@@ -126,6 +504,57 @@ harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs,
 load.
 
 ## 2026-10-11
+
+### Resolve buttons in the Issues section (#213, part of spec #209)
+
+Each row of the Issues section in project settings now has its action. Kanal does the repair. The
+operator does not edit files.
+
+1. The causes name the kinds of #210 and #211. A damaged record, a folder without a record, a copied
+   folder and a damaged row of the project list each have their own sentence. The subject of a
+   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed.
+   An `Unreadable` meeting folder (an I/O error on `meeting.json`) gets the cause
+   `workspace.issues.unreachable` and no button: the record may be healthy. For the same reason it
+   uses the warning colour, not the alarm colour, in the banner and in the drop-down mark. So does a
+   `meetings` folder that cannot be listed. A project list that cannot be read stays in the alarm
+   colour: `ProjectIssueViewModel.For` decides the colour together with the cause.
+2. `ProjectIssueViewModel.Action` selects the action from the kind:
+
+   | Kind | Button | Core call |
+   |---|---|---|
+   | `RecordMissing`, `RecordDamaged` | Resolve | `RecoverMeeting` |
+   | `Misfiled` | Resolve | `ReidentifyMeeting` |
+   | `FolderMissing` (project folder) | Choose folder… / Remove from list | `RelocateWorkspace` / `ForgetWorkspace` |
+   | `FolderMissing` (`meetings`) | Resolve | `CreateMeetingsFolder` |
+   | `RegistryRowDamaged` | Resolve | `DropBrokenRegistryRows` |
+   | `UnsupportedVersion` | none | none |
+   | `Unreadable` (meeting folder) | none | none |
+
+3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
+   language. The time is the rebuilt start time of the meeting, in the operator's time zone.
+   `WorkspaceStore.RecoverMeeting` now takes `Func<DateTimeOffset, string> titleFor` in place of a
+   base title. Core calls it after the rebuild with the start time, refuses a blank result, and
+   then applies `FreeTitle`. This changes the API that #210 added.
+4. After each action, `ReloadIssues` calls `Refresh` on the sidebar. The meeting list, the banner and
+   the project marks update. The settings window then merges the new issue list into its rows:
+   - A row with an outcome stays, so the operator can read the outcome. When its issue is not in
+     the new list, the row loses its buttons, and its commands do nothing.
+   - A row without an outcome that is not in the new list goes away.
+   - A new issue is added at the end.
+5. The outcome shows in one line in the row. A refusal shows its reason in the alarm colour. The
+   reason is mapped from the `StoreProblemKind`. A reason without its own sentence gets the
+   generic sentence, and the log gets the detail.
+6. "Choose folder…" uses a folder picker in the settings window (`ChooseProjectFolder`), owned by
+   that window. "Remove from list" opens the remove dialog with only "Remove from list" and "Keep
+   it" (`RemoveProjectWindow` with `listOnly`). It then follows the existing remove flow: the window
+   closes and the sidebar reloads. A refused removal also reloads the issue list.
+7. After a relocation, an icon file of the project points to the new folder. Without this, Save
+   refused the old icon path.
+8. Spec decision 14: no action is offered for the project that records. The sidebar keeps the
+   project of `RecordingMeetingId` (`_recordingProjectId`). The project switcher stays open while
+   a meeting records, so this is not always the selected project. A note in the Issues section
+   says why the buttons are missing. "Remove from list" also follows the existing rule: no project
+   leaves the list while any meeting records.
 
 ### The Windows installer shows Kanal artwork
 
@@ -228,10 +657,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
    change nothing, because the record may be healthy.
    `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
    `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
-   In the Issues list, `ProjectIssueViewModel.For` shows `RecordMissing` and `RecordDamaged` with
-   `workspace.issues.unreadable`. `Misfiled` gets the generic cause until ticket #213 adds its sentence.
-   For these kinds the issue `Subject` is the meeting folder. Only `UnsupportedVersion` keeps `meeting.json`.
-2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, baseTitle)` rebuilds `meeting.json` from
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, titleFor)` rebuilds `meeting.json` from
    `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
 3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
    `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
@@ -242,7 +668,7 @@ The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` an
      The code `und` (unknown language) is left out.
    - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
    - The start time is the end time minus the span of the utterance times. The created time equals the start time.
-   - The title is `FreeTitle` of the base title.
+   - The title is `FreeTitle` of `titleFor(start time)`. A blank title is refused before anything moves.
 5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
    `.damaged.2`, `.damaged.3` and so on.
 6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid
@@ -272,9 +698,9 @@ No single colour reaches 4.5:1 on both a light and a dark sheet. The palette the
 
 - `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
   The rules, bars, dots and ticks use the palette colour.
-- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in OKLab. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in sRGB. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
   The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
-  The mobile page uses `color-mix(in oklab, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+  The mobile page uses `color-mix(in srgb, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
 - No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
 - A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
 - The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
@@ -860,6 +1286,32 @@ its preservation rules are specified as implementation work after design approva
 ---
 
 ## 2026-10-03
+
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
 
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
@@ -3684,10 +4136,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   — the first then died at `File.Move` after however many gigabytes had transferred (on Windows
   the delete itself failed with a sharing violation and masked the original error). Each call now
   streams into its own `<file>.<guid>.part` and only removes the one it created; `Delete` sweeps
-  any leftovers. The reachable trigger is fixed too: `SettingsWindow.OnClosed` cancels outstanding
-  downloads, since MainWindow builds a fresh window and view model each time Settings opens, and a
-  download left running behind a closed dialog was invisible, uncancellable, and collided with the
-  Download button the next dialog offered.
+  any leftovers. The reachable trigger was fixed too: `SettingsWindow.OnClosed` cancelled outstanding
+  downloads. That rule is replaced: a download now survives the window (see "Downloads survive the
+  Settings window", 2026-10-13).
 
 - **`MtOutputCleaner` mangled two quoted spans.** A quote at each end is not the same as a quoted
   line: `"ISO 7599" gilt auch für "KX-4402"` came out as `ISO 7599" gilt auch für "KX-4402`,
@@ -3719,8 +4170,8 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Operator control over the language columns** — selection capped at four with the reason
       stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
       order host-local (#15).
-- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
-      second blocker on `local · cloud`, buildable independently of the local ASR work.
+- [x] Standalone cloud `IMtProvider` — DeepL first, other vendors later behind the same interface
+      (ADR 0060). `local · cloud` runs when a DeepL key exists.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).

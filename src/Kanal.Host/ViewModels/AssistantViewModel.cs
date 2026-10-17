@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Kanal.Core.Insights;
 using Kanal.Core.Room;
+using Kanal.Host.Localization;
 
 namespace Kanal.Host.ViewModels;
 
@@ -16,11 +17,16 @@ public sealed partial class AssistantViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowNoAnalystNote))]
     [NotifyPropertyChangedFor(nameof(ShowNothingFoundYet))]
+    [NotifyPropertyChangedFor(nameof(ShowInsightList))]
     private bool _isAnalystConnected;
 
     public ObservableCollection<InsightTopicViewModel> Topics { get; } = new();
 
-    public bool ShowNoAnalystNote => !IsAnalystConnected;
+    public Func<string, string> SpeakerName { get; set; } = tag => tag;
+
+    public bool ShowNoAnalystNote => !IsAnalystConnected && Topics.Count == 0;
+
+    public bool ShowInsightList => IsAnalystConnected || Topics.Count > 0;
 
     public bool ShowNothingFoundYet => IsAnalystConnected && Topics.Count == 0;
 
@@ -44,24 +50,44 @@ public sealed partial class AssistantViewModel : ViewModelBase
             Refresh();
     }
 
-    private void Refresh()
+    public void Pin(string utteranceId, string text)
+    {
+        if (_insights?.Pin(utteranceId, text) is not null)
+            Refresh();
+    }
+
+    public void Refresh()
     {
         Topics.Clear();
         foreach (var topic in _insights?.ByTopic() ?? [])
         {
             var items = topic.Items
                 .Where(item => item.State != InsightState.Dismissed)
-                .Select(item => new InsightItemViewModel(item, Supporting(item), Confirm, Dismiss))
+                .Select(item => new InsightItemViewModel(item, Supporting(item), Confirm, Dismiss, Attribution(item)))
                 .ToList();
             if (items.Count > 0)
-                Topics.Add(new InsightTopicViewModel(topic.Topic, items));
+                Topics.Add(new InsightTopicViewModel(Heading(topic.Topic), items));
         }
 
         OnPropertyChanged(nameof(ShowNothingFoundYet));
+        OnPropertyChanged(nameof(ShowNoAnalystNote));
+        OnPropertyChanged(nameof(ShowInsightList));
+    }
+
+    private static string Heading(string topic) =>
+        topic == MeetingInsights.PinnedTopic ? Localizer.Instance["insight.pinned.heading"] : topic;
+
+    private string? Attribution(MeetingInsight insight)
+    {
+        if (insight.Topic != MeetingInsights.PinnedTopic
+            || _room?.Find(insight.SourceUtteranceIds[0]) is not { } utterance)
+            return null;
+
+        return $"{SpeakerName(utterance.SpeakerTag)} · {BubbleViewModel.Clock(utterance.TStartMs)}";
     }
 
     private IReadOnlyList<string> Supporting(MeetingInsight insight) =>
-        insight.SourceUtteranceIds
+        insight.Topic == MeetingInsights.PinnedTopic ? [] : insight.SourceUtteranceIds
             .Select(id => _room?.Find(id)?.SrcText)
             .OfType<string>()
             .ToList();

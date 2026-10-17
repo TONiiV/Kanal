@@ -28,3 +28,4 @@ coverage/
 coverage-report/
 
 .wix/
+.scratchpad/

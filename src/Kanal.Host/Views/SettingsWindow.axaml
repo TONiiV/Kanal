@@ -3,6 +3,7 @@
         xmlns:vm="using:Kanal.Host.ViewModels"
         xmlns:l="using:Kanal.Host.Localization"
         xmlns:c="using:Kanal.Host.Controls"
+        xmlns:views="using:Kanal.Host.Views"
         x:Class="Kanal.Host.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="{l:T settings.title}"
@@ -130,14 +131,15 @@
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                     <RadioButton Grid.Column="0" GroupName="{Binding RadioGroup}"
                                  IsChecked="{Binding IsActive}"
-                                 VerticalAlignment="Top" Margin="0,1,0,0"
+                                 VerticalAlignment="Top" Margin="0,1,6,0"
+                                 IsVisible="{Binding HasChoice}"
                                  ToolTip.Tip="{Binding UseTip}" />
-                    <StackPanel Grid.Column="1" Margin="6,0,10,0">
+                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
                         <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding MetaLabel}" FontSize="11"
                                    Foreground="{DynamicResource Ink3}" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource Alarm}" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource Ink3}" Margin="0,2,0,0"
                                    IsVisible="{Binding HasLicenseNote}" />
                     </StackPanel>
                     <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" FontSize="11"
@@ -147,8 +149,9 @@
                                 VerticalAlignment="Center">
                         <Button Content="{l:T settings.model.download}" Command="{Binding DownloadCommand}"
                                 IsVisible="{Binding CanDownload}" />
-                        <Button Content="{l:T settings.model.cancel}" Command="{Binding CancelDownloadCommand}"
-                                IsVisible="{Binding IsDownloading}" />
+                        <Panel IsVisible="{Binding IsDownloading}">
+                            <views:DownloadIndicatorView Bare="True" DataContext="{Binding Download}" />
+                        </Panel>
                         <Button Content="{l:T settings.model.delete}"
                                 Command="{Binding DeleteCommand}"
                                 IsVisible="{Binding CanDelete}" />
@@ -421,8 +424,12 @@
                         <ItemsControl x:Name="TranslationModels" ItemsSource="{Binding TranslationModels}"
                                       ItemTemplate="{StaticResource ModelRow}" />
 
+                        <TextBlock Text="{l:T settings.translation.cloudkey}" FontSize="12.5"
+                                   FontWeight="SemiBold" Margin="0,18,0,4" />
                         <TextBlock FontSize="11.5" TextWrapping="Wrap" Foreground="{DynamicResource Ink3}"
-                                   Margin="0,14,0,0" Text="{l:T settings.translation.cloudnote}" />
+                                   Text="{l:T settings.translation.cloudnote}" />
+                        <TextBox x:Name="DeepLKeyValue" Text="{Binding DeepLKey}" PasswordChar="•"
+                                 PlaceholderText="{l:T settings.key.value}" Margin="0,8,0,0" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

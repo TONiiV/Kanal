@@ -416,6 +416,38 @@ public class ProjectSettingsTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt()
+    {
+        var store = Store();
+        var kappa = store.CreateWorkspace("Kappa", Folder("kappa")).Workspace!;
+        var settings = new ProjectSettingsViewModel(store, kappa, recording: false);
+        var window = new ProjectSettingsWindow(settings);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var chooser = window.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ChooseGlyph");
+        var flyout = Assert.IsType<Flyout>(chooser.Flyout);
+        flyout.ShowAt(chooser);
+        Dispatcher.UIThread.RunJobs();
+
+        var glyph = Assert.IsAssignableFrom<Control>(flyout.Content).GetVisualDescendants().OfType<Button>()
+            .Single(b => Avalonia.Automation.AutomationProperties.GetName(b) == Localizer.Instance["workspace.glyph.people"]);
+        Assert.True(glyph.IsEffectivelyEnabled);
+        var popup = Assert.IsAssignableFrom<TopLevel>(TopLevel.GetTopLevel(glyph));
+        var at = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), popup)!.Value;
+        popup.MouseDown(at, MouseButton.Left);
+        popup.MouseUp(at, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("people", settings.Glyph);
+        Assert.False(flyout.IsOpen);
+
+        settings.SaveCommand.Execute(null);
+        Assert.Equal("people", store.ListWorkspaces().Workspaces.Single(w => w.Id == kappa.Id).IconGlyph);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void ClickingTheGearInTheDropdownOpensThatProjectAndKeepsTheSelection()
     {
         var store = Store();

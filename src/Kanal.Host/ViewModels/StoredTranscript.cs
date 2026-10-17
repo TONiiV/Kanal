@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Room;
@@ -21,7 +22,7 @@ public static class StoredTranscript
         Columns(Utterances(record), record.Languages ?? []);
 
     public static IReadOnlyList<ColumnViewModel> Columns(
-        IReadOnlyList<Utterance> utterances, IReadOnlyList<string> languages)
+        IReadOnlyList<Utterance> utterances, IReadOnlyList<string> languages, Func<string, Task>? clipboard = null)
     {
         if (utterances.Count == 0)
             return [];
@@ -33,7 +34,7 @@ public static class StoredTranscript
             .ToList();
 
         var colours = ColoursByTag(utterances);
-        var columns = codes.Select(code => new ColumnViewModel(code)).ToList();
+        var columns = codes.Select(code => new ColumnViewModel(code, clipboard)).ToList();
         foreach (var utterance in utterances)
         {
             foreach (var column in columns)
@@ -43,6 +44,7 @@ public static class StoredTranscript
                 var translation = utterance.Translations.GetValueOrDefault(column.Language);
 
                 var bubble = column.GetOrAdd(utterance.Id);
+                bubble.StartMs = utterance.TStartMs;
                 bubble.SpeakerTag = utterance.SpeakerTag;
                 bubble.SpeakerName = utterance.SpeakerTag;
                 bubble.SpeakerColor = colours[utterance.SpeakerTag];
