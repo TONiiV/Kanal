@@ -47,6 +47,7 @@ switch (args.FirstOrDefault())
             Results = [.. parts.SelectMany(p => p.Results)],
             Costs = [.. parts.SelectMany(p => p.Costs)],
             Notes = [.. parts.SelectMany(p => p.Notes)],
+            Details = [.. parts.SelectMany(p => p.Details ?? [])],
         };
         var md = Report.Build(merged);
         File.WriteAllText(Path.Combine(outDir, "kanal-diarization-benchmark-merged.md"), md);
@@ -60,14 +61,27 @@ var variants = List("--variants", "clean,overlap,room,overlap-room");
 var thresholds = List("--thresholds", "0.3,0.4,0.5,0.6,0.7,0.8,0.9").Select(float.Parse).ToArray();
 var liveThresholds = List("--live-thresholds", "0.3,0.4,0.5,0.6,0.7").Select(double.Parse).ToArray();
 var parity = int.Parse(Arg("--parity") ?? "2");
+var candidateThresholds = Arg("--candidate-thresholds") is { } ct ? ct.Split(',').Select(float.Parse).ToArray() : thresholds;
+var done = args.Contains("--skip-done") && Directory.Exists(outDir)
+    ? Directory.GetFiles(outDir, "*.json").SelectMany(f => JsonSerializer.Deserialize<Run>(File.ReadAllText(f), json)!.Results.Select(x => x.Meeting)).ToHashSet()
+    : [];
 var results = new List<Result>();
 var costs = new List<Cost>();
 var notes = new List<string>();
+var details = new List<string>();
+var script = Arg("--script");
+var until = Arg("--until") is { } u ? DateTime.Today + TimeSpan.Parse(u) : DateTime.MaxValue;
 var stamp = DateTime.Now;
 Console.WriteLine(machine);
 
-foreach (var meeting in Corpus.Meetings(data, languages, counts, variants))
+foreach (var meeting in (script is null ? Corpus.Meetings(data, languages, counts, variants) : Corpus.Scripted(data, script)).Where(m => !done.Contains(m.Id)))
 {
+    if (DateTime.Now > until)
+    {
+        notes.Add($"The run stopped starting meetings at {until:HH:mm}.");
+        break;
+    }
+
     var wav = Path.Combine(data, "meetings", meeting.Id + ".wav");
     Directory.CreateDirectory(Path.GetDirectoryName(wav)!);
     using (var file = File.Create(wav))
@@ -81,7 +95,7 @@ foreach (var meeting in Corpus.Meetings(data, languages, counts, variants))
     {
         var embedding = Engines.ModelPath(modelsDir, data, model);
         var configs = new List<(string System, int? Clusters, float? Threshold)> { ("count", meeting.Speakers, null) };
-        configs.AddRange(thresholds.Select(t => ("auto", (int?)null, (float?)t)));
+        configs.AddRange((model == DiarizationModelCatalog.DefaultEmbedding ? thresholds : candidateThresholds).Select(t => ("auto", (int?)null, (float?)t)));
         foreach (var (system, clusters, threshold) in configs)
         {
             var before = Environment.WorkingSet / 1048576.0;
@@ -90,6 +104,8 @@ foreach (var meeting in Corpus.Meetings(data, languages, counts, variants))
             var (turns, seconds) = Clock.Time(() => Engines.Diarize(diarization, meeting.Samples));
             diarization.Dispose();
             var result = Score(meeting, model.Id, system, threshold ?? 0, turns);
+            if (script is not null && (system == "count" || threshold is 0.5f or 0.8f))
+                details.Add(Confusion(meeting, $"{model.Id}, {(system == "count" ? "count given" : $"threshold {threshold:0.0}")}", Scoring.Attribute(meeting.Truth, turns)));
             results.Add(result with { Rtf = seconds / meeting.Seconds });
             costs.Add(new Cost(model.Id, meeting.Id, meeting.Seconds, load, seconds, memory.PeakMb - before, memory.PeakMb));
             Console.WriteLine($"   {model.Id,-28} {system,-5} {threshold,4} DER {result.Der * 100,5:F1} % est {result.Estimated} acc {result.Accuracy * 100,5:F1} % RTF {seconds / meeting.Seconds:F3}");
@@ -99,6 +115,8 @@ foreach (var meeting in Corpus.Meetings(data, languages, counts, variants))
         foreach (var t in liveThresholds)
         {
             var tags = Engines.Live(meeting, vectors, t);
+            if (script is not null && Math.Abs(t - LiveSpeakerLabels.DefaultThreshold) < 1e-6)
+                details.Add(Confusion(meeting, $"{model.Id}, live layer, threshold {t:0.0}", tags));
             results.Add(Attribution(meeting, model.Id, "live", t, tags) with { Rtf = embedSeconds / meeting.Truth.Sum(u => u.Seconds) });
         }
 
@@ -125,15 +143,17 @@ foreach (var meeting in Corpus.Meetings(data, languages, counts, variants))
 }
 
 var stem = Save();
-File.WriteAllText(stem + ".md", Report.Build(new Run(stamp, machine, Engines.DefaultThreshold, Corpus.RoomDescription, results, costs, notes)));
+File.WriteAllText(stem + ".md", Report.Build(new Run(stamp, machine, Engines.DefaultThreshold, Corpus.RoomDescription, results, costs, notes, details)));
 Console.WriteLine($"Wrote {stem}.md and .json");
 return 0;
 
 string Save()
 {
+    if (Corpus.ElevenLabsCharacters > 0)
+        Console.WriteLine($"ElevenLabs characters used in this run: {Corpus.ElevenLabsCharacters}");
     Directory.CreateDirectory(outDir);
-    var path = Path.Combine(outDir, $"kanal-diarization-benchmark-{string.Join('-', languages)}-{stamp:yyyyMMdd-HHmm}");
-    File.WriteAllText(path + ".json", JsonSerializer.Serialize(new Run(stamp, machine, Engines.DefaultThreshold, Corpus.RoomDescription, results, costs, notes), json));
+    var path = Path.Combine(outDir, $"kanal-diarization-benchmark-{(script is null ? string.Join('-', languages) : Path.GetFileNameWithoutExtension(script))}-{stamp:yyyyMMdd-HHmm}");
+    File.WriteAllText(path + ".json", JsonSerializer.Serialize(new Run(stamp, machine, Engines.DefaultThreshold, Corpus.RoomDescription, results, costs, notes, details), json));
     return path;
 }
 
@@ -164,6 +184,25 @@ static Result Attribution(Meeting meeting, string model, string system, double t
         double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
         tags.Where(t => t is not null).Distinct().Count(), tags.Where(t => t is not null).Distinct().Count(),
         correct, total, shortCorrect, shortTotal, longCorrect, longTotal, 0);
+}
+
+static string Confusion(Meeting meeting, string label, string?[] tags)
+{
+    var pairs = meeting.Truth.Select((u, i) => (Truth: u.Speaker, Tag: tags[i])).ToList();
+    var map = Scoring.MapTags(pairs);
+    var columns = pairs.Select(p => p.Tag ?? "none").GroupBy(t => t).OrderByDescending(g => g.Count()).Select(g => g.Key).ToList();
+    var md = new StringBuilder()
+        .AppendLine($"#### {meeting.Id}: {label}").AppendLine()
+        .AppendLine("| Speaker | Utterances | Correct % | " + string.Join(" | ", columns.Select(c => map.TryGetValue(c, out var to) ? $"{c} (→ {to})" : c)) + " |")
+        .AppendLine("|---|---:|---:|" + string.Concat(columns.Select(_ => "---:|")));
+    foreach (var speaker in meeting.Truth.Select(u => u.Speaker).Distinct())
+    {
+        var mine = pairs.Where(p => p.Truth == speaker).ToList();
+        var (correct, total) = Scoring.Accuracy(mine, map);
+        md.AppendLine($"| {speaker} | {total} | {correct * 100.0 / total:F0} | " + string.Join(" | ", columns.Select(c => mine.Count(p => (p.Tag ?? "none") == c))) + " |");
+    }
+
+    return md.ToString();
 }
 
 static double Overlapped(IReadOnlyList<Segment> truth)
@@ -258,7 +297,7 @@ internal sealed record Result(
 internal sealed record Cost(string Model, string Meeting, double AudioSeconds, double LoadSeconds, double Seconds, double PeakDeltaMb, double PeakMb);
 
 [ExcludeFromCodeCoverage]
-internal sealed record Run(DateTime Stamp, string Machine, float DefaultThreshold, string Room, List<Result> Results, List<Cost> Costs, List<string> Notes);
+internal sealed record Run(DateTime Stamp, string Machine, float DefaultThreshold, string Room, List<Result> Results, List<Cost> Costs, List<string> Notes, List<string>? Details = null);
 
 [ExcludeFromCodeCoverage]
 internal partial class Program;

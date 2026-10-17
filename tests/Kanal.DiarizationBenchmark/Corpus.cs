@@ -2,13 +2,14 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Kanal.Audio;
 using SherpaOnnx;
 
 namespace Kanal.DiarizationBenchmark;
 
 [ExcludeFromCodeCoverage]
-internal sealed record Voice(string Id, string Lang, char Gender, string Package, int Sid = 0);
+internal sealed record Voice(string Id, string Lang, char Gender, string Package, int Sid = 0, string? ElevenLabsId = null);
 
 [ExcludeFromCodeCoverage]
 internal sealed record Meeting(string Id, string Lang, int Speakers, bool Overlap, bool Room, float[] Samples, IReadOnlyList<Segment> Truth)
@@ -179,7 +180,7 @@ internal static class Corpus
         IReadOnlyCollection<string> variants)
     {
         foreach (var lang in Languages.Where(languages.Contains))
-        foreach (var n in SpeakerCounts.Where(counts.Contains))
+        foreach (var n in counts.Where(SpeakerCounts.Contains))
         {
             var turns = Script(lang, n);
             var clips = turns.Select(t => Synthesised(data, t.Voice, t.Text)).ToList();
@@ -214,7 +215,7 @@ internal static class Corpus
         return turns;
     }
 
-    private static Meeting Build(string id, string lang, int n, bool overlap, bool room, List<Turn> turns, List<float[]> clips)
+    private static Meeting Build(string id, string lang, int n, bool overlap, bool room, List<Turn> turns, List<float[]> clips, List<string>? castIds = null)
     {
         var truth = new List<Segment>();
         var lastEnd = new Dictionary<string, double>();
@@ -234,7 +235,7 @@ internal static class Corpus
             previousStart = start;
         }
 
-        var cast = Cast(lang, n).Select(v => v.Id).ToList();
+        var cast = castIds ?? Cast(lang, n).Select(v => v.Id).ToList();
         var samples = new float[(int)((cursor + 1.0) * Rate)];
         for (var i = 0; i < turns.Count; i++)
         {
@@ -248,6 +249,41 @@ internal static class Corpus
             samples = Room(samples, new Random(id.Sum(c => c)));
         var pcm16 = samples.Select(s => (short)Math.Clamp(s * 32767f, short.MinValue, short.MaxValue) / 32768f).ToArray();
         return new Meeting(id, lang, n, overlap, room, pcm16, truth);
+    }
+
+    // ElevenLabs premade voices; the ids are public and stable across accounts.
+    private static readonly Dictionary<string, string> ElevenLabsVoices = new()
+    {
+        ["zh-wang"] = "nPczCjzI2devNBz1zQrb",
+        ["zh-li"] = "pFZP5JQG7iQjIQuC4Bku",
+        ["de-becker"] = "onwK4e9ZLuTAKqWW03F9",
+        ["de-schulz"] = "JBFqnCBsd6RMkjVDRZzb",
+        ["pl-nowak"] = "EXAVITQu4vr4xnSDxMaL",
+        ["pl-kowalska"] = "XrExE9yKIg1WjnnlVkGX",
+    };
+
+    public static int ElevenLabsCharacters { get; private set; }
+
+    public static IEnumerable<Meeting> Scripted(string data, string path)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+        var id = root.GetProperty("id").GetString()!;
+        var voices = root.GetProperty("speakers").EnumerateArray().Select(sp =>
+        {
+            var speaker = sp.GetProperty("id").GetString()!;
+            return new Voice(speaker, sp.GetProperty("lang").GetString()!, sp.GetProperty("gender").GetString()![0], "elevenlabs",
+                ElevenLabsId: ElevenLabsVoices[speaker]);
+        }).ToList();
+        var rng = new Random(7);
+        var turns = root.GetProperty("turns").EnumerateArray().Select(t => new Turn(
+            voices.Single(v => v.Id == t.GetProperty("speaker").GetString()),
+            t.GetProperty("text").GetString()!,
+            0.2 + rng.NextDouble() * 0.6,
+            t.TryGetProperty("overlapSeconds", out var o) ? o.GetDouble() : 0)).ToList();
+        var clips = turns.Select(t => Synthesised(data, t.Voice, t.Text)).ToList();
+        foreach (var room in new[] { false, true })
+            yield return Build($"{id}-{(room ? "room" : "clean")}", "mix", voices.Count, true, room, turns, clips, voices.Select(v => v.Id).ToList());
     }
 
     private static readonly double[] RoomGainDb = [0, 4, 2, 6, 3, 5];
@@ -313,14 +349,21 @@ internal static class Corpus
         var path = Path.Combine(data, "clips", voice.Id, hash + ".wav");
         if (!File.Exists(path))
         {
-            var tts = Engine(data, voice.Package);
-            var audio = tts.Generate(text, 1.0f, voice.Sid);
-            var pcm = audio.Samples.Select(s => (short)Math.Clamp(s * 32767f, short.MinValue, short.MaxValue)).ToArray();
-            if (audio.SampleRate != Rate)
+            short[] pcm;
+            if (voice.ElevenLabsId is { } elevenLabsId)
             {
-                var resampler = new LinearResampler(audio.SampleRate, Rate);
-                var buffer = new short[resampler.GetMaxOutputCount(pcm.Length)];
-                pcm = buffer[..resampler.Resample(pcm, buffer)];
+                pcm = ElevenLabs(elevenLabsId, text);
+            }
+            else
+            {
+                var audio = Engine(data, voice.Package).Generate(text, 1.0f, voice.Sid);
+                pcm = audio.Samples.Select(s => (short)Math.Clamp(s * 32767f, short.MinValue, short.MaxValue)).ToArray();
+                if (audio.SampleRate != Rate)
+                {
+                    var resampler = new LinearResampler(audio.SampleRate, Rate);
+                    var buffer = new short[resampler.GetMaxOutputCount(pcm.Length)];
+                    pcm = buffer[..resampler.Resample(pcm, buffer)];
+                }
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -330,6 +373,26 @@ internal static class Corpus
 
         using var stream = File.OpenRead(path);
         return [.. PcmConvert.BytesToShorts(WavFile.Read(stream).Pcm16).Select(s => s / 32768f)];
+    }
+
+    private static short[] ElevenLabs(string voiceId, string text)
+    {
+        var key = Environment.GetEnvironmentVariable("ELEVENLABS_API_KEY")
+                  ?? (OperatingSystem.IsWindows() ? Environment.GetEnvironmentVariable("ELEVENLABS_API_KEY", EnvironmentVariableTarget.User) : null)
+                  ?? throw new InvalidOperationException("ELEVENLABS_API_KEY is not set.");
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=pcm_16000")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new { text, model_id = "eleven_multilingual_v2" }), Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("xi-api-key", key);
+        using var response = http.Send(request);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"ElevenLabs answered {(int)response.StatusCode}: {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
+        if (response.Headers.TryGetValues("character-cost", out var cost))
+            ElevenLabsCharacters += int.Parse(cost.First());
+        return PcmConvert.BytesToShorts(response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult());
     }
 
     public static int NativeRate(string data, Voice voice) => Engine(data, voice.Package).SampleRate;

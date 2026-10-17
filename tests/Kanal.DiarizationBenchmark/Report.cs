@@ -26,28 +26,15 @@ internal static class Report
             .AppendLine("Utterance accuracy: SpeakerReidentification.Assign gives each reference utterance a tag; one Hungarian mapping per meeting maps tags to speakers; an untagged utterance is wrong.")
             .AppendLine();
 
+        var everyModel = r.GroupBy(x => x.Meeting).Where(g => g.Select(x => x.Model).Distinct().Count() == models.Count).Select(g => g.Key).ToHashSet();
+        var common = r.Where(x => everyModel.Contains(x.Meeting)).ToList();
         double Best(string model) => thresholds.MinBy(t => Mean(r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t), x => x.Der));
         var bestOf = models.ToDictionary(m => m, Best);
 
-        md.AppendLine("## Systems, all meetings").AppendLine()
-            .AppendLine("| Embedding | System | DER % (0.25 s collar) | Missed / FA / Confusion % | DER % no collar | Utterance accuracy % | ≥ 1 s % | < 1 s % | Count exact % | Mean found − true |")
-            .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|");
-        foreach (var model in models)
-        {
-            Row(md, model, "count given", r.Where(x => x.Model == model && x.System == "count").ToList());
-            Row(md, model, $"threshold {run.DefaultThreshold:0.0} (default)", r.Where(x => x.Model == model && x.System == "auto" && Near(x.Threshold, run.DefaultThreshold)).ToList());
-            Row(md, model, $"threshold {bestOf[model]:0.0} (best mean DER)", r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == bestOf[model]).ToList());
-        }
-
-        md.AppendLine().AppendLine("## Threshold sweep without a count").AppendLine()
-            .AppendLine("| Embedding | Threshold | DER % all | zh | de | pl | mix | Utterance accuracy % | Count exact % | Mean found − true |")
-            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
-        foreach (var model in models)
-        foreach (var t in thresholds)
-        {
-            var set = r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t).ToList();
-            md.AppendLine($"| {model} | {t:0.0} | {P(Mean(set, x => x.Der))} | {string.Join(" | ", Corpus.Languages.Select(l => P(Mean(set.Where(x => x.Lang == l), x => x.Der))))} | {P(Acc(set))} | {P(Exact(set))} | {Mean(set, x => x.Estimated - x.Speakers):+0.0;-0.0;0.0} |");
-        }
+        Systems(md, $"Systems on the {everyModel.Count} meetings that every embedding ran", common, models, run.DefaultThreshold, thresholds);
+        Systems(md, "Systems on every meeting that the embedding ran", r, models, run.DefaultThreshold, thresholds);
+        Sweep(md, $"Threshold sweep without a count, {everyModel.Count} meetings that every embedding ran", common, models, thresholds);
+        Sweep(md, "Threshold sweep without a count, every meeting that the embedding ran", r, models, thresholds);
 
         foreach (var model in models)
         {
@@ -100,11 +87,50 @@ internal static class Report
                 md.AppendLine($"- {note}");
         }
 
+        if (run.Details is { Count: > 0 })
+        {
+            md.AppendLine().AppendLine("## Per-speaker attribution, scripted meeting").AppendLine()
+                .AppendLine("Rows: true speakers. Columns: tags, with the speaker that the optimal mapping gives each tag. Cells: utterances.").AppendLine();
+            foreach (var detail in run.Details)
+                md.AppendLine(detail);
+        }
+
         return md.ToString();
     }
 
+    private static void Systems(StringBuilder md, string title, List<Result> r, List<string> models, double defaultThreshold, List<double> thresholds)
+    {
+        md.AppendLine($"## {title}").AppendLine()
+            .AppendLine("| Embedding | System | Meetings | DER % (0.25 s collar) | Missed / FA / Confusion % | DER % no collar | Utterance accuracy % | ≥ 1 s % | < 1 s % | Count exact % | Mean found − true |")
+            .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (var model in models)
+        {
+            var best = thresholds.MinBy(t => Mean(r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t), x => x.Der));
+            Row(md, model, "count given", r.Where(x => x.Model == model && x.System == "count").ToList());
+            Row(md, model, $"threshold {defaultThreshold:0.0} (default)", r.Where(x => x.Model == model && x.System == "auto" && Near(x.Threshold, defaultThreshold)).ToList());
+            Row(md, model, $"threshold {best:0.0} (best mean DER)", r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == best).ToList());
+        }
+
+        md.AppendLine();
+    }
+
+    private static void Sweep(StringBuilder md, string title, List<Result> r, List<string> models, List<double> thresholds)
+    {
+        md.AppendLine($"## {title}").AppendLine()
+            .AppendLine("| Embedding | Threshold | Meetings | DER % all | zh | de | pl | mix | Utterance accuracy % | Count exact % | Mean found − true |")
+            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (var model in models)
+        foreach (var t in thresholds)
+        {
+            var set = r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t).ToList();
+            md.AppendLine($"| {model} | {t:0.0} | {set.Count} | {P(Mean(set, x => x.Der))} | {string.Join(" | ", Corpus.Languages.Select(l => P(Mean(set.Where(x => x.Lang == l), x => x.Der))))} | {P(Acc(set))} | {P(Exact(set))} | {Mean(set, x => x.Estimated - x.Speakers):+0.0;-0.0;0.0} |");
+        }
+
+        md.AppendLine();
+    }
+
     private static void Row(StringBuilder md, string model, string label, List<Result> set) =>
-        md.AppendLine($"| {model} | {label} | {P(Mean(set, x => x.Der))} | {P(Mean(set, x => x.Missed))} / {P(Mean(set, x => x.FalseAlarm))} / {P(Mean(set, x => x.Confusion))} | {P(Mean(set, x => x.DerNoCollar))} | {P(Acc(set))} | {P(Long(set))} | {P(Short(set))} | {P(Exact(set))} | {Mean(set, x => x.Estimated - x.Speakers):+0.0;-0.0;0.0} |");
+        md.AppendLine($"| {model} | {label} | {set.Count} | {P(Mean(set, x => x.Der))} | {P(Mean(set, x => x.Missed))} / {P(Mean(set, x => x.FalseAlarm))} / {P(Mean(set, x => x.Confusion))} | {P(Mean(set, x => x.DerNoCollar))} | {P(Acc(set))} | {P(Long(set))} | {P(Short(set))} | {P(Exact(set))} | {Mean(set, x => x.Estimated - x.Speakers):+0.0;-0.0;0.0} |");
 
     public static string Variant(Result x) => (x.Overlap, x.Room) switch
     {
