@@ -81,6 +81,8 @@ var models = new[] { Engine.Default(modelsDir) }.Concat(Engine.Downloaded(data))
 var rows = new List<Row>();
 var clipRows = new List<ClipRow>();
 var notes = new List<string>();
+if (Arg("--note") is { } note)
+    notes.Add(note);
 var probes = new Dictionary<string, string?>();
 
 void Add(string model, string provider, int threads, int streams, string set, string lang, string room,

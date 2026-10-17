@@ -61,6 +61,9 @@ internal abstract class Engine : IDisposable
         ("qwen3-asr-0.6b-int8", "qwen3", 0, "csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
             ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx",
              "tokenizer/merges.txt", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"]),
+        ("qwen3-asr-1.7b-int8", "qwen3", 0, "thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8@69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5",
+            ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx",
+             "tokenizer/merges.txt", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"]),
         ("whisper-large-v3-int8", "whisper", 0, "csukuangfj/sherpa-onnx-whisper-large-v3",
             ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"]),
         ("cohere-transcribe-int8", "cohere", 0, "csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
@@ -81,7 +84,8 @@ internal abstract class Engine : IDisposable
         await DownloadAsync(http, VadUrl, Path.Combine(data, "models", "silero_vad.onnx"));
         foreach (var (id, _, _, repo, files) in Candidates.Where(c => ids.Contains(c.Id) || ids.Contains("all")))
         foreach (var file in files)
-            await DownloadAsync(http, $"https://huggingface.co/{repo}/resolve/main/{file}", Path.Combine(data, "models", id, file));
+            await DownloadAsync(http, $"https://huggingface.co/{(repo.Contains('@') ? repo.Replace("@", "/resolve/") : repo + "/resolve/main")}/{file}",
+                Path.Combine(data, "models", id, file));
     }
 
     private static async Task DownloadAsync(HttpClient http, string url, string path)

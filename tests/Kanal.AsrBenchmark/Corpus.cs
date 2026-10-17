@@ -115,6 +115,7 @@ internal static class Corpus
         ["voxpopuli"] = FetchVoxPopuliAsync,
         ["ami"] = FetchAmiAsync,
         ["aishell4"] = FetchAishell4Async,
+        ["commonvoice"] = FetchCommonVoiceAsync,
     };
 
     public static async Task FetchAsync(string data, int perLanguage, IReadOnlyCollection<string> sets)
@@ -253,7 +254,7 @@ internal static class Corpus
 
     // ElevenLabs premade voices. A clip on disk is never requested again: each request costs characters.
     private static readonly (string Name, string Id)[] ElevenLabsVoices =
-        [("sarah", "EXAVITQu4vr4xnJE6fpL"), ("george", "JBFqnCBsd6RMkjVDRZzb"), ("charlotte", "XB0fDUnXU5powFXDhCwa")];
+        [("alice", "Xb7hH8MSUJpSbSDYk0k2"), ("george", "JBFqnCBsd6RMkjVDRZzb"), ("lily", "pFZP5JQG7iQjIQuC4Bku")];
 
     private const string ElevenLabsModel = "eleven_multilingual_v2";
 
@@ -401,6 +402,88 @@ internal static class Corpus
         }
 
         Console.WriteLine($"aishell4 zh: {rows.Count} clips from {string.Join(", ", Aishell4Sessions)}");
+        return rows;
+    }
+
+    // Common Voice Scripted Speech 27.0 (Ardila et al. 2020), CC0-1.0, from Mozilla Data Collective. The dataset IDs pin the version.
+    private static readonly Dictionary<string, string> CommonVoiceDataset = new()
+    {
+        ["zh"] = "cmu5lcunh00qimh078sdd5so8",
+        ["de"] = "cmu5ktqhe00pgmh07p1xamabd",
+        ["pl"] = "cmu5wsxwp00e0nq07m8v0274j",
+        ["en"] = "cmu5jplf300nwmh07iqvk9leo",
+    };
+
+    private const long CommonVoiceCapBytes = 2L << 30;
+
+    // The archive lists the TSV files before the clips, so reading the start of the stream is enough.
+    private static async Task<List<string>> FetchCommonVoiceAsync(HttpClient http, string data, int count)
+    {
+        var key = Engine.Key("MDC_API_KEY");
+        var rows = new List<string>();
+        foreach (var (lang, dataset) in CommonVoiceDataset)
+        {
+            using var session = new HttpRequestMessage(HttpMethod.Post, $"https://mozilladatacollective.com/api/datasets/{dataset}/download");
+            session.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+            using var plan = await http.SendAsync(session);
+            if (!plan.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Common Voice {lang}: {(int)plan.StatusCode} {await plan.Content.ReadAsStringAsync()}");
+            using var body = JsonDocument.Parse(await plan.Content.ReadAsStringAsync());
+            var url = body.RootElement.GetProperty("downloadUrl").GetString()!;
+
+            var folder = Path.Combine(data, "commonvoice", lang);
+            Directory.CreateDirectory(folder);
+            Dictionary<string, string>? test = null;
+            var found = 0;
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, CommonVoiceCapBytes);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+            await using var gzip = new GZipStream(await response.Content.ReadAsStreamAsync(), CompressionMode.Decompress);
+            using var tar = new TarReader(gzip);
+            try
+            {
+                while (found < count && await tar.GetNextEntryAsync() is { } entry)
+                {
+                    if (entry.DataStream is null)
+                        continue;
+                    if (entry.Name.EndsWith("/test.tsv"))
+                    {
+                        using var reader = new StreamReader(entry.DataStream);
+                        var lines = (await reader.ReadToEndAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                        var header = lines[0].Split('\t');
+                        int path = Array.IndexOf(header, "path"), sentence = Array.IndexOf(header, "sentence");
+                        test = lines.Skip(1).Select(l => l.Split('\t')).ToDictionary(f => f[path], f => f[sentence]);
+                        continue;
+                    }
+
+                    var name = Path.GetFileName(entry.Name);
+                    if (test is null || !test.TryGetValue(name, out var text))
+                        continue;
+                    var mp3 = Path.Combine(folder, name);
+                    await using (var file = File.Create(mp3))
+                        await entry.DataStream.CopyToAsync(file);
+                    var id = Path.GetFileNameWithoutExtension(name);
+                    var wav = Path.Combine(folder, id + ".wav");
+                    using (var ffmpeg = Process.Start("ffmpeg", ["-v", "quiet", "-y", "-i", mp3, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]))
+                        await ffmpeg.WaitForExitAsync();
+                    File.Delete(mp3);
+                    if (!File.Exists(wav))
+                        throw new InvalidDataException($"Common Voice {lang}: ffmpeg could not decode {name}.");
+                    rows.Add(string.Join('\t', "commonvoice", lang, id, $"commonvoice/{lang}/{id}.wav", text));
+                    found++;
+                }
+            }
+            catch (Exception e) when (e is InvalidDataException or EndOfStreamException or IOException && found < count)
+            {
+                throw new InvalidDataException($"Common Voice {lang}: {found} test clips in the first {CommonVoiceCapBytes >> 30} GB of the archive ({e.Message}).");
+            }
+
+            if (found < count)
+                throw new InvalidDataException($"Common Voice {lang}: {found} test clips in the first {CommonVoiceCapBytes >> 30} GB of the archive.");
+            Console.WriteLine($"commonvoice {lang}: {found} clips");
+        }
+
         return rows;
     }
 
