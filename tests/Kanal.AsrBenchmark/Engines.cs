@@ -23,6 +23,8 @@ internal abstract class Engine : IDisposable
 
     public virtual bool Cloud => false;
 
+    public virtual bool NeedsLanguage => false;
+
     public virtual IAsrProvider Provider(List<double> decodeMs) => new NemotronAsrProvider(lang => Open(lang, decodeMs));
 
     public abstract IRecognizerStream Open(string language, List<double> decodeMs);
@@ -153,6 +155,8 @@ internal sealed class OfflineEngine : Engine
         _vad.SileroVad.MaxSpeechDuration = 20;
     }
 
+    public override bool NeedsLanguage => _model.Kind == "cohere";
+
     public override IRecognizerStream Open(string language, List<double> decodeMs) => new Stream(this, language, decodeMs);
 
     public override void Dispose() => _recognizer.Dispose();
@@ -160,17 +164,18 @@ internal sealed class OfflineEngine : Engine
     private string Recognize(float[] samples, string language)
     {
         using var stream = _recognizer.CreateStream();
-        if (_model.Kind is "whisper" or "cohere")
+        if (_model.Kind == "cohere")
         {
-            // Whisper and Cohere read the language from the recognizer config, not from the stream.
+            stream.SetOption("language", language[..2]);
+        }
+        else if (_model.Kind == "whisper")
+        {
+            // Whisper reads the language from the recognizer config, not from the stream.
             var code = language == "auto" ? "" : language[..2];
             lock (_gate)
                 if (_language != code)
                 {
-                    if (_model.Kind == "whisper")
-                        _config.ModelConfig.Whisper.Language = code;
-                    else
-                        _config.ModelConfig.CohereTranscribe.Language = code;
+                    _config.ModelConfig.Whisper.Language = code;
                     _recognizer.SetConfig(_config);
                     _language = code;
                 }

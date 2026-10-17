@@ -18,7 +18,7 @@ internal static class Report
             .AppendLine($"{machine}")
             .AppendLine()
             .AppendLine($"Clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()} ({g.Sum(c => c.Seconds):F0} s)"))}.")
-            .AppendLine("FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). Meeting clips: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper voices through sherpa-onnx.")
+            .AppendLine("Sets: `fleurs`: FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). `meeting-piper`: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper. `meeting-11labs`: the same sentences from ElevenLabs `eleven_multilingual_v2`, 3 premade voices. `voxpopuli`: VoxPopuli test (Wang et al. 2021, CC0; raw audio: European Parliament). `ami`: AMI Meeting Corpus test meeting EN2002a, single far-field microphone (Carletta et al. 2005, CC-BY-4.0). `aishell4`: AISHELL-4 test, channel 0 of the far-field array (Fu et al. 2021, CC-BY-SA-4.0). AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment.")
             .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl/en. Raw scores use no number normalisation. The numbers columns first turn spelled-out cardinals, decimals and percentages into digits in both texts (`Numbers.Normalize`). The no-digit columns score only clips whose reference has no digit. Gladia: the product `GladiaAsrProvider` without translation, fed at real-time pace with 1 s of trailing silence. The product sends Gladia no room languages, so Gladia has only the auto room.")
             .AppendLine();
 
@@ -120,16 +120,19 @@ internal static class Report
         | Nemotron 3.5 ASR Streaming 160 ms | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1 | csukuangfj2/…-160ms-int8-2026-06-11 (also 80, 320, 1120 ms) | ✓ |
         | Whisper large-v3-turbo | 809M | 1036 MB | ✓ | ✓ | ✓ | offline, 30 s window | MIT | csukuangfj/sherpa-onnx-whisper-turbo | ✓ |
         | Qwen3-ASR 0.6B | 0.6B | 985 MB | ✓ | ✓ | ✓ | offline in sherpa-onnx (upstream also streams) | Apache-2.0 | csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25 | ✓ |
+        | Whisper large-v3 | 1.55B | 1776 MB | ✓ | ✓ | ✓ | offline, 30 s window | MIT | csukuangfj/sherpa-onnx-whisper-large-v3 | ✓ |
+        | Qwen3-ASR 1.7B | 1.7B | 2400 MB | ✓ | ✓ | ✓ | offline | Apache-2.0, community export | thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8 (no csukuangfj export) | – |
         | Whisper small | 244M | 375 MB | ✓ | ✓ | ✓ | offline, 30 s window | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-small | – |
         | Whisper tiny / base | 39M / 74M | 116 / 208 MB archive | ✓ | ✓ | ✓ | offline | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-tiny, -base | – |
-        | Cohere Transcribe 03-2026 | 2.1B | 2888 MB | ✓ | ✓ | ✓ | offline | Apache-2.0, HF repo gated | csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01 | – |
+        | Cohere Transcribe 03-2026 | 2.1B | 2888 MB | ✓ | ✓ | ✓ | offline | Apache-2.0; the original repo is gated, the sherpa-onnx export is not | csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01 | ✓ |
         | Omnilingual ASR CTC 300M v2 | 300M | 292 MB archive | ✓ | ✓ | ✓ | offline CTC, 1600 languages | Apache-2.0 | GitHub release asr-models (facebook/omniASR-CTC-300M) | – |
         | Parakeet TDT 0.6B v3 | 0.6B | 670 MB | – | ✓ | ✓ | offline | CC-BY-4.0 | csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8 | – |
         | NeMo FastConformer transducer be/de/en/es/fr/hr/it/pl/ru/uk | ~115M | 107 MB archive | – | ✓ | ✓ | offline | not checked | GitHub release asr-models | – |
         | Canary 180M flash | 180M | 154 MB archive | – | ✓ | – | offline | CC-BY-4.0 | GitHub release asr-models | – |
         | SenseVoice small, Fun-ASR-Nano 2512, Dolphin, Moonshine zh | 0.2–0.8B | 0.1–0.9 GB | ✓ | – | – | offline | mixed | – | – |
 
-        The measured set is capped at 3 extra models and 3 GB. Offline models use Silero VAD segments (500 ms minimum silence, 20 s maximum segment).
+        The measured set is capped at 5 extra models and 7.4 GB. Offline models use Silero VAD segments (500 ms minimum silence, 20 s maximum segment).
+        sherpa-onnx 1.13.8 drops characters that byte-level BPE splits across two tokens (k2-fsa/sherpa-onnx#3964, fixed after 1.13.8 in #3965). This hits Whisper and Cohere Transcribe on Chinese: "篇章", "钙", "钾", "属" disappear. Their zh CER here is worse than the models.
         """;
 
     private static bool Match(Row r, string model, string provider, int threads, string set, string lang, string room) =>

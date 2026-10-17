@@ -123,12 +123,15 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
     Add(model.Id, provider, threads, 1, "-", "-", "-", "working_set_after_load_mb", Environment.WorkingSet / 1048576.0, "MB");
     Console.WriteLine($"   load {load.Elapsed.TotalSeconds:F2} s");
     Func<List<double>, IAsrProvider> make = engine.Provider;
+    var rooms = engine.Cloud ? ["auto"] : engine.NeedsLanguage ? ["forced"] : new[] { "forced", "auto" };
+    if (engine.NeedsLanguage)
+        notes.Add($"{model.Id}: needs the clip language, so it has no auto room. The real-time phase uses a room of the clip language.");
     if (!engine.Cloud)
-        await RunClipAsync(make, clips[0], autoRoom, realtime: false);
+        await RunClipAsync(make, clips[0], [clips[0].Lang], realtime: false);
 
     if (phases.Contains("accuracy"))
     {
-        foreach (var room in engine.Cloud ? ["auto"] : new[] { "forced", "auto" })
+        foreach (var room in rooms)
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
@@ -142,7 +145,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
     {
         var runs = new List<ClipRun>();
         foreach (var clip in realtimeClips)
-            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: true, engine.PaddingSeconds, engine.Cloud));
+            runs.Add(await RunClipAsync(make, clip, engine.NeedsLanguage ? [clip.Lang] : autoRoom, realtime: true, engine.PaddingSeconds, engine.Cloud));
         var decode = runs.SelectMany(r => r.DecodeMs).ToList();
         var finals = runs.Where(r => r.FinalAfterEnd is not null).Select(r => r.FinalAfterEnd!.Value).ToList();
         var partials = runs.Where(r => r.FirstAfterOnset is not null).Select(r => r.FirstAfterOnset!.Value).ToList();
