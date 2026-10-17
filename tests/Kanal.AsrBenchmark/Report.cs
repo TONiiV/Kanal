@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Kanal.AsrBenchmark;
 
+[ExcludeFromCodeCoverage]
 internal static class Report
 {
     public static string Build(DateTime stamp, string machine, IReadOnlyList<Clip> clips, IReadOnlyList<Row> rows,
@@ -17,25 +19,25 @@ internal static class Report
             .AppendLine()
             .AppendLine($"Clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()} ({g.Sum(c => c.Seconds):F0} s)"))}.")
             .AppendLine("FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). Meeting clips: the 12 sentences of the MT benchmark, synthesised locally with Piper voices through sherpa-onnx.")
-            .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = decode wall time / audio duration. CER for zh, WER for de/pl, no number normalisation.")
+            .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl, no number normalisation. The no-digit columns score only clips whose reference has no digit.")
             .AppendLine();
 
         var engines = rows.Where(r => r.Metric == "load_s" && r.Room == "-").Select(r => (r.Model, r.Provider, r.Threads)).Distinct().ToList();
 
         md.AppendLine("## Load and memory").AppendLine()
-            .AppendLine("| Model | Provider | Threads | Load s | Working set after load MB | Peak working set MB |")
-            .AppendLine("|---|---|---:|---:|---:|---:|");
+            .AppendLine("| Model | Provider | Threads | Load s | Working set after load MB | Peak working set MB | Peak minus baseline MB |")
+            .AppendLine("|---|---|---:|---:|---:|---:|---:|");
         foreach (var (model, provider, threads) in engines)
         {
             bool W(Row r) => r.Model == model && r.Provider == provider && r.Threads == threads && r.Room == "-";
-            md.AppendLine($"| {model} | {provider} | {threads} | {V(W, "load_s")} | {V(W, "working_set_after_load_mb", "F0")} | {V(W, "peak_working_set_mb", "F0")} |");
+            md.AppendLine($"| {model} | {provider} | {threads} | {V(W, "load_s")} | {V(W, "working_set_after_load_mb", "F0")} | {V(W, "peak_working_set_mb", "F0")} | {V(W, "peak_delta_mb", "F0")} |");
         }
 
         md.AppendLine().AppendLine("## Accuracy and offline-feed speed (1 stream)").AppendLine()
             .AppendLine("Forced: a room of the clip's language. Auto: a zh/de/pl room. Language guess: share of finals that `TranscriptLanguage.Guess` labels with the clip's language.")
             .AppendLine()
-            .AppendLine("| Model | Provider | Set | Lang | Metric | Forced % | Auto % | Language guess % | Empty (forced/auto) | Codes kept strict (forced/auto) | Codes kept loose (forced/auto) | RTF forced | RTF auto | Decode p50/p95 ms |")
-            .AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+            .AppendLine("| Model | Provider | Set | Lang | Metric | Forced % | Auto % | No-digit clips n | No-digit forced/auto % | Language guess % | Empty (forced/auto) | Codes kept strict (forced/auto) | Codes kept loose (forced/auto) | RTF forced | RTF auto | Decode p50/p95 ms |")
+            .AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var (model, provider, threads) in engines)
         foreach (var set in new[] { "fleurs", "meeting" })
         foreach (var lang in Corpus.Languages)
@@ -45,8 +47,9 @@ internal static class Report
             if (!rows.Any(F) && !rows.Any(A))
                 continue;
             var metric = lang == "zh" ? "cer_pct" : "wer_pct";
+            var noDigit = lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct";
             var codes = set == "meeting" ? V(F, "codes_total", "F0") : null;
-            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
+            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
                           $"{V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} | " +
                           (codes is null ? "– | – | " : $"{V(F, "codes_kept_strict", "F0")}/{V(A, "codes_kept_strict", "F0")} of {codes} | {V(F, "codes_kept_loose", "F0")}/{V(A, "codes_kept_loose", "F0")} of {codes} | ") +
                           $"{V(F, "rtf", "F3")} | {V(A, "rtf", "F3")} | {V(F, "decode_p50_ms", "F0")}/{V(F, "decode_p95_ms", "F0")} |");
@@ -57,7 +60,7 @@ internal static class Report
             md.AppendLine().AppendLine($"Parity: the product `NemotronAsrProvider` and the benchmark engine gave identical text on {parity.Value:F0} of {V(r => r.Room == parity.Room, "parity_clips", "F0")} meeting clips.");
 
         md.AppendLine().AppendLine("## Real-time feed (auto room, 20 ms frames at real-time pace, 4 s of silence after each clip)").AppendLine()
-            .AppendLine("Decode: one call that ran the model, about one chunk. Final: last final transcript after the speech end (end of the last frame within 20 dB of the loudest frame). First partial: first transcript after the speech onset (first frame within 20 dB of the loudest frame).")
+            .AppendLine("Percentiles use the nearest rank over the clips in the Clips column. With fewer than 20 clips, p95 is the maximum or close to it. Decode: one call that ran the model, about one chunk. Final: last final transcript after the speech end (end of the last frame within 20 dB of the loudest frame). First partial: first transcript after the speech onset (first frame within 20 dB of the loudest frame).")
             .AppendLine()
             .AppendLine("| Model | Provider | Threads | Clips | Chunk ms | Decode p50/p95/max ms | Decodes over chunk % | Final after speech end p50/p95 s | First partial after onset p50/p95 s |")
             .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|");

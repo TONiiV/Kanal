@@ -1,18 +1,23 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Kanal.Core.Models;
 using Kanal.Providers.LocalAsr;
 using SherpaOnnx;
 
 namespace Kanal.AsrBenchmark;
 
+[ExcludeFromCodeCoverage]
 internal sealed record BenchModel(
     string Id,
     string Kind,
     double ChunkSeconds,
     IReadOnlyDictionary<string, string> Files);
 
+[ExcludeFromCodeCoverage]
 internal abstract class Engine : IDisposable
 {
+    public virtual double PaddingSeconds => 0;
+
     public abstract IRecognizerStream Open(string language, List<double> decodeMs);
 
     public abstract void Dispose();
@@ -76,6 +81,7 @@ internal abstract class Engine : IDisposable
 }
 
 // Offline models get Silero VAD segments; a segment's text is a final, and there are no partials.
+[ExcludeFromCodeCoverage]
 internal sealed class OfflineEngine : Engine
 {
     public const float MinSilenceSeconds = 0.5f;
@@ -146,6 +152,7 @@ internal sealed class OfflineEngine : Engine
         return stream.Result.Text.Trim();
     }
 
+    [ExcludeFromCodeCoverage]
     private sealed class Stream(OfflineEngine engine, string language, List<double> decodeMs) : IRecognizerStream
     {
         private readonly VoiceActivityDetector _vad = new(engine._vad, 60);
@@ -184,8 +191,11 @@ internal sealed class OfflineEngine : Engine
 }
 
 // Mirrors NemotronAsrProvider.Load, with the thread count and execution provider open.
+[ExcludeFromCodeCoverage]
 internal sealed class NemotronEngine : Engine
 {
+    public override double PaddingSeconds => 2;
+
     private readonly OnlineRecognizer _recognizer;
 
     public NemotronEngine(BenchModel model, string provider, int threads)
@@ -216,6 +226,7 @@ internal sealed class NemotronEngine : Engine
     public override void Dispose() => _recognizer.Dispose();
 
     // Mirrors NemotronAsrProvider.SherpaStream and times every Decode that ran the model.
+    [ExcludeFromCodeCoverage]
     private sealed class Stream : IRecognizerStream
     {
         private readonly OnlineRecognizer _recognizer;

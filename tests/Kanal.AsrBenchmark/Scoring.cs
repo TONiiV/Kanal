@@ -9,17 +9,16 @@ internal static partial class Scoring
     public static string NormalizeChinese(string text)
     {
         var sb = new StringBuilder(text.Length);
-        foreach (var c in SimplifiedChinese.Normalize(text).ToLowerInvariant())
+        foreach (var c in SimplifiedChinese.Normalize(Compat(text)).ToLowerInvariant())
             if (char.IsLetterOrDigit(c))
                 sb.Append(c);
         return sb.ToString();
     }
 
     public static string[] Words(string text) =>
-        NotWordChar().Split(text.ToLowerInvariant()).Where(w => w.Length > 0).ToArray();
+        NotWordChar().Split(Compat(text).ToLowerInvariant()).Where(w => w.Length > 0).ToArray();
 
-    // CER for Chinese, WER for every other language; Length is the reference length.
-    public static (int Errors, int Length) Errors(string lang, string hypothesis, string reference)
+    public static (int Errors, int ReferenceLength) Errors(string lang, string hypothesis, string reference)
     {
         if (lang == "zh")
         {
@@ -32,20 +31,20 @@ internal static partial class Scoring
     }
 
     public static IReadOnlyList<string> Codes(string source) =>
-        CodeToken().Matches(source)
+        CodeToken().Matches(Compat(source))
             .Select(m => m.Value)
             .Where(v => v.Any(char.IsDigit) && v.Any(char.IsAsciiLetterUpper))
             .ToList();
 
     public static int CodesKept(string source, string output, bool loose)
     {
+        output = Compat(output);
         if (!loose)
             return Codes(source).Count(output.Contains);
-        var flat = Flat(output);
-        return Codes(source).Count(c => flat.Contains(Flat(c)));
+        return Codes(source).Count(c => Regex.IsMatch(output, LoosePattern(c), RegexOptions.IgnoreCase));
     }
 
-    public static bool HasDigit(string text) => throw new NotImplementedException();
+    public static bool HasDigit(string text) => Compat(text).Any(char.IsDigit);
 
     public static double Percentile(IReadOnlyList<double> values, double p)
     {
@@ -101,7 +100,10 @@ internal static partial class Scoring
         return previous[b.Count];
     }
 
-    private static string Flat(string text) => new(text.ToLowerInvariant().Where(char.IsAsciiLetterOrDigit).ToArray());
+    private static string Compat(string text) => text.Normalize(NormalizationForm.FormKC);
+
+    private static string LoosePattern(string code) =>
+        "(?<![A-Za-z0-9])" + string.Join(@"[\s\-./]*", code.Where(char.IsAsciiLetterOrDigit).Select(c => c.ToString())) + "(?![A-Za-z0-9])";
 
     [GeneratedRegex(@"[^\p{L}\p{N}]+")]
     private static partial Regex NotWordChar();

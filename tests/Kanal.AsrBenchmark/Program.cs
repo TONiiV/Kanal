@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -103,6 +104,7 @@ foreach (var provider in providers)
     }
 
     Console.WriteLine($"== {model.Id} · {provider} · {threads} threads");
+    var baselineMb = Environment.WorkingSet / 1048576.0;
     using var memory = new PeakMemory();
     var load = Stopwatch.StartNew();
     Engine engine;
@@ -129,9 +131,9 @@ foreach (var provider in providers)
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
-                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false));
+                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds));
             Score(model.Id, provider, threads, room, runs);
-            Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.Clip.Seconds):F3}");
+            Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
         }
     }
 
@@ -139,7 +141,7 @@ foreach (var provider in providers)
     {
         var runs = new List<ClipRun>();
         foreach (var clip in realtimeClips)
-            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: true));
+            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: true, engine.PaddingSeconds));
         var decode = runs.SelectMany(r => r.DecodeMs).ToList();
         var finals = runs.Where(r => r.FinalAfterEnd is not null).Select(r => r.FinalAfterEnd!.Value).ToList();
         var partials = runs.Where(r => r.FirstAfterOnset is not null).Select(r => r.FirstAfterOnset!.Value).ToList();
@@ -164,10 +166,11 @@ foreach (var provider in providers)
 
     if (phases.Contains("streams"))
         foreach (var n in streamLevels)
-            await StreamsAsync(model, provider, threads, n, make);
+            await StreamsAsync(model, provider, threads, n, make, engine.PaddingSeconds);
 
     engine.Dispose();
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_working_set_mb", memory.PeakMb, "MB");
+    Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_delta_mb", memory.PeakMb - baselineMb, "MB");
 
     if (phases.Contains("accuracy") && model.Id == AsrModelCatalog.Models[0].Id && provider == "cpu")
         await ParityAsync(model, clips.Where(c => c.Set == "meeting").ToList());
@@ -186,12 +189,12 @@ if (phases.Contains("threads"))
         await RunClipAsync(make, sample[0], autoRoom, realtime: false);
         var runs = new List<ClipRun>();
         foreach (var clip in sample)
-            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: false));
+            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: false, engine.PaddingSeconds));
         var decode = runs.SelectMany(r => r.DecodeMs).ToList();
-        Add(model.Id, "cpu", threads, 1, "fleurs", "all", "threads", "rtf", runs.Sum(r => r.Seconds) / runs.Sum(r => r.Clip.Seconds), "x");
+        Add(model.Id, "cpu", threads, 1, "fleurs", "all", "threads", "rtf", runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds), "x");
         Add(model.Id, "cpu", threads, 1, "fleurs", "all", "threads", "decode_p50_ms", Scoring.Percentile(decode, 0.5), "ms");
         Add(model.Id, "cpu", threads, 1, "fleurs", "all", "threads", "decode_p95_ms", Scoring.Percentile(decode, 0.95), "ms");
-        Console.WriteLine($"   RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.Clip.Seconds):F3}");
+        Console.WriteLine($"   RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
     }
 }
 
@@ -217,8 +220,15 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
         var scored = group.Select(r => (Run: r, Score: Scoring.Errors(lang, r.Text, r.Clip.Reference))).ToList();
         var decode = group.SelectMany(r => r.DecodeMs).ToList();
         void A(string metric, double value, string unit) => Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
-        A(lang == "zh" ? "cer_pct" : "wer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.Length)), "%");
-        A("rtf", group.Sum(r => r.Seconds) / group.Sum(r => r.Clip.Seconds), "x");
+        A(lang == "zh" ? "cer_pct" : "wer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.ReferenceLength)), "%");
+        var plain = scored.Where(s => !Scoring.HasDigit(s.Run.Clip.Reference)).ToList();
+        if (plain.Count > 0)
+        {
+            A(lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct", 100.0 * plain.Sum(s => s.Score.Errors) / Math.Max(1, plain.Sum(s => s.Score.ReferenceLength)), "%");
+            A("clips_no_digit", plain.Count, "n");
+        }
+
+        A("rtf", group.Sum(r => r.Seconds) / group.Sum(r => r.FedSeconds), "x");
         A("decode_p50_ms", Scoring.Percentile(decode, 0.5), "ms");
         A("decode_p95_ms", Scoring.Percentile(decode, 0.95), "ms");
         A("empty_clips", group.Count(r => r.Text.Length == 0), "n");
@@ -238,7 +248,7 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
 
         foreach (var (run, score) in scored)
             clipRows.Add(new ClipRow(model, provider, room, set, lang, run.Clip.Id, run.Clip.Reference, run.Text,
-                score.Errors, score.Length, string.Join(",", run.Langs), Math.Round(run.Seconds / run.Clip.Seconds, 4)));
+                score.Errors, score.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
     }
 }
 
@@ -261,18 +271,18 @@ async Task ParityAsync(BenchModel model, List<Clip> meeting)
     Console.WriteLine($"   parity with NemotronAsrProvider: {same}/{meeting.Count} identical");
 }
 
-async Task StreamsAsync(BenchModel model, string provider, int threads, int n, Func<List<double>, IAsrProvider> make)
+async Task StreamsAsync(BenchModel model, string provider, int threads, int n, Func<List<double>, IAsrProvider> make, double padding)
 {
     var wall = Stopwatch.StartNew();
     var all = await Task.WhenAll(Enumerable.Range(0, n).Select(i => Task.Run(async () =>
     {
         var runs = new List<ClipRun>();
         for (var k = 0; k < sample.Count; k++)
-            runs.Add(await RunClipAsync(make, sample[(k + i) % sample.Count], autoRoom, realtime: false));
+            runs.Add(await RunClipAsync(make, sample[(k + i) % sample.Count], autoRoom, realtime: false, padding));
         return runs;
     })));
     var runs = all.SelectMany(r => r).ToList();
-    var rtf = runs.Select(r => r.Seconds / r.Clip.Seconds).ToList();
+    var rtf = runs.Select(r => r.Seconds / r.FedSeconds).ToList();
     var decode = runs.SelectMany(r => r.DecodeMs).ToList();
     void S(string metric, double value, string unit) => Add(model.Id, provider, threads, n, "fleurs", "all", "streams", metric, value, unit);
     S("rtf_mean", rtf.Average(), "x");
@@ -283,7 +293,7 @@ async Task StreamsAsync(BenchModel model, string provider, int threads, int n, F
     Console.WriteLine($"   {n} streams: mean RTF {rtf.Average():F3}, p95 {Scoring.Percentile(rtf, 0.95):F3}");
 }
 
-static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime)
+static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime, double padding = 0)
 {
     const int frame = Corpus.Rate / 50;
     var decodeMs = new List<double>();
@@ -334,7 +344,8 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
         seconds,
         decodeMs,
         realtime && events.Count > 0 ? events[0].At - onsetAt : null,
-        realtime && finals.Count > 0 ? finals[^1].At - endAt : null);
+        realtime && finals.Count > 0 ? finals[^1].At - endAt : null,
+        padding);
 }
 
 string? Probe(string provider)
@@ -377,6 +388,7 @@ string? Arg(string name) => args.Select((a, i) => (a, i)).Where(x => x.a == name
 
 string[] List(string name, string fallback) => (Arg(name) ?? fallback).Split(',', StringSplitOptions.RemoveEmptyEntries);
 
+[ExcludeFromCodeCoverage]
 internal sealed record ClipRun(
     Clip Clip,
     string Text,
@@ -384,16 +396,23 @@ internal sealed record ClipRun(
     double Seconds,
     IReadOnlyList<double> DecodeMs,
     double? FirstAfterOnset,
-    double? FinalAfterEnd);
+    double? FinalAfterEnd,
+    double PaddingSeconds)
+{
+    public double FedSeconds => Clip.Seconds + PaddingSeconds;
+}
 
+[ExcludeFromCodeCoverage]
 internal sealed record Row(
     string Os, string Machine, string Model, string Provider, int Threads, int Streams, int BackgroundThreads,
     string Set, string Language, string Room, string Metric, double Value, string Unit);
 
+[ExcludeFromCodeCoverage]
 internal sealed record ClipRow(
     string Model, string Provider, string Room, string Set, string Language, string Id,
     string Reference, string Hypothesis, int Errors, int Length, string Langs, double Rtf);
 
+[ExcludeFromCodeCoverage]
 internal sealed class PeakMemory : IDisposable
 {
     private readonly Timer _timer;
@@ -405,3 +424,6 @@ internal sealed class PeakMemory : IDisposable
 
     public void Dispose() => _timer.Dispose();
 }
+
+[ExcludeFromCodeCoverage]
+internal partial class Program;

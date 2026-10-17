@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Text;
@@ -7,11 +8,13 @@ using SherpaOnnx;
 
 namespace Kanal.AsrBenchmark;
 
+[ExcludeFromCodeCoverage]
 internal sealed record Clip(string Set, string Lang, string Id, string Reference, short[] Samples)
 {
     public double Seconds => Samples.Length / (double)Corpus.Rate;
 }
 
+[ExcludeFromCodeCoverage]
 internal static class Corpus
 {
     public const int Rate = 16_000;
