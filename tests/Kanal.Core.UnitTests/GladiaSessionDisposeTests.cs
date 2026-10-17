@@ -29,13 +29,13 @@ public class GladiaSessionDisposeTests
         var session = new GladiaAsrSession(
             _ => Task.FromResult(WebSocket.CreateFromStream(new HangUpOnFirstWriteStream(), new WebSocketCreationOptions())),
             maxReconnectAttempts: 3);
-        await session.ConnectAsync(CancellationToken.None);
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
 
         await session.DisposeAsync();
 
         var seen = new List<AsrEvent>();
-        await using var events = session.Events.GetAsyncEnumerator();
-        while (await events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)))
+        await using var events = session.Events.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        while (await events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken))
             seen.Add(events.Current);
         Assert.DoesNotContain(seen, e => e is AsrEvent.Error);
     }
