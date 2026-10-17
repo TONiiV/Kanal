@@ -18,8 +18,8 @@ internal static class Report
             .AppendLine($"{machine}")
             .AppendLine()
             .AppendLine($"Clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()} ({g.Sum(c => c.Seconds):F0} s)"))}.")
-            .AppendLine("FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). Meeting clips: the 12 sentences of the MT benchmark, synthesised locally with Piper voices through sherpa-onnx.")
-            .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl, no number normalisation. The no-digit columns score only clips whose reference has no digit.")
+            .AppendLine("FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). Meeting clips: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper voices through sherpa-onnx.")
+            .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl/en. Raw scores use no number normalisation. The numbers columns first turn spelled-out cardinals, decimals and percentages into digits in both texts (`Numbers.Normalize`). The no-digit columns score only clips whose reference has no digit. Gladia: the product `GladiaAsrProvider` without translation, fed at real-time pace with 1 s of trailing silence. The product sends Gladia no room languages, so Gladia has only the auto room.")
             .AppendLine();
 
         var engines = rows.Where(r => r.Metric == "load_s" && r.Room == "-").Select(r => (r.Model, r.Provider, r.Threads)).Distinct().ToList();
@@ -34,12 +34,12 @@ internal static class Report
         }
 
         md.AppendLine().AppendLine("## Accuracy and offline-feed speed (1 stream)").AppendLine()
-            .AppendLine("Forced: a room of the clip's language. Auto: a zh/de/pl room. Language guess: share of finals that `TranscriptLanguage.Guess` labels with the clip's language.")
+            .AppendLine("Forced: a room of the clip's language. Auto: a zh/de/pl/en room. Language guess: share of finals that `TranscriptLanguage.Guess` labels with the clip's language.")
             .AppendLine()
-            .AppendLine("| Model | Provider | Set | Lang | Metric | Forced % | Auto % | No-digit clips n | No-digit forced/auto % | Language guess % | Empty (forced/auto) | Codes kept strict (forced/auto) | Codes kept loose (forced/auto) | RTF forced | RTF auto | Decode p50/p95 ms |")
-            .AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+            .AppendLine("| Model | Provider | Set | Lang | Metric | Forced % | Auto % | Numbers forced/auto % | No-digit clips n | No-digit forced/auto % | Language guess % | Empty (forced/auto) | Codes kept strict (forced/auto) | Codes kept loose (forced/auto) | RTF forced | RTF auto | Decode p50/p95 ms |")
+            .AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var (model, provider, threads) in engines)
-        foreach (var set in new[] { "fleurs", "meeting" })
+        foreach (var set in clips.Select(c => c.Set).Distinct())
         foreach (var lang in Corpus.Languages)
         {
             bool F(Row r) => Match(r, model, provider, threads, set, lang, "forced");
@@ -48,8 +48,9 @@ internal static class Report
                 continue;
             var metric = lang == "zh" ? "cer_pct" : "wer_pct";
             var noDigit = lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct";
+            var numbers = lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct";
             var codes = set == "meeting" ? V(F, "codes_total", "F0") : null;
-            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
+            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, numbers, "F1")}/{V(A, numbers, "F1")} | {V(A, "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
                           $"{V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} | " +
                           (codes is null ? "– | – | " : $"{V(F, "codes_kept_strict", "F0")}/{V(A, "codes_kept_strict", "F0")} of {codes} | {V(F, "codes_kept_loose", "F0")}/{V(A, "codes_kept_loose", "F0")} of {codes} | ") +
                           $"{V(F, "rtf", "F3")} | {V(A, "rtf", "F3")} | {V(F, "decode_p50_ms", "F0")}/{V(F, "decode_p95_ms", "F0")} |");
@@ -101,10 +102,10 @@ internal static class Report
         md.AppendLine().AppendLine(Research);
 
         md.AppendLine().AppendLine("## Meeting sentences").AppendLine()
-            .AppendLine("| Model | Provider | Room | Clip | Reference | Hypothesis | Errors / length |")
-            .AppendLine("|---|---|---|---|---|---|---:|");
+            .AppendLine("| Model | Provider | Room | Clip | Reference | Hypothesis | Errors / length | Numbers errors / length |")
+            .AppendLine("|---|---|---|---|---|---|---:|---:|");
         foreach (var c in clipRows.Where(c => c.Set == "meeting"))
-            md.AppendLine($"| {c.Model} | {c.Provider} | {c.Room} | {c.Id} | {c.Reference} | {c.Hypothesis} | {c.Errors}/{c.Length} |");
+            md.AppendLine($"| {c.Model} | {c.Provider} | {c.Room} | {c.Id} | {c.Reference} | {c.Hypothesis} | {c.Errors}/{c.Length} | {c.NumbersErrors}/{c.NumbersLength} |");
 
         return md.ToString();
     }

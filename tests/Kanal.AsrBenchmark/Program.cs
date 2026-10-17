@@ -42,7 +42,7 @@ if (args.FirstOrDefault() == "fetch")
     if (Arg("--candidates") is { } candidates)
         await Engine.FetchCandidatesAsync(data, candidates.Split(','));
     if (!args.Contains("--no-clips"))
-        await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"));
+        await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"), List("--sets", string.Join(',', Corpus.Sets.Keys)));
     return 0;
 }
 
@@ -75,8 +75,8 @@ var sample = Corpus.Languages.SelectMany(l => fleurs.Where(c => c.Lang == l).Tak
 var realtimeClips = Corpus.Languages.SelectMany(l => fleurs.Where(c => c.Lang == l).Take(rtPerLanguage)).ToList();
 
 var only = Arg("--model")?.Split(',');
-var models = new[] { Engine.Default(modelsDir) }.Concat(Engine.Downloaded(data))
-    .Where(m => only is null || only.Contains(m.Id))
+var models = new[] { Engine.Default(modelsDir) }.Concat(Engine.Downloaded(data)).Append(Engine.Gladia)
+    .Where(m => only?.Contains(m.Id) ?? m != Engine.Gladia)
     .ToList();
 var rows = new List<Row>();
 var clipRows = new List<ClipRow>();
@@ -91,12 +91,12 @@ Console.WriteLine(machine);
 Console.WriteLine($"{clips.Count} clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()}"))}");
 
 foreach (var model in models)
-foreach (var provider in providers)
+foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
 {
     var threads = Engine.DefaultThreads;
-    if (provider != "cpu" && !probes.ContainsKey(provider))
+    if (provider is not ("cpu" or "cloud") && !probes.ContainsKey(provider))
         probes[provider] = Probe(provider);
-    if (provider != "cpu" && probes[provider] is { } fallback)
+    if (provider is not ("cpu" or "cloud") && probes[provider] is { } fallback)
     {
         notes.Add($"{model.Id} · {provider}: {fallback}");
         Console.WriteLine($"   {provider}: {fallback}");
@@ -122,16 +122,17 @@ foreach (var provider in providers)
     Add(model.Id, provider, threads, 1, "-", "-", "-", "load_s", load.Elapsed.TotalSeconds, "s");
     Add(model.Id, provider, threads, 1, "-", "-", "-", "working_set_after_load_mb", Environment.WorkingSet / 1048576.0, "MB");
     Console.WriteLine($"   load {load.Elapsed.TotalSeconds:F2} s");
-    Func<List<double>, IAsrProvider> make = ms => new NemotronAsrProvider(lang => engine.Open(lang, ms));
-    await RunClipAsync(make, clips[0], autoRoom, realtime: false);
+    Func<List<double>, IAsrProvider> make = engine.Provider;
+    if (!engine.Cloud)
+        await RunClipAsync(make, clips[0], autoRoom, realtime: false);
 
     if (phases.Contains("accuracy"))
     {
-        foreach (var room in new[] { "forced", "auto" })
+        foreach (var room in engine.Cloud ? ["auto"] : new[] { "forced", "auto" })
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
-                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds));
+                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds, engine.Cloud));
             Score(model.Id, provider, threads, room, runs);
             Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
         }
@@ -141,7 +142,7 @@ foreach (var provider in providers)
     {
         var runs = new List<ClipRun>();
         foreach (var clip in realtimeClips)
-            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: true, engine.PaddingSeconds));
+            runs.Add(await RunClipAsync(make, clip, autoRoom, realtime: true, engine.PaddingSeconds, engine.Cloud));
         var decode = runs.SelectMany(r => r.DecodeMs).ToList();
         var finals = runs.Where(r => r.FinalAfterEnd is not null).Select(r => r.FinalAfterEnd!.Value).ToList();
         var partials = runs.Where(r => r.FirstAfterOnset is not null).Select(r => r.FirstAfterOnset!.Value).ToList();
@@ -164,7 +165,7 @@ foreach (var provider in providers)
         Console.WriteLine($"   real time: decode p95 {Scoring.Percentile(decode, 0.95):F0} ms, final p50 {Scoring.Percentile(finals, 0.5):F2} s");
     }
 
-    if (phases.Contains("streams"))
+    if (phases.Contains("streams") && !engine.Cloud)
         foreach (var n in streamLevels)
             await StreamsAsync(model, provider, threads, n, make, engine.PaddingSeconds);
 
@@ -185,7 +186,7 @@ if (phases.Contains("threads"))
         var load = Stopwatch.StartNew();
         using var engine = Engine.Load(model, "cpu", threads, data);
         Add(model.Id, "cpu", threads, 1, "-", "-", "threads", "load_s", load.Elapsed.TotalSeconds, "s");
-        Func<List<double>, IAsrProvider> make = ms => new NemotronAsrProvider(lang => engine.Open(lang, ms));
+        Func<List<double>, IAsrProvider> make = engine.Provider;
         await RunClipAsync(make, sample[0], autoRoom, realtime: false);
         var runs = new List<ClipRun>();
         foreach (var clip in sample)
@@ -217,10 +218,12 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
     foreach (var group in runs.GroupBy(r => (r.Clip.Set, r.Clip.Lang)))
     {
         var (set, lang) = group.Key;
-        var scored = group.Select(r => (Run: r, Score: Scoring.Errors(lang, r.Text, r.Clip.Reference))).ToList();
+        var scored = group.Select(r => (Run: r, Score: Scoring.Errors(lang, r.Text, r.Clip.Reference),
+            Numbers: Scoring.Errors(lang, r.Text, r.Clip.Reference, numbers: true))).ToList();
         var decode = group.SelectMany(r => r.DecodeMs).ToList();
         void A(string metric, double value, string unit) => Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
         A(lang == "zh" ? "cer_pct" : "wer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.ReferenceLength)), "%");
+        A(lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct", 100.0 * scored.Sum(s => s.Numbers.Errors) / Math.Max(1, scored.Sum(s => s.Numbers.ReferenceLength)), "%");
         var plain = scored.Where(s => !Scoring.HasDigit(s.Run.Clip.Reference)).ToList();
         if (plain.Count > 0)
         {
@@ -246,9 +249,9 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             A("codes_kept_loose", group.Sum(r => Scoring.CodesKept(r.Clip.Reference, r.Text, loose: true)), "n");
         }
 
-        foreach (var (run, score) in scored)
+        foreach (var (run, score, numbers) in scored)
             clipRows.Add(new ClipRow(model, provider, room, set, lang, run.Clip.Id, run.Clip.Reference, run.Text,
-                score.Errors, score.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
+                score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
     }
 }
 
@@ -293,7 +296,7 @@ async Task StreamsAsync(BenchModel model, string provider, int threads, int n, F
     Console.WriteLine($"   {n} streams: mean RTF {rtf.Average():F3}, p95 {Scoring.Percentile(rtf, 0.95):F3}");
 }
 
-static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime, double padding = 0)
+static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime, double padding = 0, bool paced = false)
 {
     const int frame = Corpus.Rate / 50;
     var decodeMs = new List<double>();
@@ -312,11 +315,11 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
     var samples = clip.Samples;
     var onset = Scoring.SpeechOnset(samples, frame);
     var end = Scoring.SpeechEnd(samples, frame);
-    var total = samples.Length + (realtime ? 4 * Corpus.Rate : 0);
+    var total = samples.Length + (int)((realtime ? 4 : paced ? padding : 0) * Corpus.Rate);
     double onsetAt = 0, endAt = 0;
     for (var i = 0; i < total; i += frame)
     {
-        if (realtime)
+        if (realtime || paced)
         {
             var wait = TimeSpan.FromSeconds(i / (double)Corpus.Rate) - clock.Elapsed;
             if (wait > TimeSpan.Zero)
@@ -410,7 +413,7 @@ internal sealed record Row(
 [ExcludeFromCodeCoverage]
 internal sealed record ClipRow(
     string Model, string Provider, string Room, string Set, string Language, string Id,
-    string Reference, string Hypothesis, int Errors, int Length, string Langs, double Rtf);
+    string Reference, string Hypothesis, int Errors, int Length, int NumbersErrors, int NumbersLength, string Langs, double Rtf);
 
 [ExcludeFromCodeCoverage]
 internal sealed class PeakMemory : IDisposable
