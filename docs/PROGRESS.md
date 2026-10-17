@@ -4,6 +4,90 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-17
+
+### Local transcription benchmark
+
+`tests/Kanal.AsrBenchmark` measures the local transcription models on this machine. It does not run
+in CI, because it needs the model files, the test audio and the local hardware. CI runs its scoring
+tests (`AsrBenchmarkScoringTests`).
+
+Every clip goes through the session of `NemotronAsrProvider` in 20 ms frames, as from the capture
+layer. The benchmark builds the recognizer itself, so that the thread count and the execution
+provider can change. A parity check runs the product provider on the meeting clips: 12 of 12 texts
+were identical. Offline models get Silero VAD segments (500 ms minimum silence). A segment's text is
+a final. Offline models give no partials.
+
+It measures, per model and execution provider:
+
+- the load time, the working set after the load and the peak working set;
+- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room;
+- the share of finals that `TranscriptLanguage.Guess` labels correctly in the zh/de/pl room;
+- how many part numbers (`KB-4471`, `X5CrNi18-10`, `IP67`) survive: strict (verbatim) and loose
+  (case and separators ignored);
+- the real-time factor (RTF) with the audio fed as fast as possible;
+- with real-time pace: the decode time per chunk, the time from the speech end to the final, and
+  the time from the speech onset to the first partial;
+- 1, 2 and 4 concurrent sessions on one recognizer;
+- 1, 2, 4 and 8 threads for the default model.
+
+Test audio:
+
+- FLEURS test split (`google/fleurs`, CC-BY-4.0), the first 20 clips per language at a pinned
+  revision. `fetch` reads the start of each test archive as a stream, about 42 MB.
+- The 12 meeting sentences of the translation benchmark. `fetch` synthesises them locally with
+  Piper voices through sherpa-onnx (zh huayan, de thorsten, pl gosia). No text leaves the machine.
+  Windows has no local German or Polish SAPI voice; Piper covers all three languages on every OS.
+
+Run it from the repo root:
+
+1. Fetch the audio and the default model, once:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch
+   ```
+
+2. Optional: fetch the three candidate models (2.7 GB) and the Silero VAD:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --candidates all --no-clips
+   ```
+
+3. Run the benchmark:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- --provider cpu --streams 1,2,4 --threads 1,2,4,8
+   ```
+
+Options: `--provider cpu,cuda,coreml`, `--model <id,...>`, `--phases accuracy,realtime,streams,threads`,
+`--clips N` (clips per set and language), `--rt-clips N`, `--burn N` (busy background threads),
+`--data <folder>` (default `LocalApplicationData/Kanal/asr-bench`), `--models <folder>` (default:
+the Kanal models folder), `--out <folder>`. The run writes `kanal-asr-benchmark-<os>-<time>.md` and a
+`.json` file with one flat row per number.
+
+The NuGet runtime of sherpa-onnx 1.13.8 is CPU only on win-x64. A child process detects the fallback
+and the report names it. For CUDA:
+
+1. Download `sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2`
+   (478 MB) from the sherpa-onnx release. Download `nvidia-cudnn-cu13` 9.27 (436 MB wheel) from PyPI.
+2. Put the DLLs from the archive's `lib` folder and the wheel's `nvidia/cudnn/bin` into one folder.
+   The CUDA 13 toolkit supplies cuBLAS and the runtime through `PATH`.
+3. Build with `dotnet build -c Release -p:SherpaNative=<folder> tests/Kanal.AsrBenchmark`. Then run
+   with `--no-build --provider cuda`.
+
+Results on a Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 2026-10-17:
+
+| Model | Load s | Peak MB | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s | 4 streams mean RTF |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Nemotron 560 ms (default) | 2.2 | 958 | 22.3 | 12.0 | 22.5 | 0.18 | 2.67/3.74 | 0.32 |
+| Nemotron 160 ms | 2.1 | 962 | 25.2 | 14.2 | 24.9 | 0.53 | 2.16/2.62 | 1.26 |
+| Whisper large-v3-turbo | 2.5 | 2744 | 33.0 | 6.9 | 13.5 | 0.25 | 2.50/3.13 | 0.63 |
+| Qwen3-ASR 0.6B | 3.7 | 2804 | 7.9 | 9.6 | 50.5 | 0.20 | 1.88/2.64 | 0.30 |
+
+CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Offline models give their first text
+only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
+partial 0.84 s after the onset.
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock
