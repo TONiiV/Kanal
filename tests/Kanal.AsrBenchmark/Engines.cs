@@ -29,6 +29,16 @@ internal abstract class Engine : IDisposable
 
     public abstract void Dispose();
 
+    public static string Key(string name)
+    {
+        var key = Environment.GetEnvironmentVariable(name)
+                  ?? (OperatingSystem.IsWindows()
+                      ? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User)
+                        ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine)
+                      : null);
+        return string.IsNullOrWhiteSpace(key) ? throw new InvalidOperationException($"{name} is not set.") : key.Trim();
+    }
+
     public static int DefaultThreads => Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
 
     public static BenchModel Default(string modelsDir)
@@ -49,6 +59,10 @@ internal abstract class Engine : IDisposable
         ("qwen3-asr-0.6b-int8", "qwen3", 0, "csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
             ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx",
              "tokenizer/merges.txt", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"]),
+        ("whisper-large-v3-int8", "whisper", 0, "csukuangfj/sherpa-onnx-whisper-large-v3",
+            ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"]),
+        ("cohere-transcribe-int8", "cohere", 0, "csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
+            ["encoder.int8.onnx", "encoder.int8.onnx.data", "decoder.int8.onnx", "tokens.txt"]),
     ];
 
     private const string VadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
@@ -117,6 +131,12 @@ internal sealed class OfflineEngine : Engine
             _config.ModelConfig.Whisper.Decoder = files.Values.Single(f => f.EndsWith("decoder.int8.onnx"));
             _config.ModelConfig.Tokens = files.Values.Single(f => f.EndsWith("tokens.txt"));
         }
+        else if (model.Kind == "cohere")
+        {
+            _config.ModelConfig.CohereTranscribe.Encoder = files["encoder.int8.onnx"];
+            _config.ModelConfig.CohereTranscribe.Decoder = files["decoder.int8.onnx"];
+            _config.ModelConfig.Tokens = files["tokens.txt"];
+        }
         else
         {
             _config.ModelConfig.Qwen3Asr.ConvFrontend = files["conv_frontend.onnx"];
@@ -140,21 +160,24 @@ internal sealed class OfflineEngine : Engine
     private string Recognize(float[] samples, string language)
     {
         using var stream = _recognizer.CreateStream();
-        if (_model.Kind == "whisper")
+        if (_model.Kind is "whisper" or "cohere")
         {
-            // Whisper reads the language from the recognizer config, not from the stream.
+            // Whisper and Cohere read the language from the recognizer config, not from the stream.
             var code = language == "auto" ? "" : language[..2];
             lock (_gate)
                 if (_language != code)
                 {
-                    _config.ModelConfig.Whisper.Language = code;
+                    if (_model.Kind == "whisper")
+                        _config.ModelConfig.Whisper.Language = code;
+                    else
+                        _config.ModelConfig.CohereTranscribe.Language = code;
                     _recognizer.SetConfig(_config);
                     _language = code;
                 }
         }
         else if (language != "auto")
         {
-            stream.SetOption("language", language[..2] switch { "zh" => "Chinese", "de" => "German", "pl" => "Polish", var l => l });
+            stream.SetOption("language", language[..2] switch { "zh" => "Chinese", "de" => "German", "pl" => "Polish", "en" => "English", var l => l });
         }
 
         stream.AcceptWaveform(Corpus.Rate, samples);
@@ -292,14 +315,7 @@ internal sealed class GladiaEngine : Engine
 
     public GladiaEngine()
     {
-        var key = Environment.GetEnvironmentVariable("GLADIA_API_KEY")
-                  ?? (OperatingSystem.IsWindows()
-                      ? Environment.GetEnvironmentVariable("GLADIA_API_KEY", EnvironmentVariableTarget.User)
-                        ?? Environment.GetEnvironmentVariable("GLADIA_API_KEY", EnvironmentVariableTarget.Machine)
-                      : null);
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("GLADIA_API_KEY is not set.");
-        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = key.Trim(), EnableTranslation = false });
+        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = Key("GLADIA_API_KEY"), EnableTranslation = false });
     }
 
     public override bool Cloud => true;

@@ -174,7 +174,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_delta_mb", memory.PeakMb - baselineMb, "MB");
 
     if (phases.Contains("accuracy") && model.Id == AsrModelCatalog.Models[0].Id && provider == "cpu")
-        await ParityAsync(model, clips.Where(c => c.Set == "meeting").ToList());
+        await ParityAsync(model, clips.Where(c => c.Set == "meeting-piper").ToList());
 }
 
 if (phases.Contains("threads"))
@@ -242,7 +242,7 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             A("lang_guess_pct", 100.0 * langs.Count(l => l == lang) / Math.Max(1, langs.Count), "%");
         }
 
-        if (set == "meeting")
+        if (set.StartsWith("meeting"))
         {
             A("codes_total", group.Sum(r => Scoring.Codes(r.Clip.Reference).Count), "n");
             A("codes_kept_strict", group.Sum(r => Scoring.CodesKept(r.Clip.Reference, r.Text, loose: false)), "n");
@@ -269,8 +269,8 @@ async Task ParityAsync(BenchModel model, List<Clip> meeting)
             notes.Add($"parity: {clip.Id} differs. Product: \"{real.Text}\". Benchmark: \"{bench.Hypothesis}\".");
     }
 
-    Add(model.Id, "cpu", Engine.DefaultThreads, 1, "meeting", "all", "auto", "parity_identical", same, "n");
-    Add(model.Id, "cpu", Engine.DefaultThreads, 1, "meeting", "all", "auto", "parity_clips", meeting.Count, "n");
+    Add(model.Id, "cpu", Engine.DefaultThreads, 1, "meeting-piper", "all", "auto", "parity_identical", same, "n");
+    Add(model.Id, "cpu", Engine.DefaultThreads, 1, "meeting-piper", "all", "auto", "parity_clips", meeting.Count, "n");
     Console.WriteLine($"   parity with NemotronAsrProvider: {same}/{meeting.Count} identical");
 }
 

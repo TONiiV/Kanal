@@ -2,7 +2,11 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
 using System.IO.Compression;
+using System.Globalization;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Kanal.Audio;
 using SherpaOnnx;
 
@@ -21,7 +25,7 @@ internal static class Corpus
 
     public static readonly string[] Languages = ["zh", "de", "pl", "en"];
 
-    // FLEURS (Conneau et al. 2022), CC-BY-4.0. The revision pins the clip choice across machines.
+    // FLEURS (Conneau et al. 2022), CC-BY-4.0. Each pinned revision keeps the clip choice the same across machines.
     private const string FleursRevision = "70bb2e84b976b7e960aa89f1c648e09c59f894dd";
 
     private static readonly Dictionary<string, string> FleursConfig = new()
@@ -106,7 +110,11 @@ internal static class Corpus
     public static readonly Dictionary<string, Func<HttpClient, string, int, Task<List<string>>>> Sets = new()
     {
         ["fleurs"] = FetchFleursAsync,
-        ["meeting"] = (http, data, _) => SynthesiseMeetingAsync(http, data),
+        ["meeting-piper"] = (http, data, _) => SynthesisePiperAsync(http, data),
+        ["meeting-11labs"] = (http, data, _) => SynthesiseElevenLabsAsync(http, data),
+        ["voxpopuli"] = FetchVoxPopuliAsync,
+        ["ami"] = FetchAmiAsync,
+        ["aishell4"] = FetchAishell4Async,
     };
 
     public static async Task FetchAsync(string data, int perLanguage, IReadOnlyCollection<string> sets)
@@ -114,59 +122,103 @@ internal static class Corpus
         Directory.CreateDirectory(data);
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         var manifest = Path.Combine(data, "clips.tsv");
-        var rows = File.Exists(manifest)
-            ? File.ReadAllLines(manifest).Where(l => !sets.Contains(l.Split('	')[0])).ToList()
-            : [];
+        var old = File.Exists(manifest) ? File.ReadAllLines(manifest).ToList() : [];
+        var rows = old.Where(l => Sets.ContainsKey(SetOf(l)) && !sets.Contains(SetOf(l))).ToList();
         foreach (var set in sets)
-            rows.AddRange(await Sets[set](http, data, perLanguage));
+        {
+            try
+            {
+                rows.AddRange(await Sets[set](http, data, perLanguage));
+            }
+            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or InvalidDataException)
+            {
+                Console.WriteLine($"{set}: {e.Message} The old clips of this set stay.");
+                rows.AddRange(old.Where(l => SetOf(l) == set));
+            }
+        }
+
         await File.WriteAllLinesAsync(manifest, rows);
         Console.WriteLine($"{rows.Count} clips listed in {manifest}");
     }
+
+    private static string SetOf(string row) => row.Split('\t')[0];
 
     private static async Task<List<string>> FetchFleursAsync(HttpClient http, string data, int count)
     {
         var rows = new List<string>();
         foreach (var lang in Languages)
-            rows.AddRange(await FetchFleursAsync(http, data, lang, count));
+        {
+            var root = $"https://huggingface.co/datasets/google/fleurs/resolve/{FleursRevision}/data/{FleursConfig[lang]}";
+            var transcripts = (await http.GetStringAsync($"{root}/test.tsv"))
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Split('\t'))
+                .GroupBy(f => f[1])
+                .ToDictionary(g => g.Key, g => g.First()[2]);
+            rows.AddRange(await StreamTarAsync(http, $"{root}/audio/test.tar.gz", "fleurs", lang, data, count, transcripts, 0));
+        }
+
         return rows;
     }
 
-    private static async Task<List<string>> FetchFleursAsync(HttpClient http, string data, string lang, int count)
-    {
-        var config = FleursConfig[lang];
-        var root = $"https://huggingface.co/datasets/google/fleurs/resolve/{FleursRevision}/data/{config}";
-        var transcripts = (await http.GetStringAsync($"{root}/test.tsv"))
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Split('\t'))
-            .GroupBy(f => f[1])
-            .ToDictionary(g => g.Key, g => g.First()[2]);
+    // VoxPopuli (Wang et al. 2021), CC0; raw audio © European Union, source: European Parliament.
+    // This revision still holds the per-language tar.gz files; the next one moved to Parquet.
+    private const string VoxPopuliRevision = "719aaef8225945c0d80b277de6c79aa42ab053d5";
 
-        var folder = Path.Combine(data, "fleurs", lang);
+    private static async Task<List<string>> FetchVoxPopuliAsync(HttpClient http, string data, int count)
+    {
+        var rows = new List<string>();
+        foreach (var lang in new[] { "de", "pl", "en" })
+        {
+            var root = $"https://huggingface.co/datasets/facebook/voxpopuli/resolve/{VoxPopuliRevision}/data/{lang}";
+            var transcripts = (await http.GetStringAsync($"{root}/asr_test.tsv"))
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Skip(1)
+                .Select(l => l.Split('\t'))
+                .ToDictionary(f => f[0] + ".wav", f => f[1]);
+            rows.AddRange(await StreamTarAsync(http, $"{root}/test/test_part_0.tar.gz", "voxpopuli", lang, data, count, transcripts, 20));
+        }
+
+        return rows;
+    }
+
+    // A test archive is about 0.5 GB; reading it as a stream stops after the first clips.
+    private static async Task<List<string>> StreamTarAsync(HttpClient http, string url, string set, string lang, string data,
+        int count, Dictionary<string, string> transcripts, double maxSeconds)
+    {
+        var folder = Path.Combine(data, set, lang);
         Directory.CreateDirectory(folder);
         var rows = new List<string>();
-        // The test archive is ~0.5 GB; reading it as a stream stops after the first clips.
-        using var response = await http.GetAsync($"{root}/audio/test.tar.gz", HttpCompletionOption.ResponseHeadersRead);
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         await using var gzip = new GZipStream(await response.Content.ReadAsStreamAsync(), CompressionMode.Decompress);
         using var tar = new TarReader(gzip);
         while (rows.Count < count && await tar.GetNextEntryAsync() is { } entry)
         {
             var name = Path.GetFileName(entry.Name);
-            if (entry.DataStream is null || !name.EndsWith(".wav") || !transcripts.TryGetValue(name, out var text))
+            if (entry.DataStream is null || !name.EndsWith(".wav") || !transcripts.TryGetValue(name, out var text) || text.Length == 0)
                 continue;
-            await using (var file = File.Create(Path.Combine(folder, name)))
+            name = name.Replace(':', '-');
+            var path = Path.Combine(folder, name);
+            await using (var file = File.Create(path))
                 await entry.DataStream.CopyToAsync(file);
-            rows.Add(string.Join('\t', "fleurs", lang, Path.GetFileNameWithoutExtension(name), $"fleurs/{lang}/{name}", text));
+            var seconds = Read(path).Length / (double)Rate;
+            if (maxSeconds > 0 && seconds is < 3 or > 20)
+            {
+                File.Delete(path);
+                continue;
+            }
+
+            rows.Add(string.Join('\t', set, lang, Path.GetFileNameWithoutExtension(name), $"{set}/{lang}/{name}", text));
         }
 
-        Console.WriteLine($"FLEURS {config}: {rows.Count} clips");
+        Console.WriteLine($"{set} {lang}: {rows.Count} clips");
         return rows;
     }
 
-    private static async Task<List<string>> SynthesiseMeetingAsync(HttpClient http, string data)
+    private static async Task<List<string>> SynthesisePiperAsync(HttpClient http, string data)
     {
         var rows = new List<string>();
-        var folder = Path.Combine(data, "meeting");
+        var folder = Path.Combine(data, "meeting-piper");
         Directory.CreateDirectory(folder);
         foreach (var (lang, voice) in PiperVoice)
         {
@@ -188,18 +240,190 @@ internal static class Corpus
                 var pcm = audio.Samples.Select(s => (short)Math.Clamp(s * 32767f, short.MinValue, short.MaxValue)).ToArray();
                 var resampler = new LinearResampler(audio.SampleRate, Rate);
                 var buffer = new short[resampler.GetMaxOutputCount(pcm.Length)];
-                var speech = buffer[..resampler.Resample(pcm, buffer)];
-                short[] padded = [.. new short[Rate * 3 / 10], .. speech, .. new short[Rate / 2]];
                 var id = $"{lang}-{++index:D2}";
-                await using (var file = File.Create(Path.Combine(folder, id + ".wav")))
-                    WavFile.Write(file, PcmConvert.ShortsToBytes(padded), Rate, 1);
-                rows.Add(string.Join('\t', "meeting", lang, id, $"meeting/{id}.wav", text));
+                await WritePaddedAsync(Path.Combine(folder, id + ".wav"), buffer[..resampler.Resample(pcm, buffer)]);
+                rows.Add(string.Join('\t', "meeting-piper", lang, id, $"meeting-piper/{id}.wav", text));
             }
 
-            Console.WriteLine($"Meeting {lang}: {index} clips synthesised with {voice}");
+            Console.WriteLine($"meeting-piper {lang}: {index} clips synthesised with {voice}");
         }
 
         return rows;
+    }
+
+    // ElevenLabs premade voices. A clip on disk is never requested again: each request costs characters.
+    private static readonly (string Name, string Id)[] ElevenLabsVoices =
+        [("sarah", "EXAVITQu4vr4xnJE6fpL"), ("george", "JBFqnCBsd6RMkjVDRZzb"), ("charlotte", "XB0fDUnXU5powFXDhCwa")];
+
+    private const string ElevenLabsModel = "eleven_multilingual_v2";
+
+    private static async Task<List<string>> SynthesiseElevenLabsAsync(HttpClient http, string data)
+    {
+        var rows = new List<string>();
+        var folder = Path.Combine(data, "meeting-11labs");
+        Directory.CreateDirectory(folder);
+        string? key = null;
+        var requested = 0;
+        foreach (var lang in Languages)
+        {
+            var index = 0;
+            foreach (var (_, text) in Meeting.Where(m => m.Lang == lang))
+            {
+                index++;
+                foreach (var (voice, voiceId) in ElevenLabsVoices)
+                {
+                    var id = $"{lang}-{index:D2}-{voice}";
+                    var path = Path.Combine(folder, id + ".wav");
+                    if (!File.Exists(path))
+                    {
+                        key ??= Engine.Key("ELEVENLABS_API_KEY");
+                        using var request = new HttpRequestMessage(HttpMethod.Post,
+                            $"https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=pcm_16000")
+                        {
+                            Content = JsonContent.Create(new { text, model_id = ElevenLabsModel }),
+                        };
+                        request.Headers.Add("xi-api-key", key);
+                        using var response = await http.SendAsync(request);
+                        if (!response.IsSuccessStatusCode)
+                            throw new InvalidOperationException($"ElevenLabs refused {id} ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}");
+                        await WritePaddedAsync(path, PcmConvert.BytesToShorts(await response.Content.ReadAsByteArrayAsync()));
+                        requested += text.Length;
+                    }
+
+                    rows.Add(string.Join('\t', "meeting-11labs", lang, id, $"meeting-11labs/{id}.wav", text));
+                }
+            }
+        }
+
+        Console.WriteLine($"meeting-11labs: {rows.Count} clips, {requested} characters sent to ElevenLabs");
+        return rows;
+    }
+
+    private static async Task WritePaddedAsync(string path, short[] speech)
+    {
+        short[] padded = [.. new short[Rate * 3 / 10], .. speech, .. new short[Rate / 2]];
+        await using var file = File.Create(path);
+        WavFile.Write(file, PcmConvert.ShortsToBytes(padded), Rate, 1);
+    }
+
+    // AMI Meeting Corpus (Carletta et al. 2005), CC-BY-4.0, through edinburghcstr/ami. SDM: the single far-field array microphone.
+    private const string AmiRevision = "46f28f2503e2ec48f8867a84eef356c70476beab";
+
+    private const string AmiMeeting = "EN2002a";
+
+    private static async Task<List<string>> FetchAmiAsync(HttpClient http, string data, int count)
+    {
+        var segments = new List<(string Id, double Begin, double End, string Text, string Src)>();
+        for (var offset = 0; ; offset += 100)
+        {
+            using var page = JsonDocument.Parse(await http.GetStringAsync(
+                $"https://datasets-server.huggingface.co/rows?dataset=edinburghcstr/ami&config=sdm&split=test&offset={offset}&length=100"));
+            var rows = page.RootElement.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("row")).ToList();
+            var mine = rows.Where(r => r.GetProperty("meeting_id").GetString() == AmiMeeting).ToList();
+            segments.AddRange(mine.Select(r => (r.GetProperty("audio_id").GetString()!, r.GetProperty("begin_time").GetDouble(),
+                r.GetProperty("end_time").GetDouble(), r.GetProperty("text").GetString()!,
+                r.GetProperty("audio")[0].GetProperty("src").GetString()!)));
+            if (mine.Count < rows.Count || rows.Count < 100)
+                break;
+        }
+
+        if (segments.Count == 0 || !segments[0].Src.Contains(AmiRevision))
+            throw new InvalidDataException($"AMI: the dataset server no longer serves revision {AmiRevision}.");
+
+        var picked = segments
+            .Where(s => s.End - s.Begin is >= 3 and <= 20)
+            .Where(s => !segments.Any(o => o.Id != s.Id && o.Begin < s.End && s.Begin < o.End))
+            .OrderBy(s => s.Begin)
+            .Take(count)
+            .ToList();
+        var folder = Path.Combine(data, "ami", "en");
+        Directory.CreateDirectory(folder);
+        var result = new List<string>();
+        foreach (var s in picked)
+        {
+            await File.WriteAllBytesAsync(Path.Combine(folder, s.Id + ".wav"), await http.GetByteArrayAsync(s.Src));
+            result.Add(string.Join('\t', "ami", "en", s.Id, $"ami/en/{s.Id}.wav", s.Text));
+        }
+
+        Console.WriteLine($"ami en: {result.Count} clips from {AmiMeeting} ({segments.Count} segments, {picked.Count} without overlap)");
+        return result;
+    }
+
+    // AISHELL-4 (Fu et al. 2021), CC-BY-SA-4.0 (openslr.org/111). Channel 0 of the 8-channel far-field array.
+    private const string Aishell4Revision = "aada72727856313b19d4a030383c426364931dbf";
+
+    private static readonly string[] Aishell4Sessions = ["L_R003S01C02", "L_R004S01C01"];
+
+    private static async Task<List<string>> FetchAishell4Async(HttpClient http, string data, int count)
+    {
+        var root = $"https://huggingface.co/datasets/AISHELL/AISHELL-4/resolve/{Aishell4Revision}/test";
+        var folder = Path.Combine(data, "aishell4", "zh");
+        Directory.CreateDirectory(folder);
+        var rows = new List<string>();
+        foreach (var session in Aishell4Sessions)
+        {
+            var intervals = TextGrid(await http.GetStringAsync($"{root}/TextGrid/{session}.TextGrid"));
+            var picked = intervals
+                .Where(i => Clean(i.Text).Length > 0 && i.End - i.Begin is >= 3 and <= 20)
+                .Where(i => !intervals.Any(o => o.Tier != i.Tier && o.Text.Trim().Length > 0 && o.Begin < i.End && i.Begin < o.End))
+                .OrderBy(i => i.Begin)
+                .Take((count + Aishell4Sessions.Length - 1) / Aishell4Sessions.Length)
+                .ToList();
+
+            // ponytail: 160 kB per second of 8-channel FLAC is above the rate of the test sessions; the length check below catches a shortfall.
+            var bytes = (long)((picked[^1].End + 10) * 160_000);
+            var part = Path.Combine(folder, session + ".part.flac");
+            using (var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/wav/{session}.flac"))
+            {
+                request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, bytes);
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                await using var file = File.Create(part);
+                await response.Content.CopyToAsync(file);
+            }
+
+            var wav = Path.Combine(folder, session + ".wav");
+            using (var ffmpeg = Process.Start("ffmpeg", ["-v", "quiet", "-y", "-i", part, "-af", "pan=mono|c0=c0", "-ar", "16000", "-c:a", "pcm_s16le", wav]))
+                await ffmpeg.WaitForExitAsync();
+            File.Delete(part);
+            var audio = File.Exists(wav) ? Read(wav) : [];
+            File.Delete(wav);
+            if (audio.Length < picked[^1].End * Rate)
+                throw new InvalidDataException($"AISHELL-4 {session}: the partial download decoded to {audio.Length / Rate} s only.");
+
+            foreach (var i in picked)
+            {
+                var id = $"{session}-{i.Begin * 1000:F0}";
+                await using (var file = File.Create(Path.Combine(folder, id + ".wav")))
+                    WavFile.Write(file, PcmConvert.ShortsToBytes(audio.AsSpan((int)(i.Begin * Rate), (int)((i.End - i.Begin) * Rate))), Rate, 1);
+                rows.Add(string.Join('\t', "aishell4", "zh", id, $"aishell4/zh/{id}.wav", Clean(i.Text)));
+            }
+        }
+
+        Console.WriteLine($"aishell4 zh: {rows.Count} clips from {string.Join(", ", Aishell4Sessions)}");
+        return rows;
+    }
+
+    private static string Clean(string text) => Regex.Replace(text, "<[^>]*>", "").Trim();
+
+    private static List<(int Tier, double Begin, double End, string Text)> TextGrid(string grid)
+    {
+        var result = new List<(int, double, double, string)>();
+        var tier = 0;
+        double begin = 0, end = 0;
+        foreach (var line in grid.Split('\n').Select(l => l.Trim()))
+        {
+            if (line.StartsWith("item ["))
+                tier++;
+            else if (line.StartsWith("xmin = "))
+                begin = double.Parse(line[7..], CultureInfo.InvariantCulture);
+            else if (line.StartsWith("xmax = "))
+                end = double.Parse(line[7..], CultureInfo.InvariantCulture);
+            else if (line.StartsWith("text = \""))
+                result.Add((tier, begin, end, line[8..line.LastIndexOf('"')]));
+        }
+
+        return result;
     }
 
     private static async Task ExtractAsync(HttpClient http, string url, string into)

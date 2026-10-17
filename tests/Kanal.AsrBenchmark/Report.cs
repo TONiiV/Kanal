@@ -49,7 +49,7 @@ internal static class Report
             var metric = lang == "zh" ? "cer_pct" : "wer_pct";
             var noDigit = lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct";
             var numbers = lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct";
-            var codes = set == "meeting" ? V(F, "codes_total", "F0") : null;
+            var codes = set.StartsWith("meeting") ? V(F, "codes_total", "F0") : null;
             md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, numbers, "F1")}/{V(A, numbers, "F1")} | {V(A, "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
                           $"{V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} | " +
                           (codes is null ? "– | – | " : $"{V(F, "codes_kept_strict", "F0")}/{V(A, "codes_kept_strict", "F0")} of {codes} | {V(F, "codes_kept_loose", "F0")}/{V(A, "codes_kept_loose", "F0")} of {codes} | ") +
@@ -104,7 +104,7 @@ internal static class Report
         md.AppendLine().AppendLine("## Meeting sentences").AppendLine()
             .AppendLine("| Model | Provider | Room | Clip | Reference | Hypothesis | Errors / length | Numbers errors / length |")
             .AppendLine("|---|---|---|---|---|---|---:|---:|");
-        foreach (var c in clipRows.Where(c => c.Set == "meeting"))
+        foreach (var c in clipRows.Where(c => c.Set.StartsWith("meeting")))
             md.AppendLine($"| {c.Model} | {c.Provider} | {c.Room} | {c.Id} | {c.Reference} | {c.Hypothesis} | {c.Errors}/{c.Length} | {c.NumbersErrors}/{c.NumbersLength} |");
 
         return md.ToString();
