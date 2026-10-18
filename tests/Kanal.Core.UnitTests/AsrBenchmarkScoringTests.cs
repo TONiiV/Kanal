@@ -202,6 +202,15 @@ public class AsrBenchmarkScoringTests
     }
 
     [Fact]
+    public void English_kept_counts_a_contraction_as_one_word_and_does_not_read_its_letters_as_spelled()
+    {
+        Assert.Equal((2, 2), Scoring.EnglishKept("I'm here", "I'm here"));
+        Assert.Equal((3, 3), Scoring.EnglishKept("it's a plan", "it's a plan"));
+        Assert.Equal((2, 2), Scoring.EnglishKept("don’t go", "don’t go"));
+        Assert.Equal((1, 2), Scoring.EnglishKept("I am here", "I'm here"));
+    }
+
+    [Fact]
     public void Mer_reads_traditional_characters_before_it_normalises_numbers()
     {
         Assert.Equal((0, 3), Scoring.MixedErrors("兩千次 pieces", "两千次 pieces", numbers: true));
