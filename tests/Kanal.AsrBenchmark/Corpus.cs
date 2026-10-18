@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
@@ -122,8 +123,13 @@ internal static class Corpus
         ["commonvoice"] = FetchCommonVoiceAsync,
     };
 
-    public static async Task FetchAsync(string data, int perLanguage, IReadOnlyCollection<string> sets)
+    public static readonly string[] OptInSets = ["meeting-11labs", "commonvoice"];
+
+    public static IEnumerable<string> DefaultSets => Sets.Keys.Except(OptInSets);
+
+    public static async Task<int> FetchAsync(string data, int perLanguage, IReadOnlyCollection<string> sets)
     {
+        var failed = 0;
         Directory.CreateDirectory(data);
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         var manifest = Path.Combine(data, "clips.tsv");
@@ -137,13 +143,15 @@ internal static class Corpus
             }
             catch (Exception e) when (e is HttpRequestException or InvalidOperationException or InvalidDataException)
             {
-                Console.WriteLine($"{set}: {e.Message} The old clips of this set stay.");
+                failed++;
+                Console.Error.WriteLine($"{set}: {e.Message} The old clips of this set stay.");
                 rows.AddRange(old.Where(l => SetOf(l) == set));
             }
         }
 
         await File.WriteAllLinesAsync(manifest, rows);
         Console.WriteLine($"{rows.Count} clips listed in {manifest}");
+        return failed;
     }
 
     internal static List<string> KeepOtherSets(IEnumerable<string> old, IReadOnlyCollection<string> fetched) =>
@@ -335,7 +343,9 @@ internal static class Corpus
                 break;
         }
 
-        if (segments.Count == 0 || !segments[0].Src.Contains(AmiRevision))
+        if (segments.Count == 0)
+            throw new InvalidDataException($"AMI: no row of {AmiMeeting} on the pages read. The order of the dataset may have changed.");
+        if (!segments[0].Src.Contains(AmiRevision))
             throw new InvalidDataException($"AMI: the dataset server no longer serves revision {AmiRevision}.");
 
         var picked = PickAmi(segments, count);
@@ -376,6 +386,8 @@ internal static class Corpus
         {
             var intervals = TextGrid(await http.GetStringAsync($"{root}/TextGrid/{session}.TextGrid"));
             var picked = PickAishell4(intervals, (count + Aishell4Sessions.Length - 1) / Aishell4Sessions.Length);
+            if (picked.Count == 0)
+                throw new InvalidDataException($"AISHELL-4 {session}: no interval passes the length and overlap filters.");
 
             // ponytail: 160 kB per second of 8-channel FLAC is above the rate of the test sessions; the length check below catches a shortfall.
             var bytes = (long)((picked[^1].End + 10) * 160_000);
@@ -390,13 +402,12 @@ internal static class Corpus
             }
 
             var wav = Path.Combine(folder, session + ".wav");
-            using (var ffmpeg = Process.Start("ffmpeg", ["-v", "quiet", "-y", "-i", part, "-af", "pan=mono|c0=c0", "-ar", "16000", "-c:a", "pcm_s16le", wav]))
-                await ffmpeg.WaitForExitAsync();
+            var (exit, error) = await FfmpegAsync("-i", part, "-af", "pan=mono|c0=c0", "-ar", "16000", "-c:a", "pcm_s16le", wav);
             File.Delete(part);
             var audio = File.Exists(wav) ? Read(wav) : [];
             File.Delete(wav);
             if (audio.Length < picked[^1].End * Rate)
-                throw new InvalidDataException($"AISHELL-4 {session}: the partial download decoded to {audio.Length / Rate} s only.");
+                throw new InvalidDataException($"AISHELL-4 {session}: the partial download decoded to {audio.Length / Rate} s only. ffmpeg exit code {exit}: {error}");
 
             foreach (var i in picked)
             {
@@ -471,11 +482,10 @@ internal static class Corpus
                         await entry.DataStream.CopyToAsync(file);
                     var id = Path.GetFileNameWithoutExtension(name);
                     var wav = Path.Combine(folder, id + ".wav");
-                    using (var ffmpeg = Process.Start("ffmpeg", ["-v", "quiet", "-y", "-i", mp3, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]))
-                        await ffmpeg.WaitForExitAsync();
+                    var (exit, error) = await FfmpegAsync("-i", mp3, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav);
                     File.Delete(mp3);
                     if (!File.Exists(wav))
-                        throw new InvalidDataException($"Common Voice {lang}: ffmpeg could not decode {name}.");
+                        throw new InvalidOperationException($"Common Voice {lang}: ffmpeg could not decode {name}. Exit code {exit}: {error}");
                     rows.Add(string.Join('\t', "commonvoice", lang, id, $"commonvoice/{lang}/{id}.wav", text));
                     found++;
                 }
@@ -501,6 +511,27 @@ internal static class Corpus
             .OrderBy(i => i.Begin)
             .Take(count)
             .ToList();
+
+    private static async Task<(int ExitCode, string Error)> FfmpegAsync(params string[] args)
+    {
+        string[] all = ["-v", "error", "-y", .. args];
+        Process process;
+        try
+        {
+            process = Process.Start(new ProcessStartInfo("ffmpeg", all) { RedirectStandardError = true })!;
+        }
+        catch (Win32Exception)
+        {
+            throw new InvalidOperationException("ffmpeg is not on PATH. Install ffmpeg and run fetch again.");
+        }
+
+        using (process)
+        {
+            var error = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            return (process.ExitCode, (await error).Trim());
+        }
+    }
 
     internal static string Clean(string text) => Regex.Replace(text, "<[^>]*>", "").Trim();
 

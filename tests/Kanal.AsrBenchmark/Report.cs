@@ -19,7 +19,7 @@ internal static class Report
             .AppendLine()
             .AppendLine($"Clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()} ({g.Sum(c => c.Seconds):F0} s)"))}.")
             .AppendLine("Sets: `fleurs`: FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). `meeting-piper`: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper. `meeting-11labs`: the same sentences from ElevenLabs `eleven_multilingual_v2`, premade voices Alice (f), Lily (f) and George (m). `commonvoice`: Common Voice Scripted Speech 27.0 test split (Ardila et al. 2020, CC0-1.0, Mozilla Data Collective). `voxpopuli`: VoxPopuli test (Wang et al. 2021, CC0; raw audio: European Parliament). `ami`: AMI Meeting Corpus test meeting EN2002a, single far-field microphone (Carletta et al. 2005, CC-BY-4.0). `aishell4`: AISHELL-4 test, channel 0 of the far-field array (Fu et al. 2021, CC-BY-SA-4.0). AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment.")
-            .AppendLine("Every run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl/en. Raw scores use no number normalisation. The numbers columns first turn spelled-out cardinals, decimals and percentages into digits in both texts (`Numbers.Normalize`). The no-digit columns score only clips whose reference has no digit. Gladia: the product `GladiaAsrProvider` without translation, fed at real-time pace with 1 s of trailing silence. The product sends Gladia no room languages, so Gladia has only the auto room.")
+            .AppendLine("Every local run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl/en. Raw scores use no number normalisation. The numbers columns first turn spelled-out cardinals, decimals and percentages into digits in both texts (`Numbers.Normalize`). The no-digit columns score only clips whose reference has no digit. Gladia: the product `GladiaAsrProvider` without translation, fed at real-time pace with 1 s of trailing silence. The product sends Gladia no room languages, so Gladia has only the auto room. The Gladia RTF and decode time come from the pacing and not from Gladia, so the report shows – for them.")
             .AppendLine();
 
         var engines = rows.Where(r => r.Metric == "load_s" && r.Room == "-").Select(r => (r.Model, r.Provider, r.Threads)).Distinct().ToList();
@@ -50,10 +50,13 @@ internal static class Report
             var noDigit = lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct";
             var numbers = lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct";
             var codes = set.StartsWith("meeting") ? V(F, "codes_total", "F0") : null;
-            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, numbers, "F1")}/{V(A, numbers, "F1")} | {V(A, "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
+            var speed = provider == "cloud"
+                ? "– | – | –"
+                : $"{V(F, "rtf", "F3")} | {V(A, "rtf", "F3")} | {V(F, "decode_p50_ms", "F0")}/{V(F, "decode_p95_ms", "F0")}";
+            md.AppendLine($"| {model} | {provider} | {set} | {lang} | {(lang == "zh" ? "CER" : "WER")} | {V(F, metric, "F1")} | {V(A, metric, "F1")} | {V(F, numbers, "F1")}/{V(A, numbers, "F1")} | {V(r => F(r) || A(r), "clips_no_digit", "F0")} | {V(F, noDigit, "F1")}/{V(A, noDigit, "F1")} | {V(A, "lang_guess_pct", "F0")} | " +
                           $"{V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} | " +
                           (codes is null ? "– | – | " : $"{V(F, "codes_kept_strict", "F0")}/{V(A, "codes_kept_strict", "F0")} of {codes} | {V(F, "codes_kept_loose", "F0")}/{V(A, "codes_kept_loose", "F0")} of {codes} | ") +
-                          $"{V(F, "rtf", "F3")} | {V(A, "rtf", "F3")} | {V(F, "decode_p50_ms", "F0")}/{V(F, "decode_p95_ms", "F0")} |");
+                          speed + " |");
         }
 
         var parity = rows.FirstOrDefault(r => r.Metric == "parity_identical");
@@ -70,7 +73,8 @@ internal static class Report
             bool R(Row r) => r.Model == model && r.Provider == provider && r.Threads == threads && r.Room == "auto-realtime";
             if (!rows.Any(R))
                 continue;
-            md.AppendLine($"| {model} | {provider} | {threads} | {V(R, "clips", "F0")} | {V(R, "chunk_ms", "F0")} | {V(R, "decode_p50_ms", "F0")}/{V(R, "decode_p95_ms", "F0")}/{V(R, "decode_max_ms", "F0")} | " +
+            var decode = provider == "cloud" ? "–/–/–" : $"{V(R, "decode_p50_ms", "F0")}/{V(R, "decode_p95_ms", "F0")}/{V(R, "decode_max_ms", "F0")}";
+            md.AppendLine($"| {model} | {provider} | {threads} | {V(R, "clips", "F0")} | {V(R, "chunk_ms", "F0")} | {decode} | " +
                           $"{V(R, "decode_over_chunk_pct", "F1")} | {V(R, "final_after_speech_end_p50_s")}/{V(R, "final_after_speech_end_p95_s")} | {V(R, "first_partial_after_onset_p50_s")}/{V(R, "first_partial_after_onset_p95_s")} |");
         }
 

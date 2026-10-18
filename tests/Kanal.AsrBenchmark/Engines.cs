@@ -14,14 +14,15 @@ internal sealed record BenchModel(
     string Id,
     string Kind,
     double ChunkSeconds,
-    IReadOnlyDictionary<string, string> Files);
+    IReadOnlyDictionary<string, string> Files)
+{
+    public bool Cloud => Kind == "gladia";
+}
 
 [ExcludeFromCodeCoverage]
 internal abstract class Engine : IDisposable
 {
     public virtual double PaddingSeconds => 0;
-
-    public virtual bool Cloud => false;
 
     public virtual bool NeedsLanguage => false;
 
@@ -326,8 +327,6 @@ internal sealed class GladiaEngine : Engine
     {
         _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = Key("GLADIA_API_KEY"), EnableTranslation = false });
     }
-
-    public override bool Cloud => true;
 
     public override double PaddingSeconds => 1;
 

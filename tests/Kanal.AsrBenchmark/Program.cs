@@ -30,6 +30,13 @@ if (args.FirstOrDefault() == "probe")
 
 if (args.FirstOrDefault() == "fetch")
 {
+    var sets = List("--sets", string.Join(',', Corpus.DefaultSets));
+    if (sets.Except(Corpus.Sets.Keys).ToList() is { Count: > 0 } unknown)
+    {
+        Console.Error.WriteLine($"Unknown set: {string.Join(", ", unknown)}. Known sets: {string.Join(", ", Corpus.Sets.Keys)}.");
+        return 2;
+    }
+
     var model = AsrModelCatalog.Models[0];
     var downloads = new ModelDownloadManager(modelsDir);
     var missing = downloads.MissingParts(model.Parts);
@@ -41,8 +48,8 @@ if (args.FirstOrDefault() == "fetch")
 
     if (Arg("--candidates") is { } candidates)
         await Engine.FetchCandidatesAsync(data, candidates.Split(','));
-    if (!args.Contains("--no-clips"))
-        await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"), List("--sets", string.Join(',', Corpus.Sets.Keys)));
+    if (!args.Contains("--no-clips") && await Corpus.FetchAsync(data, int.Parse(Arg("--clips") ?? "20"), sets) > 0)
+        return 1;
     return 0;
 }
 
@@ -76,7 +83,7 @@ var realtimeClips = Corpus.Languages.SelectMany(l => fleurs.Where(c => c.Lang ==
 
 var only = Arg("--model")?.Split(',');
 var models = new[] { Engine.Default(modelsDir) }.Concat(Engine.Downloaded(data)).Append(Engine.Gladia)
-    .Where(m => only?.Contains(m.Id) ?? m != Engine.Gladia)
+    .Where(m => only?.Contains(m.Id) ?? !m.Cloud)
     .ToList();
 var rows = new List<Row>();
 var clipRows = new List<ClipRow>();
@@ -93,16 +100,19 @@ Console.WriteLine(machine);
 Console.WriteLine($"{clips.Count} clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()}"))}");
 
 foreach (var model in models)
-foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
+foreach (var provider in model.Cloud ? ["cloud"] : providers)
 {
     var threads = Engine.DefaultThreads;
-    if (provider is not ("cpu" or "cloud") && !probes.ContainsKey(provider))
-        probes[provider] = Probe(provider);
-    if (provider is not ("cpu" or "cloud") && probes[provider] is { } fallback)
+    if (provider is not ("cpu" or "cloud"))
     {
-        notes.Add($"{model.Id} · {provider}: {fallback}");
-        Console.WriteLine($"   {provider}: {fallback}");
-        continue;
+        if (!probes.ContainsKey(provider))
+            probes[provider] = Probe(provider);
+        if (probes[provider] is { } fallback)
+        {
+            notes.Add($"{model.Id} · {provider}: {fallback}");
+            Console.WriteLine($"   {provider}: {fallback}");
+            continue;
+        }
     }
 
     Console.WriteLine($"== {model.Id} · {provider} · {threads} threads");
@@ -125,10 +135,10 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
     Add(model.Id, provider, threads, 1, "-", "-", "-", "working_set_after_load_mb", Environment.WorkingSet / 1048576.0, "MB");
     Console.WriteLine($"   load {load.Elapsed.TotalSeconds:F2} s");
     Func<List<double>, IAsrProvider> make = engine.Provider;
-    var rooms = engine.Cloud ? ["auto"] : engine.NeedsLanguage ? ["forced"] : new[] { "forced", "auto" };
+    var rooms = model.Cloud ? ["auto"] : engine.NeedsLanguage ? ["forced"] : new[] { "forced", "auto" };
     if (engine.NeedsLanguage)
         notes.Add($"{model.Id}: needs the clip language, so it has no auto room. The real-time phase uses a room of the clip language.");
-    if (!engine.Cloud)
+    if (!model.Cloud)
         await RunClipAsync(make, clips[0], [clips[0].Lang], realtime: false);
 
     if (phases.Contains("accuracy"))
@@ -137,7 +147,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
-                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds, engine.Cloud));
+                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds, model.Cloud));
             Score(model.Id, provider, threads, room, runs);
             Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
         }
@@ -147,7 +157,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
     {
         var runs = new List<ClipRun>();
         foreach (var clip in realtimeClips)
-            runs.Add(await RunClipAsync(make, clip, engine.NeedsLanguage ? [clip.Lang] : autoRoom, realtime: true, engine.PaddingSeconds, engine.Cloud));
+            runs.Add(await RunClipAsync(make, clip, engine.NeedsLanguage ? [clip.Lang] : autoRoom, realtime: true, engine.PaddingSeconds, model.Cloud));
         var decode = runs.SelectMany(r => r.DecodeMs).ToList();
         var finals = runs.Where(r => r.FinalAfterEnd is not null).Select(r => r.FinalAfterEnd!.Value).ToList();
         var partials = runs.Where(r => r.FirstAfterOnset is not null).Select(r => r.FirstAfterOnset!.Value).ToList();
@@ -170,7 +180,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
         Console.WriteLine($"   real time: decode p95 {Scoring.Percentile(decode, 0.95):F0} ms, final p50 {Scoring.Percentile(finals, 0.5):F2} s");
     }
 
-    if (phases.Contains("streams") && !engine.Cloud)
+    if (phases.Contains("streams") && !model.Cloud)
         foreach (var n in streamLevels)
             await StreamsAsync(model, provider, threads, n, make, engine.PaddingSeconds, engine.NeedsLanguage);
 

@@ -8,10 +8,10 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
 
-The benchmark of 2026-10-17 gave error rates that were not usable. Three causes were known:
-numbers written as words counted as errors, the meeting clips were synthetic Piper speech, and each
-language had only 4 meeting sentences. This change addresses all three. It also adds the cloud
-baseline and three more local models.
+The benchmark of 2026-10-17 gave error rates that were not usable. It had three causes.
+Numbers written as words counted as errors. The meeting clips were synthetic Piper speech. Each
+language had only 4 meeting sentences. This change addresses all three causes. It also adds the
+cloud baseline and three more local models.
 
 What changed in `tests/Kanal.AsrBenchmark`:
 
@@ -19,17 +19,25 @@ What changed in `tests/Kanal.AsrBenchmark`:
   (translation off) at real-time pace, with 1 s of trailing silence. The product sends Gladia no
   room languages, so Gladia has only the auto room. Gladia is opt-in, because it is a paid API.
   The key comes from `GLADIA_API_KEY` (process, then User, then Machine on Windows).
-- **English.** Every set has English. The auto room is zh/de/pl/en.
+- **English.** Every set except `aishell4` has English. The auto room is zh/de/pl/en.
 - **Number-normalised scores.** `Numbers.Normalize` turns spelled-out cardinals, decimals and
   percentages into digits in the hypothesis and in the reference (zh 两千 → 2000, de fünftausend →
   5000, pl dwa tysiące → 2000, en five thousand → 5000). The report shows the raw score and the
   normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
-  ("twenty twenty-six"), no codes read digit by digit. Chinese runs are converted everywhere, also in
-  idioms (万一), on both sides alike.
+  ("twenty twenty-six"), no codes read digit by digit. A Chinese run that starts with 万, 千, 百 or 亿
+  stays text (万一, 千万). A run like 十分 is still converted, on both sides alike.
+  A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
+  (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
+  stays two numbers. None of the 498 reference texts uses a plain space as a separator.
 - **More candidates.** Whisper large-v3, Cohere Transcribe 03-2026 and Qwen3-ASR 1.7B (community
   export, pinned revision). Cohere Transcribe needs the clip language, so it has no auto room.
-- **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. Each set pins a
-  revision or a dataset version. No audio is committed.
+  The licence of the 1.7B export is Apache-2.0 in the
+  [model card](https://huggingface.co/thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8/blob/69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5/README.md)
+  at the pinned revision. The repository has no separate licence file.
+- **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. A plain `fetch`
+  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name or a missing
+  `ffmpeg` gives an error and exit code 1 or 2. Each set pins a revision or a dataset version.
+  No audio is committed.
 
 | Set | Languages | Clips | Source | Licence |
 |---|---|---:|---|---|
@@ -61,8 +69,8 @@ Run it:
 The machine is an AMD Ryzen 9 PRO 8945HS on CPU, 4 threads per model. The runs are:
 
 1. Accuracy phase: all sets, all models except Whisper large-v3.
-2. Whisper large-v3: 5 clips per set and language, a small sample. It ran in parallel with the
-   Gladia part of the accuracy phase, so its RTF is lightly contended.
+2. Whisper large-v3: 5 clips per set and language, a small sample. It ran at the same time as the
+   Gladia part of the accuracy phase. The CPU was shared, so its RTF is too high.
 3. Speed phases (real time, streams, threads): alone on the machine.
 
 The Nemotron 560 ms forced room on FLEURS and on meeting-piper zh/de/pl ran next to the processes of
@@ -102,7 +110,7 @@ Speed (speed phases; RTF of the accuracy phase, offline feed):
 |---|---:|---:|---:|---:|---:|
 | Nemotron 560 ms | 0.17 | 0.31 | 2.34/3.76 | 0.95 | 1088 |
 | Whisper turbo | 0.31 | 0.71 | 3.42/5.44 | 8.91 | 2885 |
-| Whisper large-v3 | 1.48–1.53 (lightly contended) | – | – | – | – |
+| Whisper large-v3 | 1.48–1.53 (the CPU was shared) | – | – | – | – |
 | Qwen3-ASR 0.6B | 0.19 | 0.30 | 2.19/3.42 | 8.02 | 2687 |
 | Qwen3-ASR 1.7B | 0.34 | 0.67 | 3.62/5.51 | 9.07 | 4069 |
 | Cohere Transcribe | 0.14 | 0.26 | 1.78/2.95 | 7.65 | 3780 |
@@ -135,9 +143,9 @@ Findings:
 - **Cohere Transcribe needs the clip language.** It has no auto mode, so a mixed room cannot use it
   as it is.
 - **The Qwen3-ASR 1.7B community export leaks a header** ("language Chinese<asr_text>") into the
-  auto-room text of 103 of 498 clips. The auto-room scores of 1.7B in the report are not valid. The
-  benchmark now removes the header. In the forced room, 1.7B is close to 0.6B on zh and a little better on pl
-  (FLEURS pl 36.6 against 44.3).
+  auto-room text of 103 of 498 clips. The auto-room scores of 1.7B in the report are not valid.
+  The benchmark now removes the header. In the forced room, 1.7B scores about the same as 0.6B on
+  zh. On pl it scores better (FLEURS pl 36.6 against 44.3).
 - **Whisper large-v3 is not real-time** on this CPU (RTF about 1.5). Its sample is too small for a
   ranking.
 - **AISHELL-4 is hard for every engine** (33–85 %). Nemotron is best there (33.2), with no empty
