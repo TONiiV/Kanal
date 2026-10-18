@@ -47,7 +47,8 @@ public class AsrBenchmarkNumberTests
     [InlineData("tysiąc", "1000")]
     [InlineData("dwa przecinek pięć", "2.5")]
     [InlineData("o trzy procent", "o 3 procent")]
-    [InlineData("5 000 sztuk", "5000 sztuk")]
+    [InlineData("5\u00A0000 sztuk", "5000 sztuk")]
+    [InlineData("5\u202F000 sztuk", "5000 sztuk")]
     [InlineData("Czy dostawca może przyspieszyć wysyłkę", "czy dostawca może przyspieszyć wysyłkę")]
     public void Polish_number_words_become_digits(string text, string expected)
     {
@@ -66,6 +67,63 @@ public class AsrBenchmarkNumberTests
     public void English_number_words_become_digits(string text, string expected)
     {
         Assert.Equal(expected, Numbers.Normalize("en", text));
+    }
+
+    [Theory]
+    [InlineData("pl", "15 300", "15 300")]
+    [InlineData("en", "M10 100", "m10 100")]
+    [InlineData("en", "1.250 mm", "1 250 mm")]
+    [InlineData("de", "2,500 mm", "2 500 mm")]
+    [InlineData("en", "5,000 pieces", "5000 pieces")]
+    [InlineData("de", "5.000 Stück", "5000 stück")]
+    public void Only_the_thousands_separator_of_the_language_joins_digit_groups(string lang, string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize(lang, text));
+    }
+
+    [Theory]
+    [InlineData("po dwóch tysiącach cykli", "po 2000 cykli")]
+    [InlineData("z trzema tysiącami sztuk", "z 3000 sztuk")]
+    [InlineData("z pięcioma tysiącami sztuk", "z 5000 sztuk")]
+    [InlineData("z dwoma milionami", "z 2000000")]
+    [InlineData("z jednego miliona", "z 1000000")]
+    [InlineData("jednym z nas", "jednym z nas")]
+    [InlineData("o trzy procenty", "o 3 procent")]
+    [InlineData("w trzech procentach", "w 3 procent")]
+    [InlineData("procentowy wzrost", "procentowy wzrost")]
+    public void Polish_case_forms_of_numbers_and_percent_are_read(string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize("pl", text));
+    }
+
+    [Theory]
+    [InlineData("twelve hundred euros", "1200 euros")]
+    [InlineData("fifteen hundred", "1500")]
+    [InlineData("twenty five hundred", "2500")]
+    public void English_teen_and_tens_hundreds_are_read_as_one_number(string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize("en", text));
+    }
+
+    [Theory]
+    [InlineData("hunderttausend Euro", "100000 euro")]
+    [InlineData("einhunderttausend", "100000")]
+    [InlineData("zweihunderttausend", "200000")]
+    public void German_hunderttausend_is_read(string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize("de", text));
+    }
+
+    [Theory]
+    [InlineData("5万元", "50000元")]
+    [InlineData("3千次", "3000次")]
+    [InlineData("2.5万", "25000")]
+    [InlineData("五万元", "50000元")]
+    [InlineData("万一出问题", "万一出问题")]
+    [InlineData("千万不要", "千万不要")]
+    public void Chinese_digits_with_a_unit_and_idioms_are_read(string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize("zh", text));
     }
 
     [Fact]
