@@ -99,4 +99,58 @@ public class AsrBenchmarkCorpusTests
         Assert.Equal([old[0], old[3]], Corpus.KeepOtherSets(old, ["ami"]));
         Assert.Equal([old[0], old[1], old[3]], Corpus.KeepOtherSets(old, ["commonvoice"]));
     }
+
+    private static (string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src) AscendRow(
+        string id, string language = "mixed", double seconds = 5, string text = "你好 hello", long session = 1, long speaker = 1) =>
+        (id, language, seconds, text, session, speaker, "s");
+
+    [Fact]
+    public void Ascend_keeps_clips_of_the_language_that_last_3_to_20_seconds_and_have_a_clean_reference()
+    {
+        var rows = new[]
+        {
+            AscendRow("a"),
+            AscendRow("b", language: "zh"),
+            AscendRow("c", seconds: 2.9),
+            AscendRow("d", seconds: 3),
+            AscendRow("e", seconds: 20),
+            AscendRow("f", seconds: 20.1),
+            AscendRow("g", text: "你好 [UNK] hello"),
+            AscendRow("h", text: "  "),
+        };
+
+        Assert.Equal(["a", "d", "e"], Corpus.PickAscend(rows, "mixed", 10).Select(r => r.Id));
+        Assert.Equal(["b"], Corpus.PickAscend(rows, "zh", 10).Select(r => r.Id));
+    }
+
+    [Fact]
+    public void Ascend_spreads_the_pick_over_the_speaker_and_session_groups_in_even_steps()
+    {
+        var rows = Enumerable.Range(1, 6).Select(i => AscendRow($"a{i}"))
+            .Concat([AscendRow("b1", session: 2), AscendRow("b2", session: 2)])
+            .Reverse()
+            .ToArray();
+
+        Assert.Equal(["a1", "a4", "b1", "b2"], Corpus.PickAscend(rows, "mixed", 4).Select(r => r.Id));
+        Assert.Equal(["a1", "a3", "a5", "b1", "b2"], Corpus.PickAscend(rows, "mixed", 5).Select(r => r.Id));
+    }
+
+    [Fact]
+    public void Ascend_returns_every_clip_when_fewer_than_asked_for_remain()
+    {
+        var rows = new[] { AscendRow("a"), AscendRow("b", speaker: 2), AscendRow("c", speaker: 2) };
+
+        Assert.Equal(["a", "b", "c"], Corpus.PickAscend(rows, "mixed", 60).Select(r => r.Id));
+        Assert.Empty(Corpus.PickAscend(rows, "en", 15));
+    }
+
+    [Theory]
+    [InlineData("mixed", "zh")]
+    [InlineData("zh", "zh")]
+    [InlineData("en", "en")]
+    [InlineData("de", "de")]
+    public void A_code_switched_clip_gets_a_Chinese_room_when_the_room_is_forced(string clipLanguage, string room)
+    {
+        Assert.Equal(room, Corpus.RoomLanguage(clipLanguage));
+    }
 }

@@ -32,6 +32,13 @@ internal static partial class Scoring
         return (Distance(Words(hypothesis), words), words.Length);
     }
 
+    public static string[] MixedTokens(string text) => throw new NotImplementedException();
+
+    public static (int Errors, int ReferenceLength) MixedErrors(string hypothesis, string reference, bool numbers = false) =>
+        throw new NotImplementedException();
+
+    public static (int Kept, int Total) EnglishKept(string hypothesis, string reference) => throw new NotImplementedException();
+
     public static IReadOnlyList<string> Codes(string source) =>
         CodeToken().Matches(Compat(source))
             .Select(m => m.Value)

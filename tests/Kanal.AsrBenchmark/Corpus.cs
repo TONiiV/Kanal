@@ -503,6 +503,12 @@ internal static class Corpus
         return rows;
     }
 
+    internal static string RoomLanguage(string lang) => throw new NotImplementedException();
+
+    internal static List<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> PickAscend(
+        IReadOnlyList<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> rows,
+        string language, int count) => throw new NotImplementedException();
+
     internal static List<(int Tier, double Begin, double End, string Text)> PickAishell4(
         IReadOnlyList<(int Tier, double Begin, double End, string Text)> intervals, int count) =>
         intervals

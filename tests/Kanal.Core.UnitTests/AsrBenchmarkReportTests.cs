@@ -79,5 +79,37 @@ public class AsrBenchmarkReportTests
         Assert.Contains("fleurs", Corpus.DefaultSets);
         Assert.DoesNotContain("meeting-11labs", Corpus.DefaultSets);
         Assert.DoesNotContain("commonvoice", Corpus.DefaultSets);
+        Assert.Contains("ascend", Corpus.DefaultSets);
+    }
+
+    [Fact]
+    public void The_ascend_set_has_its_own_table_and_stays_out_of_the_language_table()
+    {
+        Clip[] clips =
+        [
+            new("ascend", "mixed", "a", "你好 hello", new short[16_000]),
+            new("ascend", "en", "b", "hello", new short[16_000]),
+        ];
+        Row[] rows =
+        [
+            R("whisper", "cpu", "-", "-", "-", "load_s", 1),
+            R("whisper", "cpu", "ascend", "mixed", "forced", "mer_pct", 31.25),
+            R("whisper", "cpu", "ascend", "mixed", "auto", "mer_pct", 40.5),
+            R("whisper", "cpu", "ascend", "mixed", "forced", "english_kept_pct", 88.2),
+            R("whisper", "cpu", "ascend", "mixed", "auto", "english_kept_pct", 20),
+            R("whisper", "cpu", "ascend", "mixed", "auto", "clips", 60),
+            R("whisper", "cpu", "ascend", "en", "auto", "mer_pct", 12),
+            R("whisper", "cpu", "ascend", "en", "auto", "clips", 15),
+        ];
+
+        var report = Report.Build(DateTime.Now, "machine", clips, rows, [], []);
+
+        var cells = Line(report, "| whisper | cpu | mixed |").Split('|').Select(c => c.Trim()).ToArray();
+        Assert.Equal("60", cells[4]);
+        Assert.Equal("31.3", cells[5]);
+        Assert.Equal("40.5", cells[6]);
+        Assert.Equal("88.2/20.0", cells[8]);
+        Assert.Contains("| whisper | cpu | en | 15 |", report);
+        Assert.DoesNotContain("| whisper | cpu | ascend |", report);
     }
 }
