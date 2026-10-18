@@ -190,6 +190,21 @@ public class SpeakerReidentificationTests
         Assert.Equal(1.0, reported[^1], 3);
     }
 
+    [Fact]
+    public void WithoutACountTheClusteringMergesAtTheMeasuredThreshold()
+    {
+        var clustering = SherpaSpeakerDiarizer.Clustering(null);
+
+        Assert.Equal(0.8f, clustering.Threshold);
+        Assert.True(clustering.NumClusters <= 0);
+    }
+
+    [Fact]
+    public void AGivenCountFixesTheNumberOfClusters()
+    {
+        Assert.Equal(3, SherpaSpeakerDiarizer.Clustering(3).NumClusters);
+    }
+
     private sealed class SyncProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);
