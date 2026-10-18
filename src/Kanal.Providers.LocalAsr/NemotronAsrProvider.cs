@@ -41,7 +41,7 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
         Streaming: true,
         Diarization: false,
         Translation: false,
-        // "auto" decodes any room language, but the model never reports which; TranscriptLanguage guesses it.
+        // "auto" decodes any language, but the model never reports which; TranscriptLanguage guesses it.
         AutoLanguageDetect: false,
         Languages: new HashSet<string>
         {
