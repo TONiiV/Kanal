@@ -106,9 +106,9 @@ public class NemotronAsrProviderTests
     {
         var stream = new ScriptedStream();
         var provider = new NemotronAsrProvider(_ => stream);
-        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(new byte[] { 0x00, 0x40, 0x00, 0xC0 });
+        await session.PushAudioAsync(new byte[] { 0x00, 0x40, 0x00, 0xC0 }, TestContext.Current.CancellationToken);
         await session.DisposeAsync();
 
         Assert.Equal([0.5f, -0.5f], Assert.Single(stream.Accepted));
@@ -128,7 +128,7 @@ public class NemotronAsrProviderTests
             return new ScriptedStream();
         });
 
-        await (await provider.StartAsync(new AsrSessionOptions(16_000, room), default)).DisposeAsync();
+        await (await provider.StartAsync(new AsrSessionOptions(16_000, room), TestContext.Current.CancellationToken)).DisposeAsync();
 
         Assert.Equal(expected, asked);
     }
@@ -157,13 +157,13 @@ public class NemotronAsrProviderTests
     {
         var provider = new NemotronAsrProvider(_ =>
             new ScriptedStream(("x", false)) { Throw = new InvalidOperationException("boom") });
-        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(Chunk);
+        await session.PushAudioAsync(Chunk, TestContext.Current.CancellationToken);
         await foreach (var _ in session.Events)
         {
         }
-        await session.PushAudioAsync(Chunk);
+        await session.PushAudioAsync(Chunk, TestContext.Current.CancellationToken);
 
         var audio = (System.Threading.Channels.Channel<float[]>)session.GetType()
             .GetField("_audio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -183,7 +183,7 @@ public class NemotronAsrProviderTests
             return new ScriptedStream();
         });
 
-        var start = provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var start = provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
         Assert.False(start.IsCompleted);
         gate.Set();
