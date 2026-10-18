@@ -4,6 +4,7 @@ namespace Kanal.Providers.LocalAsr;
 
 // ponytail: script + stopword vote; a short Latin sentence with no stopword falls to the first
 // Latin room language, or "en" when the room has none. Upgrade path: a dedicated language-identification model.
+// In a room with no scored Latin language, one stopword decides, so "I see." can label pl.
 public static class TranscriptLanguage
 {
     private static readonly Dictionary<string, (string Letters, HashSet<string> Words)> Latin = new()
@@ -28,7 +29,7 @@ public static class TranscriptLanguage
         if (cjk is not null)
             return cjk;
 
-        var script = ByScript(text, room);
+        var script = ByCyrillic(text, room);
         if (script is not null && room.Contains(script))
             return script;
 
@@ -56,7 +57,7 @@ public static class TranscriptLanguage
         return text.Any(c => c is >= '一' and <= '鿿') ? "zh" : null;
     }
 
-    private static string? ByScript(string text, IReadOnlyList<string> room)
+    private static string? ByCyrillic(string text, IReadOnlyList<string> room)
     {
         if (text.Any(c => c is >= 'Ѐ' and <= 'ӿ'))
             return text.Any(c => "іїєґІЇЄҐ".Contains(c)) || !room.Contains("ru") ? "uk" : "ru";

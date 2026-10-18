@@ -20,6 +20,7 @@ public class TranscriptLanguageTests
     [Theory]
     [InlineData("这批支架的料号是 KX-4402，表面处理按上次的标准做。", "de", "pl")]
     [InlineData("这批支架的料号是 KX-4402，表面处理按上次的标准做。", "en")]
+    [InlineData("这个 bracket 要改", "de", "pl")]
     public void HanTextWithoutKanaIsChineseInAnyRoom(string text, params string[] room) =>
         Assert.Equal("zh", TranscriptLanguage.Guess(text, room));
 
@@ -34,6 +35,10 @@ public class TranscriptLanguageTests
     [Fact]
     public void ALatinTextWithNoSignalInARoomWithoutLatinIsEnglish() =>
         Assert.Equal("en", TranscriptLanguage.Guess("Okay, thank you.", ["zh"]));
+
+    [Fact]
+    public void ALatinTextWithNoSignalInATwoLanguageRoomWithoutLatinIsEnglish() =>
+        Assert.Equal("en", TranscriptLanguage.Guess("Okay, thank you.", ["zh", "ja"]));
 
     [Fact]
     public void ALatinTextInARoomWithoutLatinIsLabelledByItsBestLanguage() =>

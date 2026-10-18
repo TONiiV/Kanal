@@ -14,9 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Kanal now labels the language of a transcript line by its script first. A Chinese sentence is no
-  longer labelled Japanese in a room without Chinese. A short English sentence in a Chinese-only room
-  is now translated. Before, the line stayed untranslated.
+- Kanal now labels the language of a transcript line by its script first. A Chinese or Japanese
+  sentence in a room without that language now gets its own language label, not a room language.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
