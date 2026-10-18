@@ -133,7 +133,7 @@ Findings:
   room languages. On AMI it wrote Welsh for 6 of 25 English clips (WER 52.1). On VoxPopuli it wrote
   Slovene, German or English for some pl and en clips. On AISHELL-4 it gave no text for 14 of 26
   clips. On clean speech Gladia is the most accurate engine (Common Voice de/pl 6.1/6.4).
-  Recommendation: the product sends the room languages to Gladia. This needs its own ticket.
+  ADR 0061 (PR #291) decides that the product sends no room languages to Gladia. It accepts these errors.
 - **Gladia gives the fastest finals** (p50 1.01 s after speech end against 2.34 s for Nemotron).
 - **The Gladia session does not end** when the session closes during the reconnect wait.
   `GladiaAsrSession.ReceiveLoopAsync` awaits the backoff delay in its `catch`, so the cancel escapes
