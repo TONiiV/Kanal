@@ -121,6 +121,14 @@ public class AsrBenchmarkNumberTests
     [InlineData("五万元", "50000元")]
     [InlineData("万一出问题", "万一出问题")]
     [InlineData("千万不要", "千万不要")]
+    [InlineData("千万别忘", "千万别忘")]
+    [InlineData("万万不可", "万万不可")]
+    [InlineData("3千万元", "30000000元")]
+    [InlineData("1万亿", "1000000000000")]
+    [InlineData("100万元", "1000000元")]
+    [InlineData("百万元", "1000000元")]
+    [InlineData("千万元", "10000000元")]
+    [InlineData("1,000万元", "10000000元")]
     public void Chinese_digits_with_a_unit_and_idioms_are_read(string text, string expected)
     {
         Assert.Equal(expected, Numbers.Normalize("zh", text));
