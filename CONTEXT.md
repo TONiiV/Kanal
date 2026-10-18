@@ -55,3 +55,7 @@ _Avoid_: Theme, dark mode (as a setting name)
 **Accent theme**:
 A named set of brand colours, with one light and one dark variant, that tints the host's controls. It never changes reading surfaces, ink, recording state or speaker colours.
 _Avoid_: Skin, colour scheme
+
+**Publish**:
+A one-way copy of an ended meeting record to an external note destination, started by the operator. The copy never returns to Kanal.
+_Avoid_: Export (only the `.kl` file is an export), sync
