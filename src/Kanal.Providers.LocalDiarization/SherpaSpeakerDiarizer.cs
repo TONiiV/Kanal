@@ -45,6 +45,8 @@ public sealed class SherpaSpeakerDiarizer(string segmentationModel, string embed
         var clustering = new FastClusteringConfig();
         if (speakerCount is > 0)
             clustering.NumClusters = speakerCount.Value;
+        else
+            clustering.Threshold = 0.8f;
         return clustering;
     }
 
