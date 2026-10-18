@@ -6,6 +6,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### TranscriptLanguage labels by script before the room prior
+
+- **Done.** This closes the ADR 0061 open item about the `TranscriptLanguage.Guess` room prior, for two cases. Issue #295.
+- **Script first.** Hangul gives `ko`. Kana gives `ja`. Han characters without kana give `zh`. The room does not change these labels. Before, Han text in a room without `zh` gave `ja`.
+- **Latin text.** A room without a Latin language now accepts the best-scoring Latin language at one signal. If none scores, the label is `en`. Before, the label was `room[0]`, for example `zh`, and the line got no MT target.
+- **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
