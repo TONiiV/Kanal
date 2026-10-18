@@ -10,6 +10,7 @@ internal static class E2eReport
     {
         ["A"] = "Gladia, transcription and translation in one session",
         ["B"] = "Gladia transcription, then Hy-MT2 1.8B",
+        ["B1"] = "Replay of route B on the clips with one Gladia final: saved Gladia text and time, fresh Hy-MT2 1.8B",
         ["C"] = "Nemotron 560 ms, then Hy-MT2 1.8B",
         ["D"] = "Qwen3-ASR 0.6B, then Hy-MT2 1.8B",
     };
@@ -22,7 +23,7 @@ internal static class E2eReport
         string Seconds(double value) => value.ToString("F2");
         string Latency(IEnumerable<E2eRun> set, bool p95)
         {
-            var latency = E2e.Latency(set);
+            var latency = E2e.Latency(set, completeOnly: true);
             return latency.N == 0 ? "–" : Seconds(p95 ? latency.P95 : latency.P50);
         }
 
@@ -41,7 +42,7 @@ internal static class E2eReport
             .AppendLine()
             .AppendLine("Audio: the `meeting-11labs` set. It has 12 meeting sentences in zh, de, pl and en, each in 3 ElevenLabs voices. Every run uses the auto room (zh, de, pl, en). The translation targets of a clip are the other three room languages. The reference translation of sentence i into language T is the T version of sentence i. The 12 sentences are parallel, and they are the references of the MT benchmark.")
             .AppendLine()
-            .AppendLine("Audio is fed in 20 ms frames at real-time pace. Latency is the time from the end of speech to the last translated text of the clip. Local routes add the ASR final time and the MT time. MT runs on the CPU.")
+            .AppendLine("Audio is fed in 20 ms frames at real-time pace. Latency is the time from the end of speech to the last translated text of the clip. It counts only clips where all three targets have text. Local routes add the ASR final time and the MT time. MT runs on the CPU. A re-run clip is marked in the clip table.")
             .AppendLine()
             .AppendLine("chrF is the mean over clips and targets of the sentence chrF (character 1..6-grams, beta 2). A missing translation scores 0. Codes: part numbers of the reference translation that the output keeps, strict (verbatim) and loose (case, space, hyphen, dot and slash ignored). ASR error: CER for zh, WER for de, pl and en, numbers normalised. The figure for several languages is the mean of the language rates.")
             .AppendLine();
@@ -91,6 +92,21 @@ internal static class E2eReport
                 : $"| {route} | {Seconds(Scoring.Percentile(asr, 0.5))} | {Seconds(Scoring.Percentile(asr, 0.95))} | {Seconds(Scoring.Percentile(rest, 0.5))} | {Seconds(Scoring.Percentile(rest, 0.95))} |");
         }
 
+        md.AppendLine().AppendLine("## Transcripts and labels").AppendLine()
+            .AppendLine("Complete: clips where all three targets have text. A clip with a missing target scores chrF 0 for it and has no latency. Label correct: share of finals that carry the language of the clip. Other load: mean and maximum of the logical CPUs that other processes used during a clip.")
+            .AppendLine()
+            .AppendLine("| Route | Complete clips | Finals | Finals per clip | Label correct % | Mean transcript characters | Mean transcript words (de, pl, en) | Other load mean/max, clips measured |")
+            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (var route in routes)
+        {
+            var set = runs.Where(r => r.Route == route).ToList();
+            var labels = E2e.Labels(set);
+            var length = E2e.TranscriptLength(set);
+            var load = E2e.OtherLoad(set);
+            md.AppendLine($"| {route} | {set.Count(E2e.IsComplete)}/{set.Count} | {labels.Finals} | {labels.PerClip:F2} | {labels.CorrectPct:F1} | {length.Characters:F1} | {length.Words:F1} | " +
+                          (load.N == 0 ? "–" : $"{load.Mean:F2}/{load.Max:F2}, {load.N}") + " |");
+        }
+
         if (notes.Count > 0)
         {
             md.AppendLine().AppendLine("## Notes").AppendLine();
@@ -99,11 +115,11 @@ internal static class E2eReport
         }
 
         md.AppendLine().AppendLine("## Clips").AppendLine()
-            .AppendLine("| Route | Clip | Transcript | Source language | Target | Translation | chrF | Latency s |")
-            .AppendLine("|---|---|---|---|---|---|---:|---:|");
+            .AppendLine("| Route | Clip | Re-run | Transcript | Source language | Target | Translation | chrF | Latency s |")
+            .AppendLine("|---|---|---|---|---|---|---|---:|---:|");
         foreach (var run in runs.OrderBy(r => r.Route).ThenBy(r => r.Clip.Id, StringComparer.Ordinal))
         foreach (var pair in E2e.Pairs(run))
-            md.AppendLine($"| {run.Route} | {run.Clip.Id} | {Cell(run.Transcript)} | {string.Join(",", run.SrcLangs)} | {pair.Target} | {Cell(run.Translations.GetValueOrDefault(pair.Target, ""))} | {pair.ChrF:F1} | {(run.LatencySeconds is { } s ? Seconds(s) : "–")} |");
+            md.AppendLine($"| {run.Route} | {run.Clip.Id} | {(run.Rerun ? "yes" : "no")} | {Cell(run.Transcript)} | {string.Join(",", run.SrcLangs)} | {pair.Target} | {Cell(run.Translations.GetValueOrDefault(pair.Target, ""))} | {pair.ChrF:F1} | {(run.LatencySeconds is { } s ? Seconds(s) : "–")} |");
 
         return md.ToString();
     }

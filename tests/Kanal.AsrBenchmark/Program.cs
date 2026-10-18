@@ -55,8 +55,16 @@ if (args.FirstOrDefault() == "fetch")
 }
 
 if (args.FirstOrDefault() == "e2e")
-    return await E2eRunner.RunAsync(data, modelsDir, Arg("--out") ?? ".", List("--routes", "gladia,nemotron,qwen3"),
-        int.Parse(Arg("--clips") ?? "1000"), Arg("--note"), Arg("--only")?.Split(','));
+{
+    if (Arg("--out") is not { } e2eOut || Arg("--run") is not { } runId)
+    {
+        Console.Error.WriteLine("e2e needs --out <folder> and --run <id>. The report reads only the run files with this id and the files of --include.");
+        return 2;
+    }
+
+    return await E2eRunner.RunAsync(new E2eOptions(data, modelsDir, e2eOut, runId, List("--routes", "nemotron,qwen3"),
+        int.Parse(Arg("--clips") ?? "1000"), Arg("--note"), Arg("--only")?.Split(','), List("--include", ""), Arg("--gladia-runs")));
+}
 
 var perGroup = int.Parse(Arg("--clips") ?? "1000");
 var clips = Corpus.Load(data)

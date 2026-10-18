@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Core.Room;
 using Kanal.Core.Text;
 using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
@@ -12,8 +13,15 @@ using Kanal.Providers.LocalMt;
 namespace Kanal.AsrBenchmark;
 
 [ExcludeFromCodeCoverage]
+internal sealed record E2eOptions(
+    string Data, string ModelsDir, string OutDir, string RunId, IReadOnlyList<string> Routes, int PerGroup,
+    string? Note, IReadOnlyList<string>? Only, IReadOnlyList<string> Include, string? GladiaRuns);
+
+[ExcludeFromCodeCoverage]
 internal static class E2eRunner
 {
+    private const int MaxAttempts = 3;
+
     private static readonly string[] Room = [.. Corpus.Languages];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -26,89 +34,114 @@ internal static class E2eRunner
     private sealed record Piece(string Src, IReadOnlyDictionary<string, string> Map, double DoneAt, string? Error);
 
     private sealed record RunDto(string Route, string ClipId, string Transcript, string[] SrcLangs,
-        Dictionary<string, string> Translations, double? LatencySeconds, double? AsrSeconds);
+        Dictionary<string, string> Translations, double? LatencySeconds, double? AsrSeconds,
+        double? OtherLoad = null, bool Rerun = false, DateTime? RanAt = null, string? Machine = null);
 
     private sealed record RouteFile(string Machine, List<string> Notes, List<RunDto> Runs);
 
-    public static async Task<int> RunAsync(string data, string modelsDir, string outDir, IReadOnlyList<string> routes, int perGroup, string? note, IReadOnlyList<string>? only)
+    public static async Task<int> RunAsync(E2eOptions o)
     {
-        var clips = Corpus.Load(data, ["meeting-11labs"]).GroupBy(c => c.Lang).SelectMany(g => g.Take(perGroup))
-            .Where(c => only is null || only.Any(o => c.Id.StartsWith(o, StringComparison.Ordinal))).ToList();
-        if (clips.Count == 0)
+        var clips = Corpus.Load(o.Data, ["meeting-11labs"]).GroupBy(c => c.Lang).SelectMany(g => g.Take(o.PerGroup)).ToList();
+        if (o.Only is not null)
         {
-            Console.Error.WriteLine($"No meeting-11labs clips in {data}. Run: fetch --sets meeting-11labs");
+            var wanted = E2e.Only(clips.Select(c => c.Id), o.Only).ToHashSet();
+            if (o.Only.Except(wanted).ToList() is { Count: > 0 } unknown)
+            {
+                Console.Error.WriteLine($"--only takes whole clip ids. Unknown: {string.Join(", ", unknown)}.");
+                return 2;
+            }
+
+            clips = [.. clips.Where(c => wanted.Contains(c.Id))];
+        }
+
+        if (clips.Count == 0 && o.Routes.Count > 0)
+        {
+            Console.Error.WriteLine($"No meeting-11labs clips in {o.Data}. Run: fetch --sets meeting-11labs");
             return 1;
         }
 
-        Directory.CreateDirectory(outDir);
+        Directory.CreateDirectory(o.OutDir);
         var machine = $"{Feeder.CpuName()} · {Environment.ProcessorCount} logical CPUs · {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})";
         Console.WriteLine($"{machine}\n{clips.Count} clips, {clips.Sum(c => c.Seconds) / 60:F1} min of audio");
 
-        foreach (var route in routes)
+        using var monitor = new LoadMonitor();
+        foreach (var route in o.Routes)
         {
             var notes = new List<string>();
-            if (note is not null)
-                notes.Add(note);
-            notes.Add(await LoadNoteAsync());
-            var runs = new List<E2eRun>();
+            if (o.Note is not null)
+                notes.Add(o.Note);
+            await Task.Delay(TimeSpan.FromSeconds(7));
+            var start = await monitor.WaitQuietAsync($"route {route}");
+            notes.Add($"Other load when the route started: {start:F2} logical CPUs of {Environment.ProcessorCount} (limit to run a clip: {LoadMonitor.QuietBelow:F1}). Each clip waits for this limit, and it runs again if the load passes the limit during the clip.");
+            List<E2eRun> runs;
             switch (route)
             {
                 case "gladia":
-                    using (var mt = await LoadMtAsync(modelsDir, notes))
-                        runs = await GladiaAsync(mt, clips, notes);
+                    using (var mt = await LoadMtAsync(o.ModelsDir, notes))
+                        runs = await GladiaAsync(mt, clips, notes, monitor);
+                    break;
+                case "gladia-mt":
+                    using (var mt = await LoadMtAsync(o.ModelsDir, notes))
+                        runs = await ReplayAsync(mt, o.GladiaRuns, clips, notes, monitor);
                     break;
                 case "nemotron":
-                    using (var asr = new NemotronAsrProvider(AsrModelCatalog.Models[0], new ModelDownloadManager(modelsDir)))
-                    using (var mt = await LoadMtAsync(modelsDir, notes))
+                    using (var asr = new NemotronAsrProvider(AsrModelCatalog.Models[0], new ModelDownloadManager(o.ModelsDir)))
+                    using (var mt = await LoadMtAsync(o.ModelsDir, notes))
                     {
                         await asr.WarmUpAsync(CancellationToken.None);
-                        runs = await LocalAsync("C", _ => asr, clips, mt);
+                        runs = await LocalAsync("C", _ => asr, clips, mt, notes, monitor);
                     }
 
                     break;
                 case "qwen3":
-                    var model = Engine.Downloaded(data).First(m => m.Id == "qwen3-asr-0.6b-int8");
-                    using (var engine = Engine.Load(model, "cpu", Engine.DefaultThreads, data))
-                    using (var mt = await LoadMtAsync(modelsDir, notes))
-                        runs = await LocalAsync("D", engine.Provider, clips, mt);
+                    var model = Engine.Downloaded(o.Data).First(m => m.Id == "qwen3-asr-0.6b-int8");
+                    using (var engine = Engine.Load(model, "cpu", Engine.DefaultThreads, o.Data))
+                    using (var mt = await LoadMtAsync(o.ModelsDir, notes))
+                        runs = await LocalAsync("D", engine.Provider, clips, mt, notes, monitor);
                     break;
                 default:
-                    Console.Error.WriteLine($"Unknown route {route}. Known routes: gladia, nemotron, qwen3.");
+                    Console.Error.WriteLine($"Unknown route {route}. Known routes: gladia, gladia-mt, nemotron, qwen3.");
                     return 2;
             }
 
-            var dtos = runs.Select(r => new RunDto(r.Route, r.Clip.Id, r.Transcript,
-                [.. r.SrcLangs], r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds)).ToList();
-            var path = Path.Combine(outDir, $"e2e-runs-{route}.json");
-            if (only is not null && File.Exists(path))
+            runs = [.. runs.Select(r => r with { Machine = machine })];
+            var path = RunPath(o, route);
+            if (o.Only is not null && File.Exists(path))
             {
-                var earlier = JsonSerializer.Deserialize<RouteFile>(await File.ReadAllTextAsync(path), Json)!;
+                var earlier = Read(path);
+                var merged = E2e.Merge(earlier.Runs, runs);
                 notes.InsertRange(0, earlier.Notes);
-                notes.Add($"Clips {string.Join(", ", only)} ran again, and the new runs replace the earlier ones.");
-                dtos = [.. earlier.Runs.Where(e => !dtos.Any(d => d.Route == e.Route && d.ClipId == e.ClipId)), .. dtos];
+                notes.Add($"Clips {string.Join(", ", o.Only)} ({o.Only.Count} clips) ran again, and the new runs replace the earlier ones and carry the re-run mark."
+                          + (merged.KeptEarlier.Count > 0 ? $" These runs failed again, so the earlier runs stay: {string.Join(", ", merged.KeptEarlier)}." : ""));
+                runs = [.. merged.Runs];
             }
 
-            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new RouteFile(machine, notes, dtos), Json));
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(
+                new RouteFile(machine, notes, [.. runs.Select(ToDto)]), Json));
         }
 
         var all = new List<E2eRun>();
         var allNotes = new List<string>();
-        foreach (var path in Directory.GetFiles(outDir, "e2e-runs-*.json").Order())
+        var files = Directory.GetFiles(o.OutDir, $"e2e-runs-{o.RunId}-*.json").Concat(o.Include).Order().ToList();
+        foreach (var path in files)
         {
-            var file = JsonSerializer.Deserialize<RouteFile>(File.ReadAllText(path), Json)!;
-            allNotes.AddRange(file.Notes.Select(n => $"{Path.GetFileNameWithoutExtension(path)["e2e-runs-".Length..]}: {n}"));
-            all.AddRange(file.Runs.Select(r => new E2eRun(r.Route,
-                new Clip("meeting-11labs", r.ClipId[..2], r.ClipId, E2e.Reference(r.ClipId, r.ClipId[..2]), []),
-                r.Transcript, r.SrcLangs, r.Translations, r.LatencySeconds, r.AsrSeconds)));
+            var file = Read(path);
+            allNotes.AddRange(file.Notes.Select(n => $"{Path.GetFileNameWithoutExtension(path)}: {n}"));
+            all.AddRange(file.Runs);
         }
 
+        if (all.GroupBy(r => (r.Route, r.Clip.Id)).FirstOrDefault(g => g.Count() > 1) is { } duplicate)
+            throw new InvalidOperationException($"Route {duplicate.Key.Route} has two runs of {duplicate.Key.Item2} in the files {string.Join(", ", files)}.");
+
         var stamp = DateTime.Now;
-        var basePath = Path.Combine(outDir, $"kanal-e2e-{stamp:yyyyMMdd-HHmm}");
+        var basePath = Path.Combine(o.OutDir, $"kanal-e2e-{o.RunId}");
+        allNotes.Insert(0, $"Run files in this report: {string.Join(", ", files.Select(Path.GetFileName))}.");
         await File.WriteAllTextAsync(basePath + ".md", E2eReport.Build(stamp, machine, all, allNotes));
         await File.WriteAllTextAsync(basePath + ".json", JsonSerializer.Serialize(new
         {
             generated = stamp,
             machine,
+            files = files.Select(Path.GetFileName),
             notes = allNotes,
             summary = E2e.Summarise(all),
             runs = all.Select(r => new
@@ -120,11 +153,29 @@ internal static class E2eRunner
                 r.Translations,
                 r.LatencySeconds,
                 r.AsrSeconds,
+                r.OtherLoad,
+                r.Rerun,
+                r.RanAt,
+                r.Machine,
+                complete = E2e.IsComplete(r),
                 pairs = E2e.Pairs(r),
             }),
         }, Json));
         Console.WriteLine($"Report: {basePath}.md");
         return 0;
+    }
+
+    private static string RunPath(E2eOptions o, string route) => Path.Combine(o.OutDir, $"e2e-runs-{o.RunId}-{route}.json");
+
+    private static RunDto ToDto(E2eRun r) => new(r.Route, r.Clip.Id, r.Transcript, [.. r.SrcLangs],
+        r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine);
+
+    private static (List<string> Notes, List<E2eRun> Runs) Read(string path)
+    {
+        var file = JsonSerializer.Deserialize<RouteFile>(File.ReadAllText(path), Json)!;
+        return (file.Notes, [.. file.Runs.Select(r => new E2eRun(r.Route,
+            new Clip("meeting-11labs", r.ClipId[..2], r.ClipId, E2e.Reference(r.ClipId, r.ClipId[..2]), []),
+            r.Transcript, r.SrcLangs, r.Translations, r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine ?? file.Machine))]);
     }
 
     private static async Task<LlamaSharpMtProvider> LoadMtAsync(string modelsDir, List<string> notes)
@@ -138,92 +189,106 @@ internal static class E2eRunner
         await mt.WarmUpAsync(CancellationToken.None);
         var loaded = load.Elapsed.TotalSeconds;
         await mt.TranslateAsync("Bitte warten Sie einen Moment.", "de", ["zh", "pl", "en"], [], CancellationToken.None);
-        notes.Add($"MT: product LlamaSharpMtProvider with {info.DisplayName} ({info.Parameters}), CPU backend, no context, one prompt per target. Load {loaded:F1} s, first translation {load.Elapsed.TotalSeconds - loaded:F1} s.");
+        notes.Add($"MT: product LlamaSharpMtProvider with {info.DisplayName} ({info.Parameters}), CPU backend, one prompt per target. Load {loaded:F1} s, first translation {load.Elapsed.TotalSeconds - loaded:F1} s. "
+                  + "The tool mirrors MeetingSession: RoomState.ApplyTranscript, then RecentFinals(8) as context. In this base, MtPrompt.Build takes only the text and the target, so the provider ignores the context.");
         return mt;
     }
 
-    private static async Task<string> LoadNoteAsync()
-    {
-        var self = Environment.ProcessId;
-        Dictionary<int, (string Name, TimeSpan Cpu)> Snapshot() => Process.GetProcesses()
-            .Select(p =>
-            {
-                try
-                {
-                    return (p.Id, Name: p.ProcessName, Cpu: p.TotalProcessorTime);
-                }
-                catch (Exception)
-                {
-                    return (p.Id, Name: p.ProcessName, Cpu: TimeSpan.Zero);
-                }
-            })
-            .GroupBy(p => p.Id)
-            .ToDictionary(g => g.Key, g => (g.First().Name, g.First().Cpu));
+    private static AsrEvent.Transcript NormalizeChinese(AsrEvent.Transcript t) =>
+        SimplifiedChinese.IsChinese(t.SrcLang) ? t with { Text = SimplifiedChinese.Normalize(t.Text) } : t;
 
-        var before = Snapshot();
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        var after = Snapshot();
-        var busy = after.Where(kv => kv.Key != self && before.TryGetValue(kv.Key, out var b) && b.Name == kv.Value.Name)
-            .Select(kv => (kv.Value.Name, Cores: (kv.Value.Cpu - before[kv.Key].Cpu).TotalSeconds / 5))
-            .GroupBy(x => x.Name)
-            .Select(g => (Name: g.Key, Cores: g.Sum(x => x.Cores)))
-            .Where(x => x.Cores >= 0.15)
-            .OrderByDescending(x => x.Cores)
-            .Take(6)
-            .ToList();
-        return busy.Count == 0
-            ? "Other load before the route: no process used 0.15 logical CPUs or more over 5 s."
-            : $"Other load before the route, over 5 s, out of {Environment.ProcessorCount} logical CPUs: {string.Join(", ", busy.Select(x => $"{x.Name} {x.Cores:F2}"))} (sum {busy.Sum(x => x.Cores):F2}).";
-    }
-
-    private static Task<Piece> TranslateAsync(IMtProvider mt, string text, string src, Stopwatch clock) => Task.Run(async () =>
+    private static Task<Piece> TranslateAsync(RoomState room, IMtProvider mt, Utterance u, Stopwatch clock) => Task.Run(async () =>
     {
-        var targets = Room.Where(l => !string.Equals(l, src, StringComparison.OrdinalIgnoreCase)).ToList();
-        var source = SimplifiedChinese.IsChinese(src) ? SimplifiedChinese.Normalize(text) : text;
         try
         {
-            var map = await mt.TranslateAsync(source, src, targets, [], CancellationToken.None);
-            return new Piece(src, Simplified(map), clock.Elapsed.TotalSeconds, null);
+            var targets = room.Config.Languages.Where(l => !string.Equals(l, u.SrcLang, StringComparison.OrdinalIgnoreCase)).ToList();
+            var context = room.RecentFinals(8, excludeId: u.Id);
+            var map = await mt.TranslateAsync(u.SrcText, u.SrcLang, targets, context, CancellationToken.None);
+            return new Piece(u.SrcLang, Simplified(map), clock.Elapsed.TotalSeconds, null);
         }
         catch (Exception e)
         {
-            return new Piece(src, new Dictionary<string, string>(), clock.Elapsed.TotalSeconds, e.Message);
+            return new Piece(u.SrcLang, new Dictionary<string, string>(), clock.Elapsed.TotalSeconds, e.Message);
         }
     });
 
     private static Dictionary<string, string> Simplified(IReadOnlyDictionary<string, string> map) =>
         map.ToDictionary(kv => kv.Key, kv => SimplifiedChinese.IsChinese(kv.Key) ? SimplifiedChinese.Normalize(kv.Value) : kv.Value);
 
-    private static Dictionary<string, string> Join(IEnumerable<IReadOnlyDictionary<string, string>> parts)
-    {
-        var list = parts.ToList();
-        return Room
-            .Select(l => (Lang: l, Text: string.Join(" ", list.Select(p => p.GetValueOrDefault(l, "")).Where(t => t.Length > 0))))
-            .Where(x => x.Text.Length > 0)
-            .ToDictionary(x => x.Lang, x => x.Text);
-    }
-
-    private static async Task<List<E2eRun>> LocalAsync(string route, Func<List<double>, IAsrProvider> make, IReadOnlyList<Clip> clips, IMtProvider mt)
+    private static async Task<List<E2eRun>> LocalAsync(string route, Func<List<double>, IAsrProvider> make, IReadOnlyList<Clip> clips,
+        IMtProvider mt, List<string> notes, LoadMonitor monitor)
     {
         await Feeder.RunClipAsync(make, clips[0], Room, realtime: false);
+        var room = new RoomState(new RoomConfig($"e2e-{route}", Room));
         var runs = new List<E2eRun>();
+        var again = new List<string>();
         foreach (var clip in clips)
         {
-            var pieces = new List<Task<Piece>>();
-            var run = await Feeder.RunClipAsync(make, clip, Room, realtime: true, onTranscript: (t, clock) =>
+            for (var attempt = 1; ; attempt++)
             {
-                if (t.IsFinal && t.Text.Trim().Length > 0)
-                    pieces.Add(TranslateAsync(mt, t.Text.Trim(), t.SrcLang, clock));
-            });
-            var done = await Task.WhenAll(pieces);
-            foreach (var error in done.Select(p => p.Error).OfType<string>())
-                Console.WriteLine($"   {clip.Id}: translation failed: {error}");
-            var result = new E2eRun(route, clip, run.Text, run.Langs, Join(done.Select(p => p.Map)),
-                done.Length == 0 ? null : done.Max(p => p.DoneAt) - run.SpeechEndAt, run.FinalAfterEnd);
-            runs.Add(result);
-            Console.WriteLine($"   {route} {clip.Id}: {result.LatencySeconds:F2} s (ASR {result.AsrSeconds:F2} s) \"{result.Transcript}\"");
+                await monitor.WaitQuietAsync(clip.Id);
+                var started = DateTime.UtcNow;
+                var pieces = new List<Task<Piece>>();
+                var run = await Feeder.RunClipAsync(make, clip, Room, realtime: true, onTranscript: (t, clock) =>
+                {
+                    var utterance = room.ApplyTranscript(NormalizeChinese(t));
+                    if (t.IsFinal && utterance.SrcText.Trim().Length > 0)
+                        pieces.Add(TranslateAsync(room, mt, utterance, clock));
+                });
+                var done = await Task.WhenAll(pieces);
+                var load = monitor.MeanSince(started);
+                if (load >= LoadMonitor.QuietBelow && attempt < MaxAttempts)
+                {
+                    Console.WriteLine($"   {route} {clip.Id}: other load {load:F1} logical CPUs during the clip, running it again.");
+                    again.Add(clip.Id);
+                    continue;
+                }
+
+                foreach (var error in done.Select(p => p.Error).OfType<string>())
+                    Console.WriteLine($"   {clip.Id}: translation failed: {error}");
+                var result = new E2eRun(route, clip, run.Text, run.Langs, E2e.Join(done.Select(p => p.Map)),
+                    done.Length == 0 ? null : done.Max(p => p.DoneAt) - run.SpeechEndAt, run.FinalAfterEnd, load, RanAt: DateTime.Now);
+                runs.Add(result);
+                Console.WriteLine($"   {route} {clip.Id}: {result.LatencySeconds:F2} s (ASR {result.AsrSeconds:F2} s, load {load:F2}) \"{result.Transcript}\"");
+                break;
+            }
         }
 
+        if (again.Count > 0)
+            notes.Add($"{again.Count} clip runs were repeated inside this run because other load passed the limit: {string.Join(", ", again)}.");
+        return runs;
+    }
+
+    private static async Task<List<E2eRun>> ReplayAsync(IMtProvider mt, string? gladiaRuns, IReadOnlyList<Clip> clips, List<string> notes, LoadMonitor monitor)
+    {
+        if (gladiaRuns is null)
+            throw new InvalidOperationException("Route gladia-mt needs --gladia-runs <file> with the saved Gladia sessions.");
+        var saved = Read(gladiaRuns).Runs.Where(r => r.Route == "B" && r.SrcLangs.Count == 1 && r.Transcript.Trim().Length > 0 && r.AsrSeconds is not null)
+            .ToDictionary(r => r.Clip.Id);
+        var room = new RoomState(new RoomConfig("e2e-B1", Room));
+        var runs = new List<E2eRun>();
+        foreach (var clip in clips.Where(c => saved.ContainsKey(c.Id)))
+        {
+            var source = saved[clip.Id];
+            for (var attempt = 1; ; attempt++)
+            {
+                await monitor.WaitQuietAsync(clip.Id);
+                var started = DateTime.UtcNow;
+                var clock = Stopwatch.StartNew();
+                var utterance = room.ApplyTranscript(NormalizeChinese(new AsrEvent.Transcript(
+                    $"b1-{clip.Id}-{attempt}", "S01", source.Transcript, source.SrcLangs[0], 0, null, true, false, 1.0, null)));
+                var piece = await TranslateAsync(room, mt, utterance, clock);
+                var load = monitor.MeanSince(started);
+                if (load >= LoadMonitor.QuietBelow && attempt < MaxAttempts)
+                    continue;
+                runs.Add(new E2eRun("B1", clip, source.Transcript, source.SrcLangs, E2e.Join([piece.Map]),
+                    source.AsrSeconds!.Value + piece.DoneAt, source.AsrSeconds, load, RanAt: DateTime.Now));
+                Console.WriteLine($"   B1 {clip.Id}: {runs[^1].LatencySeconds:F2} s (saved Gladia final {source.AsrSeconds:F2} s, load {load:F2})");
+                break;
+            }
+        }
+
+        notes.Add($"Replay of the saved Gladia sessions: {runs.Count} clips with one Gladia final each. The saved text and the saved time of the final are used; a Gladia session cost nothing here. Latency = saved Gladia final time + fresh MT time. The saved sessions of clips with several finals hold no per-final text or time, so those clips are not replayed.");
         return runs;
     }
 
@@ -236,13 +301,16 @@ internal static class E2eRunner
         public double LastAt { get; set; } = firstAt;
     }
 
-    private static async Task<List<E2eRun>> GladiaAsync(IMtProvider mt, IReadOnlyList<Clip> clips, List<string> notes)
+    private static async Task<List<E2eRun>> GladiaAsync(IMtProvider mt, IReadOnlyList<Clip> clips, List<string> notes, LoadMonitor monitor)
     {
         using var engine = new GladiaEngine(translation: true);
+        var room = new RoomState(new RoomConfig("e2e-gladia", Room));
         var runs = new List<E2eRun>();
         var failures = 0;
         foreach (var clip in clips)
         {
+            await monitor.WaitQuietAsync(clip.Id);
+            var started = DateTime.UtcNow;
             var utterances = new Dictionary<string, Heard>();
             var pieces = new List<Task<Piece>>();
             ClipRun run;
@@ -261,8 +329,9 @@ internal static class E2eRunner
                     }
 
                     utterances[t.UtteranceId] = new Heard(t, at);
-                    if (t.Text.Trim().Length > 0)
-                        pieces.Add(TranslateAsync(mt, t.Text.Trim(), t.SrcLang, clock));
+                    var utterance = room.ApplyTranscript(NormalizeChinese(t with { Translations = null }));
+                    if (utterance.SrcText.Trim().Length > 0)
+                        pieces.Add(TranslateAsync(room, mt, utterance, clock));
                 });
             }
             catch (Exception e)
@@ -274,20 +343,21 @@ internal static class E2eRunner
             }
 
             var done = await Task.WhenAll(pieces);
-            var ordered = utterances.Values.OrderBy(u => u.FirstAt).ToList();
-            var transcript = string.Join(" ", ordered.Select(u => u.Last.Text.Trim()).Where(t => t.Length > 0));
-            var langs = ordered.Select(u => u.Last.SrcLang).ToList();
-            var native = Join(ordered.Select(u => (IReadOnlyDictionary<string, string>)Simplified(u.Last.Translations ?? new Dictionary<string, string>())));
-            runs.Add(new E2eRun("A", clip, transcript, langs, native,
-                ordered.Count == 0 ? null : ordered.Max(u => u.LastAt) - run.SpeechEndAt));
-            runs.Add(new E2eRun("B", clip, transcript, langs, Join(done.Select(p => p.Map)),
+            var load = monitor.MeanSince(started);
+            var a = E2e.RouteA(utterances.Values.Select(u => new HeardUtterance(
+                u.Last.Text, u.Last.SrcLang, u.FirstAt, u.LastAt,
+                Simplified(u.Last.Translations ?? new Dictionary<string, string>()))), run.SpeechEndAt);
+            var ordered = utterances.Values.Where(u => u.Last.Text.Trim().Length > 0).ToList();
+            runs.Add(new E2eRun("A", clip, a.Transcript, a.SrcLangs, a.Translations, a.LatencySeconds, null, load, RanAt: DateTime.Now));
+            runs.Add(new E2eRun("B", clip, a.Transcript, a.SrcLangs, E2e.Join(done.Select(p => p.Map)),
                 done.Length == 0 ? null : done.Max(p => p.DoneAt) - run.SpeechEndAt,
-                ordered.Count == 0 ? null : ordered.Max(u => u.FirstAt) - run.SpeechEndAt));
-            Console.WriteLine($"   {clip.Id}: A {runs[^2].LatencySeconds:F2} s, B {runs[^1].LatencySeconds:F2} s \"{transcript}\"");
+                ordered.Count == 0 ? null : ordered.Max(u => u.FirstAt) - run.SpeechEndAt, load, RanAt: DateTime.Now));
+            Console.WriteLine($"   {clip.Id}: A {runs[^2].LatencySeconds:F2} s, B {runs[^1].LatencySeconds:F2} s \"{a.Transcript}\"");
         }
 
         var fed = runs.Where(r => r.Route == "A").Sum(r => r.Clip.Seconds + engine.PaddingSeconds);
-        notes.Add($"Gladia: {fed / 60:F1} min of audio sent (clips plus {engine.PaddingSeconds:F0} s of silence each), {runs.Count / 2} sessions, {failures} failed. Route A and route B share these sessions.");
+        var missing = runs.Where(r => r.Route == "A").Count(r => !E2e.IsComplete(r));
+        notes.Add($"Gladia: {fed / 60:F1} min of audio sent (clips plus {engine.PaddingSeconds:F0} s of silence each), {runs.Count / 2} sessions, {failures} failed. Route A and route B share these sessions. Route A clips with a missing translation: {missing}.");
         return runs;
     }
 }
