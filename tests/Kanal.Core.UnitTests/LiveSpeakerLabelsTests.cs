@@ -44,6 +44,8 @@ public class LiveSpeakerLabelsTests
         [3] = [0, 0, 1],
         // cosine 0.6 to voice 1
         [11] = [0.6f, 0.8f, 0],
+        // cosine 0.55 to voice 1
+        [12] = [0.55f, 0.8352f, 0],
     });
 
     [Fact]
@@ -59,15 +61,24 @@ public class LiveSpeakerLabelsTests
     }
 
     [Fact]
-    public void AShortSentenceInheritsThePreviousTagWithoutAnEmbedding()
+    public void AShortSentenceGetsNoTagBecauseABackchannelIsUsuallyAnotherSpeaker()
     {
         var embedder = ThreeVoices();
         var labels = new LiveSpeakerLabels(embedder);
         labels.Assign(Voice(1, 2));
         labels.Assign(Voice(2, 2));
 
-        Assert.Equal("V02?", labels.Assign(Voice(1, 0.9)));
+        Assert.Null(labels.Assign(Voice(1, 0.9)));
         Assert.Equal(2, embedder.Calls);
+    }
+
+    [Fact]
+    public void AVoiceBelowTheMeasuredDefaultThresholdIsANewSpeaker()
+    {
+        var labels = new LiveSpeakerLabels(ThreeVoices());
+        labels.Assign(Voice(1, 2));
+
+        Assert.Equal("V02?", labels.Assign(Voice(12, 2)));
     }
 
     [Fact]
@@ -82,7 +93,7 @@ public class LiveSpeakerLabelsTests
     [Fact]
     public void TheThresholdDecidesBetweenAKnownAndANewSpeaker()
     {
-        var loose = new LiveSpeakerLabels(ThreeVoices());
+        var loose = new LiveSpeakerLabels(ThreeVoices(), threshold: 0.5);
         loose.Assign(Voice(1, 2));
         Assert.Equal("V01?", loose.Assign(Voice(11, 2)));
 
@@ -97,9 +108,9 @@ public class LiveSpeakerLabelsTests
         var labels = new LiveSpeakerLabels(new VoiceEmbedder(new()
         {
             [1] = [1, 0, 0],
-            [2] = [0.6f, 0.8f, 0],
-            // cosine 0.4 to [1,0,0] alone, about 0.77 to the sum [1.6,0.8,0]
-            [3] = [0.4f, 0.9165f, 0],
+            [2] = [0.7f, 0.7141f, 0],
+            // cosine 0.5 to [1,0,0] alone, about 0.8 to the sum [1.7,0.71,0]
+            [3] = [0.5f, 0.866f, 0],
         }));
 
         Assert.Equal("V01?", labels.Assign(Voice(1, 2)));
