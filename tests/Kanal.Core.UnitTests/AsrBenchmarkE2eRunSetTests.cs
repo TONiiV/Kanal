@@ -239,8 +239,7 @@ public class AsrBenchmarkE2eRunSetTests
 
         var report = E2eReport.Build(new DateTime(2026, 10, 18), "machine", runs, []);
 
-        var row = report.Split('
-').Select(l => l.TrimEnd()).Single(l => l.StartsWith("| route-a | 2/2 |", StringComparison.Ordinal));
+        var row = report.Split('\n').Select(l => l.TrimEnd()).Single(l => l.StartsWith("| route-a | 2/2 |", StringComparison.Ordinal));
         Assert.EndsWith("| 1 |", row);
         Assert.Contains("## chrF by number of finals", report);
         Assert.Contains("| route-a | 1 final | 1 |", report);
