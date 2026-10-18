@@ -16,6 +16,7 @@ public sealed class GladiaAsrSession : IAsrSession
     private readonly GladiaWire _wire = new();
     private WebSocket _socket = null!;
     private Task? _receiveLoop;
+    private volatile bool _stopping;
 
     internal GladiaAsrSession(Uri url, int maxReconnectAttempts)
         : this(ct => OpenSocketAsync(url, ct), maxReconnectAttempts)
@@ -113,6 +114,10 @@ public sealed class GladiaAsrSession : IAsrSession
             {
                 break;
             }
+            catch (WebSocketException) when (_stopping)
+            {
+                break;
+            }
             catch (WebSocketException ex)
             {
                 message.SetLength(0);
@@ -151,6 +156,7 @@ public sealed class GladiaAsrSession : IAsrSession
 
     public async ValueTask DisposeAsync()
     {
+        _stopping = true;
         await _sendLock.WaitAsync();
         try
         {

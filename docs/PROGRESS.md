@@ -6,6 +6,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### Gladia session does not reconnect after a deliberate stop
+
+- **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
+- **How it showed.** `MeetingSession.DisposeAsync` disposes the ASR session while `PumpAsync` still reads `Events`. The false error reached `ErrorOccurred` and the operator after every meeting. The ASR benchmark (PR #285) logged it after every session.
+- **Fix.** `DisposeAsync` sets the `volatile` flag `_stopping` before it sends `stop_recording`. The filter `catch (WebSocketException) when (_stopping)` ends the loop without an error and without a reconnect. A server Close frame still ends the loop through the `Close` branch and emits `Ended`.
+- **Test seam.** `HangUpOnFirstWriteStream` returns EOF after the first write (`stop_recording`). It holds the next write (the close frame) for 500 ms. Without the hold, `DisposeAsync` cancelled the loop before the loop saw the EOF on Windows and macOS. The red test then passed on those systems. With the hold, the red test failed on every OS.
+
 ### Gladia session closes its event stream on every exit
 
 - **Bug.** `GladiaAsrSession.Events` never completed when `DisposeAsync` cancelled the session during the reconnect backoff. A reader that reads `Events` to the end then waits forever.
@@ -13,7 +20,7 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - **No operator impact.** `MeetingSession` reads `Events` with a token. It cancels that token after it disposes the session. Only `tools/Kanal.Doctor` reads without a token.
 - **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
 - **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
-- **Open item.** The session still reports "Connection lost, reconnecting" after a deliberate `stop_recording`. A separate follow-up session and PR track this.
+- **Closed item.** The session reported "Connection lost, reconnecting" after a deliberate `stop_recording`. PR #288 fixed this. See "Gladia session does not reconnect after a deliberate stop" above.
 
 ---
 
