@@ -93,7 +93,7 @@ public class AsrBenchmarkReportTests
         Row[] rows =
         [
             R("whisper", "cpu", "-", "-", "-", "load_s", 1),
-            R("whisper", "cpu", "ascend", "mixed", "forced", "mer_pct", 31.25),
+            R("whisper", "cpu", "ascend", "mixed", "forced", "mer_pct", 31.26),
             R("whisper", "cpu", "ascend", "mixed", "auto", "mer_pct", 40.5),
             R("whisper", "cpu", "ascend", "mixed", "forced", "english_kept_pct", 88.2),
             R("whisper", "cpu", "ascend", "mixed", "auto", "english_kept_pct", 20),
