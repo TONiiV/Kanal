@@ -115,10 +115,10 @@ public class NemotronAsrProviderTests
     }
 
     [Theory]
-    [InlineData(new[] { "zh" })]
-    [InlineData(new[] { "ja" })]
-    [InlineData(new[] { "de" })]
-    [InlineData(new[] { "zh", "de", "pl" })]
+    [InlineData(new[] { "zh" }, "auto")]
+    [InlineData(new[] { "ja" }, "auto")]
+    [InlineData(new[] { "de" }, "auto")]
+    [InlineData(new[] { "zh", "de", "pl" }, "auto")]
     public async Task EveryRoomStartsTheStreamWithAutoLanguage(string[] room, string expected)
     {
         string? asked = null;
