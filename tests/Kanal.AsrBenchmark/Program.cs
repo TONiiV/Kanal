@@ -149,7 +149,7 @@ foreach (var provider in model.Cloud ? ["cloud"] : providers)
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
-                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [Corpus.RoomLanguage(clip.Lang)] : autoRoom, realtime: false, engine.PaddingSeconds, model.Cloud));
+                runs.Add(await RunAccuracyClipAsync(make, clip, room == "forced" ? [Corpus.RoomLanguage(clip.Lang)] : autoRoom, engine.PaddingSeconds, model));
             Score(model.Id, provider, threads, room, runs);
             Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
         }
@@ -298,6 +298,28 @@ void ScoreAscend(string model, string provider, int threads, string room, string
     foreach (var (run, score, numbers) in scored)
         clipRows.Add(new ClipRow(model, provider, room, Corpus.AscendSet, lang, run.Clip.Id, run.Clip.Reference, run.Text,
             score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
+}
+
+async Task<ClipRun> RunAccuracyClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, double padding, BenchModel model)
+{
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            var run = await RunClipAsync(make, clip, room, realtime: false, padding, model.Cloud).WaitAsync(model.Cloud ? TimeSpan.FromMinutes(2) : Timeout.InfiniteTimeSpan);
+            if (model.Cloud)
+                Console.WriteLine($"   {clip.Id}: {run.Text.Length} characters");
+            return run;
+        }
+        catch (Exception e) when (model.Cloud && e is HttpRequestException or TaskCanceledException or TimeoutException or IOException or System.Net.WebSockets.WebSocketException)
+        {
+            Console.WriteLine($"   {clip.Id}: attempt {attempt} failed: {e.GetType().Name}");
+            if (attempt < 3)
+                continue;
+            notes.Add($"{model.Id}: {clip.Id} failed three times ({e.GetType().Name}). The clip counts as an empty text.");
+            return new ClipRun(clip, "", [], 0, [], null, null, padding);
+        }
+    }
 }
 
 async Task ParityAsync(BenchModel model, List<Clip> meeting)
