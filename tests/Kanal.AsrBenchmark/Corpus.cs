@@ -577,6 +577,8 @@ internal static class Corpus
         return result;
     }
 
+    internal static Task<T> WithRetryAsync<T>(Func<Task<T>> action, TimeSpan? delay = null) => throw new NotImplementedException();
+
     private static async Task<string> GetStringWithRetryAsync(HttpClient http, string url)
     {
         for (var attempt = 1; ; attempt++)

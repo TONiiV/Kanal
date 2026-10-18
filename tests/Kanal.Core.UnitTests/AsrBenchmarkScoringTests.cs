@@ -178,4 +178,25 @@ public class AsrBenchmarkScoringTests
         Assert.Equal((1, 1), Scoring.EnglishKept("2000 bolts", "有 2000 个 bolts"));
         Assert.Equal((0, 0), Scoring.EnglishKept("我们需要测试", "我们需要测试 2000"));
     }
+
+    [Fact]
+    public void English_kept_leaves_out_fillers()
+    {
+        Assert.Equal((1, 1), Scoring.EnglishKept("chemistry", "um 我喜欢 uh chemistry hmm mm Erm"));
+        Assert.Equal((0, 0), Scoring.EnglishKept("", "um uh"));
+    }
+
+    [Fact]
+    public void English_kept_leaves_out_spelled_letters_but_keeps_a_lone_single_letter_word()
+    {
+        Assert.Equal((0, 0), Scoring.EnglishKept("ISM", "那个 i s m"));
+        Assert.Equal((1, 1), Scoring.EnglishKept("ISM information", "那个 i s m information"));
+        Assert.Equal((4, 4), Scoring.EnglishKept("I like a plan", "I like a plan"));
+    }
+
+    [Fact]
+    public void Mer_reads_traditional_characters_before_it_normalises_numbers()
+    {
+        Assert.Equal((0, 3), Scoring.MixedErrors("兩千次 pieces", "两千次 pieces", numbers: true));
+    }
 }

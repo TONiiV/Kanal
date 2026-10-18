@@ -144,6 +144,34 @@ public class AsrBenchmarkCorpusTests
         Assert.Empty(Corpus.PickAscend(rows, "en", 15));
     }
 
+    [Fact]
+    public async Task A_request_is_tried_again_after_a_network_error_or_a_timeout()
+    {
+        var calls = 0;
+        Assert.Equal(7, await Corpus.WithRetryAsync(
+            () => ++calls < 3 ? Task.FromException<int>(new HttpRequestException()) : Task.FromResult(7), TimeSpan.Zero));
+        Assert.Equal(3, calls);
+
+        calls = 0;
+        Assert.Equal(7, await Corpus.WithRetryAsync(
+            () => ++calls < 2 ? Task.FromException<int>(new TaskCanceledException()) : Task.FromResult(7), TimeSpan.Zero));
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task A_request_is_tried_four_times_and_other_errors_are_not_tried_again()
+    {
+        var calls = 0;
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            Corpus.WithRetryAsync(() => ++calls > 0 ? Task.FromException<int>(new HttpRequestException()) : Task.FromResult(0), TimeSpan.Zero));
+        Assert.Equal(4, calls);
+
+        calls = 0;
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            Corpus.WithRetryAsync(() => ++calls > 0 ? Task.FromException<int>(new InvalidDataException()) : Task.FromResult(0), TimeSpan.Zero));
+        Assert.Equal(1, calls);
+    }
+
     [Theory]
     [InlineData("mixed", "zh")]
     [InlineData("zh", "zh")]
