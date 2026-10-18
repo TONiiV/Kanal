@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace Kanal.AsrBenchmark;
 
 // ponytail: cardinals, decimals and percent only. Ordinals, dates, years read as pairs
-// ("twenty twenty-six") and digit-by-digit codes stay as words. A run like 十分 and a mix like 5万2千 stay wrong.
+// ("twenty twenty-six") and digit-by-digit codes stay as words. A run like 十分 and a mix like 5万2千 stay wrong. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得 stay text.
 // Upgrade path: a real ITN (NeMo, WeTextProcessing).
 internal static partial class Numbers
 {
@@ -69,7 +69,7 @@ internal static partial class Numbers
     };
 
     private static Regex Separator(string mark) =>
-        new($@"(?<=\d)[{mark}  ](?=\d{{3}}(?!\d))", RegexOptions.CultureInvariant);
+        new($@"(?<=\d)[{mark}\u00A0\u202F](?=\d{{3}}(?!\d))", RegexOptions.CultureInvariant);
 
     private static readonly Dictionary<string, string> Percent = new() { ["en"] = "percent", ["de"] = "prozent", ["pl"] = "procent" };
 
@@ -246,11 +246,12 @@ internal static partial class Numbers
     private static string Chinese(string text) =>
         ChineseNumber().Replace(
             ArabicUnit().Replace(text, m =>
-                ((long)Math.Round(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * ChineseUnit(m.Groups[2].Value[0])))
+                ((long)Math.Round(double.Parse(m.Groups[1].Value.Replace(",", ""), CultureInfo.InvariantCulture)
+                                  * m.Groups[2].Value.Aggregate(1.0, (product, unit) => product * ChineseUnit(unit))))
                 .ToString(CultureInfo.InvariantCulture)),
-            m => !m.Groups[1].Success && "万千百亿".Contains(m.Groups[2].Value[0])
+            m => m.Groups[1].Success
                 ? m.Value
-                : ChineseValue(m.Groups[2].Value) + (m.Groups[1].Success ? "%" : ""));
+                : ChineseValue(m.Groups[3].Value) + (m.Groups[2].Success ? "%" : ""));
 
     private static string ChineseValue(string run)
     {
@@ -276,7 +277,7 @@ internal static partial class Numbers
                 }
 
                 if (unit < 10_000)
-                    section += (digit == 0 && unit == 10 ? 1 : digit) * unit;
+                    section += (digit == 0 && (unit == 10 || section + total == 0) ? 1 : digit) * unit;
                 else if (unit == 10_000)
                     total += (section + digit == 0 ? 1 : section + digit) * unit;
                 else
@@ -325,9 +326,9 @@ internal static partial class Numbers
         return words;
     }
 
-    [GeneratedRegex(@"(\d+(?:\.\d+)?)([百千万亿])(?![零〇一二两三四五六七八九十百千万亿])")]
+    [GeneratedRegex(@"(?<![\d,.])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)([百千万亿]+)(?![零〇一二两三四五六七八九十百千万亿])")]
     private static partial Regex ArabicUnit();
 
-    [GeneratedRegex("(百分之)?([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九]+)?)")]
+    [GeneratedRegex("(万一|万万|千万(?=[不别要得]))|(百分之)?([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九]+)?)")]
     private static partial Regex ChineseNumber();
 }
