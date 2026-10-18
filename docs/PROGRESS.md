@@ -23,7 +23,7 @@ What changed in `tests/Kanal.AsrBenchmark`:
 - **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
   token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
   The report holds two values: the raw MER and the MER with number normalisation of both texts.
-  The table below shows the raw MER.
+  The table below shows both.
 - **English kept.** The rate of the English reference words that the hypothesis spells as the same
   Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
   and spelled letters ("i s m"). The rate applies to `mixed` clips only.
