@@ -195,6 +195,13 @@ public class AsrBenchmarkScoringTests
     }
 
     [Fact]
+    public void Mer_splits_a_word_glued_to_Chinese_characters_before_it_normalises_numbers()
+    {
+        Assert.Equal((0, 4), Scoring.MixedErrors("我要five件", "我要5件", numbers: true));
+        Assert.Equal((0, 4), Scoring.MixedErrors("我要 five 件", "我要5件", numbers: true));
+    }
+
+    [Fact]
     public void Mer_reads_traditional_characters_before_it_normalises_numbers()
     {
         Assert.Equal((0, 3), Scoring.MixedErrors("兩千次 pieces", "两千次 pieces", numbers: true));
