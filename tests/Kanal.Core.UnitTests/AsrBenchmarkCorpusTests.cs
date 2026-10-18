@@ -100,9 +100,9 @@ public class AsrBenchmarkCorpusTests
         Assert.Equal([old[0], old[1], old[3]], Corpus.KeepOtherSets(old, ["commonvoice"]));
     }
 
-    private static (string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src) AscendRow(
+    private static AscendClip AscendRow(
         string id, string language = "mixed", double seconds = 5, string text = "你好 hello", long session = 1, long speaker = 1) =>
-        (id, language, seconds, text, session, speaker, "s");
+        new(id, language, seconds, text, session, speaker, "s");
 
     [Fact]
     public void Ascend_keeps_clips_of_the_language_that_last_3_to_20_seconds_and_have_a_clean_reference()

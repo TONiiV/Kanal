@@ -53,8 +53,51 @@ if (args.FirstOrDefault() == "fetch")
     return 0;
 }
 
+if (args.FirstOrDefault() == "rescore")
+{
+    var json = new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+    var saved = args.Skip(1).TakeWhile(a => !a.StartsWith("--"))
+        .Select(f => JsonSerializer.Deserialize<SavedReport>(File.ReadAllText(f), json)!).ToList();
+    var savedRows = saved.SelectMany(r => r.Rows).ToList();
+    var rescoredClips = saved.SelectMany(r => r.Clips).Where(c => c.Set != Corpus.AscendSet).ToList();
+    var rescoredRows = savedRows.Where(r => r.Set != Corpus.AscendSet).ToList();
+    foreach (var group in saved.SelectMany(r => r.Clips).Where(c => c.Set == Corpus.AscendSet).GroupBy(c => (c.Model, c.Room, c.Language)))
+    {
+        var scored = ScoreAscendClips(group);
+        rescoredClips.AddRange(scored);
+        var template = savedRows.First(r => r.Model == group.Key.Model && r.Metric == "load_s");
+        rescoredRows.AddRange(AscendMetrics(group.Key.Language, scored).Select(m => template with
+        {
+            Streams = 1, Set = Corpus.AscendSet, Language = group.Key.Language, Room = group.Key.Room,
+            Metric = m.Metric, Value = Math.Round(m.Value, 4), Unit = m.Unit,
+        }));
+    }
+
+    var notesSaved = saved.SelectMany(r => r.Notes).Distinct().ToList();
+    var clipsOnDisk = Corpus.Load(data).Where(c => rescoredClips.Any(r => r.Set == c.Set && r.Id == c.Id)).ToList();
+    var rescoredAt = DateTime.Now;
+    var rescoredPath = Path.GetFullPath(Path.Combine(Arg("--out") ?? ".", $"kanal-asr-benchmark-rescored-{rescoredAt:yyyyMMdd-HHmm}"));
+    await File.WriteAllTextAsync(rescoredPath + ".json", JsonSerializer.Serialize(
+        new { generated = rescoredAt, saved[0].Machine, notes = notesSaved, rows = rescoredRows, clips = rescoredClips }, json));
+    await File.WriteAllTextAsync(rescoredPath + ".md", Report.Build(rescoredAt, saved[0].Machine, clipsOnDisk, rescoredRows, rescoredClips, notesSaved));
+    Console.WriteLine($"Report: {rescoredPath}.md");
+    return 0;
+}
+
 var perGroup = int.Parse(Arg("--clips") ?? "1000");
 var runSets = Arg("--sets")?.Split(',');
+if (runSets?.Except(Corpus.Sets.Keys).ToList() is { Count: > 0 } unknownRunSets)
+{
+    Console.Error.WriteLine($"Unknown set: {string.Join(", ", unknownRunSets)}. Known sets: {string.Join(", ", Corpus.Sets.Keys)}.");
+    return 2;
+}
+
 var clips = Corpus.Load(data)
     .Where(c => runSets?.Contains(c.Set) ?? true)
     .GroupBy(c => (c.Set, c.Lang))
@@ -238,7 +281,11 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
         var (set, lang) = group.Key;
         if (set == Corpus.AscendSet)
         {
-            ScoreAscend(model, provider, threads, room, lang, group.ToList());
+            var ascend = ScoreAscendClips(group.Select(r => new ClipRow(model, provider, room, set, lang, r.Clip.Id, r.Clip.Reference,
+                r.Text, 0, 0, 0, 0, string.Join(",", r.Langs), Math.Round(r.Seconds / r.FedSeconds, 4))));
+            clipRows.AddRange(ascend);
+            foreach (var (metric, value, unit) in AscendMetrics(lang, ascend))
+                Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
             continue;
         }
 
@@ -246,12 +293,12 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             Numbers: Scoring.Errors(lang, r.Text, r.Clip.Reference, numbers: true))).ToList();
         var decode = group.SelectMany(r => r.DecodeMs).ToList();
         void A(string metric, double value, string unit) => Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
-        A(lang == "zh" ? "cer_pct" : "wer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.ReferenceLength)), "%");
-        A(lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct", 100.0 * scored.Sum(s => s.Numbers.Errors) / Math.Max(1, scored.Sum(s => s.Numbers.ReferenceLength)), "%");
+        A(lang == "zh" ? "cer_pct" : "wer_pct", Pct(scored.Sum(s => s.Score.Errors), scored.Sum(s => s.Score.ReferenceLength)), "%");
+        A(lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct", Pct(scored.Sum(s => s.Numbers.Errors), scored.Sum(s => s.Numbers.ReferenceLength)), "%");
         var plain = scored.Where(s => !Scoring.HasDigit(s.Run.Clip.Reference)).ToList();
         if (plain.Count > 0)
         {
-            A(lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct", 100.0 * plain.Sum(s => s.Score.Errors) / Math.Max(1, plain.Sum(s => s.Score.ReferenceLength)), "%");
+            A(lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct", Pct(plain.Sum(s => s.Score.Errors), plain.Sum(s => s.Score.ReferenceLength)), "%");
             A("clips_no_digit", plain.Count, "n");
         }
 
@@ -279,39 +326,42 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
     }
 }
 
-void ScoreAscend(string model, string provider, int threads, string room, string lang, List<ClipRun> runs)
-{
-    var scored = runs.Select(r => (Run: r, Score: Scoring.MixedErrors(r.Text, r.Clip.Reference),
-        Numbers: Scoring.MixedErrors(r.Text, r.Clip.Reference, numbers: true))).ToList();
-    void A(string metric, double value, string unit) => Add(model, provider, threads, 1, Corpus.AscendSet, lang, room, metric, value, unit);
-    A("mer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.ReferenceLength)), "%");
-    A("mer_numbers_pct", 100.0 * scored.Sum(s => s.Numbers.Errors) / Math.Max(1, scored.Sum(s => s.Numbers.ReferenceLength)), "%");
-    A("empty_clips", runs.Count(r => r.Text.Length == 0), "n");
-    A("clips", runs.Count, "n");
-    if (lang == "mixed")
-    {
-        var kept = runs.Select(r => Scoring.EnglishKept(r.Text, r.Clip.Reference)).ToList();
-        A("english_words", kept.Sum(k => k.Total), "n");
-        A("english_kept_pct", 100.0 * kept.Sum(k => k.Kept) / Math.Max(1, kept.Sum(k => k.Total)), "%");
-    }
+static double Pct(double part, double whole) => 100.0 * part / Math.Max(1, whole);
 
-    foreach (var (run, score, numbers) in scored)
-        clipRows.Add(new ClipRow(model, provider, room, Corpus.AscendSet, lang, run.Clip.Id, run.Clip.Reference, run.Text,
-            score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
+static List<ClipRow> ScoreAscendClips(IEnumerable<ClipRow> clips) =>
+    clips.Select(c =>
+    {
+        var plain = Scoring.MixedErrors(c.Hypothesis, c.Reference);
+        var numbers = Scoring.MixedErrors(c.Hypothesis, c.Reference, numbers: true);
+        return c with { Errors = plain.Errors, Length = plain.ReferenceLength, NumbersErrors = numbers.Errors, NumbersLength = numbers.ReferenceLength };
+    }).ToList();
+
+static IEnumerable<(string Metric, double Value, string Unit)> AscendMetrics(string lang, IReadOnlyList<ClipRow> clips)
+{
+    yield return ("mer_pct", Pct(clips.Sum(c => c.Errors), clips.Sum(c => c.Length)), "%");
+    yield return ("mer_numbers_pct", Pct(clips.Sum(c => c.NumbersErrors), clips.Sum(c => c.NumbersLength)), "%");
+    yield return ("empty_clips", clips.Count(c => c.Hypothesis.Length == 0), "n");
+    yield return ("clips", clips.Count, "n");
+    if (lang != "mixed")
+        yield break;
+    var kept = clips.Select(c => Scoring.EnglishKept(c.Hypothesis, c.Reference)).ToList();
+    yield return ("english_words", kept.Sum(k => k.Total), "n");
+    yield return ("english_kept_pct", Pct(kept.Sum(k => k.Kept), kept.Sum(k => k.Total)), "%");
 }
 
 async Task<ClipRun> RunAccuracyClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, double padding, BenchModel model)
 {
     for (var attempt = 1; ; attempt++)
     {
+        using var timeout = new CancellationTokenSource(model.Cloud ? TimeSpan.FromMinutes(2) : Timeout.InfiniteTimeSpan);
         try
         {
-            var run = await RunClipAsync(make, clip, room, realtime: false, padding, model.Cloud).WaitAsync(model.Cloud ? TimeSpan.FromMinutes(2) : Timeout.InfiniteTimeSpan);
+            var run = await RunClipAsync(make, clip, room, realtime: false, padding, model.Cloud, timeout.Token);
             if (model.Cloud)
                 Console.WriteLine($"   {clip.Id}: {run.Text.Length} characters");
             return run;
         }
-        catch (Exception e) when (model.Cloud && e is HttpRequestException or TaskCanceledException or TimeoutException or IOException or System.Net.WebSockets.WebSocketException)
+        catch (Exception e) when (model.Cloud && e is HttpRequestException or OperationCanceledException or IOException or System.Net.WebSockets.WebSocketException)
         {
             Console.WriteLine($"   {clip.Id}: attempt {attempt} failed: {e.GetType().Name}");
             if (attempt < 3)
@@ -366,11 +416,12 @@ async Task StreamsAsync(BenchModel model, string provider, int threads, int n, F
     Console.WriteLine($"   {n} streams: mean RTF {rtf.Average():F3}, p95 {Scoring.Percentile(rtf, 0.95):F3}");
 }
 
-static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime, double padding = 0, bool paced = false)
+static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime, double padding = 0, bool paced = false,
+    CancellationToken ct = default)
 {
     const int frame = Corpus.Rate / 50;
     var decodeMs = new List<double>();
-    var session = await make(decodeMs).StartAsync(new AsrSessionOptions(Corpus.Rate, room), CancellationToken.None);
+    var session = await make(decodeMs).StartAsync(new AsrSessionOptions(Corpus.Rate, room), ct);
     var clock = Stopwatch.StartNew();
     var events = new List<(double At, AsrEvent.Transcript Event)>();
     var reader = Task.Run(async () =>
@@ -387,26 +438,32 @@ static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, C
     var end = Scoring.SpeechEnd(samples, frame);
     var total = samples.Length + (int)((realtime ? 4 : paced ? padding : 0) * Corpus.Rate);
     double onsetAt = 0, endAt = 0;
-    for (var i = 0; i < total; i += frame)
+    try
     {
-        if (realtime || paced)
+        for (var i = 0; i < total; i += frame)
         {
-            var wait = TimeSpan.FromSeconds(i / (double)Corpus.Rate) - clock.Elapsed;
-            if (wait > TimeSpan.Zero)
-                await Task.Delay(wait);
-        }
+            if (realtime || paced)
+            {
+                var wait = TimeSpan.FromSeconds(i / (double)Corpus.Rate) - clock.Elapsed;
+                if (wait > TimeSpan.Zero)
+                    await Task.Delay(wait, ct);
+            }
 
-        if (i == onset)
-            onsetAt = clock.Elapsed.TotalSeconds;
-        var chunk = i < samples.Length
-            ? PcmBytes(samples.AsSpan(i, Math.Min(frame, samples.Length - i)))
-            : new byte[frame * 2];
-        await session.PushAudioAsync(chunk);
-        if (i + frame == end || (i < end && i + frame > end))
-            endAt = clock.Elapsed.TotalSeconds;
+            if (i == onset)
+                onsetAt = clock.Elapsed.TotalSeconds;
+            var chunk = i < samples.Length
+                ? PcmBytes(samples.AsSpan(i, Math.Min(frame, samples.Length - i)))
+                : new byte[frame * 2];
+            await session.PushAudioAsync(chunk, ct);
+            if (i + frame == end || (i < end && i + frame > end))
+                endAt = clock.Elapsed.TotalSeconds;
+        }
+    }
+    finally
+    {
+        await session.DisposeAsync();
     }
 
-    await session.DisposeAsync();
     await reader;
     var seconds = clock.Elapsed.TotalSeconds;
     var finals = events.Where(e => e.Event.IsFinal).ToList();
@@ -474,6 +531,9 @@ internal sealed record ClipRun(
 {
     public double FedSeconds => Clip.Seconds + PaddingSeconds;
 }
+
+[ExcludeFromCodeCoverage]
+internal sealed record SavedReport(DateTime Generated, string Machine, List<string> Notes, List<Row> Rows, List<ClipRow> Clips);
 
 [ExcludeFromCodeCoverage]
 internal sealed record Row(

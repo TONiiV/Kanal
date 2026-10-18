@@ -20,6 +20,9 @@ internal sealed record Clip(string Set, string Lang, string Id, string Reference
 }
 
 [ExcludeFromCodeCoverage]
+internal sealed record AscendClip(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src);
+
+[ExcludeFromCodeCoverage]
 internal static class Corpus
 {
     public const int Rate = 16_000;
@@ -508,8 +511,8 @@ internal static class Corpus
 
     internal static string RoomLanguage(string lang) => lang == "mixed" ? "zh" : lang;
 
-    internal static List<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> PickAscend(
-        IReadOnlyList<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> rows,
+    internal static List<AscendClip> PickAscend(
+        IReadOnlyList<AscendClip> rows,
         string language, int count)
     {
         var groups = rows
@@ -534,29 +537,31 @@ internal static class Corpus
             .ToList();
     }
 
-    // ASCEND (Lovenia et al. 2022), CC-BY-SA-4.0, through CAiRE/ASCEND. The test split is 78 MB; the tool downloads about 90 clips.
+    // ASCEND (Lovenia et al. 2022), CC-BY-SA-4.0, through CAiRE/ASCEND.
     private const string AscendRevision = "737e9800ae31be9932ba8464c80366559bd28424";
 
-    private static readonly (string Language, int Count)[] AscendGroups = [("mixed", 60), ("zh", 15), ("en", 15)];
+    internal static readonly (string Language, int Count)[] AscendGroups = [("mixed", 60), ("zh", 15), ("en", 15)];
 
     private static async Task<List<string>> FetchAscendAsync(HttpClient http, string data, int count)
     {
-        var all = new List<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)>();
-        for (var offset = 0; ; offset += 100)
+        var all = new List<AscendClip>();
+        var total = 1;
+        for (var offset = 0; offset < total; offset += 100)
         {
-            using var page = JsonDocument.Parse(await GetStringWithRetryAsync(http,
-                $"https://datasets-server.huggingface.co/rows?dataset=CAiRE/ASCEND&config=main&split=test&offset={offset}&length=100"));
+            using var page = JsonDocument.Parse(await WithRetryAsync(() => GetRowsPageAsync(http,
+                $"https://datasets-server.huggingface.co/rows?dataset=CAiRE/ASCEND&config=main&split=test&offset={offset}&length=100")));
+            total = page.RootElement.GetProperty("num_rows_total").GetInt32();
             var rows = page.RootElement.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("row")).ToList();
-            all.AddRange(rows.Select(r => (r.GetProperty("id").GetString()!, r.GetProperty("language").GetString()!,
+            all.AddRange(rows.Select(r => new AscendClip(r.GetProperty("id").GetString()!, r.GetProperty("language").GetString()!,
                 r.GetProperty("duration").GetDouble(), r.GetProperty("transcription").GetString()!,
                 r.GetProperty("session_id").GetInt64(), r.GetProperty("original_speaker_id").GetInt64(),
                 r.GetProperty("audio")[0].GetProperty("src").GetString()!)));
-            if (rows.Count < 100)
-                break;
         }
 
         if (all.Count == 0 || !all[0].Src.Contains(AscendRevision))
             throw new InvalidDataException($"ASCEND: the dataset server no longer serves revision {AscendRevision}.");
+        if (total != AscendTestRows || all.Count != AscendTestRows)
+            throw new InvalidDataException($"ASCEND: the test split has {total} rows and {all.Count} were read. Expected {AscendTestRows}.");
 
         var result = new List<string>();
         foreach (var (language, quota) in AscendGroups)
@@ -567,7 +572,7 @@ internal static class Corpus
             foreach (var r in picked)
             {
                 var id = $"s{r.Session}-p{r.Speaker}-{r.Id}";
-                await File.WriteAllBytesAsync(Path.Combine(folder, id + ".wav"), await http.GetByteArrayAsync(r.Src));
+                await File.WriteAllBytesAsync(Path.Combine(folder, id + ".wav"), await WithRetryAsync(() => http.GetByteArrayAsync(r.Src)));
                 result.Add(string.Join('\t', AscendSet, language, id, $"{AscendSet}/{language}/{id}.wav", Regex.Replace(r.Text, @"\s+", " ").Trim()));
             }
 
@@ -577,19 +582,28 @@ internal static class Corpus
         return result;
     }
 
-    internal static Task<T> WithRetryAsync<T>(Func<Task<T>> action, TimeSpan? delay = null) => throw new NotImplementedException();
+    private const int AscendTestRows = 1315;
 
-    private static async Task<string> GetStringWithRetryAsync(HttpClient http, string url)
+    private static async Task<string> GetRowsPageAsync(HttpClient http, string url)
+    {
+        using var response = await http.GetAsync(url);
+        if ((int)response.StatusCode == 429 && response.Headers.RetryAfter?.Delta is { } wait)
+            await Task.Delay(wait);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    internal static async Task<T> WithRetryAsync<T>(Func<Task<T>> action, TimeSpan? delay = null)
     {
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                return await http.GetStringAsync(url);
+                return await action();
             }
-            catch (HttpRequestException) when (attempt < 4)
+            catch (Exception e) when (attempt < 4 && e is HttpRequestException or TaskCanceledException)
             {
-                await Task.Delay(TimeSpan.FromSeconds(3 * attempt));
+                await Task.Delay((delay ?? TimeSpan.FromSeconds(3)) * attempt);
             }
         }
     }
