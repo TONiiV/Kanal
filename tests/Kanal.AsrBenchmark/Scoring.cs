@@ -46,6 +46,15 @@ internal static partial class Scoring
         return Codes(source).Count(c => Regex.IsMatch(output, LoosePattern(c), RegexOptions.IgnoreCase));
     }
 
+    // sherpa-onnx 1.13.8 keeps Qwen3's "language X<asr_text>" header in the auto-mode text of the 1.7B community export.
+    public static string StripAsrHeader(string text)
+    {
+        var header = text.IndexOf(AsrTextTag, StringComparison.Ordinal);
+        return (header < 0 ? text : text[(header + AsrTextTag.Length)..]).Trim();
+    }
+
+    private const string AsrTextTag = "<asr_text>";
+
     public static bool HasDigit(string text) => Compat(text).Any(char.IsDigit);
 
     public static double Percentile(IReadOnlyList<double> values, double p)

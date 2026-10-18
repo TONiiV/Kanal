@@ -192,9 +192,7 @@ internal sealed class OfflineEngine : Engine
         stream.AcceptWaveform(Corpus.Rate, samples);
         _recognizer.Decode(stream);
         var text = stream.Result.Text;
-        // sherpa-onnx 1.13.8 keeps Qwen3's "language X<asr_text>" header in the auto-mode text of the 1.7B community export.
-        var header = text.IndexOf("<asr_text>", StringComparison.Ordinal);
-        return (header < 0 ? text : text[(header + "<asr_text>".Length)..]).Trim();
+        return Scoring.StripAsrHeader(text);
     }
 
     [ExcludeFromCodeCoverage]
@@ -317,7 +315,6 @@ internal sealed class NemotronEngine : Engine
         public void Dispose() => _stream.Dispose();
     }
 }
-
 
 // The product sends no room languages to Gladia (GladiaAsrProvider.BuildInitBody), so every room is the auto room.
 [ExcludeFromCodeCoverage]

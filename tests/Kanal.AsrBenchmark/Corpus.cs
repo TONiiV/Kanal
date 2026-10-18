@@ -23,6 +23,10 @@ internal static class Corpus
 {
     public const int Rate = 16_000;
 
+    private const double MinClipSeconds = 3;
+
+    private const double MaxClipSeconds = 20;
+
     public static readonly string[] Languages = ["zh", "de", "pl", "en"];
 
     // FLEURS (Conneau et al. 2022), CC-BY-4.0. Each pinned revision keeps the clip choice the same across machines.
@@ -124,7 +128,7 @@ internal static class Corpus
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         var manifest = Path.Combine(data, "clips.tsv");
         var old = File.Exists(manifest) ? File.ReadAllLines(manifest).ToList() : [];
-        var rows = old.Where(l => Sets.ContainsKey(SetOf(l)) && !sets.Contains(SetOf(l))).ToList();
+        var rows = KeepOtherSets(old, sets);
         foreach (var set in sets)
         {
             try
@@ -142,6 +146,9 @@ internal static class Corpus
         Console.WriteLine($"{rows.Count} clips listed in {manifest}");
     }
 
+    internal static List<string> KeepOtherSets(IEnumerable<string> old, IReadOnlyCollection<string> fetched) =>
+        old.Where(l => Sets.ContainsKey(SetOf(l)) && !fetched.Contains(SetOf(l))).ToList();
+
     private static string SetOf(string row) => row.Split('\t')[0];
 
     private static async Task<List<string>> FetchFleursAsync(HttpClient http, string data, int count)
@@ -155,7 +162,7 @@ internal static class Corpus
                 .Select(l => l.Split('\t'))
                 .GroupBy(f => f[1])
                 .ToDictionary(g => g.Key, g => g.First()[2]);
-            rows.AddRange(await StreamTarAsync(http, $"{root}/audio/test.tar.gz", "fleurs", lang, data, count, transcripts, 0));
+            rows.AddRange(await StreamTarAsync(http, $"{root}/audio/test.tar.gz", "fleurs", lang, data, count, transcripts, limitLength: false));
         }
 
         return rows;
@@ -176,7 +183,7 @@ internal static class Corpus
                 .Skip(1)
                 .Select(l => l.Split('\t'))
                 .ToDictionary(f => f[0] + ".wav", f => f[1]);
-            rows.AddRange(await StreamTarAsync(http, $"{root}/test/test_part_0.tar.gz", "voxpopuli", lang, data, count, transcripts, 20));
+            rows.AddRange(await StreamTarAsync(http, $"{root}/test/test_part_0.tar.gz", "voxpopuli", lang, data, count, transcripts, limitLength: true));
         }
 
         return rows;
@@ -184,7 +191,7 @@ internal static class Corpus
 
     // A test archive is about 0.5 GB; reading it as a stream stops after the first clips.
     private static async Task<List<string>> StreamTarAsync(HttpClient http, string url, string set, string lang, string data,
-        int count, Dictionary<string, string> transcripts, double maxSeconds)
+        int count, Dictionary<string, string> transcripts, bool limitLength)
     {
         var folder = Path.Combine(data, set, lang);
         Directory.CreateDirectory(folder);
@@ -203,7 +210,7 @@ internal static class Corpus
             await using (var file = File.Create(path))
                 await entry.DataStream.CopyToAsync(file);
             var seconds = Read(path).Length / (double)Rate;
-            if (maxSeconds > 0 && seconds is < 3 or > 20)
+            if (limitLength && seconds is < MinClipSeconds or > MaxClipSeconds)
             {
                 File.Delete(path);
                 continue;
@@ -331,12 +338,7 @@ internal static class Corpus
         if (segments.Count == 0 || !segments[0].Src.Contains(AmiRevision))
             throw new InvalidDataException($"AMI: the dataset server no longer serves revision {AmiRevision}.");
 
-        var picked = segments
-            .Where(s => s.End - s.Begin is >= 3 and <= 20)
-            .Where(s => !segments.Any(o => o.Id != s.Id && o.Begin < s.End && s.Begin < o.End))
-            .OrderBy(s => s.Begin)
-            .Take(count)
-            .ToList();
+        var picked = PickAmi(segments, count);
         var folder = Path.Combine(data, "ami", "en");
         Directory.CreateDirectory(folder);
         var result = new List<string>();
@@ -349,6 +351,15 @@ internal static class Corpus
         Console.WriteLine($"ami en: {result.Count} clips from {AmiMeeting} ({segments.Count} segments, {picked.Count} without overlap)");
         return result;
     }
+
+    internal static List<(string Id, double Begin, double End, string Text, string Src)> PickAmi(
+        IReadOnlyList<(string Id, double Begin, double End, string Text, string Src)> segments, int count) =>
+        segments
+            .Where(s => s.End - s.Begin is >= MinClipSeconds and <= MaxClipSeconds)
+            .Where(s => !segments.Any(o => o.Id != s.Id && o.Begin < s.End && s.Begin < o.End))
+            .OrderBy(s => s.Begin)
+            .Take(count)
+            .ToList();
 
     // AISHELL-4 (Fu et al. 2021), CC-BY-SA-4.0 (openslr.org/111). Channel 0 of the 8-channel far-field array.
     private const string Aishell4Revision = "aada72727856313b19d4a030383c426364931dbf";
@@ -364,12 +375,7 @@ internal static class Corpus
         foreach (var session in Aishell4Sessions)
         {
             var intervals = TextGrid(await http.GetStringAsync($"{root}/TextGrid/{session}.TextGrid"));
-            var picked = intervals
-                .Where(i => Clean(i.Text).Length > 0 && i.End - i.Begin is >= 3 and <= 20)
-                .Where(i => !intervals.Any(o => o.Tier != i.Tier && o.Text.Trim().Length > 0 && o.Begin < i.End && i.Begin < o.End))
-                .OrderBy(i => i.Begin)
-                .Take((count + Aishell4Sessions.Length - 1) / Aishell4Sessions.Length)
-                .ToList();
+            var picked = PickAishell4(intervals, (count + Aishell4Sessions.Length - 1) / Aishell4Sessions.Length);
 
             // ponytail: 160 kB per second of 8-channel FLAC is above the rate of the test sessions; the length check below catches a shortfall.
             var bytes = (long)((picked[^1].End + 10) * 160_000);
@@ -487,9 +493,18 @@ internal static class Corpus
         return rows;
     }
 
-    private static string Clean(string text) => Regex.Replace(text, "<[^>]*>", "").Trim();
+    internal static List<(int Tier, double Begin, double End, string Text)> PickAishell4(
+        IReadOnlyList<(int Tier, double Begin, double End, string Text)> intervals, int count) =>
+        intervals
+            .Where(i => Clean(i.Text).Length > 0 && i.End - i.Begin is >= MinClipSeconds and <= MaxClipSeconds)
+            .Where(i => !intervals.Any(o => o.Tier != i.Tier && o.Text.Trim().Length > 0 && o.Begin < i.End && i.Begin < o.End))
+            .OrderBy(i => i.Begin)
+            .Take(count)
+            .ToList();
 
-    private static List<(int Tier, double Begin, double End, string Text)> TextGrid(string grid)
+    internal static string Clean(string text) => Regex.Replace(text, "<[^>]*>", "").Trim();
+
+    internal static List<(int Tier, double Begin, double End, string Text)> TextGrid(string grid)
     {
         var result = new List<(int, double, double, string)>();
         var tier = 0;
