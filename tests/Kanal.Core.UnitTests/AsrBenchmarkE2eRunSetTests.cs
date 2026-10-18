@@ -196,4 +196,55 @@ public class AsrBenchmarkE2eRunSetTests
         Assert.Contains("## Transcripts and labels", report);
         Assert.Contains("| route-a | 1/2 |", report);
     }
+
+    [Fact]
+    public void The_chrF_split_by_finals_averages_the_clips_with_one_final_and_with_several()
+    {
+        E2eRun[] runs =
+        [
+            Run("a", "de-01-lily", langs: ["de", "de"]),
+            Run("a", "de-02-lily", translations: new(), langs: ["de"]),
+            Run("a", "de-03-lily", langs: ["de"]),
+            Run("b", "de-01-lily", langs: ["de"]),
+        ];
+
+        var rows = E2e.FinalsSplit(runs);
+
+        Assert.Equal(3, rows.Count);
+        var one = rows.Single(r => r is { Route: "a", Several: false });
+        Assert.Equal(2, one.Clips);
+        Assert.Equal(50, one.ChrF, 6);
+        var several = rows.Single(r => r is { Route: "a", Several: true });
+        Assert.Equal(1, several.Clips);
+        Assert.Equal(100, several.ChrF, 6);
+        Assert.Equal(100, rows.Single(r => r.Route == "b").ChrF, 6);
+    }
+
+    [Fact]
+    public void A_clip_of_the_only_list_without_a_fresh_run_is_named()
+    {
+        E2eRun[] fresh = [Run("c", "de-01-lily"), Run("c", "de-02-lily", "", new(), null)];
+
+        Assert.Equal(["de-03-lily"], E2e.NotRerun(["de-01-lily", "de-02-lily", "de-03-lily"], fresh));
+    }
+
+    [Fact]
+    public void The_report_shows_repeats_inside_a_run_and_the_chrF_split_by_finals()
+    {
+        E2eRun[] runs =
+        [
+            Run("route-a", "de-01-lily") with { Attempts = 2 },
+            Run("route-a", "de-02-lily", langs: ["de", "de"]),
+        ];
+
+        var report = E2eReport.Build(new DateTime(2026, 10, 18), "machine", runs, []);
+
+        var row = report.Split('
+').Select(l => l.TrimEnd()).Single(l => l.StartsWith("| route-a | 2/2 |", StringComparison.Ordinal));
+        Assert.EndsWith("| 1 |", row);
+        Assert.Contains("## chrF by number of finals", report);
+        Assert.Contains("| route-a | 1 final | 1 |", report);
+        Assert.Contains("| route-a | several finals | 1 |", report);
+        Assert.Contains("| route-a | de-01-lily | no | 2 |", report);
+    }
 }
