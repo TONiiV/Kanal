@@ -95,8 +95,8 @@ internal static class E2eReport
         md.AppendLine().AppendLine("## Transcripts and labels").AppendLine()
             .AppendLine("Complete: clips where all three targets have text. A clip with a missing target scores chrF 0 for it and has no latency. Label correct: share of finals that carry the language of the clip. Other load: mean and maximum of the logical CPUs that other processes used during a clip.")
             .AppendLine()
-            .AppendLine("| Route | Complete clips | Finals | Finals per clip | Label correct % | Mean transcript characters | Mean transcript words (de, pl, en) | Other load mean/max, clips measured |")
-            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|");
+            .AppendLine("| Route | Complete clips | Finals | Finals per clip | Label correct % | Mean transcript characters | Mean transcript words (de, pl, en) | Other load mean/max, clips measured | Clips repeated inside the run |")
+            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var route in routes)
         {
             var set = runs.Where(r => r.Route == route).ToList();
@@ -104,8 +104,16 @@ internal static class E2eReport
             var length = E2e.TranscriptLength(set);
             var load = E2e.OtherLoad(set);
             md.AppendLine($"| {route} | {set.Count(E2e.IsComplete)}/{set.Count} | {labels.Finals} | {labels.PerClip:F2} | {labels.CorrectPct:F1} | {length.Characters:F1} | {length.Words:F1} | " +
-                          (load.N == 0 ? "–" : $"{load.Mean:F2}/{load.Max:F2}, {load.N}") + " |");
+                          (load.N == 0 ? "–" : $"{load.Mean:F2}/{load.Max:F2}, {load.N}") + $" | {set.Count(x => x.Attempts > 1)} |");
         }
+
+        md.AppendLine().AppendLine("## chrF by number of finals").AppendLine()
+            .AppendLine("A clip belongs to the group of its own route: one final, or several finals.")
+            .AppendLine()
+            .AppendLine("| Route | Finals | Clips | chrF |")
+            .AppendLine("|---|---|---:|---:|");
+        foreach (var row in E2e.FinalsSplit(runs))
+            md.AppendLine($"| {row.Route} | {(row.Several ? "several finals" : "1 final")} | {row.Clips} | {row.ChrF:F1} |");
 
         if (notes.Count > 0)
         {
@@ -115,11 +123,11 @@ internal static class E2eReport
         }
 
         md.AppendLine().AppendLine("## Clips").AppendLine()
-            .AppendLine("| Route | Clip | Re-run | Transcript | Source language | Target | Translation | chrF | Latency s |")
-            .AppendLine("|---|---|---|---|---|---|---|---:|---:|");
+            .AppendLine("| Route | Clip | Re-run | Attempts | Transcript | Source language | Target | Translation | chrF | Latency s |")
+            .AppendLine("|---|---|---|---|---|---|---|---|---:|---:|");
         foreach (var run in runs.OrderBy(r => r.Route).ThenBy(r => r.Clip.Id, StringComparer.Ordinal))
         foreach (var pair in E2e.Pairs(run))
-            md.AppendLine($"| {run.Route} | {run.Clip.Id} | {(run.Rerun ? "yes" : "no")} | {Cell(run.Transcript)} | {string.Join(",", run.SrcLangs)} | {pair.Target} | {Cell(run.Translations.GetValueOrDefault(pair.Target, ""))} | {pair.ChrF:F1} | {(run.LatencySeconds is { } s ? Seconds(s) : "–")} |");
+            md.AppendLine($"| {run.Route} | {run.Clip.Id} | {(run.Rerun ? "yes" : "no")} | {run.Attempts} | {Cell(run.Transcript)} | {string.Join(",", run.SrcLangs)} | {pair.Target} | {Cell(run.Translations.GetValueOrDefault(pair.Target, ""))} | {pair.ChrF:F1} | {(run.LatencySeconds is { } s ? Seconds(s) : "–")} |");
 
         return md.ToString();
     }

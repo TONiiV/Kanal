@@ -35,7 +35,7 @@ internal static class E2eRunner
 
     private sealed record RunDto(string Route, string ClipId, string Transcript, string[] SrcLangs,
         Dictionary<string, string> Translations, double? LatencySeconds, double? AsrSeconds,
-        double? OtherLoad = null, bool Rerun = false, DateTime? RanAt = null, string? Machine = null);
+        double? OtherLoad = null, bool Rerun = false, DateTime? RanAt = null, string? Machine = null, int Attempts = 1);
 
     private sealed record RouteFile(string Machine, List<string> Notes, List<RunDto> Runs);
 
@@ -72,7 +72,9 @@ internal static class E2eRunner
                 notes.Add(o.Note);
             await Task.Delay(TimeSpan.FromSeconds(7));
             var start = await monitor.WaitQuietAsync($"route {route}");
-            notes.Add($"Other load when the route started: {start:F2} logical CPUs of {Environment.ProcessorCount} (limit to run a clip: {LoadMonitor.QuietBelow:F1}). Each clip waits for this limit, and it runs again if the load passes the limit during the clip.");
+            notes.Add($"Other load when the route started: {start:F2} logical CPUs of {Environment.ProcessorCount} (limit to run a clip: {LoadMonitor.QuietBelow:F1}). Each clip waits for this limit. " + (route == "gladia"
+                ? "This route never runs a clip again, because each run costs money."
+                : $"The route runs a clip again if the load passes the limit during the clip. After {MaxAttempts} attempts, the last run stays and is marked."));
             List<E2eRun> runs;
             switch (route)
             {
@@ -111,7 +113,9 @@ internal static class E2eRunner
                 var earlier = Read(path);
                 var merged = E2e.Merge(earlier.Runs, runs);
                 notes.InsertRange(0, earlier.Notes);
-                notes.Add($"Clips {string.Join(", ", o.Only)} ({o.Only.Count} clips) ran again, and the new runs replace the earlier ones and carry the re-run mark."
+                var absent = E2e.NotRerun(o.Only, runs);
+                notes.Add($"Clips {string.Join(", ", o.Only)} ({o.Only.Count} clips) were asked to run again. The new runs replace the earlier ones and carry the re-run mark."
+                          + (absent.Count > 0 ? $" These clips gave no new run, so the earlier runs stay: {string.Join(", ", absent)}." : "")
                           + (merged.KeptEarlier.Count > 0 ? $" These runs failed again, so the earlier runs stay: {string.Join(", ", merged.KeptEarlier)}." : ""));
                 runs = [.. merged.Runs];
             }
@@ -157,6 +161,7 @@ internal static class E2eRunner
                 r.Rerun,
                 r.RanAt,
                 r.Machine,
+                r.Attempts,
                 complete = E2e.IsComplete(r),
                 pairs = E2e.Pairs(r),
             }),
@@ -168,14 +173,14 @@ internal static class E2eRunner
     private static string RunPath(E2eOptions o, string route) => Path.Combine(o.OutDir, $"e2e-runs-{o.RunId}-{route}.json");
 
     private static RunDto ToDto(E2eRun r) => new(r.Route, r.Clip.Id, r.Transcript, [.. r.SrcLangs],
-        r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine);
+        r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine, r.Attempts);
 
     private static (List<string> Notes, List<E2eRun> Runs) Read(string path)
     {
         var file = JsonSerializer.Deserialize<RouteFile>(File.ReadAllText(path), Json)!;
         return (file.Notes, [.. file.Runs.Select(r => new E2eRun(r.Route,
             new Clip("meeting-11labs", r.ClipId[..2], r.ClipId, E2e.Reference(r.ClipId, r.ClipId[..2]), []),
-            r.Transcript, r.SrcLangs, r.Translations, r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine ?? file.Machine))]);
+            r.Transcript, r.SrcLangs, r.Translations, r.LatencySeconds, r.AsrSeconds, r.OtherLoad, r.Rerun, r.RanAt, r.Machine ?? file.Machine, r.Attempts))]);
     }
 
     private static async Task<LlamaSharpMtProvider> LoadMtAsync(string modelsDir, List<string> notes)
@@ -247,15 +252,18 @@ internal static class E2eRunner
                 foreach (var error in done.Select(p => p.Error).OfType<string>())
                     Console.WriteLine($"   {clip.Id}: translation failed: {error}");
                 var result = new E2eRun(route, clip, run.Text, run.Langs, E2e.Join(done.Select(p => p.Map)),
-                    done.Length == 0 ? null : done.Max(p => p.DoneAt) - run.SpeechEndAt, run.FinalAfterEnd, load, RanAt: DateTime.Now);
+                    done.Length == 0 ? null : done.Max(p => p.DoneAt) - run.SpeechEndAt, run.FinalAfterEnd, load, RanAt: DateTime.Now, Attempts: attempt);
                 runs.Add(result);
                 Console.WriteLine($"   {route} {clip.Id}: {result.LatencySeconds:F2} s (ASR {result.AsrSeconds:F2} s, load {load:F2}) \"{result.Transcript}\"");
                 break;
             }
         }
 
+        var capped = runs.Where(r => r.OtherLoad >= LoadMonitor.QuietBelow).Select(r => r.Clip.Id).ToList();
         if (again.Count > 0)
             notes.Add($"{again.Count} clip runs were repeated inside this run because other load passed the limit: {string.Join(", ", again)}.");
+        if (capped.Count > 0)
+            notes.Add($"After {MaxAttempts} attempts, the last run stays even though other load was at or above the limit: {string.Join(", ", capped)}.");
         return runs;
     }
 
@@ -267,6 +275,7 @@ internal static class E2eRunner
             .ToDictionary(r => r.Clip.Id);
         var room = new RoomState(new RoomConfig("e2e-B1", Room));
         var runs = new List<E2eRun>();
+        var again = new List<string>();
         foreach (var clip in clips.Where(c => saved.ContainsKey(c.Id)))
         {
             var source = saved[clip.Id];
@@ -280,15 +289,22 @@ internal static class E2eRunner
                 var piece = await TranslateAsync(room, mt, utterance, clock);
                 var load = monitor.MeanSince(started);
                 if (load >= LoadMonitor.QuietBelow && attempt < MaxAttempts)
+                {
+                    Console.WriteLine($"   B1 {clip.Id}: other load {load:F1} logical CPUs during the clip, running it again.");
+                    again.Add(clip.Id);
                     continue;
+                }
+
                 runs.Add(new E2eRun("B1", clip, source.Transcript, source.SrcLangs, E2e.Join([piece.Map]),
-                    source.AsrSeconds!.Value + piece.DoneAt, source.AsrSeconds, load, RanAt: DateTime.Now));
+                    source.AsrSeconds!.Value + piece.DoneAt, source.AsrSeconds, load, RanAt: DateTime.Now, Attempts: attempt));
                 Console.WriteLine($"   B1 {clip.Id}: {runs[^1].LatencySeconds:F2} s (saved Gladia final {source.AsrSeconds:F2} s, load {load:F2})");
                 break;
             }
         }
 
-        notes.Add($"Replay of the saved Gladia sessions: {runs.Count} clips with one Gladia final each. The saved text and the saved time of the final are used; a Gladia session cost nothing here. Latency = saved Gladia final time + fresh MT time. The saved sessions of clips with several finals hold no per-final text or time, so those clips are not replayed.");
+        if (again.Count > 0)
+            notes.Add($"{again.Count} clip runs were repeated inside this run because other load passed the limit: {string.Join(", ", again)}.");
+        notes.Add($"Replay of the saved Gladia sessions: {runs.Count} clips with one Gladia final each. The saved text and the saved time of the final come from the first Gladia run, which overlapped a diarization benchmark; Gladia final time depends mostly on the network; a Gladia session cost nothing here. Latency = saved Gladia final time + fresh MT time. The saved sessions of clips with several finals hold no per-final text or time, so those clips are not replayed.");
         return runs;
     }
 

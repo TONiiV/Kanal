@@ -35,8 +35,11 @@ What the command does:
   machine. The total is 19.9 min. The second pass is in a separate run file and a separate report.
   It did not replace any row of the 144 clips. The tool makes no new Gladia call.
 - **Quiet machine.** The tool measures the CPU use of all other processes every 2 s. A clip starts
-  only when other processes use less than 3.0 logical CPUs. It runs again if they pass this limit
-  during the clip. The report shows the mean and maximum load per route.
+  only when other processes use less than 3.0 logical CPUs. The local routes and route B1 run a clip
+  again if the load passes the limit during the clip. After 3 attempts, the last run stays and carries
+  an attempt count above 1. Route `gladia` never runs a clip again, because each run costs money; it
+  only waits and records the load. The report shows the mean and maximum load per route and the
+  number of repeated clips.
 - **Metrics.** chrF against the reference (the algorithm of the MT benchmark, with unit tests). Part
   numbers of the reference that the output keeps, strict and loose. Latency from the end of speech
   to the last translated text of the clip, for clips where all three targets have text. CER (zh) or
@@ -74,8 +77,10 @@ Notes on the table:
   0.25 and maximum 0.94 logical CPUs; D mean 0.26 and maximum 1.14. No clip passed the limit, and no clip ran again.
 - Route B latency is contended. The first Gladia run overlapped a diarization benchmark of another
   session (python, 7.85 logical CPUs). The saved sessions hold the text and the time of each final only
-  for the 74 clips with one final. Route B1 replays those clips with the saved Gladia text and time
-  and a fresh MT time (other load: mean 0.34, maximum 1.50). The 70 clips with several finals cannot be
+  for the 74 clips with one final. Route B1 replays those clips with the saved Gladia text and final
+  time of the first run and a fresh MT time (other load: mean 0.34, maximum 1.50). The Gladia final
+  time still comes from the loaded run. The effect is probably small, because that time depends
+  mostly on the network and on the Gladia servers, not on the local CPU. The 70 clips with several finals cannot be
   replayed. The 12-clip sample of the second Gladia pass gave route B a p50 of 3.12 s and a p95 of 4.23 s.
 - Route A: all 144 clips have text for all three targets, checked on the saved clip totals. The saved
   sessions hold no per-final translations, so the check per final is not possible for this run. The
@@ -97,21 +102,22 @@ Latency parts, p50 (ASR final, then translation): B1 0.80 s and 2.21 s; C 2.13 s
 Findings:
 
 1. **On these 12 sentences, Gladia translates its own text better than Hy-MT2.** Route A beats route B
-   by 8.7 chrF points. On the 74 clips with one Gladia final, A scores 56.6, B 47.8 and the replay B1 47.6.
-   On the 70 clips with several finals, A scores 52.2 and B 43.8. The gap is about the same in both
+   by 8.7 chrF points. The report table "chrF by number of finals" shows the split. On the 74 clips with one Gladia
+   final, A scores 56.6, B 47.8 and the replay B1 47.6. On the 70 clips with several finals, A scores
+   52.2 and B 43.8. The gap is about the same in both
    groups, so text fragments do not explain it. This is one run with synthetic voices.
 2. **Qwen3-ASR gives the better local text.** Route D beats the product chain C by 6.6 chrF points.
    The ASR error is 17.9 % against 28.2 %. Route D keeps 107 loose part numbers; route C keeps 23.
    Nemotron writes numbers and part numbers as words ("PB zwei neun eins"). Its transcripts are
    longer: 78.2 characters on average, against 70.2 for Qwen3-ASR and 68.8 for Gladia.
-3. **Part numbers are the weak point of every route.** The best route keeps 159 of 288 loosely and
-   71 strictly. The voices read a code letter by letter. The recogniser then writes the code with
+3. **Part numbers are the weak point of every route.** The best routes (A and B) keep 159 of 288
+   loosely and at most 72 strictly. The voices read a code letter by letter. The recogniser then writes the code with
    spaces, words or errors.
 4. **Route D is faster than route C, because its final comes sooner.** The p50 is 4.29 s against
    4.88 s. The MT part is equal (2.57 s and 2.65 s). The ASR final comes 1.74 s after the end of
    speech for D and 2.13 s for C. The final time of D comes from the Silero VAD of the tool
    (500 ms of silence). A product Qwen3 provider can differ. Route A answers in 1.98 s. MT on the CPU
-   is about half of every local latency. The GPU change (#270) is open.
+   is 54 % to 71 % of the p50 latency of the local routes (C 54 %, D 60 %, B1 71 %). The GPU change (#270) is open.
 5. **The auto room finds the language.** 98.6 % to 100 % of the finals carry the language of the
    clip on all routes. Gladia gives 1.74 finals per clip. Nemotron gives 1.00 and Qwen3-ASR 1.01.
 

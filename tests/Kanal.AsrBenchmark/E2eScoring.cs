@@ -11,7 +11,8 @@ internal sealed record E2eRun(
     double? OtherLoad = null,
     bool Rerun = false,
     DateTime? RanAt = null,
-    string? Machine = null)
+    string? Machine = null,
+    int Attempts = 1)
 {
     public bool Failed => Transcript.Length == 0 && Translations.Count == 0;
 }
@@ -26,6 +27,8 @@ internal sealed record HeardUtterance(string Text, string SrcLang, double FirstA
 
 internal sealed record RouteAResult(
     string Transcript, IReadOnlyList<string> SrcLangs, IReadOnlyDictionary<string, string> Translations, double? LatencySeconds, bool Complete);
+
+internal sealed record FinalsSplitRow(string Route, bool Several, int Clips, double ChrF);
 
 internal sealed record MergeResult(IReadOnlyList<E2eRun> Runs, IReadOnlyList<string> KeptEarlier);
 
@@ -137,6 +140,18 @@ internal static class E2e
         }
 
         return new MergeResult(runs, kept);
+    }
+
+    public static IReadOnlyList<FinalsSplitRow> FinalsSplit(IEnumerable<E2eRun> runs) =>
+        runs.GroupBy(r => (r.Route, Several: r.SrcLangs.Count > 1))
+            .OrderBy(g => g.Key.Route, StringComparer.Ordinal).ThenBy(g => g.Key.Several)
+            .Select(g => new FinalsSplitRow(g.Key.Route, g.Key.Several, g.Count(), g.SelectMany(Pairs).Average(p => p.ChrF)))
+            .ToList();
+
+    public static IReadOnlyList<string> NotRerun(IReadOnlyList<string> only, IEnumerable<E2eRun> fresh)
+    {
+        var ran = fresh.Select(r => r.Clip.Id).ToHashSet();
+        return only.Where(id => !ran.Contains(id)).ToList();
     }
 
     public static IEnumerable<string> Only(IEnumerable<string> ids, IReadOnlyList<string>? only) =>
