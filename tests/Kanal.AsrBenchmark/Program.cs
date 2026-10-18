@@ -64,20 +64,7 @@ if (args.FirstOrDefault() == "rescore")
     };
     var saved = args.Skip(1).TakeWhile(a => !a.StartsWith("--"))
         .Select(f => JsonSerializer.Deserialize<SavedReport>(File.ReadAllText(f), json)!).ToList();
-    var savedRows = saved.SelectMany(r => r.Rows).ToList();
-    var rescoredClips = saved.SelectMany(r => r.Clips).Where(c => c.Set != Corpus.AscendSet).ToList();
-    var rescoredRows = savedRows.Where(r => r.Set != Corpus.AscendSet).ToList();
-    foreach (var group in saved.SelectMany(r => r.Clips).Where(c => c.Set == Corpus.AscendSet).GroupBy(c => (c.Model, c.Room, c.Language)))
-    {
-        var scored = ScoreAscendClips(group);
-        rescoredClips.AddRange(scored);
-        var template = savedRows.First(r => r.Model == group.Key.Model && r.Metric == "load_s");
-        rescoredRows.AddRange(AscendMetrics(group.Key.Language, scored).Select(m => template with
-        {
-            Streams = 1, Set = Corpus.AscendSet, Language = group.Key.Language, Room = group.Key.Room,
-            Metric = m.Metric, Value = Math.Round(m.Value, 4), Unit = m.Unit,
-        }));
-    }
+    var (rescoredRows, rescoredClips) = Rescore.Apply(saved);
 
     var notesSaved = saved.SelectMany(r => r.Notes).Distinct().ToList();
     var clipsOnDisk = Corpus.Load(data).Where(c => rescoredClips.Any(r => r.Set == c.Set && r.Id == c.Id)).ToList();
@@ -281,10 +268,10 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
         var (set, lang) = group.Key;
         if (set == Corpus.AscendSet)
         {
-            var ascend = ScoreAscendClips(group.Select(r => new ClipRow(model, provider, room, set, lang, r.Clip.Id, r.Clip.Reference,
+            var ascend = Rescore.ScoreAscendClips(group.Select(r => new ClipRow(model, provider, room, set, lang, r.Clip.Id, r.Clip.Reference,
                 r.Text, 0, 0, 0, 0, string.Join(",", r.Langs), Math.Round(r.Seconds / r.FedSeconds, 4))));
             clipRows.AddRange(ascend);
-            foreach (var (metric, value, unit) in AscendMetrics(lang, ascend))
+            foreach (var (metric, value, unit) in Rescore.AscendMetrics(lang, ascend))
                 Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
             continue;
         }
@@ -293,12 +280,12 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             Numbers: Scoring.Errors(lang, r.Text, r.Clip.Reference, numbers: true))).ToList();
         var decode = group.SelectMany(r => r.DecodeMs).ToList();
         void A(string metric, double value, string unit) => Add(model, provider, threads, 1, set, lang, room, metric, value, unit);
-        A(lang == "zh" ? "cer_pct" : "wer_pct", Pct(scored.Sum(s => s.Score.Errors), scored.Sum(s => s.Score.ReferenceLength)), "%");
-        A(lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct", Pct(scored.Sum(s => s.Numbers.Errors), scored.Sum(s => s.Numbers.ReferenceLength)), "%");
+        A(lang == "zh" ? "cer_pct" : "wer_pct", Rescore.Pct(scored.Sum(s => s.Score.Errors), scored.Sum(s => s.Score.ReferenceLength)), "%");
+        A(lang == "zh" ? "cer_numbers_pct" : "wer_numbers_pct", Rescore.Pct(scored.Sum(s => s.Numbers.Errors), scored.Sum(s => s.Numbers.ReferenceLength)), "%");
         var plain = scored.Where(s => !Scoring.HasDigit(s.Run.Clip.Reference)).ToList();
         if (plain.Count > 0)
         {
-            A(lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct", Pct(plain.Sum(s => s.Score.Errors), plain.Sum(s => s.Score.ReferenceLength)), "%");
+            A(lang == "zh" ? "cer_no_digit_pct" : "wer_no_digit_pct", Rescore.Pct(plain.Sum(s => s.Score.Errors), plain.Sum(s => s.Score.ReferenceLength)), "%");
             A("clips_no_digit", plain.Count, "n");
         }
 
@@ -324,29 +311,6 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             clipRows.Add(new ClipRow(model, provider, room, set, lang, run.Clip.Id, run.Clip.Reference, run.Text,
                 score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
     }
-}
-
-static double Pct(double part, double whole) => 100.0 * part / Math.Max(1, whole);
-
-static List<ClipRow> ScoreAscendClips(IEnumerable<ClipRow> clips) =>
-    clips.Select(c =>
-    {
-        var plain = Scoring.MixedErrors(c.Hypothesis, c.Reference);
-        var numbers = Scoring.MixedErrors(c.Hypothesis, c.Reference, numbers: true);
-        return c with { Errors = plain.Errors, Length = plain.ReferenceLength, NumbersErrors = numbers.Errors, NumbersLength = numbers.ReferenceLength };
-    }).ToList();
-
-static IEnumerable<(string Metric, double Value, string Unit)> AscendMetrics(string lang, IReadOnlyList<ClipRow> clips)
-{
-    yield return ("mer_pct", Pct(clips.Sum(c => c.Errors), clips.Sum(c => c.Length)), "%");
-    yield return ("mer_numbers_pct", Pct(clips.Sum(c => c.NumbersErrors), clips.Sum(c => c.NumbersLength)), "%");
-    yield return ("empty_clips", clips.Count(c => c.Hypothesis.Length == 0), "n");
-    yield return ("clips", clips.Count, "n");
-    if (lang != "mixed")
-        yield break;
-    var kept = clips.Select(c => Scoring.EnglishKept(c.Hypothesis, c.Reference)).ToList();
-    yield return ("english_words", kept.Sum(k => k.Total), "n");
-    yield return ("english_kept_pct", Pct(kept.Sum(k => k.Kept), kept.Sum(k => k.Total)), "%");
 }
 
 async Task<ClipRun> RunAccuracyClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, double padding, BenchModel model)

@@ -74,6 +74,8 @@ internal static partial class Scoring
 
     public static (int Kept, int Total) EnglishKept(string hypothesis, string reference)
     {
+        hypothesis = Contraction().Replace(Compat(hypothesis), "");
+        reference = Contraction().Replace(Compat(reference), "");
         var available = MixedTokens(hypothesis).Where(IsEnglishWord).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
         var words = EnglishWords(reference);
         var kept = 0;
@@ -192,6 +194,10 @@ internal static partial class Scoring
 
     [GeneratedRegex(@"(?<=[\u4e00-\u9fff\u3400-\u4dbf])(?=[A-Za-z])|(?<=[A-Za-z])(?=[\u4e00-\u9fff\u3400-\u4dbf])")]
     private static partial Regex ScriptEdge();
+
+    // A contraction stays one word: split at the apostrophe, "I'm" would look like a spelled word.
+    [GeneratedRegex(@"(?<=[A-Za-z])['\u2019](?=[A-Za-z])")]
+    private static partial Regex Contraction();
 
     [GeneratedRegex(@"[^\p{L}\p{N}]+")]
     private static partial Regex NotWordChar();

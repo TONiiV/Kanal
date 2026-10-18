@@ -64,7 +64,7 @@ Findings:
 2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
 3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
 4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
-5. The numbers are rough. The references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
+5. The numbers are rough. The MER references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The English kept rate leaves them out. The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
 
