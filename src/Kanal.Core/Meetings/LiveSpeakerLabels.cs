@@ -13,18 +13,17 @@ public interface ISpeakerEmbedder : IDisposable
 public sealed class LiveSpeakerLabels(ISpeakerEmbedder embedder, double threshold = LiveSpeakerLabels.DefaultThreshold)
     : IDisposable
 {
-    // Unmeasured on zh/de/pl; slice 6 (#111) calibrates it.
-    public const double DefaultThreshold = 0.5;
+    public const double DefaultThreshold = 0.6;
 
     public static readonly TimeSpan MinimumSpeech = TimeSpan.FromSeconds(1);
 
     private readonly List<(string Tag, float[] Sum)> _speakers = [];
-    private string? _previous;
 
     public string? Assign(ReadOnlySpan<byte> pcm16)
     {
+        // A short sentence is mostly another speaker's backchannel: the previous tag was right in 0-6 % of them (#111).
         if (pcm16.Length < MinimumSpeech.TotalSeconds * MeetingTimeline.BytesPerSecond)
-            return _previous;
+            return null;
 
         var embedding = Normalized(embedder.Embed(ToSamples(pcm16)));
         var best = -1;
@@ -41,15 +40,12 @@ public sealed class LiveSpeakerLabels(ISpeakerEmbedder embedder, double threshol
             var sum = _speakers[best].Sum;
             for (var i = 0; i < sum.Length; i++)
                 sum[i] += embedding[i];
-            _previous = _speakers[best].Tag;
-        }
-        else
-        {
-            _previous = string.Create(CultureInfo.InvariantCulture, $"V{_speakers.Count + 1:00}?");
-            _speakers.Add((_previous, embedding));
+            return _speakers[best].Tag;
         }
 
-        return _previous;
+        var tag = string.Create(CultureInfo.InvariantCulture, $"V{_speakers.Count + 1:00}?");
+        _speakers.Add((tag, embedding));
+        return tag;
     }
 
     public void Dispose() => embedder.Dispose();

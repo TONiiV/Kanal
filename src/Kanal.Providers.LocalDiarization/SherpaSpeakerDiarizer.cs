@@ -24,8 +24,7 @@ public sealed class SherpaSpeakerDiarizer(string segmentationModel, string embed
         config.Segmentation.NumThreads = threads;
         config.Embedding.Model = embeddingModel;
         config.Embedding.NumThreads = threads;
-        if (speakerCount is > 0)
-            config.Clustering.NumClusters = speakerCount.Value;
+        config.Clustering = Clustering(speakerCount);
 
         using var diarization = new OfflineSpeakerDiarization(config);
         OfflineSpeakerDiarizationProgressCallback callback = (done, total, _) =>
@@ -39,6 +38,16 @@ public sealed class SherpaSpeakerDiarizer(string segmentationModel, string embed
         GC.KeepAlive(callback);
 
         return [.. segments.Select(s => new SpeakerTurn(s.Start, s.End, s.Speaker))];
+    }
+
+    internal static FastClusteringConfig Clustering(int? speakerCount)
+    {
+        var clustering = new FastClusteringConfig();
+        if (speakerCount is > 0)
+            clustering.NumClusters = speakerCount.Value;
+        else
+            clustering.Threshold = 0.8f;
+        return clustering;
     }
 
     // sherpa-onnx aborts the process on a model it cannot open, and 1.13.8 never checks the handle.

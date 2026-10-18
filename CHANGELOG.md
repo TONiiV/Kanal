@@ -15,14 +15,18 @@ newest heading has to match the version the build reports, and a test holds the 
 The first release. Everything below is what Kanal does on the day it ships.
 
 - During a meeting, Kanal now gives each finished sentence a speaker tag from the voice. The tags
-  are `V01?`, `V02?`… The question mark shows that the tag is a guess. This works only after the
-  speaker models are on this computer: run *Re-identify speakers* on a recorded meeting once.
+  are `V01?`, `V02?`… The question mark shows that the tag is a guess. A sentence shorter than
+  1 second gets no voice tag. This works only after the speaker models are on this computer: run
+  *Re-identify speakers* on a recorded meeting once.
   Kanal keeps no voiceprint after the meeting ends.
 - A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
-  choose *Re-identify speakers*, then the number of people who spoke. Kanal runs speaker separation
-  on the recording on this computer and gives each person their own tag and colour. If you choose
-  *Not sure*, Kanal guesses the number, and it often finds too many people. The first run
-  downloads a 34 MB model. The original tags stay in the transcript file.
+  choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
+  speaker separation on the recording on this computer and gives each person their own tag and
+  colour. *Not sure* can find more people than there are, but it rarely joins two people. A number
+  can join two similar voices into one. The first run downloads a 34 MB model. The original tags
+  stay in the transcript file.
+- When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
+  reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
   and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
   the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,

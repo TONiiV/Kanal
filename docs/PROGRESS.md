@@ -258,6 +258,24 @@ Caveats:
 - The meetings are 2 to 5 min. A 1-hour meeting gives the clusterer more data per speaker.
 - The scripted meeting is one script. Each per-speaker number rests on 9 to 13 utterances.
 
+### Gladia session does not reconnect after a deliberate stop
+
+- **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
+- **How it showed.** `MeetingSession.DisposeAsync` disposes the ASR session while `PumpAsync` still reads `Events`. The false error reached `ErrorOccurred` and the operator after every meeting. The ASR benchmark (PR #285) logged it after every session.
+- **Fix.** `DisposeAsync` sets the `volatile` flag `_stopping` before it sends `stop_recording`. The filter `catch (WebSocketException) when (_stopping)` ends the loop without an error and without a reconnect. A server Close frame still ends the loop through the `Close` branch and emits `Ended`.
+- **Test seam.** `HangUpOnFirstWriteStream` returns EOF after the first write (`stop_recording`). It holds the next write (the close frame) for 500 ms. Without the hold, `DisposeAsync` cancelled the loop before the loop saw the EOF on Windows and macOS. The red test then passed on those systems. With the hold, the red test failed on every OS.
+
+### Gladia session closes its event stream on every exit
+
+- **Bug.** `GladiaAsrSession.Events` never completed when `DisposeAsync` cancelled the session during the reconnect backoff. A reader that reads `Events` to the end then waits forever.
+- **How it showed.** The ASR benchmark (PR #285) hung on close. It reads `Events` to the end without a token.
+- **No operator impact.** `MeetingSession` reads `Events` with a token. It cancels that token after it disposes the session. Only `tools/Kanal.Doctor` reads without a token.
+- **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
+- **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
+- **Closed item.** The session reported "Connection lost, reconnecting" after a deliberate `stop_recording`. PR #288 fixed this. See "Gladia session does not reconnect after a deliberate stop" above.
+
+---
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock
@@ -398,8 +416,8 @@ During a meeting, each final utterance gets a speaker tag from its voice.
 - **Audio.** The pump takes the utterance's audio from `MeetingTimeline.TakeRecentAudio` at once, before the 60 s ring buffer overwrites it. Audio that is not available (aged out, never pushed) gets no tag.
 - **Embedding.** `SherpaSpeakerEmbedder` runs the CAM++ model of slice 3 through `SpeakerEmbeddingExtractor`, one thread. The model loads on the first sentence, not at Start. The work runs on the thread pool, one sentence at a time, in order. The ASR pump, the audio thread and the UI thread do not wait for it.
 - **Clustering.** Each speaker has a centroid: the sum of its unit embeddings. A sentence joins the speaker with the highest cosine similarity if that is at least 0.5. Otherwise it starts a new speaker. The C# loop replaces `SpeakerEmbeddingManager`, so the rule is tested without the native library.
-- **Threshold 0.5.** It is not measured on zh/de/pl. A false new speaker costs one merge in the Speakers tab. A false join of two people cannot be undone live. So the threshold leans to new speakers. Slice 6 ([#111](https://github.com/TONiiV/Kanal/issues/111)) calibrates it.
-- **Short sentences.** A sentence under 1 s gets the tag of the previous sentence and no embedding. A short first sentence keeps the ASR tag. The ADR says 0.3 s; 1 s keeps noisy embeddings of "ja", "好" and "tak" out of the centroids.
+- **Threshold 0.6.** The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) measured 82.3 % utterance accuracy at 0.6 and 78.7 % at 0.5, on 62 synthetic meetings. On the scripted 6-speaker meeting, 0.6 gave 81.5 % and 0.5 gave 72.3 %. 0.6 creates a few more speakers. A false new speaker costs one merge in the Speakers tab; a false join of two people cannot be undone live.
+- **Short sentences.** A sentence under 1 s gets no live tag and no embedding: it keeps the ASR tag until slice 3 runs. It first copied the tag of the previous sentence. The benchmark found that copy right in only 0 to 6 % of short sentences, because a backchannel ("ja", "好", "tak") is usually another speaker. The 1 s limit stays: it keeps noisy embeddings out of the centroids.
 - **Tags.** `V01?`, `V02?`… The question mark is the tentative state of decision 18. Slice 3 replaces the tags with `D01`… after the meeting. A rename by the operator replaces the shown name.
 - **Original tag.** `RoomState.AssignSpeaker` keeps the ASR tag in the new field `Utterance.AsrSpeakerTag`. The field goes into `transcript.jsonl` and to the phones. A later revision of the same utterance keeps the live tag. Slice 3's `speakers.json` still overrides both.
 - **Failure.** The first exception from the embedder stops the live tags for that meeting and writes one warning to the log. The transcript, translation and relay go on.
@@ -423,7 +441,12 @@ The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherp
 - **Timing.** The ASR clock and the recording both start on the first accepted frame. Both skip a pause. So `TStartMs` is the offset into `audio.wav`. A Gladia reconnect restarts the ASR clock but not the recording. Utterances after a reconnect can map to the wrong turn.
 - **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
 - **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
-- **Speaker count.** *Re-identify speakers* is a submenu: 2 to 8 people, or *Not sure*. The number goes to `NumClusters`. *Not sure* passes no count, so clustering uses the default threshold 0.5. The first real test had 3 people and no count: it gave more than 40 tags. ADR 0055 decision 12 expects this, so the count comes before the merge. The count input in the Speakers tab stays in [#110](https://github.com/TONiiV/Kanal/issues/110).
+- **Speaker count.** *Re-identify speakers* is a submenu. *Not sure* is the first item, then 2 to 8 people. A number goes to `NumClusters`. *Not sure* passes no count, and clustering then uses the threshold 0.8 (`SherpaSpeakerDiarizer.Clustering`). The count input in the Speakers tab stays in [#110](https://github.com/TONiiV/Kanal/issues/110).
+- **Why 0.8 and *Not sure* first.** The first real test had 3 people. The library default threshold 0.5 gave 47 tags. The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) then measured both paths:
+  - Without a count, 0.8 gave the lowest DER: 13.5 % on 62 synthetic meetings and 8.1 % on the scripted 6-speaker meeting, against 23.3 % and 28.9 % at 0.5.
+  - With a count, sherpa often returned fewer clusters than asked (17 of 62 meetings). Two similar voices merge, and the operator cannot split them. The real 3-person meeting with count 3 got 2 tags.
+  - A false extra speaker costs one merge; a false merge cannot be undone. So *Not sure* is the default choice.
+  - The real recording still got 17 tags at 0.8. A real room is harder than TTS audio.
 - **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
 - **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
 - **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
