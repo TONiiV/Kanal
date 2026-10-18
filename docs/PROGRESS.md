@@ -110,6 +110,17 @@ bytes, Apache-2.0). The first entry is the recommended model. The other three en
 - **Licence list.** `OpenSourceNotices` lists software packages only, not models. The model row in
   Settings shows the licence of each model, so Hy-MT2 needs no extra entry there.
 
+### Automatic recognition language (ADR 0061)
+
+Decided on 2026-10-18: transcription never limits the recognition language. Room languages set
+only the columns and the translation targets. People mix zh with en, de or pl, and nobody can set
+the language before the meeting.
+
+- **Gladia** keeps `code_switching` and sends no `languages`. The code already does this.
+- **Benchmarks** choose models by the auto-room scores. The forced-language room is a diagnostic.
+- **Open item:** `NemotronAsrProvider` forces the language when the room has one language. A
+  separate ticket removes this.
+
 ### Cloud translation with DeepL (ADR 0060)
 
 *Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
