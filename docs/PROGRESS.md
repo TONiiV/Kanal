@@ -17,7 +17,7 @@ What the command does:
 - **Audio.** The set `meeting-11labs`: 12 meeting sentences in zh, de, pl and en, in 3 ElevenLabs
   voices. That is 144 clips and 16.3 min. The command makes no new audio.
 - **Room.** Every route runs in the auto room (zh, de, pl, en), as ADR 0061 requires. The targets of
-  a clip are the other three languages. A missing translation scores 0.
+  a clip are the other three languages. A missing translation scores chrF 0.
 - **References.** The 12 sentences are parallel in the four languages. The reference of sentence i
   in language T is the T version of sentence i. These texts are the references of the MT benchmark
   (PR #267). A unit test checks that the part numbers match in all four languages.
@@ -26,68 +26,101 @@ What the command does:
 - **Providers.** The product `GladiaAsrProvider` with translation on, the product
   `NemotronAsrProvider` (560 ms), the sherpa-onnx offline engine of the tool for Qwen3-ASR 0.6B, and
   the product `LlamaSharpMtProvider` with Hy-MT2 1.8B on the CPU. The command changes no product code.
-  Each final transcript is translated on its own, as `MeetingSession` does.
-- **Gladia.** Route A and route B share the same 144 Gladia sessions. The tool sent 18.7 min of audio.
-  A second pass of 12 clips (1.2 min) checked the latency of route B on a quiet machine.
-  The total is 19.9 min.
+- **MT input.** The tool mirrors `MeetingSession`. It puts every transcript event into a `RoomState`.
+  It translates each final on its own, into the room languages without the source language. It sends
+  `RecentFinals(8)` as context. In this base, `MtPrompt.Build` takes only the text and the target, so
+  `LlamaSharpMtProvider` ignores the context. The context cannot change any output here.
+- **Gladia.** Route A and route B share the same 144 Gladia sessions of the first run. The tool sent
+  18.7 min of audio. A second pass of 12 clips (1.2 min) checked the latency of route B on a quiet
+  machine. The total is 19.9 min. The second pass is in a separate run file and a separate report.
+  It did not replace any row of the 144 clips. The tool makes no new Gladia call.
+- **Quiet machine.** The tool measures the CPU use of all other processes every 2 s. A clip starts
+  only when other processes use less than 3.0 logical CPUs. It runs again if they pass this limit
+  during the clip. The report shows the mean and maximum load per route.
 - **Metrics.** chrF against the reference (the algorithm of the MT benchmark, with unit tests). Part
   numbers of the reference that the output keeps, strict and loose. Latency from the end of speech
-  to the last translated text of the clip. CER (zh) or WER (de, pl, en) of the transcript, numbers
-  normalised. The figure for several languages is the mean of the language rates.
+  to the last translated text of the clip, for clips where all three targets have text. CER (zh) or
+  WER (de, pl, en) of the transcript, numbers normalised. The figure for several languages is the mean
+  of the language rates. The tool also prints finals per clip, the share of finals with the right
+  language label, and the mean transcript length.
+- **Scale.** The chrF of this benchmark and the chrF of the MT benchmark are not on one scale. This
+  benchmark scores 48 spoken sources from four languages, with recognition errors. The MT benchmark
+  scores 12 written sentences from zh, de and pl.
 
 Run it:
 
 1. Fetch the clips once: `fetch --sets meeting-11labs`. The tool never calls ElevenLabs for a clip on disk.
-2. Run a route: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- e2e --routes gladia,nemotron,qwen3 --out <folder>`.
-3. Read `kanal-e2e-<time>.md` and `.json` in the folder. Option `--clips <n>` takes the first n clips of each language.
-   Option `--only <clip prefixes>` runs some clips again and replaces their earlier runs.
+2. Run the local routes: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- e2e --routes nemotron,qwen3 --run <id> --out <folder>`.
+   Options `--run` and `--out` are required. The report reads only the run files `e2e-runs-<id>-*.json`
+   and the files of `--include`. Route `gladia` calls the paid API, so name it on purpose.
+   Route `gladia-mt --gladia-runs <file>` replays the saved Gladia sessions with fresh MT.
+3. Read `kanal-e2e-<id>.md` and `.json` in the folder. Option `--clips <n>` takes the first n clips of each language.
+   Option `--only <clip ids>` runs whole clip ids again. The new runs replace the earlier ones and carry a re-run mark.
 
-Result (2026-10-18, AMD Ryzen 9 PRO 8945HS, 16 logical CPUs, MT on the CPU, Windows):
+Result (2026-10-18, AMD Ryzen 9 PRO 8945HS, 16 logical CPUs, MT on the CPU, Windows). Run files and
+reports: `%LocalAppData%\Kanal\asr-bench\reports\e2e-run2\`.
 
 | Route | chrF | Part numbers strict | Part numbers loose | Latency p50 s | Latency p95 s | ASR error % |
 |---|---:|---:|---:|---:|---:|---:|
 | A. Gladia, one session with translation | 54.5 | 71/288 | 159/288 | 1.98 | 2.78 | 17.0 |
-| B. Gladia transcript, then Hy-MT2 1.8B | 45.8 | 72/288 | 159/288 | 5.56 (3.12 quiet, 12 clips) | 9.25 (4.23 quiet) | 17.0 |
-| C. Nemotron 560 ms, then Hy-MT2 1.8B (the product chain) | 38.3 | 11/288 | 23/288 | 5.98 | 8.35 | 28.2 |
-| D. Qwen3-ASR 0.6B, then Hy-MT2 1.8B | 45.0 | 49/288 | 110/288 | 4.30 | 5.91 | 17.9 |
+| B. Gladia transcript, then Hy-MT2 1.8B | 45.8 | 72/288 | 159/288 | 5.56 (contended) | 9.25 (contended) | 17.0 |
+| B1. Replay of B on the 74 clips with one Gladia final | 47.6 | 24/81 | 48/81 | 3.10 | 3.95 | 9.9 |
+| C. Nemotron 560 ms, then Hy-MT2 1.8B (the product chain) | 38.5 | 10/288 | 23/288 | 4.88 | 5.99 | 28.2 |
+| D. Qwen3-ASR 0.6B, then Hy-MT2 1.8B | 45.1 | 49/288 | 107/288 | 4.29 | 5.85 | 17.9 |
 
-chrF by source language (the rows hold 36 clips each):
+Notes on the table:
+
+- Route C and route D ran again in full on a quiet machine, with the context above. Other load: C mean
+  0.25 and maximum 0.94 logical CPUs; D mean 0.26 and maximum 1.14. No clip passed the limit, and no clip ran again.
+- Route B latency is contended. The first Gladia run overlapped a diarization benchmark of another
+  session (python, 7.85 logical CPUs). The saved sessions hold the text and the time of each final only
+  for the 74 clips with one final. Route B1 replays those clips with the saved Gladia text and time
+  and a fresh MT time (other load: mean 0.34, maximum 1.50). The 70 clips with several finals cannot be
+  replayed. The 12-clip sample of the second Gladia pass gave route B a p50 of 3.12 s and a p95 of 4.23 s.
+- Route A: all 144 clips have text for all three targets, checked on the saved clip totals. The saved
+  sessions hold no per-final translations, so the check per final is not possible for this run. The
+  tool now applies that check to new runs. Route C: 2 clips (zh-10-george, zh-10-lily) miss a target.
+  They score chrF 0 for it and have no latency.
+
+chrF by source language (the rows hold 36 clips each; B1 holds 21, 16, 17 and 20):
 
 | Route | zh | de | pl | en |
 |---|---:|---:|---:|---:|
 | A | 41.8 | 60.6 | 55.7 | 59.8 |
 | B | 38.9 | 48.6 | 44.4 | 51.4 |
-| C | 30.7 | 41.9 | 39.8 | 40.7 |
-| D | 45.6 | 49.4 | 39.0 | 46.0 |
+| B1 | 38.3 | 54.4 | 46.8 | 52.7 |
+| C | 30.8 | 41.4 | 40.4 | 41.3 |
+| D | 45.2 | 49.5 | 38.8 | 46.6 |
+
+Latency parts, p50 (ASR final, then translation): B1 0.80 s and 2.21 s; C 2.13 s and 2.65 s; D 1.74 s and 2.57 s.
 
 Findings:
 
-1. **Gladia translates better than Hy-MT2 on the same text.** Route A beats route B by 8.7 chrF points
-   with the same transcript. The gap is 2 to 4 points for zh sources and 3 to 19 points for de, pl and en sources.
-2. **Qwen3-ASR is the better local recogniser.** Route D matches route B (45.0 against 45.8 chrF) and
-   beats the product chain C by 6.7 points. The ASR error is 17.9 % against 28.2 %. Nemotron writes
-   part numbers and numbers as words ("PB zwei neun eins"), and Hy-MT2 then translates the words.
-   Route D keeps 110 loose part numbers. Route C keeps 23.
+1. **On these 12 sentences, Gladia translates its own text better than Hy-MT2.** Route A beats route B
+   by 8.7 chrF points. On the 74 clips with one Gladia final, A scores 56.6, B 47.8 and the replay B1 47.6.
+   On the 70 clips with several finals, A scores 52.2 and B 43.8. The gap is about the same in both
+   groups, so text fragments do not explain it. This is one run with synthetic voices.
+2. **Qwen3-ASR gives the better local text.** Route D beats the product chain C by 6.6 chrF points.
+   The ASR error is 17.9 % against 28.2 %. Route D keeps 107 loose part numbers; route C keeps 23.
+   Nemotron writes numbers and part numbers as words ("PB zwei neun eins"). Its transcripts are
+   longer: 78.2 characters on average, against 70.2 for Qwen3-ASR and 68.8 for Gladia.
 3. **Part numbers are the weak point of every route.** The best route keeps 159 of 288 loosely and
-   71 strictly. The voices read a code letter by letter. The recogniser then writes
-   the code with spaces, words or errors.
-4. **Route D is faster than route C, but not faster than Gladia.** Qwen3 gives its final 1.75 s after
-   the end of speech (p50), Nemotron 2.14 s. The MT takes 2.59 s for route D and 3.81 s for route C,
-   because the number words make the text longer. Route A answers in 1.98 s. MT on the CPU is the
-   largest part of every local route. The GPU change (#270) is open.
-5. **The auto room finds the language.** 98.6 % to 99.3 % of the finals carry the language of the clip
-   on all routes. Gladia splits a sentence into 1.74 finals on average. The local routes give 1.0 finals.
+   71 strictly. The voices read a code letter by letter. The recogniser then writes the code with
+   spaces, words or errors.
+4. **Route D is faster than route C, because its final comes sooner.** The p50 is 4.29 s against
+   4.88 s. The MT part is equal (2.57 s and 2.65 s). The ASR final comes 1.74 s after the end of
+   speech for D and 2.13 s for C. The final time of D comes from the Silero VAD of the tool
+   (500 ms of silence). A product Qwen3 provider can differ. Route A answers in 1.98 s. MT on the CPU
+   is about half of every local latency. The GPU change (#270) is open.
+5. **The auto room finds the language.** 98.6 % to 100 % of the finals carry the language of the
+   clip on all routes. Gladia gives 1.74 finals per clip. Nemotron gives 1.00 and Qwen3-ASR 1.01.
 
 Limits:
 
-- Latency changes with the load of the machine. Another session ran a diarization benchmark (python,
-  7.85 logical CPUs) during the Gladia run. The MT part of route B is therefore too slow in the
-  table. The quiet check of 12 clips gives 3.12 s p50 and 4.23 s p95. Clips zh-01 to zh-04, de-07
-  and pl-07 of route C ran again on a quiet machine. The first run had spikes up to 46.6 s with normal output. The second run gave 4 to 7 s.
-  Route D ran on a quiet machine.
-- The voices are synthetic and read part numbers letter by letter. Real speech can differ.
-- Hy-MT2 gets no context and one prompt per target language. The batched prompt of PR #276 is not in this base.
 - One run per route. The Hy-MT2 sampler uses a temperature of 0.2, so a second run differs a little.
+- The voices are synthetic and read part numbers letter by letter. Real speech can differ.
+- MT runs on the CPU only. Hy-MT2 gets one prompt per target language. The batched prompt of PR #276 is not in this base.
+- Route B has no clean latency for the 70 clips with several finals.
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
 
