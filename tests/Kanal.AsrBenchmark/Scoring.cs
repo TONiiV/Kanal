@@ -32,12 +32,64 @@ internal static partial class Scoring
         return (Distance(Words(hypothesis), words), words.Length);
     }
 
-    public static string[] MixedTokens(string text) => throw new NotImplementedException();
+    public static string[] MixedTokens(string text)
+    {
+        var tokens = new List<string>();
+        var word = new StringBuilder();
+        void Flush()
+        {
+            if (word.Length > 0)
+                tokens.Add(word.ToString());
+            word.Clear();
+        }
 
-    public static (int Errors, int ReferenceLength) MixedErrors(string hypothesis, string reference, bool numbers = false) =>
-        throw new NotImplementedException();
+        foreach (var c in SimplifiedChinese.Normalize(Compat(text)).ToLowerInvariant())
+        {
+            if (c is >= '一' and <= '鿿' or >= '㐀' and <= '䶿')
+            {
+                Flush();
+                tokens.Add(c.ToString());
+            }
+            else if (char.IsLetterOrDigit(c))
+            {
+                word.Append(c);
+            }
+            else
+            {
+                Flush();
+            }
+        }
 
-    public static (int Kept, int Total) EnglishKept(string hypothesis, string reference) => throw new NotImplementedException();
+        Flush();
+        return [.. tokens];
+    }
+
+    public static (int Errors, int ReferenceLength) MixedErrors(string hypothesis, string reference, bool numbers = false)
+    {
+        if (numbers)
+            (hypothesis, reference) = (MixedNumbers(hypothesis), MixedNumbers(reference));
+        var tokens = MixedTokens(reference);
+        return (Distance(MixedTokens(hypothesis), tokens), tokens.Length);
+    }
+
+    public static (int Kept, int Total) EnglishKept(string hypothesis, string reference)
+    {
+        var available = MixedTokens(hypothesis).Where(IsEnglishWord).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
+        var words = MixedTokens(reference).Where(IsEnglishWord).ToList();
+        var kept = 0;
+        foreach (var word in words)
+            if (available.TryGetValue(word, out var left) && left > 0)
+            {
+                available[word] = left - 1;
+                kept++;
+            }
+
+        return (kept, words.Count);
+    }
+
+    private static bool IsEnglishWord(string token) => token.Any(char.IsAsciiLetter);
+
+    private static string MixedNumbers(string text) => Numbers.Normalize("en", Numbers.Normalize("zh", text));
 
     public static IReadOnlyList<string> Codes(string source) =>
         CodeToken().Matches(Compat(source))

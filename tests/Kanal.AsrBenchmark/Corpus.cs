@@ -28,6 +28,8 @@ internal static class Corpus
 
     private const double MaxClipSeconds = 20;
 
+    public const string AscendSet = "ascend";
+
     public static readonly string[] Languages = ["zh", "de", "pl", "en"];
 
     // FLEURS (Conneau et al. 2022), CC-BY-4.0. Each pinned revision keeps the clip choice the same across machines.
@@ -121,6 +123,7 @@ internal static class Corpus
         ["ami"] = FetchAmiAsync,
         ["aishell4"] = FetchAishell4Async,
         ["commonvoice"] = FetchCommonVoiceAsync,
+        [AscendSet] = FetchAscendAsync,
     };
 
     public static readonly string[] OptInSets = ["meeting-11labs", "commonvoice"];
@@ -503,11 +506,91 @@ internal static class Corpus
         return rows;
     }
 
-    internal static string RoomLanguage(string lang) => throw new NotImplementedException();
+    internal static string RoomLanguage(string lang) => lang == "mixed" ? "zh" : lang;
 
     internal static List<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> PickAscend(
         IReadOnlyList<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)> rows,
-        string language, int count) => throw new NotImplementedException();
+        string language, int count)
+    {
+        var groups = rows
+            .Where(r => r.Language == language && r.Seconds is >= MinClipSeconds and <= MaxClipSeconds)
+            .Where(r => !r.Text.Contains("[UNK]") && Clean(r.Text).Length > 0)
+            .GroupBy(r => (r.Session, r.Speaker))
+            .OrderBy(g => g.Key)
+            .Select(g => g.OrderBy(r => r.Id, StringComparer.Ordinal).ToList())
+            .ToList();
+        var quota = new int[groups.Count];
+        for (var left = count; left > 0 && groups.Where((g, i) => quota[i] < g.Count).Any();)
+            for (var i = 0; i < groups.Count && left > 0; i++)
+                if (quota[i] < groups[i].Count)
+                {
+                    quota[i]++;
+                    left--;
+                }
+
+        return groups
+            .SelectMany((g, i) => Enumerable.Range(0, quota[i]).Select(k => g[k * g.Count / quota[i]]))
+            .OrderBy(r => r.Id, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    // ASCEND (Lovenia et al. 2022), CC-BY-SA-4.0, through CAiRE/ASCEND. The test split is 78 MB; the tool downloads about 90 clips.
+    private const string AscendRevision = "737e9800ae31be9932ba8464c80366559bd28424";
+
+    private static readonly (string Language, int Count)[] AscendGroups = [("mixed", 60), ("zh", 15), ("en", 15)];
+
+    private static async Task<List<string>> FetchAscendAsync(HttpClient http, string data, int count)
+    {
+        var all = new List<(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src)>();
+        for (var offset = 0; ; offset += 100)
+        {
+            using var page = JsonDocument.Parse(await GetStringWithRetryAsync(http,
+                $"https://datasets-server.huggingface.co/rows?dataset=CAiRE/ASCEND&config=main&split=test&offset={offset}&length=100"));
+            var rows = page.RootElement.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("row")).ToList();
+            all.AddRange(rows.Select(r => (r.GetProperty("id").GetString()!, r.GetProperty("language").GetString()!,
+                r.GetProperty("duration").GetDouble(), r.GetProperty("transcription").GetString()!,
+                r.GetProperty("session_id").GetInt64(), r.GetProperty("original_speaker_id").GetInt64(),
+                r.GetProperty("audio")[0].GetProperty("src").GetString()!)));
+            if (rows.Count < 100)
+                break;
+        }
+
+        if (all.Count == 0 || !all[0].Src.Contains(AscendRevision))
+            throw new InvalidDataException($"ASCEND: the dataset server no longer serves revision {AscendRevision}.");
+
+        var result = new List<string>();
+        foreach (var (language, quota) in AscendGroups)
+        {
+            var picked = PickAscend(all, language, quota);
+            var folder = Path.Combine(data, AscendSet, language);
+            Directory.CreateDirectory(folder);
+            foreach (var r in picked)
+            {
+                var id = $"s{r.Session}-p{r.Speaker}-{r.Id}";
+                await File.WriteAllBytesAsync(Path.Combine(folder, id + ".wav"), await http.GetByteArrayAsync(r.Src));
+                result.Add(string.Join('\t', AscendSet, language, id, $"{AscendSet}/{language}/{id}.wav", Regex.Replace(r.Text, @"\s+", " ").Trim()));
+            }
+
+            Console.WriteLine($"{AscendSet} {language}: {picked.Count} clips from {picked.Select(r => (r.Session, r.Speaker)).Distinct().Count()} speaker and session groups");
+        }
+
+        return result;
+    }
+
+    private static async Task<string> GetStringWithRetryAsync(HttpClient http, string url)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await http.GetStringAsync(url);
+            }
+            catch (HttpRequestException) when (attempt < 4)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3 * attempt));
+            }
+        }
+    }
 
     internal static List<(int Tier, double Begin, double End, string Text)> PickAishell4(
         IReadOnlyList<(int Tier, double Begin, double End, string Text)> intervals, int count) =>

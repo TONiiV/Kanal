@@ -54,7 +54,9 @@ if (args.FirstOrDefault() == "fetch")
 }
 
 var perGroup = int.Parse(Arg("--clips") ?? "1000");
+var runSets = Arg("--sets")?.Split(',');
 var clips = Corpus.Load(data)
+    .Where(c => runSets?.Contains(c.Set) ?? true)
     .GroupBy(c => (c.Set, c.Lang))
     .SelectMany(g => g.Take(perGroup))
     .ToList();
@@ -139,7 +141,7 @@ foreach (var provider in model.Cloud ? ["cloud"] : providers)
     if (engine.NeedsLanguage)
         notes.Add($"{model.Id}: needs the clip language, so it has no auto room. The real-time phase uses a room of the clip language.");
     if (!model.Cloud)
-        await RunClipAsync(make, clips[0], [clips[0].Lang], realtime: false);
+        await RunClipAsync(make, clips[0], [Corpus.RoomLanguage(clips[0].Lang)], realtime: false);
 
     if (phases.Contains("accuracy"))
     {
@@ -147,7 +149,7 @@ foreach (var provider in model.Cloud ? ["cloud"] : providers)
         {
             var runs = new List<ClipRun>();
             foreach (var clip in clips)
-                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [clip.Lang] : autoRoom, realtime: false, engine.PaddingSeconds, model.Cloud));
+                runs.Add(await RunClipAsync(make, clip, room == "forced" ? [Corpus.RoomLanguage(clip.Lang)] : autoRoom, realtime: false, engine.PaddingSeconds, model.Cloud));
             Score(model.Id, provider, threads, room, runs);
             Console.WriteLine($"   {room}: RTF {runs.Sum(r => r.Seconds) / runs.Sum(r => r.FedSeconds):F3}");
         }
@@ -188,8 +190,9 @@ foreach (var provider in model.Cloud ? ["cloud"] : providers)
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_working_set_mb", memory.PeakMb, "MB");
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_delta_mb", memory.PeakMb - baselineMb, "MB");
 
-    if (phases.Contains("accuracy") && model.Id == AsrModelCatalog.Models[0].Id && provider == "cpu")
-        await ParityAsync(model, clips.Where(c => c.Set == "meeting-piper").ToList());
+    if (phases.Contains("accuracy") && model.Id == AsrModelCatalog.Models[0].Id && provider == "cpu"
+        && clips.Where(c => c.Set == "meeting-piper").ToList() is { Count: > 0 } meetingClips)
+        await ParityAsync(model, meetingClips);
 }
 
 if (phases.Contains("threads"))
@@ -233,6 +236,12 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
     foreach (var group in runs.GroupBy(r => (r.Clip.Set, r.Clip.Lang)))
     {
         var (set, lang) = group.Key;
+        if (set == Corpus.AscendSet)
+        {
+            ScoreAscend(model, provider, threads, room, lang, group.ToList());
+            continue;
+        }
+
         var scored = group.Select(r => (Run: r, Score: Scoring.Errors(lang, r.Text, r.Clip.Reference),
             Numbers: Scoring.Errors(lang, r.Text, r.Clip.Reference, numbers: true))).ToList();
         var decode = group.SelectMany(r => r.DecodeMs).ToList();
@@ -268,6 +277,27 @@ void Score(string model, string provider, int threads, string room, List<ClipRun
             clipRows.Add(new ClipRow(model, provider, room, set, lang, run.Clip.Id, run.Clip.Reference, run.Text,
                 score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
     }
+}
+
+void ScoreAscend(string model, string provider, int threads, string room, string lang, List<ClipRun> runs)
+{
+    var scored = runs.Select(r => (Run: r, Score: Scoring.MixedErrors(r.Text, r.Clip.Reference),
+        Numbers: Scoring.MixedErrors(r.Text, r.Clip.Reference, numbers: true))).ToList();
+    void A(string metric, double value, string unit) => Add(model, provider, threads, 1, Corpus.AscendSet, lang, room, metric, value, unit);
+    A("mer_pct", 100.0 * scored.Sum(s => s.Score.Errors) / Math.Max(1, scored.Sum(s => s.Score.ReferenceLength)), "%");
+    A("mer_numbers_pct", 100.0 * scored.Sum(s => s.Numbers.Errors) / Math.Max(1, scored.Sum(s => s.Numbers.ReferenceLength)), "%");
+    A("empty_clips", runs.Count(r => r.Text.Length == 0), "n");
+    A("clips", runs.Count, "n");
+    if (lang == "mixed")
+    {
+        var kept = runs.Select(r => Scoring.EnglishKept(r.Text, r.Clip.Reference)).ToList();
+        A("english_words", kept.Sum(k => k.Total), "n");
+        A("english_kept_pct", 100.0 * kept.Sum(k => k.Kept) / Math.Max(1, kept.Sum(k => k.Total)), "%");
+    }
+
+    foreach (var (run, score, numbers) in scored)
+        clipRows.Add(new ClipRow(model, provider, room, Corpus.AscendSet, lang, run.Clip.Id, run.Clip.Reference, run.Text,
+            score.Errors, score.ReferenceLength, numbers.Errors, numbers.ReferenceLength, string.Join(",", run.Langs), Math.Round(run.Seconds / run.FedSeconds, 4)));
 }
 
 async Task ParityAsync(BenchModel model, List<Clip> meeting)
