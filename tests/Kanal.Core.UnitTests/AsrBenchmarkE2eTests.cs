@@ -137,7 +137,9 @@ public class AsrBenchmarkE2eTests
 
         var latency = E2e.Latency(runs);
 
-        Assert.Equal((3, 3, 9), (latency.N, latency.P50, latency.P95));
+        Assert.Equal(3, latency.N);
+        Assert.Equal(3.0, latency.P50);
+        Assert.Equal(9.0, latency.P95);
     }
 
     [Fact]
