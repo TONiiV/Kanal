@@ -55,17 +55,8 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
     public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct)
     {
         var room = options.TargetLanguages;
-        var forced = room.Count == 1 ? room[0] : null;
-        return Task.Run(() => (IAsrSession)new Session(_streams(forced is null ? "auto" : PromptLanguage(forced)), room, forced), ct);
+        return Task.Run(() => (IAsrSession)new Session(_streams("auto"), room), ct);
     }
-
-    // The model's prompt dictionary has no bare "zh" or "ja"; an unknown key silently decodes as auto.
-    private static string PromptLanguage(string code) => code switch
-    {
-        "zh" => "zh-CN",
-        "ja" => "ja-JP",
-        _ => code,
-    };
 
     private OnlineRecognizer Recognizer()
     {
@@ -151,7 +142,6 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
 
         private readonly IRecognizerStream _stream;
         private readonly IReadOnlyList<string> _room;
-        private readonly string? _forced;
         private readonly string _prefix = Guid.NewGuid().ToString("N")[..6];
         private readonly Channel<float[]> _audio = Channel.CreateUnbounded<float[]>(new() { SingleReader = true });
         private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
@@ -160,11 +150,10 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
         private long _start;
         private int _utterance;
 
-        public Session(IRecognizerStream stream, IReadOnlyList<string> room, string? forced)
+        public Session(IRecognizerStream stream, IReadOnlyList<string> room)
         {
             _stream = stream;
             _room = room;
-            _forced = forced;
             _worker = Task.Run(RunAsync);
         }
 
@@ -228,7 +217,7 @@ public sealed class NemotronAsrProvider : IAsrProvider, IWarmupProvider, IDispos
                 $"{_prefix}-{_utterance:D4}",
                 Speaker,
                 text,
-                _forced ?? TranscriptLanguage.Guess(text, _room),
+                TranscriptLanguage.Guess(text, _room),
                 _start * 1000 / SampleRate,
                 isFinal ? _heard * 1000 / SampleRate : null,
                 isFinal,
