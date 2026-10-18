@@ -23,7 +23,8 @@ var json = new JsonSerializerOptions { WriteIndented = true, NumberHandling = Sy
 if (Arg("--threads") is { } threadArg)
     Engines.Threads = int.Parse(threadArg);
 var machine = $"{CpuName()} · {Environment.ProcessorCount} logical CPUs · {RuntimeInformation.OSDescription} · {Engines.Threads} threads";
-var segmentation = Engines.ModelPath(modelsDir, data, DiarizationModelCatalog.DefaultSegmentation);
+var segmentation = Arg("--segmentation") ?? Engines.ModelPath(modelsDir, data, DiarizationModelCatalog.DefaultSegmentation);
+var storedIds = List("--meetings", "negotiation-6-clean,negotiation-6-room,mix-3-clean,mix-3-overlap-room,mix-4-clean,mix-4-overlap-room,mix-6-clean,mix-6-overlap-room,pl-4-clean,pl-4-overlap-room,pl-6-clean,pl-6-overlap-room");
 var embeddings = DiarizationModelCatalog.Embeddings
     .Where(m => Arg("--embedding") is not { } only || only.Split(',').Contains(m.Id))
     .ToList();
@@ -42,6 +43,8 @@ switch (args.FirstOrDefault())
         return Real(args[1]);
     case "cloud":
         return CloudRun();
+    case "rttm":
+        return SherpaRttm(args[1]);
     case "report":
         var parts = args.Skip(1).Where(a => a.EndsWith(".json")).Select(a => JsonSerializer.Deserialize<Run>(File.ReadAllText(a), json)!).ToList();
         var merged = parts[0] with
@@ -257,7 +260,7 @@ int Real(string meetingFolder)
 
 int CloudRun()
 {
-    var ids = List("--meetings", "negotiation-6-clean,negotiation-6-room,mix-3-clean,mix-3-overlap-room,mix-4-clean,mix-4-overlap-room,mix-6-clean,mix-6-overlap-room,pl-4-clean,pl-4-overlap-room,pl-6-clean,pl-6-overlap-room");
+    var ids = storedIds;
     var services = List("--services", $"{Cloud.Gladia},{Cloud.Scribe}");
     var realFolder = Arg("--real");
     var realHint = int.Parse(Arg("--real-hint") ?? "3");
@@ -387,6 +390,26 @@ int CloudRun()
     File.WriteAllText(path + ".md", md.ToString());
     File.WriteAllText(path + ".json", JsonSerializer.Serialize(new Run(DateTime.Now, machine, Engines.DefaultThreshold, Corpus.RoomDescription, cloudResults, [], cloudNotes, cloudDetails), json));
     Console.WriteLine(md);
+    return 0;
+}
+
+int SherpaRttm(string name)
+{
+    var embedding = Engines.ModelPath(modelsDir, data, DiarizationModelCatalog.DefaultEmbedding);
+    var rtf = new List<double>();
+    Directory.CreateDirectory(Path.Combine(data, "cloud"));
+    foreach (var meeting in storedIds.Select(Stored))
+    foreach (var hint in new int?[] { meeting.Speakers, null })
+    {
+        using var diarization = Engines.Load(segmentation, embedding, hint, hint is null ? 0.8f : null);
+        var (turns, seconds) = Clock.Time(() => Engines.Diarize(diarization, meeting.Samples));
+        rtf.Add(seconds / meeting.Seconds);
+        File.WriteAllLines(Path.Combine(data, "cloud", $"{name}-{meeting.Id}-{(hint is null ? "none" : $"hint{hint}")}.rttm"), turns.Select(t =>
+            $"SPEAKER {meeting.Id} 1 {t.StartSeconds:F3} {t.EndSeconds - t.StartSeconds:F3} <NA> <NA> {t.Speaker} <NA> <NA>"));
+        Console.WriteLine($"{meeting.Id,-24} hint {hint?.ToString() ?? "none",-4} {turns.Select(t => t.Speaker).Distinct().Count()} speakers, RTF {seconds / meeting.Seconds:F3}");
+    }
+
+    Console.WriteLine($"{segmentation}: RTF mean {rtf.Average():F3}, {machine}");
     return 0;
 }
 

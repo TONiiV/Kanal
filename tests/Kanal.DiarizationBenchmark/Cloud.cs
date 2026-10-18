@@ -35,7 +35,12 @@ internal static class Cloud
         if (!File.Exists(raw))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(raw)!);
-            var body = service == Gladia ? await GladiaRun(wav, hint, languages, id) : await ScribeRun(wav, hint, id);
+            var body = service switch
+            {
+                Gladia => await GladiaRun(wav, hint, languages, id),
+                Scribe => await ScribeRun(wav, hint, id),
+                _ => throw new FileNotFoundException($"No RTTM file for local system {service}.", stem + ".rttm"),
+            };
             await File.WriteAllTextAsync(raw, body);
         }
 

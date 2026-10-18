@@ -434,6 +434,47 @@ Recommendation: do not port the full pipeline. The gain applies only when the op
 count. It costs 5 times the CPU time, 2 times the memory and two new algorithms in C#. A smaller test
 is open: run sherpa-onnx with the community-1 segmentation model in ONNX and CAM++ at 0.8.
 
+#### Segmentation swap only: community-1 segmentation in sherpa-onnx
+
+Result: the swap changes nothing. The community-1 segmentation model has the same weights as
+segmentation 3.0. All the community-1 gain comes from the ResNet34 embeddings, PLDA and VBx.
+
+Method:
+
+1. The export follows the sherpa-onnx script (opset 13) and adds the sherpa metadata. The values are
+   equal to the shipped `pyannote-segmentation-3-0.onnx`: 3 speakers, powerset 2, 7 classes, window
+   160000, receptive field 991 and 270, model type `pyannote-segmentation-3.0`.
+2. `rttm <name> [--segmentation <onnx>]` runs sherpa CAM++ on the 12 stored meetings. It uses the true
+   count and threshold 0.8. It writes `<data>/cloud/<name>-<id>-<hint>.rttm` and does not write the
+   meeting audio.
+3. `cloud --services sherpa-seg30,sherpa-c1seg` scores both sets with the same code. A local system
+   without an RTTM file now stops with an error, so no audio goes to a cloud service.
+
+Weight check:
+
+- 28 of 33 float tensors in the two ONNX files are equal bit for bit, including all LSTM and linear
+  weights. The other 5 are small constants that the export folds differently.
+- On 30 s of `negotiation-6-room`, the outputs differ by at most 7e-5. The argmax class agrees on 100 %
+  of the frames.
+- The 24 RTTM files of the two runs are byte-identical.
+
+| System | Utterance accuracy, scripted / synthetic % | Exact count | Under 1 s correct | DER synthetic % (missed / FA / confusion) | RTF |
+|---|---:|---:|---:|---|---:|
+| sherpa seg 3.0 hint, this run | 71.5 / 70.3 | 9 | 17/84 | 16.3 (0.4 / 0.1 / 15.9) | 0.085 |
+| sherpa community-1 seg hint | 71.5 / 70.3 | 9 | 17/84 | 16.3 (0.4 / 0.1 / 15.9) | 0.083 |
+| sherpa seg 3.0 at 0.8, this run | 76.9 / 69.3 | 6 | 12/84 | 16.3 (0.4 / 0.1 / 15.8) | 0.085 |
+| sherpa community-1 seg at 0.8 | 76.9 / 69.3 | 6 | 12/84 | 16.3 (0.4 / 0.1 / 15.8) | 0.083 |
+
+RTF is the mean over 24 runs per model (Ryzen 9 PRO 8945HS, 8 threads).
+
+The seg 3.0 rows differ from the earlier sherpa rows (68.5 / 70.3 and 80.0 / 68.4) on 6 meetings.
+The audio files and the scoring are the same. The difference is up to 6 points on one meeting and up
+to 3 points on the scripted mean. The cause is not checked. Treat differences of this size between
+sherpa runs as noise.
+
+Decision: do not ship the community-1 segmentation file. It gives no gain, and its licence
+(CC-BY-4.0, gated) is stricter than the shipped model.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
