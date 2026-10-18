@@ -326,7 +326,7 @@ internal static partial class Numbers
         return words;
     }
 
-    [GeneratedRegex(@"(?<![\d,.])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)([百千万亿]+)(?![零〇一二两三四五六七八九十百千万亿])")]
+    [GeneratedRegex(@"(?<!\d|\d[,.])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)([百千万亿]+)(?![零〇一二两三四五六七八九十百千万亿])")]
     private static partial Regex ArabicUnit();
 
     [GeneratedRegex("(万一|万万|千万(?=[不别要得]))|(百分之)?([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九]+)?)")]

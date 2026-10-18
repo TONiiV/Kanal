@@ -86,6 +86,8 @@ What changed in `tests/Kanal.AsrBenchmark`:
   normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
   ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
   stay text. A run like 十分 is still converted, on both sides alike.
+  A bare 百 or 千 at the start of a run is read as 100 or 1000, so 百度 becomes 100度 and 百分比
+  becomes 100分比. Both sides change alike. A real inverse text normaliser would remove this limit.
   A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
   (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
   stays two numbers. None of the 498 reference texts uses a plain space as a separator.
@@ -164,6 +166,9 @@ and Qwen3-ASR 1.7B show the forced room (see the findings). The raw scores are i
 | ami | en | 20.2 | 27.1 | 22.6 | 24.6 | 25.9 | 21.7 | 52.1 |
 | aishell4 | zh | 33.2 | 83.2 | 68.0 | 55.5 | 85.2 | 56.2 | 66.6 |
 
+The engine run used the normaliser of commit 80805cb. Later normaliser fixes can change the
+number-normalised column slightly. The raw column is not affected.
+
 Speed (speed phases; RTF of the accuracy phase, offline feed):
 
 | Model | RTF offline | RTF 4 streams (mean) | Final after speech end p50/p95 s | First partial p50 s | Peak working set MB |
@@ -193,7 +198,7 @@ Findings:
   room languages. On AMI it wrote Welsh for 6 of 25 English clips (WER 52.1). On VoxPopuli it wrote
   Slovene, German or English for some pl and en clips. On AISHELL-4 it gave no text for 14 of 26
   clips. On clean speech Gladia is the most accurate engine (Common Voice de/pl 6.1/6.4).
-  Recommendation: the product sends the room languages to Gladia. This needs its own ticket.
+  ADR 0061 (PR #291) decides that the product sends no room languages to Gladia. It accepts these errors.
 - **Gladia gives the fastest finals** (p50 1.01 s after speech end against 2.34 s for Nemotron).
 - **The Gladia session does not end** when the session closes during the reconnect wait.
   `GladiaAsrSession.ReceiveLoopAsync` awaits the backoff delay in its `catch`, so the cancel escapes
