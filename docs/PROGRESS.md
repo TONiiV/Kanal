@@ -355,6 +355,85 @@ Cloud caveats:
   user for this run only).
 - The sherpa columns come from the earlier runs of this benchmark (same audio and scoring).
 
+#### Local comparison: pyannote community-1
+
+`pyannote/speaker-diarization-community-1` (pyannote.audio 4.0.7, PyTorch 2.14 CPU, 8 threads) ran
+offline on the same 12 meetings. No audio left the machine. The pipeline is pyannote segmentation
+(community-1 weights), WeSpeaker ResNet34 embeddings, PLDA and VBx clustering.
+
+- A Python script outside the repo wrote one RTTM file per meeting and setting into `<data>/cloud/`.
+- `Cloud.Diarize` reads `<service>-<id>-<hint>.rttm` when the file exists. The `cloud` command then
+  scores it with the same code: `cloud --services pyannote-community-1,pyannote-community-1-exclusive`.
+- "hint" is `num_speakers` (an exact count). "none" is the pipeline default (VBx threshold 0.6).
+- The `-exclusive` output gives one speaker per frame. It is within 1 point of the regular output on
+  every mean, so the table shows the regular output only.
+
+| Meeting | True | sherpa hint | sherpa none | community-1 hint | community-1 none |
+|---|---:|---:|---:|---:|---:|
+| negotiation-6-clean | 6 | 18.6 / 72.3 / 5 | 9.6 / 78.5 / 8 | 16.4 / 86.2 / 6 | 16.4 / 86.2 / 6 |
+| negotiation-6-room | 6 | 27.0 / 64.6 / 5 | 6.7 / 81.5 / 10 | 24.9 / 75.4 / 6 | 22.8 / 73.8 / 5 |
+| mix-3-clean | 3 | 22.5 / 70.3 / 3 | 22.5 / 70.3 / 3 | 19.3 / 73.0 / 3 | 19.3 / 73.0 / 3 |
+| mix-3-overlap-room | 3 | 26.3 / 62.2 / 3 | 36.8 / 48.6 / 7 | 17.1 / 70.3 / 3 | 33.7 / 64.9 / 2 |
+| mix-4-clean | 4 | 21.0 / 72.2 / 4 | 19.2 / 77.8 / 4 | 11.2 / 80.6 / 4 | 11.2 / 80.6 / 4 |
+| mix-4-overlap-room | 4 | 20.5 / 63.9 / 4 | 23.0 / 61.1 / 5 | 20.9 / 63.9 / 4 | 27.6 / 58.3 / 3 |
+| mix-6-clean | 6 | 4.4 / 79.5 / 6 | 4.4 / 76.9 / 7 | 2.2 / 82.1 / 6 | 2.2 / 82.1 / 6 |
+| mix-6-overlap-room | 6 | 12.0 / 69.2 / 5 | 12.3 / 64.1 / 9 | 6.8 / 74.4 / 6 | 6.8 / 74.4 / 6 |
+| pl-4-clean | 4 | 15.3 / 70.3 / 4 | 15.3 / 70.3 / 4 | 6.8 / 81.1 / 4 | 6.8 / 81.1 / 4 |
+| pl-4-overlap-room | 4 | 17.4 / 62.2 / 4 | 17.4 / 62.2 / 4 | 19.3 / 67.6 / 4 | 25.6 / 62.2 / 3 |
+| pl-6-clean | 6 | 9.2 / 76.3 / 6 | 9.2 / 76.3 / 6 | 6.1 / 78.9 / 6 | 6.1 / 78.9 / 6 |
+| pl-6-overlap-room | 6 | 8.5 / 76.3 / 6 | 8.5 / 76.3 / 6 | 16.8 / 68.4 / 6 | 37.4 / 52.6 / 4 |
+| Mean, scripted (2) | | 22.8 / 68.5 | 8.1 / 80.0 | 20.7 / 80.8 | 19.6 / 80.0 |
+| Mean, synthetic (10) | | 15.7 / 70.3 | 16.9 / 68.4 | 12.6 / 74.1 | 17.7 / 70.9 |
+| Exact count, all 12 | | 9 | 6 | 12 | 7 |
+
+All systems side by side, all 12 meetings:
+
+| System | Utterance accuracy, scripted / synthetic % | Exact count | Under 1 s correct | DER synthetic % (missed / FA / confusion) |
+|---|---:|---:|---:|---|
+| sherpa CAM++ hint | 68.5 / 70.3 | 9 | 16/84 | 15.7 (0.4 / 0.1 / 15.3) |
+| sherpa CAM++ 0.8 | 80.0 / 68.4 | 6 | 11/84 | 16.9 (0.4 / 0.1 / 16.4) |
+| community-1 hint | 80.8 / 74.1 | 12 | 21/84 | 12.6 (0.4 / 0.0 / 12.2) |
+| community-1 none | 80.0 / 70.9 | 7 | 25/84 | 17.7 (0.4 / 0.0 / 17.2) |
+| Gladia hint | 66.9 / 73.3 | 12 | 32/84 | 26.2 (13.7 / 1.1 / 11.4) |
+| Scribe v2 none | 70.8 / 88.8 | 8 | 56/84 | 9.5 (4.9 / 0.0 / 4.5) |
+
+Cost on the same machine (Ryzen 9 PRO 8945HS, 8 threads, nothing else running): RTF 0.36 to 0.47,
+mean 0.42. Model load 12.5 s. Peak working set 2.4 GB. sherpa CAM++ has RTF 0.086 on the real
+recording and a peak of 470 to 1350 MB (see "Cost" above). community-1 is about 5 times slower and needs about 2 times the memory.
+
+Per speaker on the scripted meeting:
+
+- Clean: community-1 separates all 6 speakers, with or without the count (73 to 92 % per speaker).
+  It is the best system on this variant (86.2 %).
+- Room, with the count: pl-nowak goes into pl-kowalska (0 % correct).
+- Room, without the count: de-schulz goes into de-becker (0 % correct). It finds 5 speakers.
+
+Licence and port:
+
+- Weights: CC-BY-4.0 (attribution needed). The Hugging Face repository is gated. A user must accept
+  the terms and use a token with access to the gated repository.
+- The segmentation model has the same shape as segmentation 3.0: 10 s window, 7 powerset classes,
+  589 frames, receptive field 991 samples, step 270 samples. The sherpa-onnx export script
+  (`scripts/pyannote/segmentation/export-onnx.py`, opset 13) exports it. ONNX Runtime output differs
+  from PyTorch by at most 2.1e-5. A sherpa-onnx swap of the segmentation model is therefore possible.
+- sherpa-onnx has no PLDA and no VBx clustering. A full port needs PLDA and VBx in C#, the ResNet34
+  embedding in ONNX, and 5 times the CPU time.
+
+Findings:
+
+- **With the count, community-1 is the best local system.** It gives the exact count in 12 of 12
+  meetings, as Gladia does. Its utterance accuracy is +12.3 points (scripted) and +3.8 points
+  (synthetic) above sherpa with the count.
+- **Without the count, it is no better than sherpa at 0.8.** VBx under-counts in 5 of the 6 room
+  meetings with overlap (2 for 3, 3 for 4, 4 or 5 for 6). sherpa at 0.8 over-counts instead.
+- **Short utterances improve a little.** 21 to 25 of 84 are correct, against 11 to 16 for sherpa.
+  Scribe gets 56.
+- **Scribe stays far ahead on the synthetic meetings** (88.8 % against 74.1 %).
+
+Recommendation: do not port the full pipeline. The gain applies only when the operator gives the
+count. It costs 5 times the CPU time, 2 times the memory and two new algorithms in C#. A smaller test
+is open: run sherpa-onnx with the community-1 segmentation model in ONNX and CAM++ at 0.8.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.

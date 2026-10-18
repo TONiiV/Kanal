@@ -28,7 +28,10 @@ internal static class Cloud
     // Raw responses hold transcript text, so they stay in the data folder and double as a cache.
     public static async Task<IReadOnlyList<SpeakerTurn>> Diarize(string service, string data, string id, string wav, int? hint, string[] languages)
     {
-        var raw = Path.Combine(data, "cloud", $"{service}-{id}-{(hint is null ? "none" : $"hint{hint}")}.json");
+        var stem = Path.Combine(data, "cloud", $"{service}-{id}-{(hint is null ? "none" : $"hint{hint}")}");
+        if (File.Exists(stem + ".rttm"))
+            return RttmTurns(await File.ReadAllLinesAsync(stem + ".rttm"));
+        var raw = stem + ".json";
         if (!File.Exists(raw))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(raw)!);
@@ -157,6 +160,13 @@ internal static class Cloud
     public static IReadOnlyList<SpeakerTurn> GladiaTurns(JsonNode job) =>
         [.. job["result"]!["transcription"]!["utterances"]!.AsArray().Select(u => new SpeakerTurn(
             u!["start"]!.GetValue<double>(), u["end"]!.GetValue<double>(), u["speaker"]?.GetValue<int>() ?? -1))];
+
+    public static IReadOnlyList<SpeakerTurn> RttmTurns(IEnumerable<string> lines)
+    {
+        var fields = lines.Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Where(f => f is ["SPEAKER", ..]).ToList();
+        var ids = fields.Select(f => f[7]).Distinct().Select((s, i) => (s, i)).ToDictionary(x => x.s, x => x.i);
+        return [.. fields.Select(f => new SpeakerTurn(double.Parse(f[3]), double.Parse(f[3]) + double.Parse(f[4]), ids[f[7]]))];
+    }
 
     // Words of one speaker join into a turn until the speaker changes or the gap passes MaxGap.
     public const double MaxGap = 0.5;
