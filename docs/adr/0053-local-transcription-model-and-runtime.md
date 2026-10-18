@@ -4,6 +4,12 @@
 **Date:** 2026-09-08  
 **Issues:** [#72](https://github.com/TONiiV/Kanal/issues/72), [#49](https://github.com/TONiiV/Kanal/issues/49)
 
+> **Amended 2026-10-18:** language conditioning no longer follows the room. A room whose source
+> language is set explicitly does not pass it to the model. Every stream passes `auto`. Room languages
+> never limit recognition, because no one knows beforehand which language a speaker will use. See
+> [ADR 0061](0061-automatic-recognition-language.md). The "Language conditioning" item below is
+> superseded.
+
 ## Context
 
 `StageKind.Local` transcription is offered in the mode list and always resolves to
