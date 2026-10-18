@@ -119,7 +119,7 @@ public class NemotronAsrProviderTests
     [InlineData(new[] { "ja" })]
     [InlineData(new[] { "de" })]
     [InlineData(new[] { "zh", "de", "pl" })]
-    public async Task EveryRoomStartsTheStreamWithAutoLanguage(string[] room)
+    public async Task EveryRoomStartsTheStreamWithAutoLanguage(string[] room, string expected)
     {
         string? asked = null;
         var provider = new NemotronAsrProvider(language =>
@@ -130,7 +130,7 @@ public class NemotronAsrProviderTests
 
         await (await provider.StartAsync(new AsrSessionOptions(16_000, room), TestContext.Current.CancellationToken)).DisposeAsync();
 
-        Assert.Equal("auto", asked);
+        Assert.Equal(expected, asked);
     }
 
     [Fact]
