@@ -100,4 +100,22 @@ public class DiarizationBenchmarkScoringTests
         Assert.Equal((3, 5), Scoring.Accuracy(utterances, map));
         Assert.Equal((1, 2), Scoring.Accuracy(utterances[3..], map));
     }
+
+    [Fact]
+    public void Scribe_words_of_one_speaker_join_until_the_speaker_changes_or_a_long_gap()
+    {
+        var result = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"words": [
+              {"type": "word", "start": 0.0, "end": 0.4, "speaker_id": "speaker_1"},
+              {"type": "spacing", "start": 0.4, "end": 0.5, "speaker_id": "speaker_1"},
+              {"type": "word", "start": 0.5, "end": 1.0, "speaker_id": "speaker_1"},
+              {"type": "word", "start": 2.0, "end": 2.5, "speaker_id": "speaker_1"},
+              {"type": "word", "start": 2.6, "end": 3.0, "speaker_id": "speaker_0"}
+            ]}
+            """)!;
+
+        Assert.Equal(
+            [new SpeakerTurn(0, 1.0, 0), new SpeakerTurn(2.0, 2.5, 0), new SpeakerTurn(2.6, 3.0, 1)],
+            Cloud.ScribeTurns(result));
+    }
 }

@@ -258,6 +258,103 @@ Caveats:
 - The meetings are 2 to 5 min. A 1-hour meeting gives the clusterer more data per speaker.
 - The scripted meeting is one script. Each per-speaker number rests on 9 to 13 utterances.
 
+#### Cloud comparison: Gladia and ElevenLabs Scribe v2
+
+The `cloud` command sends the same meetings to two cloud services and scores them with the same code.
+
+- Gladia pre-recorded API (`/v2/upload`, `/v2/pre-recorded`), `diarization: true`. The hint is
+  `diarization_config.number_of_speakers`. The turns are `result.transcription.utterances`.
+- ElevenLabs `/v1/speech-to-text`, `model_id=scribe_v2`, `diarize=true`. The hint is `num_speakers`,
+  which is a maximum. Consecutive words of one `speaker_id` join into a turn up to a 0.5 s gap.
+- Each service ran twice per meeting: with the true count as the hint, and without a hint.
+- The raw responses stay in the data folder. The tool deletes each Gladia job and each ElevenLabs
+  transcript after it reads the result.
+
+Each cell: DER % (0.25 s collar) / utterance accuracy % / speakers found. "sherpa hint" is CAM++
+with the count; "sherpa none" is CAM++ at threshold 0.8.
+
+| Meeting | True | sherpa hint | sherpa none | Gladia hint | Gladia none | Scribe hint | Scribe none |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| negotiation-6-clean | 6 | 18.6 / 72.3 / 5 | 9.6 / 78.5 / 8 | 26.4 / 83.1 / 6 | 26.4 / 83.1 / 6 | 31.4 / 67.7 / 4 | 31.8 / 67.7 / 4 |
+| negotiation-6-room | 6 | 27.0 / 64.6 / 5 | 6.7 / 81.5 / 10 | 40.8 / 50.8 / 6 | 52.9 / 40.0 / 4 | 28.8 / 69.2 / 4 | 23.0 / 73.8 / 6 |
+| mix-3-clean | 3 | 22.5 / 70.3 / 3 | 22.5 / 70.3 / 3 | 9.9 / 91.9 / 3 | 9.9 / 91.9 / 3 | 1.5 / 100.0 / 3 | 0.6 / 100.0 / 3 |
+| mix-3-overlap-room | 3 | 26.3 / 62.2 / 3 | 36.8 / 48.6 / 7 | 47.3 / 54.1 / 3 | 46.7 / 51.4 / 3 | 12.0 / 86.5 / 3 | 11.9 / 86.5 / 3 |
+| mix-4-clean | 4 | 21.0 / 72.2 / 4 | 19.2 / 77.8 / 4 | 16.8 / 91.7 / 4 | 16.8 / 91.7 / 4 | 2.4 / 100.0 / 4 | 2.2 / 100.0 / 4 |
+| mix-4-overlap-room | 4 | 20.5 / 63.9 / 4 | 23.0 / 61.1 / 5 | 46.9 / 61.1 / 4 | 48.1 / 55.6 / 4 | 24.7 / 77.8 / 4 | 21.6 / 80.6 / 4 |
+| mix-6-clean | 6 | 4.4 / 79.5 / 6 | 4.4 / 76.9 / 7 | 20.4 / 74.4 / 6 | 21.5 / 71.8 / 5 | 9.7 / 89.7 / 5 | 1.4 / 97.4 / 6 |
+| mix-6-overlap-room | 6 | 12.0 / 69.2 / 5 | 12.3 / 64.1 / 9 | 40.6 / 53.8 / 6 | 40.5 / 56.4 / 5 | 13.8 / 82.1 / 5 | 14.9 / 82.1 / 5 |
+| pl-4-clean | 4 | 15.3 / 70.3 / 4 | 15.3 / 70.3 / 4 | 11.3 / 89.2 / 4 | 11.3 / 89.2 / 4 | 0.0 / 100.0 / 4 | 0.0 / 100.0 / 4 |
+| pl-4-overlap-room | 4 | 17.4 / 62.2 / 4 | 17.4 / 62.2 / 4 | 22.9 / 75.7 / 4 | 22.9 / 75.7 / 4 | 10.7 / 86.5 / 4 | 11.2 / 86.5 / 4 |
+| pl-6-clean | 6 | 9.2 / 76.3 / 6 | 9.2 / 76.3 / 6 | 19.6 / 78.9 / 6 | 22.4 / 76.3 / 5 | 19.1 / 73.7 / 4 | 6.5 / 89.5 / 5 |
+| pl-6-overlap-room | 6 | 8.5 / 76.3 / 6 | 8.5 / 76.3 / 6 | 26.9 / 63.2 / 6 | 49.7 / 47.4 / 3 | 21.0 / 71.1 / 5 | 24.2 / 65.8 / 5 |
+| Mean, scripted (2) | | 22.8 / 68.5 | 8.1 / 80.0 | 33.6 / 66.9 | 39.7 / 61.5 | 30.1 / 68.5 | 27.4 / 70.8 |
+| Mean, synthetic (10) | | 15.7 / 70.3 | 16.9 / 68.4 | 26.2 / 73.3 | 29.0 / 70.6 | 11.5 / 86.6 | 9.5 / 88.8 |
+| Exact count, all 12 | | 9 | 6 | 12 | 7 | 6 | 8 |
+
+DER parts, mean of the 10 synthetic meetings, % (missed / false alarm / confusion):
+
+| sherpa hint | sherpa none | Gladia hint | Gladia none | Scribe hint | Scribe none |
+|---:|---:|---:|---:|---:|---:|
+| 0.4 / 0.1 / 15.3 | 0.4 / 0.1 / 16.4 | 13.7 / 1.1 / 11.4 | 13.6 / 1.1 / 14.3 | 4.7 / 0.0 / 6.8 | 4.9 / 0.0 / 4.5 |
+
+On the scripted meeting the confusion is 18.9 % (sherpa hint), 4.1 % (sherpa none), 5.8 % (Gladia
+hint), 11.9 % (Gladia none) and 19 to 22 % (Scribe). Utterances under 1 s, correct, all 12
+meetings: sherpa 16/84 (hint) and 11/84 (none), Gladia 32/84 and 33/84, Scribe 55/84 and 56/84.
+
+Per speaker on the scripted meeting (the full tables are in the run report):
+
+- Scribe merges the same-gender pairs. de-schulz goes into de-becker (0 % correct in 3 of 4 runs) and pl-nowak goes
+  into pl-kowalska. It finds 4 speakers for 6 in 3 of 4 runs, also with `num_speakers=6`.
+- Gladia separates all 6 speakers on the clean variant (69 to 100 % per speaker). In the room
+  variant it loses speech: 2 to 5 utterances per speaker get no tag.
+- sherpa at 0.8 keeps de-schulz apart (70 to 80 %), but it adds small extra clusters.
+
+Real recording ("景江集团合作洽谈", 27.6 min, 344 final utterances in Kanal's transcript):
+
+| System | Hint | Speakers found | Tags after `Assign` | Share of diarized speech per speaker, % |
+|---|---:|---:|---:|---|
+| sherpa CAM++ | – (0.5) | 84 | 47 | 16 / 13 / 11 / 11 / 9 / 7 / 5 / 5, 76 more |
+| sherpa CAM++ | 3 | 3 | 2 | 78 / 20 / 2 |
+| sherpa CAM++ | – (0.8) | 33 | 17 | 26 / 20 / 18 / 16 / 10 / 3 / 1 / 1, 25 more |
+| sherpa CAM++ | – (0.9) | 22 | 11 | 56 / 19 / 17 / 3 / 1 / 1, 16 more |
+| Gladia | 3 | 3 | 3 | 60 / 24 / 16 |
+| Gladia | – | 3 | 3 | 60 / 24 / 16 |
+| ElevenLabs Scribe v2 | – | not run | | |
+
+ElevenLabs refused the real recording with `quota_exceeded`. The request needed 1,843 credits and
+1,659 were left of 10,000.
+
+Cost:
+
+| Service | Audio sent | Price on the vendor page, 2026-10-18 | Cost of this run |
+|---|---:|---|---:|
+| Gladia | 122.5 min | €0.16/h (Solaria-3) to €0.27/h (Solaria-1), diarization included | €0.33 to €0.55 |
+| ElevenLabs Scribe v2 | 67.2 min | $0.22/h, no diarization surcharge listed | $0.25 |
+
+Deletion: the run made 26 Gladia jobs and 24 ElevenLabs transcripts. Every Gladia job answered `202`
+to `DELETE /v2/pre-recorded/{id}`. Every ElevenLabs transcript answered `200` to
+`DELETE /v1/speech-to-text/transcripts/{id}`. A `GET` on the first two of each then answered `404`.
+
+Cloud findings:
+
+- **Gladia is the only system that finds 3 speakers in the real room and gives 3 tags.** sherpa gives
+  2 tags with the count and 17 at 0.8. Without a reference, the real accuracy is not known.
+- **Scribe is the best on the synthetic meetings** (9.5 % DER, 88.8 % utterances, best on short
+  utterances). It is the worst at separating same-gender voices of one language.
+- **Gladia's DER is mostly missed speech.** Its turns cover only recognised words. Its confusion
+  (11.4 % with the hint) is lower than sherpa's (15.3 %) on the synthetic meetings.
+- **The Gladia hint matters, the Scribe hint does not.** `number_of_speakers` gave the exact count
+  in 12 of 12 meetings. `num_speakers` is only a maximum and Scribe still under-counts.
+- **No cloud service wins everywhere.** sherpa at 0.8 stays best on the scripted 6-speaker meeting.
+
+Cloud caveats:
+
+- One run per meeting and per setting. The services can give different results on a second run.
+- Gladia also transcribes. A diarization-only call is not available, so the turns depend on its ASR.
+- Gladia and Scribe received all the meeting audio, including the real recording (approved by the
+  user for this run only).
+- The sherpa columns come from the earlier runs of this benchmark (same audio and scoring).
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.

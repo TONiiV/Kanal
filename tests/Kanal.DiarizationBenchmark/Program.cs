@@ -40,6 +40,8 @@ switch (args.FirstOrDefault())
         return 0;
     case "real":
         return Real(args[1]);
+    case "cloud":
+        return CloudRun();
     case "report":
         var parts = args.Skip(1).Where(a => a.EndsWith(".json")).Select(a => JsonSerializer.Deserialize<Run>(File.ReadAllText(a), json)!).ToList();
         var merged = parts[0] with
@@ -251,6 +253,156 @@ int Real(string meetingFolder)
     File.WriteAllLines(path, lines);
     Console.WriteLine($"Wrote {path}");
     return 0;
+}
+
+int CloudRun()
+{
+    var ids = List("--meetings", "negotiation-6-clean,negotiation-6-room,mix-3-clean,mix-3-overlap-room,mix-4-clean,mix-4-overlap-room,mix-6-clean,mix-6-overlap-room,pl-4-clean,pl-4-overlap-room,pl-6-clean,pl-6-overlap-room");
+    var services = List("--services", $"{Cloud.Gladia},{Cloud.Scribe}");
+    var realFolder = Arg("--real");
+    var realHint = int.Parse(Arg("--real-hint") ?? "3");
+    var meetings = ids.Select(Stored).ToList();
+    var forbidden = new HashSet<string>();
+    var gates = services.ToDictionary(s => s, _ => new SemaphoreSlim(3));
+    var cloudResults = new List<Result>();
+    var cloudDetails = new List<string>();
+    var cloudNotes = new List<string>();
+    var sent = services.ToDictionary(s => s, _ => 0.0);
+    var realLines = new List<string>();
+
+    async Task<IReadOnlyList<SpeakerTurn>?> Call(string service, string id, string wav, int? hint, string[] languages, double seconds)
+    {
+        await gates[service].WaitAsync();
+        try
+        {
+            lock (forbidden)
+                if (forbidden.Contains(service))
+                    return null;
+            var watch = Stopwatch.StartNew();
+            var turns = await Cloud.Diarize(service, data, id, wav, hint, languages);
+            lock (sent)
+                sent[service] += seconds;
+            Console.WriteLine($"   {service,-22} {id,-24} hint {hint?.ToString() ?? "none",-4} {turns.Select(t => t.Speaker).Distinct().Count()} speakers, {watch.Elapsed.TotalSeconds:F0} s");
+            return turns;
+        }
+        catch (ForbiddenException e)
+        {
+            lock (forbidden)
+                if (forbidden.Add(service))
+                    lock (cloudNotes)
+                        cloudNotes.Add($"{service} stopped: {e.Message}");
+            Console.WriteLine($"   {service}: {e.Message}");
+            return null;
+        }
+        catch (Exception e)
+        {
+            lock (cloudNotes)
+                cloudNotes.Add($"{service} {id} hint {hint?.ToString() ?? "none"} failed: {e.Message}");
+            Console.WriteLine($"   {service} {id}: {e.Message}");
+            return null;
+        }
+        finally
+        {
+            gates[service].Release();
+        }
+    }
+
+    var jobs = new List<Task>();
+    foreach (var meeting in meetings)
+    foreach (var service in services)
+    foreach (var hint in new int?[] { meeting.Speakers, null })
+        jobs.Add(Task.Run(async () =>
+        {
+            var languages = meeting.Lang == "mix" ? new[] { "zh", "de", "pl" } : [meeting.Lang];
+            var turns = await Call(service, meeting.Id, Path.Combine(data, "meetings", meeting.Id + ".wav"), hint, languages, meeting.Seconds);
+            if (turns is null)
+                return;
+            var result = Score(meeting, service, hint is null ? "none" : "hint", 0, turns);
+            lock (cloudResults)
+            {
+                cloudResults.Add(result);
+                if (meeting.Id.StartsWith("negotiation", StringComparison.Ordinal))
+                    cloudDetails.Add(Confusion(meeting, $"{service}, {(hint is null ? "no hint" : $"hint {hint}")}", Scoring.Attribute(meeting.Truth, turns)));
+            }
+        }));
+
+    if (realFolder is not null)
+    {
+        var audio = Path.Combine(realFolder, WorkspaceStore.AudioFileName);
+        var utterances = TranscriptLog.Read(Path.Combine(realFolder, TranscriptLog.FileName));
+        double seconds;
+        using (var file = File.OpenRead(audio))
+            seconds = WavFile.Read(file).Pcm16.Length / 2.0 / Corpus.Rate;
+        realLines.Add($"Real recording: {seconds / 60:F1} min, {utterances.Count} utterances.");
+        realLines.Add("");
+        realLines.Add("| Service | Hint | Speakers found | Tags after Assign | Share of diarized speech per speaker (largest first) |");
+        realLines.Add("|---|---:|---:|---:|---|");
+        foreach (var service in services)
+        foreach (var hint in new int?[] { realHint, null })
+            jobs.Add(Task.Run(async () =>
+            {
+                var turns = await Call(service, "real", audio, hint, ["zh", "de", "pl", "en"], seconds);
+                if (turns is null)
+                    return;
+                var total = turns.Sum(t => t.EndSeconds - t.StartSeconds);
+                var shares = turns.GroupBy(t => t.Speaker).Select(g => g.Sum(t => t.EndSeconds - t.StartSeconds) / total).OrderDescending().ToList();
+                var tags = SpeakerReidentification.Assign(utterances, turns).Values.Distinct().Count();
+                lock (realLines)
+                    realLines.Add($"| {service} | {hint?.ToString() ?? "–"} | {shares.Count} | {tags} | {string.Join(" / ", shares.Select(s => $"{s * 100:F0}"))} |");
+            }));
+    }
+
+    Task.WaitAll(jobs);
+
+    var sherpa = Directory.GetFiles(Arg("--sherpa") ?? Path.Combine(data, "runs"), "kanal-diarization-benchmark-*.json").Order()
+        .SelectMany(f => JsonSerializer.Deserialize<Run>(File.ReadAllText(f), json)!.Results)
+        .Where(r => r.Model == DiarizationModelCatalog.DefaultEmbedding.Id && ids.Contains(r.Meeting)
+                    && (r.System == "count" || (r.System == "auto" && Math.Abs(r.Threshold - 0.8) < 1e-3)))
+        .GroupBy(r => (r.Meeting, r.System))
+        .Select(g => g.Last() with { Model = "sherpa CAM++", System = g.Key.System == "count" ? "hint" : "none" })
+        .ToList();
+    var all = sherpa.Concat(cloudResults).ToList();
+    var columns = new[] { "sherpa CAM++" }.Concat(services).SelectMany(s => new[] { (Service: s, System: "hint"), (Service: s, System: "none") }).ToList();
+    var md = new StringBuilder()
+        .AppendLine("Each cell: DER % (0.25 s collar) / utterance accuracy % / speakers found. sherpa \"hint\" is the count given; sherpa \"none\" is threshold 0.8. Gladia \"hint\" is `number_of_speakers`; ElevenLabs \"hint\" is `num_speakers` (a maximum).").AppendLine()
+        .AppendLine("| Meeting | True | " + string.Join(" | ", columns.Select(c => $"{c.Service} {c.System}")) + " |")
+        .AppendLine("|---|---:|" + string.Concat(columns.Select(_ => "---:|")));
+    foreach (var meeting in meetings)
+        md.AppendLine($"| {meeting.Id} | {meeting.Speakers} | " + string.Join(" | ", columns.Select(c =>
+            all.FirstOrDefault(r => r.Meeting == meeting.Id && r.Model == c.Service && r.System == c.System) is { } r
+                ? $"{r.Der * 100:F1} / {r.Accuracy * 100:F1} / {r.Estimated}" : "–")) + " |");
+    foreach (var (label, scripted) in new[] { ("Mean, scripted", true), ("Mean, synthetic", false) })
+        md.AppendLine($"| {label} | | " + string.Join(" | ", columns.Select(c =>
+            all.Where(r => r.Meeting.StartsWith("negotiation", StringComparison.Ordinal) == scripted && r.Model == c.Service && r.System == c.System).ToList() is { Count: > 0 } rs
+                ? $"{rs.Average(r => r.Der) * 100:F1} / {rs.Sum(r => r.Correct) * 100.0 / rs.Sum(r => r.Total):F1} / {rs.Count(r => r.Estimated == r.Speakers)} of {rs.Count} exact" : "–")) + " |");
+    md.AppendLine().AppendLine("| Service | Audio sent, min |").AppendLine("|---|---:|");
+    foreach (var (service, s) in sent)
+        md.AppendLine($"| {service} | {s / 60:F1} |");
+    md.AppendLine().AppendJoin(Environment.NewLine, realLines).AppendLine().AppendLine()
+        .AppendLine("Deletions:").AppendLine().AppendJoin(Environment.NewLine, Cloud.Deletions.Select(d => "- " + d)).AppendLine().AppendLine()
+        .AppendLine("Notes:").AppendLine().AppendJoin(Environment.NewLine, cloudNotes.Select(n => "- " + n)).AppendLine().AppendLine()
+        .AppendJoin(Environment.NewLine, cloudDetails.Order());
+    Directory.CreateDirectory(outDir);
+    var path = Path.Combine(outDir, $"kanal-diarization-cloud-{DateTime.Now:yyyyMMdd-HHmm}");
+    File.WriteAllText(path + ".md", md.ToString());
+    File.WriteAllText(path + ".json", JsonSerializer.Serialize(new Run(DateTime.Now, machine, Engines.DefaultThreshold, Corpus.RoomDescription, cloudResults, [], cloudNotes, cloudDetails), json));
+    Console.WriteLine(md);
+    return 0;
+}
+
+Meeting Stored(string id)
+{
+    var wav = Path.Combine(data, "meetings", id + ".wav");
+    using var file = File.OpenRead(wav);
+    var samples = PcmConvert.BytesToShorts(WavFile.Read(file).Pcm16).Select(s => s / 32768f).ToArray();
+    var truth = File.ReadAllLines(Path.ChangeExtension(wav, ".rttm")).Select(l => l.Split(' ')).Select(f =>
+    {
+        var start = double.Parse(f[3]);
+        return new Segment(start, start + double.Parse(f[4]), f[7]);
+    }).ToList();
+    var scripted = id.StartsWith("negotiation", StringComparison.Ordinal);
+    return new Meeting(id, scripted ? "mix" : id.Split('-')[0], truth.Select(t => t.Speaker).Distinct().Count(),
+        scripted || id.Contains("overlap", StringComparison.Ordinal), id.EndsWith("room", StringComparison.Ordinal), samples, truth);
 }
 
 static string Sample(string lang) => lang switch
