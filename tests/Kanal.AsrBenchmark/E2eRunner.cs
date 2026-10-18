@@ -30,9 +30,10 @@ internal static class E2eRunner
 
     private sealed record RouteFile(string Machine, List<string> Notes, List<RunDto> Runs);
 
-    public static async Task<int> RunAsync(string data, string modelsDir, string outDir, IReadOnlyList<string> routes, int perGroup, string? note)
+    public static async Task<int> RunAsync(string data, string modelsDir, string outDir, IReadOnlyList<string> routes, int perGroup, string? note, IReadOnlyList<string>? only)
     {
-        var clips = Corpus.Load(data, ["meeting-11labs"]).GroupBy(c => c.Lang).SelectMany(g => g.Take(perGroup)).ToList();
+        var clips = Corpus.Load(data, ["meeting-11labs"]).GroupBy(c => c.Lang).SelectMany(g => g.Take(perGroup))
+            .Where(c => only is null || only.Any(o => c.Id.StartsWith(o, StringComparison.Ordinal))).ToList();
         if (clips.Count == 0)
         {
             Console.Error.WriteLine($"No meeting-11labs clips in {data}. Run: fetch --sets meeting-11labs");
@@ -76,9 +77,18 @@ internal static class E2eRunner
                     return 2;
             }
 
-            var file = new RouteFile(machine, notes, [.. runs.Select(r => new RunDto(r.Route, r.Clip.Id, r.Transcript,
-                [.. r.SrcLangs], r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds))]);
-            await File.WriteAllTextAsync(Path.Combine(outDir, $"e2e-runs-{route}.json"), JsonSerializer.Serialize(file, Json));
+            var dtos = runs.Select(r => new RunDto(r.Route, r.Clip.Id, r.Transcript,
+                [.. r.SrcLangs], r.Translations.ToDictionary(kv => kv.Key, kv => kv.Value), r.LatencySeconds, r.AsrSeconds)).ToList();
+            var path = Path.Combine(outDir, $"e2e-runs-{route}.json");
+            if (only is not null && File.Exists(path))
+            {
+                var earlier = JsonSerializer.Deserialize<RouteFile>(await File.ReadAllTextAsync(path), Json)!;
+                notes.InsertRange(0, earlier.Notes);
+                notes.Add($"Clips {string.Join(", ", only)} ran again, and the new runs replace the earlier ones.");
+                dtos = [.. earlier.Runs.Where(e => !dtos.Any(d => d.Route == e.Route && d.ClipId == e.ClipId)), .. dtos];
+            }
+
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new RouteFile(machine, notes, dtos), Json));
         }
 
         var all = new List<E2eRun>();

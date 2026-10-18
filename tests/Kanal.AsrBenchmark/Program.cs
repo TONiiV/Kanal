@@ -56,7 +56,7 @@ if (args.FirstOrDefault() == "fetch")
 
 if (args.FirstOrDefault() == "e2e")
     return await E2eRunner.RunAsync(data, modelsDir, Arg("--out") ?? ".", List("--routes", "gladia,nemotron,qwen3"),
-        int.Parse(Arg("--clips") ?? "1000"), Arg("--note"));
+        int.Parse(Arg("--clips") ?? "1000"), Arg("--note"), Arg("--only")?.Split(','));
 
 var perGroup = int.Parse(Arg("--clips") ?? "1000");
 var clips = Corpus.Load(data)
