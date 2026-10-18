@@ -141,7 +141,7 @@ internal static class Corpus
             {
                 rows.AddRange(await Sets[set](http, data, perLanguage));
             }
-            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or InvalidDataException)
+            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or InvalidDataException or IOException or TaskCanceledException)
             {
                 failed++;
                 Console.Error.WriteLine($"{set}: {e.Message} The old clips of this set stay.");

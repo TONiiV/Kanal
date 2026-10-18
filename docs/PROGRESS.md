@@ -24,8 +24,8 @@ What changed in `tests/Kanal.AsrBenchmark`:
   percentages into digits in the hypothesis and in the reference (zh 两千 → 2000, de fünftausend →
   5000, pl dwa tysiące → 2000, en five thousand → 5000). The report shows the raw score and the
   normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
-  ("twenty twenty-six"), no codes read digit by digit. A Chinese run that starts with 万, 千, 百 or 亿
-  stays text (万一, 千万). A run like 十分 is still converted, on both sides alike.
+  ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
+  stay text. A run like 十分 is still converted, on both sides alike.
   A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
   (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
   stays two numbers. None of the 498 reference texts uses a plain space as a separator.
@@ -35,8 +35,8 @@ What changed in `tests/Kanal.AsrBenchmark`:
   [model card](https://huggingface.co/thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8/blob/69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5/README.md)
   at the pinned revision. The repository has no separate licence file.
 - **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. A plain `fetch`
-  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name or a missing
-  `ffmpeg` gives an error and exit code 1 or 2. Each set pins a revision or a dataset version.
+  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name gives exit code 2.
+  A failed set, for example with no `ffmpeg`, gives exit code 1. Each set pins a revision or a dataset version.
   No audio is committed.
 
 | Set | Languages | Clips | Source | Licence |

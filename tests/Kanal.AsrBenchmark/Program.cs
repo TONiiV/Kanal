@@ -30,7 +30,7 @@ if (args.FirstOrDefault() == "probe")
 
 if (args.FirstOrDefault() == "fetch")
 {
-    var sets = List("--sets", string.Join(',', Corpus.DefaultSets));
+    var sets = List("--sets", string.Join(',', Corpus.DefaultSets)).Distinct().ToArray();
     if (sets.Except(Corpus.Sets.Keys).ToList() is { Count: > 0 } unknown)
     {
         Console.Error.WriteLine($"Unknown set: {string.Join(", ", unknown)}. Known sets: {string.Join(", ", Corpus.Sets.Keys)}.");
