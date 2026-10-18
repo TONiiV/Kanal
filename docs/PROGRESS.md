@@ -4,6 +4,260 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-18
+
+### Speaker diarization benchmark
+
+Issue #111, ADR 0055 slice 6. `tests/Kanal.DiarizationBenchmark` measures how well Kanal separates
+speakers in zh, de and pl. It does not run in CI, because it needs the models, the test audio and
+the local hardware. CI runs its scoring tests (`DiarizationBenchmarkScoringTests`).
+
+**Result first.** Keep the CAM++ embedding (`3dspeaker_campplus_zh_en_16k-common_advanced`). Change
+the clustering threshold without a count from the library default 0.5 to 0.8. At 0.5 the post-meeting
+layer finds too many speakers in every language. No language is unusable, but Polish is the weakest,
+and two voices of the same gender and language often merge. The numbers are an optimistic bound:
+the voices are TTS voices, cleaner and more distinct than people in a real room. The real 3-person
+recording shows this: at 0.8 it still gets 17 tags.
+
+#### Setup
+
+Test audio:
+
+- **Scripted meeting** (`Scripts/negotiation-6.json`): 65 turns of a supplier/customer negotiation,
+  6 speakers in the real Kanal setup: 2 zh (male, female), 2 de (both male), 2 pl (both female). Each
+  speaker keeps one language. 9 turns are under 1 s. ElevenLabs `eleven_multilingual_v2` synthesised
+  it with 6 premade voices (median F0: zh 108/190 Hz, de 143/140 Hz, pl 195/216 Hz). Pauses are 0.2 to
+  0.8 s. 9 marked turns overlap (3.6 s of overlap in total). There is a clean and a room variant
+  (294 s each).
+- **Synthetic matrix**: 4 languages (zh only, de only, pl only, a zh/de/pl mix) × 2, 3, 4 and 6
+  speakers × 4 conditions (clean, overlap, room, overlap and room). Each meeting has about 140 s of
+  speech from a fixed pool of meeting turns, and about 15 % very short turns ("好", "ja", "tak",
+  "genau", "对"). Local voices synthesise it: Kokoro multi-lang v1.0 for zh, Piper for de and pl,
+  3 male and 3 female per language. Every speaker list starts with two voices of one gender, so every
+  meeting has a same-gender pair. In the overlap condition, 35 % of the turns start 0.5 to 2 s before
+  the previous turn ends (9 to 18 s of overlap per meeting).
+- The timeline of each meeting is the reference RTTM. Every clip has the same RMS level.
+- The room condition adds a level per speaker (0 to −6 dB), a Schroeder reverb (RT60 0.5 s, 30 %
+  wet), a low-pass filter at 3.5 kHz and low-passed noise at 15 dB SNR.
+- All audio is 16 kHz mono 16-bit, as Kanal records it. The audio stays in
+  `LocalApplicationData/Kanal/diarization-bench`, outside the repo.
+
+Systems:
+
+- Post-meeting layer: sherpa-onnx `OfflineSpeakerDiarization`, pyannote segmentation 3.0 and one of
+  the four embedding candidates of ADR 0055 decision 16. The benchmark builds the configuration of
+  `SherpaSpeakerDiarizer` and adds the clustering threshold. The sherpa-onnx threshold is a cosine
+  distance: a higher value merges more and gives fewer speakers.
+- Each candidate runs with the true speaker count (what the "how many people" submenu passes) and
+  without a count at one or more thresholds.
+- Live layer: `LiveSpeakerLabels` gets the reference utterances in order, each as its slice of the
+  meeting audio. Each embedding is computed once and replayed for the threshold sweep 0.3 to 0.7.
+  The `LiveSpeakerLabels` threshold is a cosine similarity: a higher value gives more speakers.
+
+Metrics:
+
+- DER with missed speech, false alarm and speaker confusion: 10 ms frames, optimal (Hungarian)
+  speaker mapping, a 0.25 s collar and no collar. Overlapped speech counts once for each speaker.
+  sherpa-onnx gives one speaker per segment, so the overlap is always partly missed (ADR 0055
+  decision 19).
+- The speaker count found against the true count.
+- Utterance accuracy, which is what the operator sees: `SpeakerReidentification.Assign` gives each
+  reference utterance a tag, one Hungarian mapping per meeting maps the tags to speakers, and an
+  utterance without a tag is wrong. Utterances under 1 s are also reported separately.
+- Cost: real-time factor (RTF), peak working set and model load time.
+
+Scope. Each threshold of the sweep runs segmentation and embedding again on the whole meeting, so the
+full matrix did not fit the time box:
+
+- The scripted meeting ran completely: CAM++ with the count, the sweep 0.4 to 0.9 and the live sweep;
+  the other 3 embeddings with the count, threshold 0.8 and their live sweeps.
+- 15 synthetic meetings (all 2-speaker meetings except de-2-room) have the full sweep 0.4 to 0.9 for
+  all 4 embeddings.
+- 47 synthetic meetings (3, 4 and 6 speakers) have the full sweep for CAM++ only. There, the other 3
+  embeddings have the count and threshold 0.8.
+- 2 synthetic meetings did not run: de-2-room and de-3-room.
+
+Run it from the repo root:
+
+1. Run the matrix. The first run downloads the local TTS voices (about 600 MB) and the three
+   candidate embeddings (106 MB):
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- --lang zh --threads 4
+   ```
+
+2. Run the scripted meeting. It needs `ELEVENLABS_API_KEY`. The clips are cached, so a rerun costs
+   no characters:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- --script tests/Kanal.DiarizationBenchmark/Scripts/negotiation-6.json
+   ```
+
+3. Run the real-recording check on one meeting folder. It reads the folder and writes nothing there:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- real <meeting folder>
+   ```
+
+4. Merge the result files of parallel runs into one report:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- report <file.json> <file.json>
+   ```
+
+Options: `--lang`, `--speakers` (the order is the run order), `--variants`, `--embedding <id,...>`,
+`--thresholds` (CAM++), `--candidate-thresholds` (the other embeddings), `--live-thresholds`,
+`--threads N` (default `ProcessorCount / 2`, as the product), `--skip-done` (skip meetings with
+results in `--out`), `--until HH:mm` (start no meeting after this time), `--parity N`, `--data`,
+`--models`, `--out`. `voices` synthesises one sentence per local voice and prints its median F0.
+
+#### Results: scripted 6-speaker meeting
+
+Mean of the clean and the room variant. DER with the 0.25 s collar.
+
+| Embedding | System | DER % | Missed / FA / Confusion % | Utterance accuracy % | < 1 s % | Speakers found, clean / room (true 6) |
+|---|---|---:|---:|---:|---:|---:|
+| CAM++ | count 6 | 22.8 | 3.8 / 0.1 / 18.9 | 68.5 | 27.8 | 5 / 5 |
+| CAM++ | threshold 0.5 (default) | 28.9 | 3.8 / 0.3 / 24.9 | 56.9 | 11.1 | 16 / 22 |
+| CAM++ | threshold 0.8 | **8.1** | 3.8 / 0.3 / 4.1 | **80.0** | 16.7 | 8 / 10 |
+| CAM++ | threshold 0.9 | 12.8 | – | 79.2 | – | 6 / 8 |
+| ERes2Net base | count 6 | 18.2 | 3.7 / 0.6 / 13.9 | 73.1 | 33.3 | 5 / 6 |
+| ERes2Net base | threshold 0.8 | 14.0 | 3.7 / 0.6 / 9.8 | 73.8 | 11.1 | 10 / 11 |
+| WeSpeaker ResNet34 | count 6 | 28.6 | 3.8 / 0.2 / 24.6 | 63.1 | 38.9 | 5 / 5 |
+| WeSpeaker ResNet34 | threshold 0.8 | 23.4 | 3.7 / 0.1 / 19.6 | 65.4 | 44.4 | 4 / 7 |
+| TitaNet small | count 6 | 21.7 | 3.9 / 0.6 / 17.2 | 66.2 | 11.1 | 6 / 6 |
+| TitaNet small | threshold 0.8 | 10.4 | 3.7 / 0.3 / 6.3 | 73.8 | 11.1 | 8 / 11 |
+
+Per speaker (CAM++, share of the speaker's utterances with the right tag, clean / room):
+
+| Speaker | Count 6 | Threshold 0.8 | Live 0.5 |
+|---|---:|---:|---:|
+| de-becker | 92 / 100 % | 85 / 92 % | 92 / 92 % |
+| de-schulz | **0 / 0 %** (merged into de-becker) | 70 / 80 % | **0 / 10 %** (merged into de-becker) |
+| zh-wang | 92 / 92 % | 85 / 85 % | 92 / 85 % |
+| zh-li | 78 / 78 % | 78 / 78 % | 89 / 89 % |
+| pl-nowak | 89 / **0 %** (merged into pl-kowalska) | 78 / 67 % | 67 / 67 % |
+| pl-kowalska | 73 / 91 % | 73 / 82 % | 82 / 82 % |
+
+The two de men (median F0 143 and 140 Hz) are the hard case. With the count, sherpa-onnx returns
+only 5 clusters and puts both men in one. In the room variant the two pl women also merge, so only 4
+clusters win any utterance. The live layer at 0.5 also merges the de men. Threshold 0.8 keeps all 6
+apart and adds 2 to 4 small extra clusters, which the operator merges by hand. The tool writes the
+full confusion tables into its report.
+
+Live layer on the scripted meeting (CAM++): 72.3 % at 0.5 (6.5 speakers created), 81.5 % at 0.6
+(9.0 speakers created), 76.9 % at 0.7.
+
+#### Results: synthetic matrix
+
+All 62 meetings, DER with the 0.25 s collar / utterance accuracy %:
+
+| Embedding | Count given | Threshold 0.5 | Threshold 0.8 | Count exact at 0.8 |
+|---|---:|---:|---:|---:|
+| CAM++ | 16.8 / 72.6 | 23.3 / 64.7 | **13.5 / 74.9** | 48 % |
+| ERes2Net base | 15.3 / 74.6 | (15 meetings) 23.9 / 66.3 | 14.1 / 74.1 | 37 % |
+| WeSpeaker ResNet34 | 19.4 / 71.3 | (15 meetings) 14.4 / 76.1 | 23.3 / 68.5 | 39 % |
+| TitaNet small | 21.0 / 69.7 | (15 meetings) 23.1 / 68.8 | 15.2 / 73.6 | 37 % |
+
+On the 15 meetings with the full sweep for all embeddings (2 speakers), the best thresholds are:
+CAM++ 0.8 (DER 9.9 %), ERes2Net 0.9 (8.2 %), WeSpeaker 0.7 (8.4 %), TitaNet 0.9 (14.3 %).
+The best WeSpeaker threshold is lower than the others. At 0.8 it merges speakers, so its 0.8
+numbers on the larger meetings understate it.
+
+CAM++ threshold sweep, all 62 meetings (DER %):
+
+| Threshold | All | zh | de | pl | mix | Utterance accuracy % | Count exact % | Mean found − true |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.4 | 34.1 | 22.5 | 34.1 | 46.2 | 33.6 | 54.7 | 5 | +7.1 |
+| 0.5 | 23.3 | 14.9 | 21.0 | 31.7 | 25.1 | 64.7 | 6 | +3.9 |
+| 0.6 | 17.1 | 10.9 | 15.4 | 22.5 | 19.2 | 70.3 | 11 | +2.2 |
+| 0.7 | 13.6 | 11.8 | 10.4 | 16.8 | 15.0 | 74.2 | 37 | +1.0 |
+| 0.8 | 13.5 | 15.6 | 7.2 | 15.9 | 14.6 | 74.9 | 48 | +0.5 |
+| 0.9 | 16.0 | 22.8 | 9.6 | 17.0 | 13.9 | 73.1 | 56 | 0.0 |
+
+CAM++ DER % / utterance accuracy % by speaker count:
+
+| Speakers | Count given | Threshold 0.5 | Threshold 0.8 | Live 0.5 | Live 0.6 |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 8.4 / 84 | 20.9 / 72 | 9.9 / 83 | 82 | 85 |
+| 3 | 14.8 / 73 | 20.0 / 65 | 10.9 / 75 | 81 | 80 |
+| 4 | 21.4 / 69 | 27.7 / 62 | 16.9 / 73 | 84 | 85 |
+| 6 | 21.9 / 66 | 24.1 / 61 | 16.0 / 70 | 76 | 79 |
+
+CAM++ at threshold 0.8 by condition: clean 13.2 %, overlap 16.1 %, room 10.9 %, overlap and room
+13.6 % DER. The simulated room does not make it worse. The TTS voices stay distinct through it.
+
+Live layer, all 62 meetings (utterance accuracy %): CAM++ 78.7 at 0.5 and 82.3 at 0.6; ERes2Net
+81.6 at 0.5; TitaNet 78.8 at 0.5; WeSpeaker 62.9 at 0.5 and 80.2 at 0.7.
+
+Cost. Quiet machine, Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 8 threads (the product
+setting), CAM++ on the 27.6 min real recording: RTF 0.086 (2.4 min), load 0.5 to 1.0 s, peak working
+set of the process 470 to 1350 MB. The matrix ran 4 processes in parallel at 2 to 4 threads, and
+another benchmark ran on the machine part of the time, so its timings are not clean. Relative to
+CAM++ on the same runs, ERes2Net is 1.7× slower, WeSpeaker 1.6× slower and TitaNet 0.9×.
+
+Licences (catalog): CAM++, ERes2Net and WeSpeaker Apache-2.0; TitaNet CC-BY-4.0 with attribution;
+pyannote segmentation 3.0 MIT.
+
+#### Real recording
+
+The 3-person meeting "景江集团合作洽谈" (27.6 min, one room microphone) has no reference. CAM++:
+
+| Count | Threshold | Clusters | Tags after `Assign` | Share of diarized speech per cluster, % |
+|---:|---:|---:|---:|---|
+| – | 0.5 (default) | 84 | 47 | 16 / 13 / 11 / 11 / 9 / 7 / 5 / 5, 76 more with 23 together |
+| 3 | – | 3 | 2 | 78 / 20 / 2 |
+| – | 0.8 | 33 | 17 | 26 / 20 / 18 / 16 / 10 / 3 / 1 / 1, 25 more with 5 together |
+| – | 0.9 | 22 | 11 | 56 / 19 / 17 / 3 / 1 / 1, 16 more with 2 together |
+
+The default reproduces the 47 tags that the operator saw. With the count 3, one cluster holds 2 % of
+the speech and wins no utterance, so the operator sees 2 tags for 3 people. Threshold 0.8 cuts the
+tags from 47 to 17, but a real room is clearly harder than the synthetic audio.
+
+#### Findings
+
+- **The library default threshold 0.5 is wrong for Kanal.** It over-splits in every language and
+  condition: +3.9 speakers on the synthetic meetings, +13 on the scripted one, 47 tags on the real one.
+- **The count does not guarantee the count.** With `NumClusters`, sherpa-onnx returned fewer clusters
+  than asked in 17 of 62 synthetic meetings and in both scripted variants. Speakers merge, and the
+  operator cannot split them in the UI. For 3 or more speakers, threshold 0.8 without a count beats
+  the count (10.9 to 16.9 % against 14.8 to 21.9 % DER).
+- **Same-gender, same-language pairs merge.** de-becker and de-schulz merged with the count and in
+  the live layer. The two pl men in pl-2 give 34 % DER with the count.
+- **Polish is the weakest language, but it is not unusable.** CAM++ at 0.8: de 7.2 %, zh 15.6 %,
+  mix 14.6 %, pl 15.9 %. zh gets worse above 0.8 (22.8 % at 0.9), because its voices merge first.
+- **Short utterances are mostly wrong.** Under 1 s, the post-meeting layer gets 17 to 28 % right. The
+  live layer gets 0 to 6 %: an utterance under 1 s copies the previous tag, and a backchannel ("ja",
+  "好") is almost always a change of speaker.
+- **Overlap is missed, as ADR 0055 decision 19 says.** Missed speech is 3.8 % on the scripted meeting.
+- **Parity.** `SherpaSpeakerDiarizer` and the benchmark engine gave identical turns on mix-2-clean
+  (with and without a count) and on zh-2-clean with a count. On zh-2-clean without a count they gave
+  31 and 34 turns. The benchmark ran at 3 threads and the product at 8. The thread count probably
+  changes the clustering at the margin. This is not investigated.
+
+Recommendations (no product change in this PR):
+
+1. Keep `3dspeaker-campplus-zh-en` as the default embedding. No candidate is clearly better. It is
+   best on the scripted meeting and on the 62-meeting mean at 0.8. Its licence needs no attribution.
+   Only TitaNet is faster.
+2. Set `Clustering.Threshold = 0.8` in `SherpaSpeakerDiarizer` when no count is given.
+3. Make "no count" the default path, or tell the operator that a count can merge speakers.
+4. Raise `LiveSpeakerLabels.DefaultThreshold` from 0.5 to 0.6 (+3.6 points, a few more speakers).
+   Do not copy the previous tag for utterances under 1 s. Leave them untagged until the post-meeting
+   layer runs.
+5. Measure real recordings with a hand-made reference before the next default change.
+
+Caveats:
+
+- TTS voices are cleaner and more distinct than people. The numbers are an optimistic bound.
+- The synthetic matrix uses local TTS voices, not ElevenLabs. At the start the ElevenLabs variable
+  held a key ID. The corrected key cannot read the subscription or the voice list. ElevenLabs used
+  3,189 characters (the script plus one 22-character test). The remaining quota is unknown.
+- The synthetic room is a simulation (one reverb, one noise). It is no real room.
+- The reference boundaries come from trimmed TTS clips. A pause inside a turn counts as speech.
+- The meetings are 2 to 5 min. A 1-hour meeting gives the clusterer more data per speaker.
+- The scripted meeting is one script. Each per-speaker number rests on 9 to 13 utterances.
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock

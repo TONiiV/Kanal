@@ -13,63 +13,53 @@ internal static class Report
         var r = run.Results;
         var models = r.Select(x => x.Model).Distinct().ToList();
         var meetings = r.GroupBy(x => x.Meeting).Select(g => g.First()).ToList();
-        var thresholds = r.Where(x => x.System == "auto").Select(x => x.Threshold).Distinct().Order().ToList();
-        var liveThresholds = r.Where(x => x.System == "live").Select(x => x.Threshold).Distinct().Order().ToList();
         var md = new StringBuilder()
             .AppendLine($"# Kanal diarization benchmark — {run.Stamp:yyyy-MM-dd HH:mm}")
             .AppendLine()
             .AppendLine(run.Machine)
             .AppendLine()
-            .AppendLine($"{meetings.Count} synthetic meetings, {run.Costs.Where(c => c.Model == models[0]).GroupBy(c => c.Meeting).Sum(g => g.First().AudioSeconds) / 60:F0} min of audio, {meetings.Sum(m => m.Total)} utterances ({meetings.Sum(m => m.ShortTotal)} under 1 s).")
+            .AppendLine($"{meetings.Count} meetings, {run.Costs.Where(c => c.Model == models[0]).GroupBy(c => c.Meeting).Sum(g => g.First().AudioSeconds) / 60:F0} min of audio, {meetings.Sum(m => m.Total)} utterances ({meetings.Sum(m => m.ShortTotal)} under 1 s).")
             .AppendLine($"Room channel: {run.Room}.")
             .AppendLine($"DER: 10 ms frames, Hungarian speaker mapping, overlap scored as is (a frame with two reference speakers counts twice). Library default clustering threshold: {run.DefaultThreshold:0.0}.")
             .AppendLine("Utterance accuracy: SpeakerReidentification.Assign gives each reference utterance a tag; one Hungarian mapping per meeting maps tags to speakers; an untagged utterance is wrong.")
             .AppendLine();
 
-        var everyModel = r.GroupBy(x => x.Meeting).Where(g => g.Select(x => x.Model).Distinct().Count() == models.Count).Select(g => g.Key).ToHashSet();
-        var common = r.Where(x => everyModel.Contains(x.Meeting)).ToList();
-        double Best(string model) => thresholds.MinBy(t => Mean(r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t), x => x.Der));
-        var bestOf = models.ToDictionary(m => m, Best);
+        var scripted = r.Where(x => x.Meeting.StartsWith("negotiation", StringComparison.Ordinal)).ToList();
+        var synthetic = r.Except(scripted).ToList();
+        if (scripted.Count > 0)
+        {
+            Systems(md, "Scripted 6-speaker meeting (clean and room)", scripted, models, run.DefaultThreshold);
+            Live(md, "Live layer, scripted meeting", scripted, models);
+        }
 
-        Systems(md, $"Systems on the {everyModel.Count} meetings that every embedding ran", common, models, run.DefaultThreshold, thresholds);
-        Systems(md, "Systems on every meeting that the embedding ran", r, models, run.DefaultThreshold, thresholds);
-        Sweep(md, $"Threshold sweep without a count, {everyModel.Count} meetings that every embedding ran", common, models, thresholds);
-        Sweep(md, "Threshold sweep without a count, every meeting that the embedding ran", r, models, thresholds);
+        var everyModel = synthetic.GroupBy(x => x.Meeting)
+            .Where(g => g.Select(x => (x.Model, x.Threshold)).Distinct().Count() == g.Where(x => x.Model == models[0]).Select(x => (x.Model, x.Threshold)).Distinct().Count() * models.Count)
+            .Select(g => g.Key).ToHashSet();
+        var full = synthetic.Where(x => everyModel.Contains(x.Meeting)).ToList();
+        Systems(md, $"Synthetic meetings with the full sweep for every embedding ({everyModel.Count})", full, models, run.DefaultThreshold);
+        Systems(md, $"All synthetic meetings ({synthetic.Select(x => x.Meeting).Distinct().Count()})", synthetic, models, run.DefaultThreshold);
+        Sweep(md, "Threshold sweep without a count, all synthetic meetings", synthetic, models);
 
         foreach (var model in models)
+        foreach (var system in Labels(synthetic, model, run.DefaultThreshold))
         {
-            foreach (var (label, pick) in new (string, Func<Result, bool>)[]
-                     {
-                         ("count given", x => x.System == "count"),
-                         ($"threshold {run.DefaultThreshold:0.0}", x => x.System == "auto" && Near(x.Threshold, run.DefaultThreshold)),
-                         ($"threshold {bestOf[model]:0.0}", x => x.System == "auto" && x.Threshold == bestOf[model]),
-                     })
+            var set = synthetic.Where(x => x.Model == model && system.Pick(x)).ToList();
+            md.AppendLine().AppendLine($"## {model}, {system.Label}: DER % / utterance accuracy % / speakers found").AppendLine()
+                .AppendLine("| Language | Speakers | " + string.Join(" | ", Variants) + " |")
+                .AppendLine("|---|---:|" + string.Concat(Variants.Select(_ => "---:|")));
+            foreach (var lang in Corpus.Languages)
+            foreach (var n in Corpus.SpeakerCounts)
             {
-                var set = r.Where(x => x.Model == model && pick(x)).ToList();
-                md.AppendLine().AppendLine($"## {model}, {label}: DER % / utterance accuracy % / speakers found").AppendLine()
-                    .AppendLine("| Language | Speakers | " + string.Join(" | ", Variants) + " |")
-                    .AppendLine("|---|---:|" + string.Concat(Variants.Select(_ => "---:|")));
-                foreach (var lang in Corpus.Languages)
-                foreach (var n in Corpus.SpeakerCounts)
-                {
-                    var cells = Variants.Select(v => set.FirstOrDefault(x => x.Lang == lang && x.Speakers == n && Variant(x) == v) is { } x
-                        ? $"{P(x.Der)} / {P(x.Accuracy)} / {x.Estimated}"
-                        : "–");
-                    if (set.Any(x => x.Lang == lang && x.Speakers == n))
-                        md.AppendLine($"| {lang} | {n} | {string.Join(" | ", cells)} |");
-                }
+                var cells = Variants.Select(v => set.FirstOrDefault(x => x.Lang == lang && x.Speakers == n && Variant(x) == v) is { } x
+                    ? $"{P(x.Der)} / {P(x.Accuracy)} / {x.Estimated}"
+                    : "–");
+                if (set.Any(x => x.Lang == lang && x.Speakers == n))
+                    md.AppendLine($"| {lang} | {n} | {string.Join(" | ", cells)} |");
             }
         }
 
-        md.AppendLine().AppendLine("## Live layer (LiveSpeakerLabels over the reference utterances)").AppendLine()
-            .AppendLine("| Embedding | Threshold | Utterance accuracy % | ≥ 1 s % | < 1 s % | zh | de | pl | mix | Speakers created (mean) | True (mean) |")
-            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
-        foreach (var model in models)
-        foreach (var t in liveThresholds)
-        {
-            var set = r.Where(x => x.Model == model && x.System == "live" && x.Threshold == t).ToList();
-            md.AppendLine($"| {model} | {t:0.0} | {P(Acc(set))} | {P(Long(set))} | {P(Short(set))} | {string.Join(" | ", Corpus.Languages.Select(l => P(Acc(set.Where(x => x.Lang == l)))))} | {Mean(set, x => x.Estimated):F1} | {Mean(set, x => x.Speakers):F1} |");
-        }
+        md.AppendLine();
+        Live(md, "Live layer, all synthetic meetings", synthetic, models);
 
         md.AppendLine().AppendLine("## Cost (post-meeting layer, one diarization per run)").AppendLine()
             .AppendLine("| Embedding | Runs | Load s (mean) | RTF mean | RTF max | Peak working set MB | Peak minus baseline MB |")
@@ -98,32 +88,57 @@ internal static class Report
         return md.ToString();
     }
 
-    private static void Systems(StringBuilder md, string title, List<Result> r, List<string> models, double defaultThreshold, List<double> thresholds)
+    private static List<(string Label, Func<Result, bool> Pick)> Labels(List<Result> r, string model, double defaultThreshold)
+    {
+        var mine = r.Where(x => x.Model == model).ToList();
+        var thresholds = mine.Where(x => x.System == "auto").Select(x => x.Threshold).Distinct().ToList();
+        var best = thresholds.MinBy(t => Mean(mine.Where(x => x.System == "auto" && x.Threshold == t), x => x.Der));
+        var labels = new List<(string, Func<Result, bool>)> { ("count given", x => x.System == "count") };
+        foreach (var t in new[] { defaultThreshold, 0.8, best }.Select(t => Math.Round(t, 2)).Distinct().Where(t => thresholds.Any(u => Near(u, t))))
+        {
+            var label = $"threshold {t:0.0}" + (Near(t, defaultThreshold) ? " (default)" : "") + (thresholds.Count > 2 && Near(t, best) ? " (best mean DER)" : "");
+            labels.Add((label, x => x.System == "auto" && Near(x.Threshold, t)));
+        }
+
+        return labels;
+    }
+
+    private static void Systems(StringBuilder md, string title, List<Result> r, List<string> models, double defaultThreshold)
     {
         md.AppendLine($"## {title}").AppendLine()
             .AppendLine("| Embedding | System | Meetings | DER % (0.25 s collar) | Missed / FA / Confusion % | DER % no collar | Utterance accuracy % | ≥ 1 s % | < 1 s % | Count exact % | Mean found − true |")
             .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var model in models)
-        {
-            var best = thresholds.MinBy(t => Mean(r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t), x => x.Der));
-            Row(md, model, "count given", r.Where(x => x.Model == model && x.System == "count").ToList());
-            Row(md, model, $"threshold {defaultThreshold:0.0} (default)", r.Where(x => x.Model == model && x.System == "auto" && Near(x.Threshold, defaultThreshold)).ToList());
-            Row(md, model, $"threshold {best:0.0} (best mean DER)", r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == best).ToList());
-        }
-
+        foreach (var (label, pick) in Labels(r, model, defaultThreshold))
+            Row(md, model, label, r.Where(x => x.Model == model && pick(x)).ToList());
         md.AppendLine();
     }
 
-    private static void Sweep(StringBuilder md, string title, List<Result> r, List<string> models, List<double> thresholds)
+    private static void Sweep(StringBuilder md, string title, List<Result> r, List<string> models)
     {
         md.AppendLine($"## {title}").AppendLine()
             .AppendLine("| Embedding | Threshold | Meetings | DER % all | zh | de | pl | mix | Utterance accuracy % | Count exact % | Mean found − true |")
             .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var model in models)
-        foreach (var t in thresholds)
+        foreach (var t in r.Where(x => x.Model == model && x.System == "auto").Select(x => x.Threshold).Distinct().Order())
         {
             var set = r.Where(x => x.Model == model && x.System == "auto" && x.Threshold == t).ToList();
             md.AppendLine($"| {model} | {t:0.0} | {set.Count} | {P(Mean(set, x => x.Der))} | {string.Join(" | ", Corpus.Languages.Select(l => P(Mean(set.Where(x => x.Lang == l), x => x.Der))))} | {P(Acc(set))} | {P(Exact(set))} | {Mean(set, x => x.Estimated - x.Speakers):+0.0;-0.0;0.0} |");
+        }
+
+        md.AppendLine();
+    }
+
+    private static void Live(StringBuilder md, string title, List<Result> r, List<string> models)
+    {
+        md.AppendLine($"## {title} (LiveSpeakerLabels over the reference utterances)").AppendLine()
+            .AppendLine("| Embedding | Threshold | Meetings | Utterance accuracy % | ≥ 1 s % | < 1 s % | zh | de | pl | mix | Speakers created (mean) | True (mean) |")
+            .AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (var model in models)
+        foreach (var t in r.Where(x => x.Model == model && x.System == "live").Select(x => x.Threshold).Distinct().Order())
+        {
+            var set = r.Where(x => x.Model == model && x.System == "live" && x.Threshold == t).ToList();
+            md.AppendLine($"| {model} | {t:0.0} | {set.Count} | {P(Acc(set))} | {P(Long(set))} | {P(Short(set))} | {string.Join(" | ", Corpus.Languages.Select(l => P(Acc(set.Where(x => x.Lang == l)))))} | {Mean(set, x => x.Estimated):F1} | {Mean(set, x => x.Speakers):F1} |");
         }
 
         md.AppendLine();
