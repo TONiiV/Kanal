@@ -26,6 +26,8 @@ What changed in `tests/Kanal.AsrBenchmark`:
   normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
   ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
   stay text. A run like 十分 is still converted, on both sides alike.
+  A bare 百 or 千 at the start of a run is read as 100 or 1000, so 百度 becomes 100度 and 百分比
+  becomes 100分比. Both sides change alike. A real inverse text normaliser would remove this limit.
   A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
   (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
   stays two numbers. None of the 498 reference texts uses a plain space as a separator.
@@ -103,6 +105,9 @@ and Qwen3-ASR 1.7B show the forced room (see the findings). The raw scores are i
 | meeting-piper | en | 9.1 | 6.5 | 7.8 | 8.6 | 7.5 | 4.3 | 9.7 |
 | ami | en | 20.2 | 27.1 | 22.6 | 24.6 | 25.9 | 21.7 | 52.1 |
 | aishell4 | zh | 33.2 | 83.2 | 68.0 | 55.5 | 85.2 | 56.2 | 66.6 |
+
+The engine run used the normaliser of commit 80805cb. Later normaliser fixes can change the
+number-normalised column slightly. The raw column is not affected.
 
 Speed (speed phases; RTF of the accuracy phase, offline feed):
 
