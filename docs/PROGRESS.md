@@ -21,16 +21,24 @@ What changed in `tests/Kanal.AsrBenchmark`:
   The pick spreads evenly over the speaker and session groups. The test split has 2 speakers in 4
   sessions, so the groups are few. The mixed clips last 299 s in total.
 - **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
-  token. Each Latin word is one token. The number normalisation applies to both texts.
-- **English kept.** The share of the English reference words that the hypothesis spells as the same
-  Latin word. A word counts once per occurrence. The rate applies to `mixed` clips only (167 words).
+  token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
+  The report holds two values: the raw MER and the MER with number normalisation of both texts.
+  The table below shows the raw MER.
+- **English kept.** The rate of the English reference words that the hypothesis spells as the same
+  Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
+  and spelled letters ("i s m"). The rate applies to `mixed` clips only.
 - **Rooms.** Auto room: zh/de/pl/en. Forced room: `zh` for `mixed` and `zh` clips, `en` for `en` clips.
   Cohere Transcribe has the forced room only. Gladia has the auto room only.
-- **Run.** `... -- fetch --sets ascend`, then `... -- --sets ascend --phases accuracy --model <ids>`.
-  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+- **Run.**
+  1. Fetch the clips: `... -- fetch --sets ascend`.
+  2. Run the engines: `... -- --sets ascend --phases accuracy --model <ids>`.
+  3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
 
-Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). Columns are MER in %, except
-"English kept". Auto room first, because it counts.
+  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+  In the result below, Gladia returned no text for 1 `mixed` clip and 1 `zh` clip. No Gladia clip failed.
+
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). Columns are the raw MER in %,
+except "English kept". Auto room first, because it counts.
 
 | Engine | Room | `mixed` MER (60 clips) | English kept (167 words) | `zh` MER (15) | `en` MER (15) | Empty mixed clips |
 |---|---|---:|---:|---:|---:|---:|
@@ -45,12 +53,16 @@ Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). Columns are MER i
 | Cohere Transcribe | forced | 25.6 | 28.7 | 18.7 | 25.5 | 0 |
 | Nemotron 560 ms | forced | 28.1 | 4.8 | 15.7 | 36.9 | 3 |
 
+The English kept column uses the first rule. That rule counts fillers and spelled letters, so it
+has 167 words. The rate with the final rule is open: the saved per-clip files were lost, and a
+re-score needs them.
+
 Findings:
 
 1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
 2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
-3. The Qwen3 models keep about 70 % of the English words. Whisper turbo keeps 65 %, Gladia 59 % and Nemotron 32 %.
-4. A forced `zh` room does not help every engine. It lowers the Whisper turbo score (MER +4.0, English kept 49 %) and the Nemotron score (MER +2.8, English kept 5 %).
+3. The Qwen3 models keep about 70 % of the English words. Nemotron keeps about a third. The gaps between Whisper turbo (65 %), Gladia (59 %) and the Qwen3 models are 6 to 12 points. They are inside the noise that finding 5 describes.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate of both.
 5. The numbers are rough. The references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
