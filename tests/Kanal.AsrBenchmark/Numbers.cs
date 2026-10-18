@@ -5,13 +5,16 @@ using System.Text.RegularExpressions;
 namespace Kanal.AsrBenchmark;
 
 // ponytail: cardinals, decimals and percent only. Ordinals, dates, years read as pairs
-// ("twenty twenty-six") and digit-by-digit codes stay as words. Upgrade path: a real ITN (NeMo, WeTextProcessing).
+// ("twenty twenty-six") and digit-by-digit codes stay as words. A run like 十分 and a mix like 5万2千 stay wrong.
+// Upgrade path: a real ITN (NeMo, WeTextProcessing).
 internal static partial class Numbers
 {
     public static string Normalize(string lang, string text)
     {
-        text = text.Normalize(NormalizationForm.FormKC);
-        return lang == "zh" ? Chinese(text) : Latin(lang, text);
+        // The separator goes first: FormKC turns every no-break space into a plain space, which is not a separator.
+        return lang == "zh"
+            ? Chinese(text.Normalize(NormalizationForm.FormKC))
+            : Latin(lang, Thousands[lang].Replace(text, "").Normalize(NormalizationForm.FormKC));
     }
 
     private enum Kind { Value, Hundred, Scale, Decimal, One }
@@ -33,7 +36,8 @@ internal static partial class Numbers
             .With(Kind.Decimal, 0, "komma").With(Kind.One, 1, "ein", "eine", "einen", "einem", "einer"),
         ["pl"] = Build(
             ("zero", 0), ("jeden", 1), ("jedna", 1), ("jedno", 1), ("dwa", 2), ("dwie", 2), ("dwóch", 2), ("dwu", 2),
-            ("trzy", 3), ("trzech", 3), ("cztery", 4), ("czterech", 4), ("pięć", 5), ("pięciu", 5), ("sześć", 6),
+            ("trzy", 3), ("trzech", 3), ("dwoma", 2), ("trzema", 3), ("czterema", 4), ("pięcioma", 5), ("sześcioma", 6),
+            ("siedmioma", 7), ("ośmioma", 8), ("dziewięcioma", 9), ("dziesięcioma", 10), ("cztery", 4), ("czterech", 4), ("pięć", 5), ("pięciu", 5), ("sześć", 6),
             ("sześciu", 6), ("siedem", 7), ("siedmiu", 7), ("osiem", 8), ("ośmiu", 8), ("dziewięć", 9), ("dziewięciu", 9),
             ("dziesięć", 10), ("dziesięciu", 10), ("jedenaście", 11), ("jedenastu", 11), ("dwanaście", 12), ("dwunastu", 12),
             ("trzynaście", 13), ("trzynastu", 13), ("czternaście", 14), ("czternastu", 14), ("piętnaście", 15),
@@ -47,17 +51,30 @@ internal static partial class Numbers
             ("czterysta", 400), ("czterystu", 400), ("pięćset", 500), ("pięciuset", 500), ("sześćset", 600),
             ("sześciuset", 600), ("siedemset", 700), ("siedmiuset", 700), ("osiemset", 800), ("ośmiuset", 800),
             ("dziewięćset", 900), ("dziewięciuset", 900))
-            .With(Kind.Scale, 1000, "tysiąc", "tysiące", "tysięcy", "tysiąca")
-            .With(Kind.Scale, 1_000_000, "milion", "miliony", "milionów", "miliona")
-            .With(Kind.Scale, 1_000_000_000, "miliard", "miliardy", "miliardów", "miliarda")
+            .With(Kind.Scale, 1000, "tysiąc", "tysiące", "tysięcy", "tysiąca", "tysiącu", "tysiącom", "tysiącami", "tysiącach")
+            .With(Kind.Scale, 1_000_000, "milion", "miliony", "milionów", "miliona", "milionie", "milionom", "milionami", "milionach")
+            .With(Kind.Scale, 1_000_000_000, "miliard", "miliardy", "miliardów", "miliarda", "miliardzie", "miliardom", "miliardami", "miliardach")
+            .With(Kind.One, 1, "jednego", "jednym", "jednej", "jednemu")
             .With(Kind.Decimal, 0, "przecinek"),
     };
+
+    private static readonly HashSet<string> PolishPercent =
+        ["procent", "procenty", "procentów", "procentu", "procentach", "procentami", "procentom", "procentowi"];
+
+    private static readonly Dictionary<string, Regex> Thousands = new()
+    {
+        ["en"] = Separator(","),
+        ["de"] = Separator(@"\."),
+        ["pl"] = Separator(@"\."),
+    };
+
+    private static Regex Separator(string mark) =>
+        new($@"(?<=\d)[{mark}  ](?=\d{{3}}(?!\d))", RegexOptions.CultureInvariant);
 
     private static readonly Dictionary<string, string> Percent = new() { ["en"] = "percent", ["de"] = "prozent", ["pl"] = "procent" };
 
     private static string Latin(string lang, string text)
     {
-        text = ThousandsSeparator().Replace(text, "");
         if (Percent.TryGetValue(lang, out var percent))
             text = text.Replace("%", " " + percent);
         var tokens = Scoring.Words(text);
@@ -65,7 +82,7 @@ internal static partial class Numbers
         var number = new Builder();
         for (var i = 0; i < tokens.Length; i++)
         {
-            var token = lang == "pl" && tokens[i].StartsWith("procent") ? "procent" : tokens[i];
+            var token = lang == "pl" && PolishPercent.Contains(tokens[i]) ? "procent" : tokens[i];
             var next = i + 1 < tokens.Length ? Parse(lang, tokens[i + 1]) : null;
             var parsed = Parse(lang, token);
 
@@ -143,7 +160,7 @@ internal static partial class Numbers
                     _limit = digits ? 1 : Limit(value);
                     break;
                 case Kind.Hundred:
-                    if (Active && _group >= 10)
+                    if (Active && _group >= 100)
                         return false;
                     _group = Math.Max(_group, 1) * 100;
                     _limit = 100;
@@ -204,7 +221,7 @@ internal static partial class Numbers
                 continue;
             var left = word[..at];
             var right = word[(at + unit.Length)..];
-            long? factor = left is "" or "ein" ? 1 : German(left);
+            long? factor = left is "" or "ein" ? 1 : left == "hundert" ? 100 : German(left);
             long? rest = right == "" ? 0 : German(right);
             return factor is { } f && f < (value == 1000 ? 1000 : 10) && rest is { } r && r < value ? f * value + r : null;
         }
@@ -227,7 +244,13 @@ internal static partial class Numbers
     }
 
     private static string Chinese(string text) =>
-        ChineseNumber().Replace(text, m => ChineseValue(m.Groups[2].Value) + (m.Groups[1].Success ? "%" : ""));
+        ChineseNumber().Replace(
+            ArabicUnit().Replace(text, m =>
+                ((long)Math.Round(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * ChineseUnit(m.Groups[2].Value[0])))
+                .ToString(CultureInfo.InvariantCulture)),
+            m => !m.Groups[1].Success && "万千百亿".Contains(m.Groups[2].Value[0])
+                ? m.Value
+                : ChineseValue(m.Groups[2].Value) + (m.Groups[1].Success ? "%" : ""));
 
     private static string ChineseValue(string run)
     {
@@ -302,8 +325,8 @@ internal static partial class Numbers
         return words;
     }
 
-    [GeneratedRegex(@"(?<=\d)[.,   ](?=\d{3}(?!\d))")]
-    private static partial Regex ThousandsSeparator();
+    [GeneratedRegex(@"(\d+(?:\.\d+)?)([百千万亿])(?![零〇一二两三四五六七八九十百千万亿])")]
+    private static partial Regex ArabicUnit();
 
     [GeneratedRegex("(百分之)?([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九]+)?)")]
     private static partial Regex ChineseNumber();
