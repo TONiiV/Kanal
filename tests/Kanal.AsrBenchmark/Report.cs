@@ -74,7 +74,7 @@ internal static class Report
                           $"{V(R, "decode_over_chunk_pct", "F1")} | {V(R, "final_after_speech_end_p50_s")}/{V(R, "final_after_speech_end_p95_s")} | {V(R, "first_partial_after_onset_p50_s")}/{V(R, "first_partial_after_onset_p95_s")} |");
         }
 
-        md.AppendLine().AppendLine("## Concurrent streams (offline feed, auto room, each stream its own clip order)").AppendLine()
+        md.AppendLine().AppendLine("## Concurrent streams (offline feed, auto room or the clip's language for engines that need one, each stream its own clip order)").AppendLine()
             .AppendLine("| Model | Provider | Threads per stream | Streams | Mean RTF | p95 RTF | Decode p50/p95 ms | Throughput × real time |")
             .AppendLine("|---|---|---:|---:|---:|---:|---:|---:|");
         foreach (var level in rows.Where(r => r.Room == "streams").Select(r => (r.Model, r.Provider, r.Threads, r.Streams)).Distinct())
@@ -117,11 +117,11 @@ internal static class Report
         | Model | Params | int8 download | zh | de | pl | Mode | Licence | Repo | Measured |
         |---|---:|---:|:-:|:-:|:-:|---|---|---|:-:|
         | Nemotron 3.5 ASR Streaming 560 ms (default) | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1, no regional clause | csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11 | ✓ |
-        | Nemotron 3.5 ASR Streaming 160 ms | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1 | csukuangfj2/…-160ms-int8-2026-06-11 (also 80, 320, 1120 ms) | ✓ |
+        | Nemotron 3.5 ASR Streaming 160 ms | 0.6B | 682 MB | ✓ | ✓ | ✓ | streaming | OpenMDW-1.1 | csukuangfj2/…-160ms-int8-2026-06-11 (also 80, 320, 1120 ms) | #284 |
         | Whisper large-v3-turbo | 809M | 1036 MB | ✓ | ✓ | ✓ | offline, 30 s window | MIT | csukuangfj/sherpa-onnx-whisper-turbo | ✓ |
         | Qwen3-ASR 0.6B | 0.6B | 985 MB | ✓ | ✓ | ✓ | offline in sherpa-onnx (upstream also streams) | Apache-2.0 | csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25 | ✓ |
         | Whisper large-v3 | 1.55B | 1776 MB | ✓ | ✓ | ✓ | offline, 30 s window | MIT | csukuangfj/sherpa-onnx-whisper-large-v3 | ✓ |
-        | Qwen3-ASR 1.7B | 1.7B | 2400 MB | ✓ | ✓ | ✓ | offline | Apache-2.0, community export | thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8 (no csukuangfj export) | – |
+        | Qwen3-ASR 1.7B | 1.7B | 2400 MB | ✓ | ✓ | ✓ | offline | Apache-2.0, community export | thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8 (no csukuangfj export) at 69eb686 | ✓ |
         | Whisper small | 244M | 375 MB | ✓ | ✓ | ✓ | offline, 30 s window | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-small | – |
         | Whisper tiny / base | 39M / 74M | 116 / 208 MB archive | ✓ | ✓ | ✓ | offline | Apache-2.0 (HF card) | csukuangfj/sherpa-onnx-whisper-tiny, -base | – |
         | Cohere Transcribe 03-2026 | 2.1B | 2888 MB | ✓ | ✓ | ✓ | offline | Apache-2.0; the original repo is gated, the sherpa-onnx export is not | csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01 | ✓ |
@@ -132,7 +132,7 @@ internal static class Report
         | SenseVoice small, Fun-ASR-Nano 2512, Dolphin, Moonshine zh | 0.2–0.8B | 0.1–0.9 GB | ✓ | – | – | offline | mixed | – | – |
 
         The measured set is capped at 5 extra models and 7.4 GB. Offline models use Silero VAD segments (500 ms minimum silence, 20 s maximum segment).
-        sherpa-onnx 1.13.8 drops characters that byte-level BPE splits across two tokens (k2-fsa/sherpa-onnx#3964, fixed after 1.13.8 in #3965). This hits Whisper and Cohere Transcribe on Chinese: "篇章", "钙", "钾", "属" disappear. Their zh CER here is worse than the models.
+        sherpa-onnx 1.13.8 drops characters that byte-level BPE splits across two tokens (k2-fsa/sherpa-onnx#3964, fixed after 1.13.8 in #3965). This hits Whisper and Cohere Transcribe on Chinese: "篇章", "钙", "钾", "属" disappear. Their zh CER here is worse than the models can do.
         """;
 
     private static bool Match(Row r, string model, string provider, int threads, string set, string lang, string room) =>

@@ -172,7 +172,7 @@ foreach (var provider in model == Engine.Gladia ? ["cloud"] : providers)
 
     if (phases.Contains("streams") && !engine.Cloud)
         foreach (var n in streamLevels)
-            await StreamsAsync(model, provider, threads, n, make, engine.PaddingSeconds);
+            await StreamsAsync(model, provider, threads, n, make, engine.PaddingSeconds, engine.NeedsLanguage);
 
     engine.Dispose();
     Add(model.Id, provider, threads, 1, "-", "-", "-", "peak_working_set_mb", memory.PeakMb, "MB");
@@ -279,14 +279,17 @@ async Task ParityAsync(BenchModel model, List<Clip> meeting)
     Console.WriteLine($"   parity with NemotronAsrProvider: {same}/{meeting.Count} identical");
 }
 
-async Task StreamsAsync(BenchModel model, string provider, int threads, int n, Func<List<double>, IAsrProvider> make, double padding)
+async Task StreamsAsync(BenchModel model, string provider, int threads, int n, Func<List<double>, IAsrProvider> make, double padding, bool needsLanguage)
 {
     var wall = Stopwatch.StartNew();
     var all = await Task.WhenAll(Enumerable.Range(0, n).Select(i => Task.Run(async () =>
     {
         var runs = new List<ClipRun>();
         for (var k = 0; k < sample.Count; k++)
-            runs.Add(await RunClipAsync(make, sample[(k + i) % sample.Count], autoRoom, realtime: false, padding));
+        {
+            var clip = sample[(k + i) % sample.Count];
+            runs.Add(await RunClipAsync(make, clip, needsLanguage ? [clip.Lang] : autoRoom, realtime: false, padding));
+        }
         return runs;
     })));
     var runs = all.SelectMany(r => r).ToList();
