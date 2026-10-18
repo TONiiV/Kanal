@@ -4,6 +4,19 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-18
+
+### Gladia session closes its event stream on every exit
+
+- **Bug.** `GladiaAsrSession.Events` never completed when `DisposeAsync` cancelled the session during the reconnect backoff. A reader that reads `Events` to the end then waits forever.
+- **How it showed.** The ASR benchmark (PR #285) hung on close. It reads `Events` to the end without a token.
+- **No operator impact.** `MeetingSession` reads `Events` with a token. It cancels that token after it disposes the session. Only `tools/Kanal.Doctor` reads without a token.
+- **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
+- **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
+- **Open item.** The session still reports "Connection lost, reconnecting" after a deliberate `stop_recording`. A separate follow-up session and PR track this.
+
+---
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock

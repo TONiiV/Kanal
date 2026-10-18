@@ -8,18 +8,23 @@ namespace Kanal.Providers.Gladia;
 
 public sealed class GladiaAsrSession : IAsrSession
 {
-    private readonly Uri _url;
+    private readonly Func<CancellationToken, Task<WebSocket>> _openSocket;
     private readonly int _maxReconnectAttempts;
     private readonly CancellationTokenSource _cts = new();
     private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly GladiaWire _wire = new();
-    private ClientWebSocket _socket = null!;
+    private WebSocket _socket = null!;
     private Task? _receiveLoop;
 
     internal GladiaAsrSession(Uri url, int maxReconnectAttempts)
+        : this(ct => OpenSocketAsync(url, ct), maxReconnectAttempts)
     {
-        _url = url;
+    }
+
+    internal GladiaAsrSession(Func<CancellationToken, Task<WebSocket>> openSocket, int maxReconnectAttempts)
+    {
+        _openSocket = openSocket;
         _maxReconnectAttempts = maxReconnectAttempts;
     }
 
@@ -30,15 +35,25 @@ public sealed class GladiaAsrSession : IAsrSession
 
     internal async Task ConnectAsync(CancellationToken ct)
     {
-        _socket = await OpenSocketAsync(ct);
-        _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token), CancellationToken.None);
+        _socket = await _openSocket(ct);
+        _receiveLoop = Task.Run(async () =>
+        {
+            try
+            {
+                await ReceiveLoopAsync(_cts.Token);
+            }
+            finally
+            {
+                _events.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
     }
 
-    private async Task<ClientWebSocket> OpenSocketAsync(CancellationToken ct)
+    private static async Task<WebSocket> OpenSocketAsync(Uri url, CancellationToken ct)
     {
         var socket = new ClientWebSocket();
         socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-        await socket.ConnectAsync(_url, ct);
+        await socket.ConnectAsync(url, ct);
         return socket;
     }
 
@@ -119,7 +134,7 @@ public sealed class GladiaAsrSession : IAsrSession
                 try
                 {
                     _socket.Dispose();
-                    _socket = await OpenSocketAsync(ct);
+                    _socket = await _openSocket(ct);
                 }
                 catch (Exception reconnectEx)
                 {
@@ -132,8 +147,6 @@ public sealed class GladiaAsrSession : IAsrSession
                 }
             }
         }
-
-        _events.Writer.TryComplete();
     }
 
     public async ValueTask DisposeAsync()
