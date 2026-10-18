@@ -57,5 +57,13 @@ A named set of brand colours, with one light and one dark variant, that tints th
 _Avoid_: Skin, colour scheme
 
 **Publish**:
-A one-way copy of an ended meeting record to an external note destination, started by the operator. The copy never returns to Kanal.
+A one-way copy of an ended meeting record to a publish destination in an external note service, started by the operator. The copy never returns to Kanal, and publishing again makes a new copy beside the earlier ones.
 _Avoid_: Export (only the `.kl` file is an export), sync
+
+**Connection**:
+The operator's authorization for Kanal to publish into one workspace of an external note service, made once from the Connectors settings. One Notion workspace is one connection. It does not require a Kanal account.
+_Avoid_: Integration (Notion's name for its own side), API key
+
+**Publish destination**:
+The page or database under which a published copy is created. Kanal remembers the last publish destination per workspace.
+_Avoid_: Folder (Notion has none)
