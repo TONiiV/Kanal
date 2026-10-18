@@ -35,34 +35,35 @@ What changed in `tests/Kanal.AsrBenchmark`:
   3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
 
   The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
-  In the result below, Gladia returned no text for 1 `mixed` clip and 1 `zh` clip. No Gladia clip failed.
+  In the result below, Gladia returned no text for 1 `zh` clip. No Gladia clip failed.
+  The report files stay outside the repository, in `%LocalAppData%/Kanal/asr-bench/reports/ascend-run2/`.
 
-Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). Columns are the raw MER in %,
-except "English kept". Auto room first, because it counts.
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). MER is in %. "MER" is the raw
+value. "MER num." is the MER with number normalisation of both texts. English kept has 150 words.
+Auto room first, because it counts.
 
-| Engine | Room | `mixed` MER (60 clips) | English kept (167 words) | `zh` MER (15) | `en` MER (15) | Empty mixed clips |
-|---|---|---:|---:|---:|---:|---:|
-| Qwen3-ASR 0.6B | auto | 12.3 | 70.7 | 8.3 | 30.5 | 0 |
-| Whisper turbo | auto | 19.6 | 65.3 | 26.1 | 31.9 | 0 |
-| Qwen3-ASR 1.7B | auto | 23.1 | 72.5 | 19.6 | 27.7 | 1 |
-| Gladia | auto | 24.9 | 59.3 | 27.8 | 29.8 | 1 |
-| Nemotron 560 ms | auto | 25.3 | 32.3 | 16.5 | 38.3 | 1 |
-| Qwen3-ASR 0.6B | forced | 12.0 | 69.5 | 8.7 | 27.0 | 0 |
-| Qwen3-ASR 1.7B | forced | 14.5 | 71.3 | 19.1 | 24.8 | 0 |
-| Whisper turbo | forced | 23.6 | 49.1 | 25.7 | 31.9 | 0 |
-| Cohere Transcribe | forced | 25.6 | 28.7 | 18.7 | 25.5 | 0 |
-| Nemotron 560 ms | forced | 28.1 | 4.8 | 15.7 | 36.9 | 3 |
+| Engine | Room | `mixed` MER (60 clips) | `mixed` MER num. | English kept % | `zh` MER (15) | `en` MER (15) | Empty `mixed` clips |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-ASR 0.6B | auto | 12.3 | 12.2 | 73.3 | 8.3 | 30.5 | 0 |
+| Whisper turbo | auto | 19.6 | 19.4 | 72.7 | 26.1 | 31.9 | 0 |
+| Qwen3-ASR 1.7B | auto | 23.1 | 23.1 | 76.0 | 19.6 | 27.7 | 1 |
+| Gladia | auto | 22.8 | 22.5 | 68.7 | 27.8 | 29.8 | 0 |
+| Nemotron 560 ms | auto | 25.3 | 25.4 | 36.0 | 16.5 | 38.3 | 1 |
+| Qwen3-ASR 0.6B | forced | 12.0 | 12.0 | 73.3 | 8.7 | 27.0 | 0 |
+| Qwen3-ASR 1.7B | forced | 14.5 | 14.5 | 75.3 | 19.1 | 24.8 | 0 |
+| Whisper turbo | forced | 23.6 | 23.4 | 54.7 | 25.7 | 31.9 | 0 |
+| Cohere Transcribe | forced | 25.6 | 25.4 | 30.7 | 18.7 | 25.5 | 0 |
+| Nemotron 560 ms | forced | 28.1 | 28.2 | 4.7 | 15.7 | 36.9 | 3 |
 
-The English kept column uses the first rule. That rule counts fillers and spelled letters, so it
-has 167 words. The rate with the final rule is open: the saved per-clip files were lost, and a
-re-score needs them.
+The engines ran twice on the same clips. The scores of the local engines did not change between the runs.
+The Gladia scores did: the first run gave 24.9 % `mixed` MER and 1 empty `mixed` clip. The cloud result varies.
 
 Findings:
 
 1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
 2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
-3. The Qwen3 models keep about 70 % of the English words. Nemotron keeps about a third. The gaps between Whisper turbo (65 %), Gladia (59 %) and the Qwen3 models are 6 to 12 points. They are inside the noise that finding 5 describes.
-4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate of both.
+3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
 5. The numbers are rough. The references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
