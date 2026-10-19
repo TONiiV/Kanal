@@ -115,11 +115,11 @@ public class NemotronAsrProviderTests
     }
 
     [Theory]
-    [InlineData(new[] { "zh" }, "zh-CN")]
-    [InlineData(new[] { "ja" }, "ja-JP")]
-    [InlineData(new[] { "pl" }, "pl")]
+    [InlineData(new[] { "zh" }, "auto")]
+    [InlineData(new[] { "ja" }, "auto")]
+    [InlineData(new[] { "de" }, "auto")]
     [InlineData(new[] { "zh", "de", "pl" }, "auto")]
-    public async Task ARoomOfOneLanguageForcesItAndAnyOtherRoomDetects(string[] room, string expected)
+    public async Task EveryRoomStartsTheStreamWithAutoLanguage(string[] room, string expected)
     {
         string? asked = null;
         var provider = new NemotronAsrProvider(language =>
@@ -134,11 +134,12 @@ public class NemotronAsrProviderTests
     }
 
     [Fact]
-    public async Task AForcedLanguageIsAlsoTheSourceLanguage()
+    public async Task InARoomOfOneLanguageTheFinalIsLabelledByItsText()
     {
-        var events = await RunAsync(new ScriptedStream(("KX-4402", true)), chunks: 1, room: ["zh"]);
+        var events = await RunAsync(
+            new ScriptedStream(("We are not sure that this is the right time for it", true)), chunks: 1, room: ["de"]);
 
-        Assert.Equal("zh", Assert.Single(events.OfType<AsrEvent.Transcript>()).SrcLang);
+        Assert.Equal("en", Assert.Single(events.OfType<AsrEvent.Transcript>()).SrcLang);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 
 namespace Kanal.Core.Workspaces;
@@ -40,27 +41,50 @@ public static class MeetingBundle
 
         var transcript = Path.Combine(folder, TranscriptLog.FileName);
         var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
+        var speakers = Path.Combine(folder, SpeakerReidentification.FileName);
+        var partial = target + ".partial";
         try
         {
-            using var file = new FileStream(target, FileMode.Create, FileAccess.Write);
-            using var zip = new ZipArchive(file, ZipArchiveMode.Create);
-            Put(zip, ManifestFileName, JsonSerializer.Serialize(
-                StoredManifest.From(meeting), Options));
-            Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(transcript)));
-            if (File.Exists(transcript))
-                zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
-            if (includeAudio && File.Exists(audio))
-                zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
+            if (File.Exists(partial))
+                File.SetAttributes(partial, FileAttributes.Normal);
 
-            var attachments = Path.Combine(folder, "attachments");
-            if (Directory.Exists(attachments))
-                foreach (var path in Directory.EnumerateFiles(attachments).Order())
-                    zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+            using (var file = new FileStream(partial, FileMode.Create, FileAccess.Write))
+            {
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    Put(zip, ManifestFileName, JsonSerializer.Serialize(
+                        StoredManifest.From(meeting), Options));
+                    Put(zip, TranscriptFileName, Markdown(meeting, SpeakerReidentification.Apply(
+                        TranscriptLog.Read(transcript), SpeakerReidentification.Read(folder))));
+                    if (File.Exists(transcript))
+                        zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
+                    if (File.Exists(speakers))
+                        zip.CreateEntryFromFile(speakers, SpeakerReidentification.FileName);
+                    if (includeAudio && File.Exists(audio))
+                        zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
 
+                    var attachments = Path.Combine(folder, "attachments");
+                    if (Directory.Exists(attachments))
+                        foreach (var path in Directory.EnumerateFiles(attachments).Order())
+                            zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+                }
+
+                file.Flush(flushToDisk: true);
+            }
+
+            File.Move(partial, target, overwrite: true);
             return null;
         }
         catch (Exception ex)
         {
+            try
+            {
+                File.Delete(partial);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+
             Log.Error(LogCategory, $"The bundle could not be written to {target}.", ex);
             return StoreProblems.Unwritable(target, ex.Message);
         }
@@ -94,7 +118,8 @@ public static class MeetingBundle
 
     /// <summary>
     /// Plants the bundle in <paramref name="workspaceId"/>. With <paramref name="asNewRecord"/>
-    /// the content arrives under a fresh id beside whatever already holds the original one —
+    /// the content arrives under a fresh id beside whatever already holds the original one.
+    /// Without it, a meeting folder that already exists on disk, listed or not, is refused:
     /// there is no overwrite, here or anywhere above this (decision 23).
     /// </summary>
     public static MeetingResult Import(
@@ -130,28 +155,83 @@ public static class MeetingBundle
         if (store.MeetingFolder(workspaceId, record.Id) is not { } folder)
             return new MeetingResult(null, StoreProblems.NotAMeetingId(record.Id));
 
+        if (!asNewRecord && (Directory.Exists(folder) || File.Exists(folder)))
+        {
+            Log.Warning(LogCategory, $"{bundlePath} was not imported: {folder} is already on disk.");
+            return new MeetingResult(null, StoreProblems.FolderTaken(folder));
+        }
+
+        var staging = Path.Combine(
+            Path.GetDirectoryName(folder)!, $"{record.Id}.importing-{Guid.NewGuid():N}");
         try
         {
             using var zip = ZipFile.OpenRead(bundlePath);
-            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(staging);
             foreach (var entry in zip.Entries.Where(e => Wanted(e.FullName)))
             {
-                var target = Path.Combine(folder, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+                var target = Path.Combine(staging, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                entry.ExtractToFile(target, overwrite: true);
+                entry.ExtractToFile(target);
             }
+
+            if (asNewRecord)
+                MergeInto(staging, folder);
+            else
+                MoveIntoPlace(staging, folder);
         }
         catch (Exception ex)
         {
             Log.Error(LogCategory, $"{bundlePath} could not be unpacked into {folder}.", ex);
             return new MeetingResult(null, StoreProblems.Unwritable(folder, ex.Message));
         }
+        finally
+        {
+            DeleteQuietly(staging);
+        }
 
-        return store.SaveMeeting(record with
+        var saved = store.SaveMeeting(record with
         {
             TranscriptPath = Kept(folder, TranscriptLog.FileName),
             AudioPath = Kept(folder, WorkspaceStore.AudioFileName),
         });
+        if (saved.Problem is not null && !asNewRecord)
+            DeleteQuietly(folder);
+
+        return saved;
+    }
+
+    // Directory.Move fails when the target exists, so a folder that appeared since the check is never merged into or deleted.
+    internal static void MoveIntoPlace(string staging, string folder) => Directory.Move(staging, folder);
+
+    private static void MergeInto(string staging, string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            Directory.Move(staging, folder);
+            return;
+        }
+
+        foreach (var path in Directory.EnumerateFileSystemEntries(staging))
+        {
+            var target = Path.Combine(folder, Path.GetFileName(path));
+            if (Directory.Exists(path))
+                Directory.Move(path, target);
+            else
+                File.Move(path, target);
+        }
+    }
+
+    private static void DeleteQuietly(string folder)
+    {
+        try
+        {
+            if (Directory.Exists(folder))
+                Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogCategory, $"{folder} could not be removed.", ex);
+        }
     }
 
     /// <summary>The name the save dialog offers, and the one the Markdown export offers too.</summary>
@@ -169,6 +249,7 @@ public static class MeetingBundle
     // workspace above the meeting, and an absolute one anywhere on the disk.
     private static bool Wanted(string name) =>
         name is TranscriptFileName or TranscriptLog.FileName or WorkspaceStore.AudioFileName
+            or SpeakerReidentification.FileName
         || (name.StartsWith(AttachmentsPrefix, StringComparison.Ordinal)
             && PlainName(name[AttachmentsPrefix.Length..]));
 
