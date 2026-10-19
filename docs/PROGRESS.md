@@ -252,6 +252,36 @@ below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
 
 ## 2026-10-13
 
+### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
+
+The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherpa-onnx `OfflineSpeakerDiarization` on `audio.wav` and gives each final utterance a new tag.
+
+- **Runtime.** The new project `Kanal.Providers.LocalDiarization` references `org.k2fsa.sherpa.onnx` 1.13.8. This is the package and version of PR #181. `SherpaSpeakerDiarizer` is the only class that touches the native library.
+- **Models.** One default pair, no picker ([#179](https://github.com/TONiiV/Kanal/issues/179)). The first run downloads both files through `ModelDownloadManager` and checks SHA-256.
+  - Segmentation: pyannote segmentation 3.0, MIT, 5,992,913 bytes. The GitHub release has only a `.tar.bz2`, and the BCL has no bzip2. The catalog now takes the plain `model.onnx` from Hugging Face, pinned to commit `9403a69`. This closes open item 1 of the slice-2 entry below.
+  - Embedding: 3D-Speaker CAM++ zh/en advanced, Apache-2.0, 28,281,164 bytes, from the GitHub release. Slice 6 ([#111](https://github.com/TONiiV/Kanal/issues/111)) replaces it after zh/de/pl measurements.
+- **Mapping.** Each utterance takes the diarized speaker with the largest total time overlap. Tags are `D01`, `D02`… in the order that people first speak. An utterance that no turn covers keeps its original tag. The stored view gives each tag a palette colour by first appearance, as before.
+- **Timing.** The ASR clock and the recording both start on the first accepted frame. Both skip a pause. So `TStartMs` is the offset into `audio.wav`. A Gladia reconnect restarts the ASR clock but not the recording. Utterances after a reconnect can map to the wrong turn.
+- **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
+- **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
+- **Speaker count.** *Re-identify speakers* is a submenu. *Not sure* is the first item, then 2 to 8 people. A number goes to `NumClusters`. *Not sure* passes no count, and clustering then uses the threshold 0.8 (`SherpaSpeakerDiarizer.Clustering`). The count input in the Speakers tab stays in [#110](https://github.com/TONiiV/Kanal/issues/110).
+- **Why 0.8 and *Not sure* first.** The first real test had 3 people. The library default threshold 0.5 gave 47 tags. The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) then measured both paths:
+  - Without a count, 0.8 gave the lowest DER: 13.5 % on 62 synthetic meetings and 8.1 % on the scripted 6-speaker meeting, against 23.3 % and 28.9 % at 0.5.
+  - With a count, sherpa often returned fewer clusters than asked (17 of 62 meetings). Two similar voices merge, and the operator cannot split them. The real 3-person meeting with count 3 got 2 tags.
+  - A false extra speaker costs one merge; a false merge cannot be undone. So *Not sure* is the default choice.
+  - The real recording still got 17 tags at 0.8. A real room is harder than TTS audio.
+- **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
+- **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
+- **Exports.** A `.kl` bundle carries `speakers.json`, and import accepts it. The bundle's `transcript.md` and the Markdown export of the just-stopped meeting use the new tags. `transcript.jsonl` keeps the original tags.
+
+Open items:
+
+1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
+2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
+3. Hugging Face and GitHub release downloads can be blocked in mainland China.
+4. The speaker tab of the just-stopped meeting still lists the live tags.
+
 ### The ruler shows the screen and pages through the transcript
 
 Issue #268. The reference is the message navigator of a chat app.
