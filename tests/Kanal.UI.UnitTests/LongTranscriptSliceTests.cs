@@ -177,6 +177,53 @@ public class LongTranscriptSliceTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void TheOldMeetingIsHiddenAtOnceAndTheNewOneStartsOnLoading()
+    {
+        var (store, first, second) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        Open(vm, first);
+        yields.ReleaseAll();
+        var changes = new List<string?>();
+        vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        Open(vm, second);
+
+        Assert.True(vm.IsLoadingRecord);
+        Assert.False(vm.ShowStartHint);
+        Assert.False(vm.ShowNoStoredTranscript);
+        Assert.Contains(nameof(MainViewModel.IsLoadingRecord), changes);
+        Assert.Contains(nameof(MainViewModel.ShowStartHint), changes);
+
+        yields.ReleaseAll();
+
+        Assert.False(vm.IsLoadingRecord);
+    }
+
+    [AvaloniaFact]
+    public void TheLoadingStateStaysOnWhileTheOldMeetingLeavesBeforeTheLiveMeeting()
+    {
+        var (store, first, _) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        Open(vm, first);
+        yields.ReleaseAll();
+
+        vm.Sidebar.SelectedMeeting = null;
+
+        Assert.True(vm.IsLoadingRecord);
+        Assert.False(vm.ShowStartHint);
+        while (yields.Count > 0)
+        {
+            Assert.True(vm.IsLoadingRecord);
+            yields.Release();
+        }
+
+        Assert.False(vm.IsLoadingRecord);
+        Assert.True(vm.ShowStartHint);
+    }
+
+    [AvaloniaFact]
     public void AColumnHiddenByFocusStaysHiddenWhileTheOldMeetingLeaves()
     {
         var (store, first, second) = TwoLongMeetings();
