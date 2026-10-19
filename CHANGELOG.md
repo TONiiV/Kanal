@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
+  the project folder. Kanal does not use the glossary in a meeting yet.
 - Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
   could replace the transcript and the recording in a meeting folder that the sidebar did not list.
   Now Kanal refuses the import and shows a message.

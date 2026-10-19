@@ -6,7 +6,7 @@
         x:Class="Kanal.Host.Views.ProjectSettingsWindow"
         x:DataType="vm:ProjectSettingsViewModel"
         Title="{l:T workspace.settings.title}"
-        Width="520" MaxHeight="720" SizeToContent="Height" CanResize="False"
+        Width="640" MaxHeight="720" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource Sans}"
         TextElement.Foreground="{DynamicResource Ink}"
@@ -89,6 +89,77 @@
                             Command="{Binding ChooseImageCommand}" />
                     <Button x:Name="ResetIcon" Content="{l:T workspace.icon.reset}" VerticalAlignment="Center"
                             Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}" />
+                </StackPanel>
+
+                <TextBlock Text="{l:T workspace.glossary}" Classes="label" Margin="0,28,0,0" />
+                <Border Classes="rule" />
+                <TextBlock Text="{l:T workspace.glossary.note}" FontSize="11.5" LineHeight="17" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Ink3}" Margin="0,0,0,8" />
+                <TextBlock x:Name="GlossaryProblem" Text="{Binding GlossaryProblem}" FontSize="11.5" LineHeight="17"
+                           TextWrapping="Wrap" Foreground="{DynamicResource Alarm}"
+                           IsVisible="{Binding !CanEditGlossary}" />
+                <StackPanel x:Name="GlossaryEditor" Grid.IsSharedSizeScope="True" Spacing="6"
+                            IsVisible="{Binding CanEditGlossary}">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Keep" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Remove" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="中文" Classes="label" />
+                        <TextBlock Grid.Column="1" Text="Deutsch" Classes="label" />
+                        <TextBlock Grid.Column="2" Text="Polski" Classes="label" />
+                        <TextBlock Grid.Column="3" Text="English" Classes="label" />
+                        <TextBlock Grid.Column="4" Text="{l:T workspace.glossary.keep}" Classes="label"
+                                   HorizontalAlignment="Center"
+                                   ToolTip.Tip="{l:T workspace.glossary.donottranslate}" />
+                    </Grid>
+                    <ItemsControl x:Name="GlossaryRows" ItemsSource="{Binding Glossary}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GlossaryRowViewModel">
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Keep" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Remove" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TermZh" Text="{Binding Zh}"
+                                             AutomationProperties.Name="中文" />
+                                    <TextBox Grid.Column="1" x:Name="TermDe" Text="{Binding De}"
+                                             AutomationProperties.Name="Deutsch" />
+                                    <TextBox Grid.Column="2" x:Name="TermPl" Text="{Binding Pl}"
+                                             AutomationProperties.Name="Polski" />
+                                    <TextBox Grid.Column="3" x:Name="TermEn" Text="{Binding En}"
+                                             AutomationProperties.Name="English" />
+                                    <CheckBox Grid.Column="4" x:Name="DoNotTranslate" IsChecked="{Binding DoNotTranslate}"
+                                              HorizontalAlignment="Center" MinWidth="0" Padding="0"
+                                              ToolTip.Tip="{l:T workspace.glossary.donottranslate}"
+                                              AutomationProperties.Name="{l:T workspace.glossary.donottranslate}" />
+                                    <Button Grid.Column="5" x:Name="RemoveTerm" Classes="ghost icon"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="{l:T workspace.glossary.remove}"
+                                            AutomationProperties.Name="{l:T workspace.glossary.remove}"
+                                            Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).RemoveTermCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Path Classes="glyph" Data="{c:Icon trash}" Width="13" Height="13" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="AddTerm" Content="{l:T workspace.glossary.add}" HorizontalAlignment="Left"
+                            Command="{Binding AddTermCommand}" Margin="0,2,0,0" />
                 </StackPanel>
 
                 <StackPanel x:Name="IssuesSection" IsVisible="{Binding HasIssues}" Margin="0,28,0,0">
