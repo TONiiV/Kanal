@@ -160,6 +160,15 @@ public class RelaySecurityTests
         Assert.DoesNotContain("supabase", worker, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void MobilePageKeepsTranslationsWhenAFinalComesBackAtTheSameRevision()
+    {
+        var web = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "web", "index.html"));
+
+        Assert.Contains("prev.revision === u.revision", web);
+        Assert.Contains("u.translations = Object.assign({}, prev.translations, u.translations);", web);
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

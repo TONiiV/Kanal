@@ -343,6 +343,10 @@ function applySpeaker(s) {
 }
 
 function applyUtterance(u) {
+  // A live speaker label re-sends a final at the same revision; its translation may arrive first.
+  const prev = state.utterances.get(u.id);
+  if (prev && prev.revision === u.revision)
+    u.translations = Object.assign({}, prev.translations, u.translations);
   state.utterances.set(u.id, u);
   renderRecord(u);
   saveCache();

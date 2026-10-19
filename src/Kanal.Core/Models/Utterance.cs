@@ -21,4 +21,5 @@ public sealed record Utterance(
     UtteranceState State,
     bool CodeSwitch,
     double SpeakerConfidence,
-    IReadOnlyDictionary<string, string> Translations);
+    IReadOnlyDictionary<string, string> Translations,
+    string? AsrSpeakerTag = null);

@@ -870,6 +870,27 @@ below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
 
 ## 2026-10-13
 
+### Live tentative speaker tags ([#109](https://github.com/TONiiV/Kanal/issues/109), ADR 0055 slice 4)
+
+During a meeting, each final utterance gets a speaker tag from its voice.
+
+- **Routing.** `MeetingSession` sends a final to `LiveSpeakerLabels` when `!asr.Caps.Diarization`. This has the same shape as the translation decision. The fake ASR declares diarization, so scripted runs keep their tags.
+- **Audio.** The pump takes the utterance's audio from `MeetingTimeline.TakeRecentAudio` at once, before the 60 s ring buffer overwrites it. Audio that is not available (aged out, never pushed) gets no tag.
+- **Embedding.** `SherpaSpeakerEmbedder` runs the CAM++ model of slice 3 through `SpeakerEmbeddingExtractor`, one thread. The model loads on the first sentence, not at Start. The work runs on the thread pool, one sentence at a time, in order. The ASR pump, the audio thread and the UI thread do not wait for it.
+- **Clustering.** Each speaker has a centroid: the sum of its unit embeddings. A sentence joins the speaker with the highest cosine similarity if that is at least the threshold (0.6, below). Otherwise it starts a new speaker. The C# loop replaces `SpeakerEmbeddingManager`, so the rule is tested without the native library.
+- **Threshold 0.6.** The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) measured 82.3 % utterance accuracy at 0.6 and 78.7 % at 0.5, on 62 synthetic meetings. On the scripted 6-speaker meeting, 0.6 gave 81.5 % and 0.5 gave 72.3 %. 0.6 creates a few more speakers. A false new speaker costs one merge in the Speakers tab; a false join of two people cannot be undone live.
+- **Short sentences.** A sentence under 1 s gets no live tag and no embedding: it keeps the ASR tag until slice 3 runs. It first copied the tag of the previous sentence. The benchmark found that copy right in only 0 to 6 % of short sentences, because a backchannel ("ja", "好", "tak") is usually another speaker. The 1 s limit stays: it keeps noisy embeddings out of the centroids.
+- **Tags.** `V01?`, `V02?`… The question mark is the tentative state of decision 18. Slice 3 replaces the tags with `D01`… after the meeting. A rename by the operator replaces the shown name.
+- **Original tag.** `RoomState.AssignSpeaker` keeps the ASR tag in the new field `Utterance.AsrSpeakerTag`. The field goes into `transcript.jsonl` and to the phones. A later revision of the same utterance keeps the live tag. Slice 3's `speakers.json` still overrides both.
+- **Failure.** The first exception from the embedder stops the live tags for that meeting and writes one warning to the log. The transcript, translation and relay go on.
+- **Within one meeting only.** The centroids live in memory and end with the session. ADR 0055 excludes a voiceprint across meetings.
+- **Cost.** The CAM++ paper gives a real-time factor of about 0.013 on one CPU thread. A 5 s sentence is then about 65 ms of CPU, plus a model load of 28 MB on the first sentence. Not measured on the target laptops.
+
+Open items:
+
+1. Each partial still shows the ASR tag (`S01` for Gladia). The tag changes when the final gets its label. `S01` stays in the speaker list with no sentences.
+2. The phones and the host show the tentative state only through the `?` in the tag. No UI style marks it.
+
 ### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
 
 The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherpa-onnx `OfflineSpeakerDiarization` on `audio.wav` and gives each final utterance a new tag.

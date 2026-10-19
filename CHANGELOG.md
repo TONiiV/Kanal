@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- During a meeting, Kanal now gives each finished sentence a speaker tag from the voice. The tags
+  are `V01?`, `V02?`… The question mark shows that the tag is a guess. A sentence shorter than
+  1 second gets no voice tag. This works only after the speaker models are on this computer: run
+  *Re-identify speakers* on a recorded meeting once.
+  Kanal keeps no voiceprint after the meeting ends.
 - A warning bar now appears under the toolbar when cloud translation fails during a meeting. The bar
   states the reason and has an *Open settings* button for the Translation tab. Before, a later status
   message replaced the warning. The bar stays until one translation succeeds or the meeting ends.

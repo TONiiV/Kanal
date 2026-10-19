@@ -525,6 +525,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private static LiveSpeakerLabels? LiveSpeakerLabelsFor(ModelDownloadManager downloads) =>
+        downloads.IsDownloaded(DiarizationModelCatalog.DefaultEmbedding)
+            ? new LiveSpeakerLabels(new SherpaSpeakerEmbedder(downloads.GetPath(DiarizationModelCatalog.DefaultEmbedding)))
+            : null;
+
     private async Task ReidentifySpeakersAsync(MeetingItemViewModel item, int? people)
     {
         if (IsRunning || IsStarting || Sidebar.ReidentifyingMeetingId is not null
@@ -1418,7 +1423,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         // The transcriber connects while the relay room is still being created; the first publish waits.
         var session = new MeetingSession(
-            asr, mt, new PendingRelay(connecting), config, announceTranscription: mode.NeedsMicrophone);
+            asr, mt, new PendingRelay(connecting), config, announceTranscription: mode.NeedsMicrophone,
+            speakerLabels: LiveSpeakerLabelsFor(_downloads()));
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
