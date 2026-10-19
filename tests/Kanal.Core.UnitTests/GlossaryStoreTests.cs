@@ -141,6 +141,18 @@ public class GlossaryStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveDoesNotWriteOverADamagedFile()
+    {
+        var store = Store();
+        var project = Project(store, "acme");
+        File.WriteAllText(FileOf(project), "{ not json");
+
+        Assert.Equal(StoreProblemKind.Unreadable, store.SaveGlossary(project.Id, [Bracket])!.Kind);
+
+        Assert.Equal("{ not json", File.ReadAllText(FileOf(project)));
+    }
+
+    [Fact]
     public void AFileWithoutEntriesIsReportedNotEmptied()
     {
         var store = Store();

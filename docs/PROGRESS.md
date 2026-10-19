@@ -4,6 +4,21 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### Glossary T1: per-project storage
+
+Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
+
+- **Model.** `GlossaryEntry(Zh, De, Pl, En, DoNotTranslate)`. An empty cell is `""`. The flag marks part numbers and codes.
+- **Storage.** `kanal-glossary.json` in the project root folder, next to `kanal-workspace.json`. The file moves with the folder. A person can read it without Kanal.
+- **Write.** `RecordFile` writes a temporary file, flushes it and replaces the old file. Save trims each cell and drops rows with no term.
+- **Read.** No file gives an empty glossary. A damaged file gives `Unreadable`, and Save refuses to write over it. A different schema version gives `UnsupportedVersion`.
+- **Delete.** "Delete files" on a project also deletes the glossary file, because Kanal wrote it.
+- **Next.** T2 adds the editor to the project settings window. T3 (#303), T4 (#304) and T5 (#306) are tickets only.
+
+---
+
 ## 2026-10-18
 
 ### Gladia session does not reconnect after a deliberate stop

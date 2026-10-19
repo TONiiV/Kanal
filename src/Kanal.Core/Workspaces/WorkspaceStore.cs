@@ -160,6 +160,8 @@ public sealed class WorkspaceStore
             if (Directory.Exists(meetingsFolder))
                 Directory.Delete(meetingsFolder, recursive: true);
             WorkspaceIcons.DeleteFiles(root);
+            File.Delete(GlossaryIn(root));
+            File.Delete(RecordFile.TemporaryPathFor(GlossaryIn(root)));
             File.Delete(marker);
             File.Delete(RecordFile.TemporaryPathFor(marker));
             if (!Directory.EnumerateFileSystemEntries(root).Any())
@@ -297,10 +299,36 @@ public sealed class WorkspaceStore
     public RecoverResult ReidentifyMeeting(string workspaceId, string folder) =>
         meetings.Reidentify(workspaceId, folder);
 
-    public GlossaryResult ReadGlossary(string workspaceId) => throw new NotImplementedException();
+    public GlossaryResult ReadGlossary(string workspaceId)
+    {
+        var (workspace, problem) = registry.Locate(workspaceId);
+        return problem is not null
+            ? new GlossaryResult(null, problem)
+            : ReadGlossaryFile(GlossaryIn(workspace!.RootPath));
+    }
 
-    public StoreProblem? SaveGlossary(string workspaceId, IReadOnlyList<GlossaryEntry> entries) =>
-        throw new NotImplementedException();
+    public StoreProblem? SaveGlossary(string workspaceId, IReadOnlyList<GlossaryEntry> entries)
+    {
+        var (workspace, problem) = registry.Locate(workspaceId);
+        if (problem is not null)
+            return problem;
+
+        var path = GlossaryIn(workspace!.RootPath);
+        if (ReadGlossaryFile(path).Problem is { } unreadable)
+            return unreadable;
+
+        try
+        {
+            RecordFile.Write(path, StoredGlossary.From(entries.Select(e => e.Trimmed()).Where(e => e.HasTerm)));
+            return null;
+        }
+        catch (Exception ex)
+        {
+            const string failure = "The glossary could not be written.";
+            Log.Warning(StoreProblems.LogCategory, $"{failure} ({path})", ex);
+            return StoreProblems.Unwritable(path, failure, ex);
+        }
+    }
 
     public string? MeetingFolder(string workspaceId, string meetingId) =>
         meetings.FolderOf(workspaceId, meetingId).Folder;
@@ -335,6 +363,17 @@ public sealed class WorkspaceStore
     }
 
     private static string MarkerIn(string rootPath) => Path.Combine(rootPath, WorkspaceFileName);
+
+    private static string GlossaryIn(string rootPath) => Path.Combine(rootPath, GlossaryFileName);
+
+    private static GlossaryResult ReadGlossaryFile(string path)
+    {
+        if (!File.Exists(path))
+            return new GlossaryResult([], null);
+
+        var (stored, problem) = RecordFile.Read<StoredGlossary>(path);
+        return problem is not null ? new GlossaryResult(null, problem) : new GlossaryResult(stored!.ToEntries(), null);
+    }
 
     private static void WriteMarker(Workspace workspace) =>
         RecordFile.Write(MarkerIn(workspace.RootPath), StoredWorkspace.From(workspace));
