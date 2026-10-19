@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kanal.Audio\Kanal.Audio.csproj" />
+    <ProjectReference Include="..\..\src\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
     <ProjectReference Include="..\..\src\Kanal.Providers.LocalAsr\Kanal.Providers.LocalAsr.csproj" />
   </ItemGroup>
 
