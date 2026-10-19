@@ -32,6 +32,48 @@ internal static partial class Scoring
         return (Distance(Words(hypothesis), words), words.Length);
     }
 
+    // chrF (Popović 2015): character 1..6-grams, whitespace removed, recall weighted by beta = 2.
+    public static double ChrF(string hypothesis, string reference, int maxOrder = 6, double beta = 2)
+    {
+        var hyp = Whitespace().Replace(hypothesis, "");
+        var refText = Whitespace().Replace(reference, "");
+        double precision = 0, recall = 0;
+        var orders = 0;
+        for (var n = 1; n <= maxOrder; n++)
+        {
+            var h = Grams(hyp, n);
+            var r = Grams(refText, n);
+            if (h.Count == 0 || r.Count == 0)
+                continue;
+            var matches = h.Sum(kv => Math.Min(kv.Value, r.GetValueOrDefault(kv.Key)));
+            precision += (double)matches / h.Values.Sum();
+            recall += (double)matches / r.Values.Sum();
+            orders++;
+        }
+
+        if (orders == 0)
+            return 0;
+        precision /= orders;
+        recall /= orders;
+        var b2 = beta * beta;
+        return precision + recall == 0 ? 0 : 100 * (1 + b2) * precision * recall / (b2 * precision + recall);
+    }
+
+    private static Dictionary<string, int> Grams(string text, int n)
+    {
+        var grams = new Dictionary<string, int>();
+        for (var i = 0; i + n <= text.Length; i++)
+        {
+            var g = text.Substring(i, n);
+            grams[g] = grams.GetValueOrDefault(g) + 1;
+        }
+
+        return grams;
+    }
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
+
     public static string[] MixedTokens(string text)
     {
         var tokens = new List<string>();

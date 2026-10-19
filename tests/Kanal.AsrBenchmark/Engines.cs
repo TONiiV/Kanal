@@ -323,9 +323,9 @@ internal sealed class GladiaEngine : Engine
 {
     private readonly GladiaAsrProvider _provider;
 
-    public GladiaEngine()
+    public GladiaEngine(bool translation = false)
     {
-        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = Key("GLADIA_API_KEY"), EnableTranslation = false });
+        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = Key("GLADIA_API_KEY"), EnableTranslation = translation });
     }
 
     public override double PaddingSeconds => 1;

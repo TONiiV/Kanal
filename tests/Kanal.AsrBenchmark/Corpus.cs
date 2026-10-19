@@ -106,13 +106,14 @@ internal static class Corpus
         ("en", "The customer rejected batch L-2418 because the O-ring seals do not fit the groove."),
     ];
 
-    public static IReadOnlyList<Clip> Load(string data)
+    public static IReadOnlyList<Clip> Load(string data, IReadOnlyCollection<string>? sets = null)
     {
         var manifest = Path.Combine(data, "clips.tsv");
         if (!File.Exists(manifest))
             return [];
         return File.ReadAllLines(manifest)
             .Select(line => line.Split('\t'))
+            .Where(f => sets is null || sets.Contains(f[0]))
             .Select(f => new Clip(f[0], f[1], f[2], f[4], Read(Path.Combine(data, f[3]))))
             .ToList();
     }
