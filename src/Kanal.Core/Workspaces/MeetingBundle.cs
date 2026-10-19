@@ -42,30 +42,49 @@ public static class MeetingBundle
         var transcript = Path.Combine(folder, TranscriptLog.FileName);
         var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
         var speakers = Path.Combine(folder, SpeakerReidentification.FileName);
+        var partial = target + ".partial";
         try
         {
-            using var file = new FileStream(target, FileMode.Create, FileAccess.Write);
-            using var zip = new ZipArchive(file, ZipArchiveMode.Create);
-            Put(zip, ManifestFileName, JsonSerializer.Serialize(
-                StoredManifest.From(meeting), Options));
-            Put(zip, TranscriptFileName, Markdown(meeting, SpeakerReidentification.Apply(
-                TranscriptLog.Read(transcript), SpeakerReidentification.Read(folder))));
-            if (File.Exists(transcript))
-                zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
-            if (File.Exists(speakers))
-                zip.CreateEntryFromFile(speakers, SpeakerReidentification.FileName);
-            if (includeAudio && File.Exists(audio))
-                zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
+            if (File.Exists(partial))
+                File.SetAttributes(partial, FileAttributes.Normal);
 
-            var attachments = Path.Combine(folder, "attachments");
-            if (Directory.Exists(attachments))
-                foreach (var path in Directory.EnumerateFiles(attachments).Order())
-                    zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+            using (var file = new FileStream(partial, FileMode.Create, FileAccess.Write))
+            {
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    Put(zip, ManifestFileName, JsonSerializer.Serialize(
+                        StoredManifest.From(meeting), Options));
+                    Put(zip, TranscriptFileName, Markdown(meeting, SpeakerReidentification.Apply(
+                        TranscriptLog.Read(transcript), SpeakerReidentification.Read(folder))));
+                    if (File.Exists(transcript))
+                        zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
+                    if (File.Exists(speakers))
+                        zip.CreateEntryFromFile(speakers, SpeakerReidentification.FileName);
+                    if (includeAudio && File.Exists(audio))
+                        zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
 
+                    var attachments = Path.Combine(folder, "attachments");
+                    if (Directory.Exists(attachments))
+                        foreach (var path in Directory.EnumerateFiles(attachments).Order())
+                            zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+                }
+
+                file.Flush(flushToDisk: true);
+            }
+
+            File.Move(partial, target, overwrite: true);
             return null;
         }
         catch (Exception ex)
         {
+            try
+            {
+                File.Delete(partial);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+
             Log.Error(LogCategory, $"The bundle could not be written to {target}.", ex);
             return StoreProblems.Unwritable(target, ex.Message);
         }

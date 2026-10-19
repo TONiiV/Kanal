@@ -50,6 +50,16 @@ Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the oper
 - **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
 - **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
 
+---
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
 ## 2026-10-18
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
@@ -539,6 +549,26 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### Local translation on the GPU
+
+Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
+CPU, and `GpuLayerCount = 999` had no effect. Now:
+
+- `LLamaSharp.Backend.Vulkan` is always in. It needs only the GPU driver and works with NVIDIA, AMD
+  and Intel GPUs. It adds about 20 MB to the MSI download and 65 MB to the install folder.
+- Apple silicon uses Metal. The osx-arm64 build in `LLamaSharp.Backend.Cpu` already contains it.
+- `LLamaSharp.Backend.Cuda12` is optional (`-p:KanalCuda=true`). It adds about 600 MB and needs the
+  CUDA 12 toolkit, so it is not in the installer.
+- LLamaSharp selects the library: CUDA, then Vulkan, then CPU. It falls back when a library does not
+  load. `LlamaAcceleration` reads the loaded library and `llama_supports_gpu_offload()`, and logs
+  the result as `Accelerator`.
+- `KANAL_ACCELERATOR=cpu|vulkan|cuda` forces one library. With `cpu`, no layer goes to the GPU.
+
+Limits:
+
+- LLamaSharp tries Vulkan only when `vulkaninfo --summary` runs. On Linux this needs `vulkan-tools`.
+- LLamaSharp 0.27 `DryRun` always returns null libraries. Do not use it to detect the backend.
+
 ### Local translation benchmark
 
 `tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
@@ -583,7 +613,8 @@ Options:
 - `--gguf <file>`: an extra model. Repeat it for more models.
 - `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
 - `--streams 1,2,4`: the levels of sentences in flight.
-- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
+- `-p:KanalCuda=true` (before `--`): add the CUDA 12 backend. Vulkan and Metal are always in.
+- `KANAL_ACCELERATOR=cpu` (environment): force the CPU, to compare it with the GPU.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
 
