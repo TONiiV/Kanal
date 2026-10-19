@@ -6,6 +6,480 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### Speaker diarization benchmark
+
+Issue #111, ADR 0055 slice 6. `tests/Kanal.DiarizationBenchmark` measures how well Kanal separates
+speakers in zh, de and pl. It does not run in CI, because it needs the models, the test audio and
+the local hardware. CI runs its scoring tests (`DiarizationBenchmarkScoringTests`).
+
+**Result first.** Keep the CAM++ embedding (`3dspeaker-campplus-zh-en`). Change
+the clustering threshold without a count from the library default 0.5 to 0.8. At 0.5 the post-meeting
+layer finds too many speakers in every language. No language is unusable, but Polish is the weakest,
+and two voices of the same gender and language often merge. The numbers are an optimistic bound:
+the voices are TTS voices, cleaner and more distinct than people in a real room. The real 3-person
+recording shows this: at 0.8 it still gets 17 tags.
+
+#### Setup
+
+Test audio:
+
+- **Scripted meeting** (`Scripts/negotiation-6.json`): 65 turns of a supplier/customer negotiation,
+  6 speakers in the real Kanal setup: 2 zh (male, female), 2 de (both male), 2 pl (both female). Each
+  speaker keeps one language. 9 turns are under 1 s. ElevenLabs `eleven_multilingual_v2` synthesised
+  it with 6 premade voices (median F0: zh 108/190 Hz, de 143/140 Hz, pl 195/216 Hz). Pauses are 0.2 to
+  0.8 s. 9 marked turns overlap (3.6 s of overlap in total). There is a clean and a room variant
+  (294 s each).
+- **Synthetic matrix**: 4 languages (zh only, de only, pl only, a zh/de/pl mix) × 2, 3, 4 and 6
+  speakers × 4 conditions (clean, overlap, room, overlap and room). Each meeting has about 140 s of
+  speech from a fixed pool of meeting turns, and about 15 % very short turns ("好", "ja", "tak",
+  "genau", "对"). Local voices synthesise it: Kokoro multi-lang v1.0 for zh, Piper for de and pl,
+  3 male and 3 female per language. Every speaker list starts with two voices of one gender, so every
+  meeting has a same-gender pair. In the overlap condition, 35 % of the turns start 0.5 to 2 s before
+  the previous turn ends (9 to 18 s of overlap per meeting).
+- The timeline of each meeting is the reference RTTM. Every clip has the same RMS level.
+- The room condition adds a level per speaker (0 to −6 dB), a Schroeder reverb (RT60 0.5 s, 30 %
+  wet), a low-pass filter at 3.5 kHz and low-passed noise at 15 dB SNR.
+- All audio is 16 kHz mono 16-bit, as Kanal records it. The audio stays in
+  `LocalApplicationData/Kanal/diarization-bench`, outside the repo.
+
+Systems:
+
+- Post-meeting layer: sherpa-onnx `OfflineSpeakerDiarization`, pyannote segmentation 3.0 and one of
+  the four embedding candidates of ADR 0055 decision 16. The benchmark builds the configuration of
+  `SherpaSpeakerDiarizer` and adds the clustering threshold. The sherpa-onnx threshold is a cosine
+  distance: a higher value merges more and gives fewer speakers.
+- Each candidate runs with the true speaker count (what the "how many people" submenu passes) and
+  without a count at one or more thresholds.
+- Live layer: `LiveSpeakerLabels` gets the reference utterances in order, each as its slice of the
+  meeting audio. Each embedding is computed once and replayed for the threshold sweep 0.3 to 0.7.
+  The `LiveSpeakerLabels` threshold is a cosine similarity: a higher value gives more speakers.
+
+Metrics:
+
+- DER with missed speech, false alarm and speaker confusion. The report gives the mean of the
+  per-meeting DER, so each meeting has the same weight. Settings: 10 ms frames, optimal (Hungarian)
+  speaker mapping, a 0.25 s collar and no collar. Overlapped speech counts once for each speaker.
+  sherpa-onnx gives one speaker per segment, so the overlap is always partly missed (ADR 0055
+  decision 19).
+- The speaker count found against the true count.
+- Utterance accuracy, which is what the operator sees: `SpeakerReidentification.Assign` gives each
+  reference utterance a tag, one Hungarian mapping per meeting maps the tags to speakers, and an
+  utterance without a tag is wrong. Utterances under 1 s are also reported separately.
+- Cost: real-time factor (RTF), peak working set and model load time.
+
+Scope. Each threshold of the sweep runs segmentation and embedding again on the whole meeting, so the
+full matrix did not fit the time box:
+
+- The scripted meeting ran completely: CAM++ with the count, the sweep 0.4 to 0.9 and the live sweep;
+  the other 3 embeddings with the count, threshold 0.8 and their live sweeps.
+- 15 synthetic meetings (all 2-speaker meetings except de-2-room) have the full sweep 0.4 to 0.9 for
+  all 4 embeddings.
+- 47 synthetic meetings (3, 4 and 6 speakers) have the full sweep for CAM++ only. There, the other 3
+  embeddings have the count and threshold 0.8.
+- 2 synthetic meetings did not run: de-2-room and de-3-room.
+
+Run it from the repo root:
+
+1. Run the matrix. The first run downloads the local TTS voices (about 600 MB) and the three
+   candidate embeddings (106 MB):
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- --lang zh --threads 4
+   ```
+
+2. Run the scripted meeting. It needs `ELEVENLABS_API_KEY`. The clips are cached, so a rerun costs
+   no characters:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- --script tests/Kanal.DiarizationBenchmark/Scripts/negotiation-6.json
+   ```
+
+3. Run the real-recording check on one meeting folder. It reads the folder and writes nothing there:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- real <meeting folder>
+   ```
+
+4. Merge the result files of parallel runs into one report:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.DiarizationBenchmark -- report <file.json> <file.json>
+   ```
+
+Options: `--lang`, `--speakers` (the order is the run order), `--variants`, `--embedding <id,...>`,
+`--thresholds` (CAM++), `--candidate-thresholds` (the other embeddings), `--live-thresholds`,
+`--threads N` (default `ProcessorCount / 2`, as the product), `--skip-done` (skip meetings with
+results in `--out`), `--until HH:mm` (start no meeting after this time), `--parity N`, `--data`,
+`--models`, `--out`. `voices` synthesises one sentence per local voice and prints its median F0.
+
+#### Results: scripted 6-speaker meeting
+
+Mean of the clean and the room variant. DER with the 0.25 s collar.
+
+| Embedding | System | DER % | Missed / FA / Confusion % | Utterance accuracy % | < 1 s % | Speakers found, clean / room (true 6) |
+|---|---|---:|---:|---:|---:|---:|
+| CAM++ | count 6 | 22.8 | 3.8 / 0.1 / 18.9 | 68.5 | 27.8 | 5 / 5 |
+| CAM++ | threshold 0.5 (default) | 28.9 | 3.8 / 0.3 / 24.9 | 56.9 | 11.1 | 16 / 22 |
+| CAM++ | threshold 0.8 | **8.1** | 3.8 / 0.3 / 4.1 | **80.0** | 16.7 | 8 / 10 |
+| CAM++ | threshold 0.9 | 12.8 | – | 79.2 | – | 6 / 8 |
+| ERes2Net base | count 6 | 18.2 | 3.7 / 0.6 / 13.9 | 73.1 | 33.3 | 5 / 6 |
+| ERes2Net base | threshold 0.8 | 14.0 | 3.7 / 0.6 / 9.8 | 73.8 | 11.1 | 10 / 11 |
+| WeSpeaker ResNet34 | count 6 | 28.6 | 3.8 / 0.2 / 24.6 | 63.1 | 38.9 | 5 / 5 |
+| WeSpeaker ResNet34 | threshold 0.8 | 23.4 | 3.7 / 0.1 / 19.6 | 65.4 | 44.4 | 4 / 7 |
+| TitaNet small | count 6 | 21.7 | 3.9 / 0.6 / 17.2 | 66.2 | 11.1 | 6 / 6 |
+| TitaNet small | threshold 0.8 | 10.4 | 3.7 / 0.3 / 6.3 | 73.8 | 11.1 | 8 / 11 |
+
+Per speaker (CAM++, share of the speaker's utterances with the right tag, clean / room):
+
+| Speaker | Count 6 | Threshold 0.8 | Live 0.5 |
+|---|---:|---:|---:|
+| de-becker | 92 / 100 % | 85 / 92 % | 92 / 92 % |
+| de-schulz | **0 / 0 %** (merged into de-becker) | 70 / 80 % | **0 / 10 %** (merged into de-becker) |
+| zh-wang | 92 / 92 % | 85 / 85 % | 92 / 85 % |
+| zh-li | 78 / 78 % | 78 / 78 % | 89 / 89 % |
+| pl-nowak | 89 / **0 %** (merged into pl-kowalska) | 78 / 67 % | 67 / 67 % |
+| pl-kowalska | 73 / 91 % | 73 / 82 % | 82 / 82 % |
+
+The two de men (median F0 143 and 140 Hz) are the hard case. With the count, sherpa-onnx returns
+only 5 clusters and puts both men in one. In the room variant the two pl women also merge, so only 4
+clusters win any utterance. The live layer at 0.5 also merges the de men. Threshold 0.8 keeps all 6
+apart and adds 2 to 4 small extra clusters, which the operator merges by hand. The tool writes the
+full confusion tables into its report.
+
+Live layer on the scripted meeting (CAM++): 72.3 % at 0.5 (6.5 speakers created), 81.5 % at 0.6
+(9.0 speakers created), 76.9 % at 0.7.
+
+#### Results: synthetic matrix
+
+All 62 meetings, DER with the 0.25 s collar / utterance accuracy %:
+
+| Embedding | Count given | Threshold 0.5 | Threshold 0.8 | Count exact at 0.8 |
+|---|---:|---:|---:|---:|
+| CAM++ | 16.8 / 72.6 | 23.3 / 64.7 | **13.5 / 74.9** | 48 % |
+| ERes2Net base | 15.3 / 74.6 | (15 meetings) 23.9 / 66.3 | 14.1 / 74.1 | 37 % |
+| WeSpeaker ResNet34 | 19.4 / 71.3 | (15 meetings) 14.4 / 76.1 | 23.3 / 68.5 | 39 % |
+| TitaNet small | 21.0 / 69.7 | (15 meetings) 23.1 / 68.8 | 15.2 / 73.6 | 37 % |
+
+On the 15 meetings with the full sweep for all embeddings (2 speakers), the best thresholds are:
+CAM++ 0.8 (DER 9.9 %), ERes2Net 0.9 (8.2 %), WeSpeaker 0.7 (8.4 %), TitaNet 0.9 (14.3 %).
+The best WeSpeaker threshold is lower than the others. At 0.8 it merges speakers, so its 0.8
+numbers on the larger meetings understate it.
+
+CAM++ threshold sweep, all 62 meetings (DER %):
+
+| Threshold | All | zh | de | pl | mix | Utterance accuracy % | Count exact % | Mean found − true |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.4 | 34.1 | 22.5 | 34.1 | 46.2 | 33.6 | 54.7 | 5 | +7.1 |
+| 0.5 | 23.3 | 14.9 | 21.0 | 31.7 | 25.1 | 64.7 | 6 | +3.9 |
+| 0.6 | 17.1 | 10.9 | 15.4 | 22.5 | 19.2 | 70.3 | 11 | +2.2 |
+| 0.7 | 13.6 | 11.8 | 10.4 | 16.8 | 15.0 | 74.2 | 37 | +1.0 |
+| 0.8 | 13.5 | 15.6 | 7.2 | 15.9 | 14.6 | 74.9 | 48 | +0.5 |
+| 0.9 | 16.0 | 22.8 | 9.6 | 17.0 | 13.9 | 73.1 | 56 | 0.0 |
+
+CAM++ DER % / utterance accuracy % by speaker count:
+
+| Speakers | Count given | Threshold 0.5 | Threshold 0.8 | Live 0.5 | Live 0.6 |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 8.4 / 84 | 20.9 / 72 | 9.9 / 83 | 82 | 85 |
+| 3 | 14.8 / 73 | 20.0 / 65 | 10.9 / 75 | 81 | 80 |
+| 4 | 21.4 / 69 | 27.7 / 62 | 16.9 / 73 | 84 | 85 |
+| 6 | 21.9 / 66 | 24.1 / 61 | 16.0 / 70 | 76 | 79 |
+
+CAM++ at threshold 0.8 by condition: clean 13.2 %, overlap 16.1 %, room 10.9 %, overlap and room
+13.6 % DER. The simulated room does not make it worse. The TTS voices stay distinct through it.
+
+Live layer, all 62 meetings (utterance accuracy %): CAM++ 78.7 at 0.5 and 82.3 at 0.6; ERes2Net
+81.6 at 0.5; TitaNet 78.8 at 0.5; WeSpeaker 62.9 at 0.5 and 80.2 at 0.7.
+
+Cost. Quiet machine, Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 8 threads (the product
+setting), CAM++ on the 27.6 min real recording: RTF 0.086 (2.4 min), load 0.5 to 1.0 s, peak working
+set of the process 470 to 1350 MB. The matrix ran 4 processes in parallel at 2 to 4 threads, and
+another benchmark ran on the machine part of the time, so its timings are not clean. Relative to
+CAM++ on the same runs, ERes2Net is 1.7× slower, WeSpeaker 1.6× slower and TitaNet 0.9×.
+
+Licences (catalog): CAM++, ERes2Net and WeSpeaker Apache-2.0; TitaNet CC-BY-4.0 with attribution;
+pyannote segmentation 3.0 MIT.
+
+#### Real recording
+
+The 3-person meeting "景江集团合作洽谈" (27.6 min, one room microphone) has no reference. CAM++:
+
+| Count | Threshold | Clusters | Tags after `Assign` | Share of diarized speech per cluster, % |
+|---:|---:|---:|---:|---|
+| – | 0.5 (default) | 84 | 47 | 16 / 13 / 11 / 11 / 9 / 7 / 5 / 5, 76 more with 23 together |
+| 3 | – | 3 | 2 | 78 / 20 / 2 |
+| – | 0.8 | 33 | 17 | 26 / 20 / 18 / 16 / 10 / 3 / 1 / 1, 25 more with 5 together |
+| – | 0.9 | 22 | 11 | 56 / 19 / 17 / 3 / 1 / 1, 16 more with 2 together |
+
+The default reproduces the 47 tags that the operator saw. With the count 3, one cluster holds 2 % of
+the speech and wins no utterance, so the operator sees 2 tags for 3 people. Threshold 0.8 cuts the
+tags from 47 to 17, but a real room is clearly harder than the synthetic audio.
+
+#### Findings
+
+- **The library default threshold 0.5 is wrong for Kanal.** It over-splits in every language and
+  condition: +3.9 speakers on the synthetic meetings, +13 on the scripted one, 47 tags on the real one.
+- **The count does not guarantee the count.** With `NumClusters`, sherpa-onnx returned fewer clusters
+  than asked in 17 of 62 synthetic meetings and in both scripted variants. Speakers merge, and the
+  operator cannot split them in the UI. For 3 or more speakers, threshold 0.8 without a count beats
+  the count (10.9 to 16.9 % against 14.8 to 21.9 % DER).
+- **Same-gender, same-language pairs merge.** de-becker and de-schulz merged with the count and in
+  the live layer. The two pl men in pl-2 give 34 % DER with the count.
+- **Polish is the weakest language, but it is not unusable.** CAM++ at 0.8: de 7.2 %, zh 15.6 %,
+  mix 14.6 %, pl 15.9 %. zh gets worse above 0.8 (22.8 % at 0.9), because its voices merge first.
+- **Short utterances are mostly wrong.** Under 1 s, the post-meeting layer gets 17 to 28 % right. The
+  live layer got 0 to 6 %. The live numbers in this document come from the old rule: an utterance
+  under 1 s copied the previous tag. A backchannel ("ja", "好") is almost always a change of
+  speaker. Commit a9b5b56 (#250) removed that rule. The current rule gives no tag under 1 s.
+  A rerun of the benchmark scores the live "< 1 s" bucket as 0 by construction, because an
+  untagged utterance is wrong. The other live numbers can change with the new rule. They are
+  not remeasured yet.
+- **Overlap is missed, as ADR 0055 decision 19 says.** Missed speech is 3.8 % on the scripted meeting.
+- **Parity.** `SherpaSpeakerDiarizer` and the benchmark engine gave identical turns on mix-2-clean
+  (with and without a count) and on zh-2-clean with a count. On zh-2-clean without a count they gave
+  31 and 34 turns. The benchmark ran at 3 threads and the product at 8. The thread count probably
+  changes the clustering at the margin. This is not investigated.
+
+Recommendations (this PR makes no product change; item 4 is already done in a9b5b56):
+
+1. Keep `3dspeaker-campplus-zh-en` as the default embedding. No candidate is clearly better. It is
+   best on the scripted meeting and on the 62-meeting mean at 0.8. Its licence needs no attribution.
+   Only TitaNet is faster.
+2. Set `Clustering.Threshold = 0.8` in `SherpaSpeakerDiarizer` when no count is given.
+3. Make "no count" the default path, or tell the operator that a count can merge speakers.
+4. Done in a9b5b56 (#250): `LiveSpeakerLabels.DefaultThreshold` is 0.6 (+3.6 points, a few more
+   speakers) and an utterance under 1 s gets no tag until the post-meeting layer runs. The +3.6
+   points were measured with the old copy-previous rule.
+5. Measure real recordings with a hand-made reference before the next default change.
+
+Caveats:
+
+- TTS voices are cleaner and more distinct than people. The numbers are an optimistic bound.
+- The synthetic matrix uses local TTS voices, not ElevenLabs. At the start the ElevenLabs variable
+  held a key ID. The corrected key cannot read the subscription or the voice list. ElevenLabs used
+  3,189 characters (the script plus one 22-character test). The remaining quota is unknown.
+- The synthetic room is a simulation (one reverb, one noise). It is no real room.
+- The reference boundaries come from trimmed TTS clips. A pause inside a turn counts as speech.
+- The meetings are 2 to 5 min. A 1-hour meeting gives the clusterer more data per speaker.
+- The scripted meeting is one script. Each per-speaker number rests on 9 to 13 utterances.
+
+#### Cloud comparison: Gladia and ElevenLabs Scribe v2
+
+The `cloud` command sends the same meetings to two cloud services and scores them with the same code.
+
+- Gladia pre-recorded API (`/v2/upload`, `/v2/pre-recorded`), `diarization: true`. The hint is
+  `diarization_config.number_of_speakers`. The turns are `result.transcription.utterances`.
+- ElevenLabs `/v1/speech-to-text`, `model_id=scribe_v2`, `diarize=true`. The hint is `num_speakers`,
+  which is a maximum. Consecutive words of one `speaker_id` join into a turn up to a 0.5 s gap.
+- Each service ran twice per meeting: with the true count as the hint, and without a hint.
+- The raw responses stay in the data folder. The tool deletes each Gladia job and each ElevenLabs
+  transcript after it reads the result.
+
+Each cell: DER % (0.25 s collar) / utterance accuracy % / speakers found. "sherpa hint" is CAM++
+with the count; "sherpa none" is CAM++ at threshold 0.8.
+
+| Meeting | True | sherpa hint | sherpa none | Gladia hint | Gladia none | Scribe hint | Scribe none |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| negotiation-6-clean | 6 | 18.6 / 72.3 / 5 | 9.6 / 78.5 / 8 | 26.4 / 83.1 / 6 | 26.4 / 83.1 / 6 | 31.4 / 67.7 / 4 | 31.8 / 67.7 / 4 |
+| negotiation-6-room | 6 | 27.0 / 64.6 / 5 | 6.7 / 81.5 / 10 | 40.8 / 50.8 / 6 | 52.9 / 40.0 / 4 | 28.8 / 69.2 / 4 | 23.0 / 73.8 / 6 |
+| mix-3-clean | 3 | 22.5 / 70.3 / 3 | 22.5 / 70.3 / 3 | 9.9 / 91.9 / 3 | 9.9 / 91.9 / 3 | 1.5 / 100.0 / 3 | 0.6 / 100.0 / 3 |
+| mix-3-overlap-room | 3 | 26.3 / 62.2 / 3 | 36.8 / 48.6 / 7 | 47.3 / 54.1 / 3 | 46.7 / 51.4 / 3 | 12.0 / 86.5 / 3 | 11.9 / 86.5 / 3 |
+| mix-4-clean | 4 | 21.0 / 72.2 / 4 | 19.2 / 77.8 / 4 | 16.8 / 91.7 / 4 | 16.8 / 91.7 / 4 | 2.4 / 100.0 / 4 | 2.2 / 100.0 / 4 |
+| mix-4-overlap-room | 4 | 20.5 / 63.9 / 4 | 23.0 / 61.1 / 5 | 46.9 / 61.1 / 4 | 48.1 / 55.6 / 4 | 24.7 / 77.8 / 4 | 21.6 / 80.6 / 4 |
+| mix-6-clean | 6 | 4.4 / 79.5 / 6 | 4.4 / 76.9 / 7 | 20.4 / 74.4 / 6 | 21.5 / 71.8 / 5 | 9.7 / 89.7 / 5 | 1.4 / 97.4 / 6 |
+| mix-6-overlap-room | 6 | 12.0 / 69.2 / 5 | 12.3 / 64.1 / 9 | 40.6 / 53.8 / 6 | 40.5 / 56.4 / 5 | 13.8 / 82.1 / 5 | 14.9 / 82.1 / 5 |
+| pl-4-clean | 4 | 15.3 / 70.3 / 4 | 15.3 / 70.3 / 4 | 11.3 / 89.2 / 4 | 11.3 / 89.2 / 4 | 0.0 / 100.0 / 4 | 0.0 / 100.0 / 4 |
+| pl-4-overlap-room | 4 | 17.4 / 62.2 / 4 | 17.4 / 62.2 / 4 | 22.9 / 75.7 / 4 | 22.9 / 75.7 / 4 | 10.7 / 86.5 / 4 | 11.2 / 86.5 / 4 |
+| pl-6-clean | 6 | 9.2 / 76.3 / 6 | 9.2 / 76.3 / 6 | 19.6 / 78.9 / 6 | 22.4 / 76.3 / 5 | 19.1 / 73.7 / 4 | 6.5 / 89.5 / 5 |
+| pl-6-overlap-room | 6 | 8.5 / 76.3 / 6 | 8.5 / 76.3 / 6 | 26.9 / 63.2 / 6 | 49.7 / 47.4 / 3 | 21.0 / 71.1 / 5 | 24.2 / 65.8 / 5 |
+| Mean, scripted (2) | | 22.8 / 68.5 | 8.1 / 80.0 | 33.6 / 66.9 | 39.7 / 61.5 | 30.1 / 68.5 | 27.4 / 70.8 |
+| Mean, synthetic (10) | | 15.7 / 70.3 | 16.9 / 68.4 | 26.2 / 73.3 | 29.0 / 70.6 | 11.5 / 86.6 | 9.5 / 88.8 |
+| Exact count, all 12 | | 9 | 6 | 12 | 7 | 6 | 8 |
+
+DER parts, mean of the 10 synthetic meetings, % (missed / false alarm / confusion):
+
+| sherpa hint | sherpa none | Gladia hint | Gladia none | Scribe hint | Scribe none |
+|---:|---:|---:|---:|---:|---:|
+| 0.4 / 0.1 / 15.3 | 0.4 / 0.1 / 16.4 | 13.7 / 1.1 / 11.4 | 13.6 / 1.1 / 14.3 | 4.7 / 0.0 / 6.8 | 4.9 / 0.0 / 4.5 |
+
+On the scripted meeting the confusion is 18.9 % (sherpa hint), 4.1 % (sherpa none), 5.8 % (Gladia
+hint), 11.9 % (Gladia none) and 19 to 22 % (Scribe). Utterances under 1 s, correct, all 12
+meetings: sherpa 16/84 (hint) and 11/84 (none), Gladia 32/84 and 33/84, Scribe 55/84 and 56/84.
+
+Per speaker on the scripted meeting (the full tables are in the run report):
+
+- Scribe merges the same-gender pairs. de-schulz goes into de-becker (0 % correct in 3 of 4 runs) and pl-nowak goes
+  into pl-kowalska. It finds 4 speakers for 6 in 3 of 4 runs, also with `num_speakers=6`.
+- Gladia separates all 6 speakers on the clean variant (69 to 100 % per speaker). In the room
+  variant it loses speech: 2 to 5 utterances per speaker get no tag.
+- sherpa at 0.8 keeps de-schulz apart (70 to 80 %), but it adds small extra clusters.
+
+Real recording ("景江集团合作洽谈", 27.6 min, 344 final utterances in Kanal's transcript):
+
+| System | Hint | Speakers found | Tags after `Assign` | Share of diarized speech per speaker, % |
+|---|---:|---:|---:|---|
+| sherpa CAM++ | – (0.5) | 84 | 47 | 16 / 13 / 11 / 11 / 9 / 7 / 5 / 5, 76 more |
+| sherpa CAM++ | 3 | 3 | 2 | 78 / 20 / 2 |
+| sherpa CAM++ | – (0.8) | 33 | 17 | 26 / 20 / 18 / 16 / 10 / 3 / 1 / 1, 25 more |
+| sherpa CAM++ | – (0.9) | 22 | 11 | 56 / 19 / 17 / 3 / 1 / 1, 16 more |
+| Gladia | 3 | 3 | 3 | 60 / 24 / 16 |
+| Gladia | – | 3 | 3 | 60 / 24 / 16 |
+| ElevenLabs Scribe v2 | – | not run | | |
+
+ElevenLabs refused the real recording with `quota_exceeded`. The request needed 1,843 credits and
+1,659 were left of 10,000.
+
+Cost:
+
+| Service | Audio sent | Price on the vendor page, 2026-10-18 | Cost of this run |
+|---|---:|---|---:|
+| Gladia | 122.5 min | €0.16/h (Solaria-3) to €0.27/h (Solaria-1), diarization included | €0.33 to €0.55 |
+| ElevenLabs Scribe v2 | 67.2 min | $0.22/h, no diarization surcharge listed | $0.25 |
+
+Deletion: the run made 26 Gladia jobs and 24 ElevenLabs transcripts. Every Gladia job answered `202`
+to `DELETE /v2/pre-recorded/{id}`. Every ElevenLabs transcript answered `200` to
+`DELETE /v1/speech-to-text/transcripts/{id}`. A `GET` on the first two of each then answered `404`.
+
+Cloud findings:
+
+- **Gladia is the only system that finds 3 speakers in the real room and gives 3 tags.** sherpa gives
+  2 tags with the count and 17 at 0.8. Without a reference, the real accuracy is not known.
+- **Scribe is the best on the synthetic meetings** (9.5 % DER, 88.8 % utterances, best on short
+  utterances). It is the worst at separating same-gender voices of one language.
+- **Gladia's DER is mostly missed speech.** Its turns cover only recognised words. Its confusion
+  (11.4 % with the hint) is lower than sherpa's (15.3 %) on the synthetic meetings.
+- **The Gladia hint matters, the Scribe hint does not.** `number_of_speakers` gave the exact count
+  in 12 of 12 meetings. `num_speakers` is only a maximum and Scribe still under-counts.
+- **No cloud service wins everywhere.** sherpa at 0.8 stays best on the scripted 6-speaker meeting.
+
+Cloud caveats:
+
+- One run per meeting and per setting. The services can give different results on a second run.
+- Gladia also transcribes. A diarization-only call is not available, so the turns depend on its ASR.
+- Gladia and Scribe received all the meeting audio, including the real recording (approved by the
+  user for this run only).
+- The sherpa columns come from the earlier runs of this benchmark (same audio and scoring).
+
+#### Local comparison: pyannote community-1
+
+`pyannote/speaker-diarization-community-1` (pyannote.audio 4.0.7, PyTorch 2.14 CPU, 8 threads) ran
+offline on the same 12 meetings. No audio left the machine. The pipeline is pyannote segmentation
+(community-1 weights), WeSpeaker ResNet34 embeddings, PLDA and VBx clustering.
+
+- A Python script outside the repo wrote one RTTM file per meeting and setting into `<data>/cloud/`.
+- `Cloud.Diarize` reads `<service>-<id>-<hint>.rttm` when the file exists. The `cloud` command then
+  scores it with the same code: `cloud --services pyannote-community-1,pyannote-community-1-exclusive`.
+- "hint" is `num_speakers` (an exact count). "none" is the pipeline default (VBx threshold 0.6).
+- The `-exclusive` output gives one speaker per frame. It is within 1 point of the regular output on
+  every mean, so the table shows the regular output only.
+
+| Meeting | True | sherpa hint | sherpa none | community-1 hint | community-1 none |
+|---|---:|---:|---:|---:|---:|
+| negotiation-6-clean | 6 | 18.6 / 72.3 / 5 | 9.6 / 78.5 / 8 | 16.4 / 86.2 / 6 | 16.4 / 86.2 / 6 |
+| negotiation-6-room | 6 | 27.0 / 64.6 / 5 | 6.7 / 81.5 / 10 | 24.9 / 75.4 / 6 | 22.8 / 73.8 / 5 |
+| mix-3-clean | 3 | 22.5 / 70.3 / 3 | 22.5 / 70.3 / 3 | 19.3 / 73.0 / 3 | 19.3 / 73.0 / 3 |
+| mix-3-overlap-room | 3 | 26.3 / 62.2 / 3 | 36.8 / 48.6 / 7 | 17.1 / 70.3 / 3 | 33.7 / 64.9 / 2 |
+| mix-4-clean | 4 | 21.0 / 72.2 / 4 | 19.2 / 77.8 / 4 | 11.2 / 80.6 / 4 | 11.2 / 80.6 / 4 |
+| mix-4-overlap-room | 4 | 20.5 / 63.9 / 4 | 23.0 / 61.1 / 5 | 20.9 / 63.9 / 4 | 27.6 / 58.3 / 3 |
+| mix-6-clean | 6 | 4.4 / 79.5 / 6 | 4.4 / 76.9 / 7 | 2.2 / 82.1 / 6 | 2.2 / 82.1 / 6 |
+| mix-6-overlap-room | 6 | 12.0 / 69.2 / 5 | 12.3 / 64.1 / 9 | 6.8 / 74.4 / 6 | 6.8 / 74.4 / 6 |
+| pl-4-clean | 4 | 15.3 / 70.3 / 4 | 15.3 / 70.3 / 4 | 6.8 / 81.1 / 4 | 6.8 / 81.1 / 4 |
+| pl-4-overlap-room | 4 | 17.4 / 62.2 / 4 | 17.4 / 62.2 / 4 | 19.3 / 67.6 / 4 | 25.6 / 62.2 / 3 |
+| pl-6-clean | 6 | 9.2 / 76.3 / 6 | 9.2 / 76.3 / 6 | 6.1 / 78.9 / 6 | 6.1 / 78.9 / 6 |
+| pl-6-overlap-room | 6 | 8.5 / 76.3 / 6 | 8.5 / 76.3 / 6 | 16.8 / 68.4 / 6 | 37.4 / 52.6 / 4 |
+| Mean, scripted (2) | | 22.8 / 68.5 | 8.1 / 80.0 | 20.7 / 80.8 | 19.6 / 80.0 |
+| Mean, synthetic (10) | | 15.7 / 70.3 | 16.9 / 68.4 | 12.6 / 74.1 | 17.7 / 70.9 |
+| Exact count, all 12 | | 9 | 6 | 12 | 7 |
+
+All systems side by side, all 12 meetings:
+
+| System | Utterance accuracy, scripted / synthetic % | Exact count | Under 1 s correct | DER synthetic % (missed / FA / confusion) |
+|---|---:|---:|---:|---|
+| sherpa CAM++ hint | 68.5 / 70.3 | 9 | 16/84 | 15.7 (0.4 / 0.1 / 15.3) |
+| sherpa CAM++ 0.8 | 80.0 / 68.4 | 6 | 11/84 | 16.9 (0.4 / 0.1 / 16.4) |
+| community-1 hint | 80.8 / 74.1 | 12 | 21/84 | 12.6 (0.4 / 0.0 / 12.2) |
+| community-1 none | 80.0 / 70.9 | 7 | 25/84 | 17.7 (0.4 / 0.0 / 17.2) |
+| Gladia hint | 66.9 / 73.3 | 12 | 32/84 | 26.2 (13.7 / 1.1 / 11.4) |
+| Scribe v2 none | 70.8 / 88.8 | 8 | 56/84 | 9.5 (4.9 / 0.0 / 4.5) |
+
+Cost on the same machine (Ryzen 9 PRO 8945HS, 8 threads, nothing else running): RTF 0.36 to 0.47,
+mean 0.42. Model load 12.5 s. Peak working set 2.4 GB. sherpa CAM++ has RTF 0.086 on the real
+recording and a peak of 470 to 1350 MB (see "Cost" above). community-1 is about 5 times slower and needs about 2 times the memory.
+
+Per speaker on the scripted meeting:
+
+- Clean: community-1 separates all 6 speakers, with or without the count (73 to 92 % per speaker).
+  It is the best system on this variant (86.2 %).
+- Room, with the count: pl-nowak goes into pl-kowalska (0 % correct).
+- Room, without the count: de-schulz goes into de-becker (0 % correct). It finds 5 speakers.
+
+Licence and port:
+
+- Weights: CC-BY-4.0 (attribution needed). The Hugging Face repository is gated. A user must accept
+  the terms and use a token with access to the gated repository.
+- The segmentation model has the same shape as segmentation 3.0: 10 s window, 7 powerset classes,
+  589 frames, receptive field 991 samples, step 270 samples. The sherpa-onnx export script
+  (`scripts/pyannote/segmentation/export-onnx.py`, opset 13) exports it. ONNX Runtime output differs
+  from PyTorch by at most 2.1e-5. A sherpa-onnx swap of the segmentation model is therefore possible.
+- sherpa-onnx has no PLDA and no VBx clustering. A full port needs PLDA and VBx in C#, the ResNet34
+  embedding in ONNX, and 5 times the CPU time.
+
+Findings:
+
+- **With the count, community-1 is the best local system.** It gives the exact count in 12 of 12
+  meetings, as Gladia does. Its utterance accuracy is +12.3 points (scripted) and +3.8 points
+  (synthetic) above sherpa with the count.
+- **Without the count, it is no better than sherpa at 0.8.** VBx under-counts in 5 of the 6 room
+  meetings with overlap (2 for 3, 3 for 4, 4 or 5 for 6). sherpa at 0.8 over-counts instead.
+- **Short utterances improve a little.** 21 to 25 of 84 are correct, against 11 to 16 for sherpa.
+  Scribe gets 56.
+- **Scribe stays far ahead on the synthetic meetings** (88.8 % against 74.1 %).
+
+Recommendation: do not port the full pipeline. The gain applies only when the operator gives the
+count. It costs 5 times the CPU time, 2 times the memory and two new algorithms in C#. A smaller test
+is open: run sherpa-onnx with the community-1 segmentation model in ONNX and CAM++ at 0.8.
+
+#### Segmentation swap only: community-1 segmentation in sherpa-onnx
+
+Result: the swap changes nothing. The community-1 segmentation model has the same weights as
+segmentation 3.0. All the community-1 gain comes from the ResNet34 embeddings, PLDA and VBx.
+
+Method:
+
+1. The export follows the sherpa-onnx script (opset 13) and adds the sherpa metadata. The values are
+   equal to the shipped `pyannote-segmentation-3-0.onnx`: 3 speakers, powerset 2, 7 classes, window
+   160000, receptive field 991 and 270, model type `pyannote-segmentation-3.0`.
+2. `rttm <name> [--segmentation <onnx>]` runs sherpa CAM++ on the 12 stored meetings. It uses the true
+   count and threshold 0.8. It writes `<data>/cloud/<name>-<id>-<hint>.rttm` and does not write the
+   meeting audio.
+3. `cloud --services sherpa-seg30,sherpa-c1seg` scores both sets with the same code. A local system
+   without an RTTM file now stops with an error, so no audio goes to a cloud service.
+
+Weight check:
+
+- 28 of 33 float tensors in the two ONNX files are equal bit for bit, including all LSTM and linear
+  weights. The other 5 are small constants that the export folds differently.
+- On 30 s of `negotiation-6-room`, the outputs differ by at most 7e-5. The argmax class agrees on 100 %
+  of the frames.
+- The 24 RTTM files of the two runs are byte-identical.
+
+| System | Utterance accuracy, scripted / synthetic % | Exact count | Under 1 s correct | DER synthetic % (missed / FA / confusion) | RTF |
+|---|---:|---:|---:|---|---:|
+| sherpa seg 3.0 hint, this run | 71.5 / 70.3 | 9 | 17/84 | 16.3 (0.4 / 0.1 / 15.9) | 0.085 |
+| sherpa community-1 seg hint | 71.5 / 70.3 | 9 | 17/84 | 16.3 (0.4 / 0.1 / 15.9) | 0.083 |
+| sherpa seg 3.0 at 0.8, this run | 76.9 / 69.3 | 6 | 12/84 | 16.3 (0.4 / 0.1 / 15.8) | 0.085 |
+| sherpa community-1 seg at 0.8 | 76.9 / 69.3 | 6 | 12/84 | 16.3 (0.4 / 0.1 / 15.8) | 0.083 |
+
+RTF is the mean over 24 runs per model (Ryzen 9 PRO 8945HS, 8 threads).
+
+The seg 3.0 rows differ from the earlier sherpa rows (68.5 / 70.3 and 80.0 / 68.4) on 6 meetings.
+The audio files and the scoring are the same. The difference is up to 6 points on one meeting and up
+to 3 points on the scripted mean. The cause is not checked. Treat differences of this size between
+sherpa runs as noise.
+
+Decision: do not ship the community-1 segmentation file. It gives no gain, and its licence
+(CC-BY-4.0, gated) is stricter than the shipped model.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
