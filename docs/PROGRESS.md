@@ -19,6 +19,7 @@ Issue #279, part of spec #278.
 - **Button.** `OpenTranslationSettingsCommand` calls `MainViewModel.ShowTranslationSettings`. `WorkspaceSidebarView` sets that hook. It opens the Settings window with `SelectedTab = SettingsViewModel.TranslationTab`.
 - **Log.** The Warning entry in `RoomLog` stays.
 - **Test seam.** `PlanFilter` replaces the machine-translation provider with a scripted one. A `TaskCompletionSource` gate holds later calls. The clear test therefore does not race the pump.
+
 ### Glossary T2: editor in the project settings window
 
 Spec #302. Stacked on T1 (#307).
