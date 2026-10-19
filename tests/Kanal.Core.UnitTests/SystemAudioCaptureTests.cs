@@ -246,6 +246,34 @@ public class SystemAudioCaptureTests
 
     [Fact]
     [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeAsksMacOsAgainAfterOneSecondAndStopsWhenThePermissionWasRevoked()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Authorized);
+        var clock = new StillClock();
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: clock);
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        Assert.True(await native.QueryAsync());
+
+        native.Authorization = MacAudioCaptureAuthorization.Denied;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        native.Deliver();
+        Assert.True(await native.QueryAsync());
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            while (await frames.MoveNextAsync())
+            {
+            }
+        });
+        Assert.Equal(AudioCaptureFault.PermissionDenied, error.Fault);
+        Assert.Equal(2, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeKeepsRunningWhenSoundArrivesEvenIfMacOsSaysDenied()
     {
         var native = new FakeMacNative(authorization: MacAudioCaptureAuthorization.Denied);
@@ -491,15 +519,22 @@ public class SystemAudioCaptureTests
     {
         private readonly SemaphoreSlim _queried = new(0);
         private int _queries;
+        private int _authorization = (int)authorization;
         private MacSystemAudioFrameCallback? _onFrame;
 
         public int AuthorizationQueries => Volatile.Read(ref _queries);
+
+        public MacAudioCaptureAuthorization Authorization
+        {
+            get => (MacAudioCaptureAuthorization)Volatile.Read(ref _authorization);
+            set => Volatile.Write(ref _authorization, (int)value);
+        }
 
         public MacAudioCaptureAuthorization AudioCaptureAuthorization()
         {
             Interlocked.Increment(ref _queries);
             _queried.Release();
-            return authorization;
+            return Authorization;
         }
 
         public async Task<bool> QueryAsync(TimeSpan? within = null) =>

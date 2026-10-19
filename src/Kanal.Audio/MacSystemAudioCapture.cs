@@ -52,7 +52,6 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         LinearResampler? resampler = null;
         var resamplerInputRate = 0;
         var nextAuthorizationCheck = 0L;
-        var authorizationCheckRunning = 0;
 
         MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, context) =>
         {
@@ -64,26 +63,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                 Marshal.Copy(data, bytes, 0, byteCount);
                 if (Backend == SystemAudioBackend.CoreAudioProcessTap
                     && !bytes.AsSpan().ContainsAnyExcept((byte)0)
-                    && _clock.GetTimestamp() >= Volatile.Read(ref nextAuthorizationCheck)
-                    && Interlocked.Exchange(ref authorizationCheckRunning, 1) == 0)
+                    && ReserveAuthorizationCheck(ref nextAuthorizationCheck))
                 {
                     _ = Task.Run(() =>
                     {
-                        try
-                        {
-                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
-                                frames.Writer.TryComplete(new AudioCaptureException(
-                                    AudioCaptureFault.PermissionDenied,
-                                    "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +
-                                    PermissionAdvice));
-                        }
-                        finally
-                        {
-                            Volatile.Write(
-                                ref nextAuthorizationCheck,
-                                _clock.GetTimestamp() + _clock.TimestampFrequency * AuthorizationCheckIntervalSeconds);
-                            Volatile.Write(ref authorizationCheckRunning, 0);
-                        }
+                        if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
+                            frames.Writer.TryComplete(new AudioCaptureException(
+                                AudioCaptureFault.PermissionDenied,
+                                "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +
+                                PermissionAdvice));
                     });
                 }
                 if (sampleRate == AudioCaptureFormat.SampleRateHz)
@@ -161,6 +149,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     internal static int LeakedCallbackCount
     {
         get { lock (Leaked) { return Leaked.Count; } }
+    }
+
+    private bool ReserveAuthorizationCheck(ref long nextCheck)
+    {
+        var now = _clock.GetTimestamp();
+        var due = Volatile.Read(ref nextCheck);
+        return now >= due
+            && Interlocked.CompareExchange(
+                ref nextCheck, long.MaxValue, due) == due;
     }
 
     private static bool IsPermissionFailure(string detail) =>
