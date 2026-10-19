@@ -189,6 +189,23 @@ public class SystemAudioCaptureTests
 
     [Fact]
     [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeReportsALostClockDeviceAsSourceEnded()
+    {
+        var native = new FakeMacNative("computer audio device lost");
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            await foreach (var _ in capture.CaptureAsync(TestContext.Current.CancellationToken))
+                break;
+        });
+
+        Assert.Equal(AudioCaptureFault.SourceEnded, error.Fault);
+        Assert.True(native.Stopped);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeReportsAnyOtherNativeFailureAsASourceFailure()
     {
         var native = new FakeMacNative("tap creation failed (OSStatus 560947818)");
