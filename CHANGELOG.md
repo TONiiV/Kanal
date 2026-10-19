@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A room with one language now also transcribes speakers who use another language. Before, local
+  transcription could transcribe only the language of the room.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

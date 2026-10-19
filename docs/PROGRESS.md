@@ -6,6 +6,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### Nemotron never gets a fixed language
+
+- **Bug.** `StartAsync` passed the room language to the model as the prompt language when the room had one language. Each final skipped `TranscriptLanguage.Guess` and took the room language as its label.
+- **Fix.** `StartAsync` always starts the stream with `auto`. Each final takes its label from `TranscriptLanguage.Guess`. The `forced` path and `PromptLanguage` (the zh to zh-CN and ja to ja-JP mapping) are removed. Nothing else used them.
+- **Closed item.** This closes the ADR 0061 open item for `NemotronAsrProvider`. See issue #293 and PR #294.
+- **Open item.** The room prior in `TranscriptLanguage.Guess` stays. ADR 0061 tracks it.
+
 ### Automatic recognition language (ADR 0061)
 
 Transcription never limits the recognition language. Room languages set only the columns, the
