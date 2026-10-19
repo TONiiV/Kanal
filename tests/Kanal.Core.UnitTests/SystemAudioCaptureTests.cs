@@ -189,6 +189,129 @@ public class SystemAudioCaptureTests
 
     [Fact]
     [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeStopsWithPermissionDeniedWhenTheTapDeliversZerosAndMacOsSaysDenied()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Denied);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: new StillClock());
+        using var cts = Bounded();
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            await foreach (var _ in capture.CaptureAsync(cts.Token))
+            {
+            }
+        });
+
+        Assert.Equal(AudioCaptureFault.PermissionDenied, error.Fault);
+        Assert.Contains("System Audio Recording", error.Message, StringComparison.Ordinal);
+        Assert.True(native.Stopped);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(0)]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeAsksMacOsAndKeepsRunningWhenTheTapDeliversZerosAndMacOsDoesNotSayDenied(
+        int authorization)
+    {
+        var native = new FakeMacNative(silent: true, authorization: (MacAudioCaptureAuthorization)authorization);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: new StillClock());
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        Assert.True(await native.QueryAsync());
+        native.Deliver();
+        Assert.True(await frames.MoveNextAsync());
+
+        Assert.False(await native.QueryAsync(QuietPeriod));
+        Assert.Equal(1, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeAsksMacOsAtMostOncePerSecondWhenZeroFramesArriveInABurst()
+    {
+        var native = new FakeMacNative(silent: true, frameCount: 50);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: new StillClock());
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        Assert.True(await native.QueryAsync());
+
+        Assert.False(await native.QueryAsync(QuietPeriod));
+        Assert.Equal(1, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeAsksMacOsAgainAfterOneSecondAndStopsWhenThePermissionWasRevoked()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Authorized);
+        var clock = new StillClock();
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: clock);
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        Assert.True(await native.QueryAsync());
+
+        native.Authorization = MacAudioCaptureAuthorization.Denied;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        native.Deliver();
+        Assert.True(await native.QueryAsync());
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            while (await frames.MoveNextAsync())
+            {
+            }
+        });
+        Assert.Equal(AudioCaptureFault.PermissionDenied, error.Fault);
+        Assert.Equal(2, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeKeepsRunningWhenSoundArrivesEvenIfMacOsSaysDenied()
+    {
+        var native = new FakeMacNative(authorization: MacAudioCaptureAuthorization.Denied);
+        var clock = new StillClock();
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: clock);
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        clock.Advance(TimeSpan.FromSeconds(2));
+        native.Deliver();
+        Assert.True(await frames.MoveNextAsync());
+
+        Assert.False(await native.QueryAsync(QuietPeriod));
+        Assert.Equal(0, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeDoesNotAskMacOsAboutTheSystemAudioPermissionForScreenCaptureKit()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Denied);
+        var clock = new StillClock();
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.ScreenCaptureKit, native, clock: clock);
+        using var cts = Bounded();
+
+        await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await frames.MoveNextAsync());
+        clock.Advance(TimeSpan.FromSeconds(2));
+        native.Deliver();
+        Assert.True(await frames.MoveNextAsync());
+
+        Assert.False(await native.QueryAsync(QuietPeriod));
+        Assert.Equal(0, native.AuthorizationQueries);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeReportsALostClockDeviceAsSourceEnded()
     {
         var native = new FakeMacNative(MacSystemAudioCapture.DeviceLostMessage);
@@ -269,7 +392,7 @@ public class SystemAudioCaptureTests
     }
 
     [Fact]
-    public void MacBuildCarriesBothNativeCEntryPoints()
+    public void MacBuildCarriesTheNativeCEntryPoints()
     {
         if (!OperatingSystem.IsMacOS())
             return;
@@ -280,6 +403,7 @@ public class SystemAudioCaptureTests
         {
             Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_start"));
             Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_stop_with_completion"));
+            Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_audio_capture_authorization"));
         }
         finally
         {
@@ -366,11 +490,74 @@ public class SystemAudioCaptureTests
         Assert.Equal(before, MacSystemAudioCapture.LeakedCallbackCount);
     }
 
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
+
+    private static readonly TimeSpan QuietPeriod = TimeSpan.FromMilliseconds(200);
+
+    private static CancellationTokenSource Bounded()
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cts.CancelAfter(Patience);
+        return cts;
+    }
+
+    private sealed class StillClock : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _ticks, by.Ticks);
+    }
+
     private sealed class FakeMacNative(
         string? failure = null,
         int[]? sampleRates = null,
-        bool stopHangs = false) : IMacSystemAudioNative
+        bool stopHangs = false,
+        bool silent = false,
+        int frameCount = 1,
+        MacAudioCaptureAuthorization authorization = MacAudioCaptureAuthorization.Unknown) : IMacSystemAudioNative
     {
+        private readonly SemaphoreSlim _queried = new(0);
+        private int _queries;
+        private int _authorization = (int)authorization;
+        private MacSystemAudioFrameCallback? _onFrame;
+
+        public int AuthorizationQueries => Volatile.Read(ref _queries);
+
+        public MacAudioCaptureAuthorization Authorization
+        {
+            get => (MacAudioCaptureAuthorization)Volatile.Read(ref _authorization);
+            set => Volatile.Write(ref _authorization, (int)value);
+        }
+
+        public MacAudioCaptureAuthorization AudioCaptureAuthorization()
+        {
+            Interlocked.Increment(ref _queries);
+            _queried.Release();
+            return Authorization;
+        }
+
+        public async Task<bool> QueryAsync(TimeSpan? within = null) =>
+            await _queried.WaitAsync(within ?? Patience, TestContext.Current.CancellationToken);
+
+        public void Deliver() => Send(_onFrame!, 48_000);
+
+        private void Send(MacSystemAudioFrameCallback onFrame, int rate)
+        {
+            var samples = Enumerable.Range(0, 100).Select(i => silent ? (short)0 : (short)(i * 100)).ToArray();
+            var bytes = samples.Length * sizeof(short);
+            var data = Marshal.AllocHGlobal(bytes);
+            try
+            {
+                Marshal.Copy(samples, 0, data, samples.Length);
+                onFrame(data, bytes, rate, IntPtr.Zero);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+        }
+
         public SystemAudioBackend? Backend { get; private set; }
         public bool Stopped { get; private set; }
 
@@ -400,19 +587,10 @@ public class SystemAudioCaptureTests
             }
             else
             {
-                var samples = Enumerable.Range(0, 100).Select(i => (short)(i * 100)).ToArray();
-                var bytes = samples.Length * sizeof(short);
-                var data = Marshal.AllocHGlobal(bytes);
-                try
-                {
-                    Marshal.Copy(samples, 0, data, samples.Length);
+                _onFrame = onFrame;
+                for (var i = 0; i < frameCount; i++)
                     foreach (var rate in sampleRates ?? [48_000])
-                        onFrame(data, bytes, rate, IntPtr.Zero);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(data);
-                }
+                        Send(onFrame, rate);
             }
 
             return new IntPtr(42);

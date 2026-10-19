@@ -11,10 +11,16 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     // A session that outlives its stop keeps calling these thunks; leaking them beats a call into freed memory.
     private static readonly List<object> Leaked = [];
 
+    private const string PermissionAdvice =
+        " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal.";
+
+    private const int AuthorizationCheckIntervalSeconds = 1;
+
     internal const string DeviceLostMessage = "computer audio device lost";
 
     private readonly IMacSystemAudioNative _native;
     private readonly TimeSpan _stopTimeout;
+    private readonly TimeProvider _clock;
 
     public MacSystemAudioCapture(SystemAudioBackend backend)
         : this(backend, MacSystemAudioNative.Instance)
@@ -24,13 +30,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     internal MacSystemAudioCapture(
         SystemAudioBackend backend,
         IMacSystemAudioNative native,
-        TimeSpan? stopTimeout = null)
+        TimeSpan? stopTimeout = null,
+        TimeProvider? clock = null)
     {
         if (backend is not (SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit))
             throw new ArgumentOutOfRangeException(nameof(backend));
         Backend = backend;
         _native = native;
         _stopTimeout = stopTimeout ?? TimeSpan.FromSeconds(5);
+        _clock = clock ?? TimeProvider.System;
     }
 
     public SystemAudioBackend Backend { get; }
@@ -43,8 +51,9 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         });
         LinearResampler? resampler = null;
         var resamplerInputRate = 0;
+        var nextAuthorizationCheck = 0L;
 
-        MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, _) =>
+        MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, context) =>
         {
             try
             {
@@ -52,6 +61,19 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                     return;
                 var bytes = new byte[byteCount];
                 Marshal.Copy(data, bytes, 0, byteCount);
+                if (Backend == SystemAudioBackend.CoreAudioProcessTap
+                    && !bytes.AsSpan().ContainsAnyExcept((byte)0)
+                    && ReserveAuthorizationCheck(ref nextAuthorizationCheck))
+                {
+                    _ = Task.Run(() =>
+                    {
+                        if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
+                            frames.Writer.TryComplete(new AudioCaptureException(
+                                AudioCaptureFault.PermissionDenied,
+                                "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +
+                                PermissionAdvice));
+                    });
+                }
                 if (sampleRate == AudioCaptureFormat.SampleRateHz)
                 {
                     frames.Writer.TryWrite(bytes);
@@ -87,7 +109,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
 
             var denied = IsPermissionFailure(detail);
             var advice = denied
-                ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
+                ? PermissionAdvice
                 : " Start again; if it keeps failing, restart Kanal.";
             frames.Writer.TryComplete(new AudioCaptureException(
                 denied ? AudioCaptureFault.PermissionDenied : AudioCaptureFault.SourceFailed,
@@ -129,6 +151,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         get { lock (Leaked) { return Leaked.Count; } }
     }
 
+    private bool ReserveAuthorizationCheck(ref long nextCheck)
+    {
+        var now = _clock.GetTimestamp();
+        var due = Volatile.Read(ref nextCheck);
+        return now >= due
+            && Interlocked.CompareExchange(
+                ref nextCheck, now + _clock.TimestampFrequency * AuthorizationCheckIntervalSeconds, due) == due;
+    }
+
     private static bool IsPermissionFailure(string detail) =>
         detail.Contains("permission", StringComparison.OrdinalIgnoreCase) ||
         detail.Contains("denied", StringComparison.OrdinalIgnoreCase) ||
@@ -151,6 +182,15 @@ internal interface IMacSystemAudioNative
         MacSystemAudioErrorCallback onError);
 
     ValueTask StopAsync(IntPtr handle);
+
+    MacAudioCaptureAuthorization AudioCaptureAuthorization();
+}
+
+internal enum MacAudioCaptureAuthorization
+{
+    Unknown = 0,
+    Authorized = 1,
+    Denied = 2,
 }
 
 internal sealed class MacSystemAudioNative : IMacSystemAudioNative
@@ -165,6 +205,23 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
 
     public ValueTask StopAsync(IntPtr handle) =>
         WaitForStopAsync(callback => NativeStop(handle, callback, IntPtr.Zero));
+
+    public MacAudioCaptureAuthorization AudioCaptureAuthorization()
+    {
+        try
+        {
+            return NativeAuthorization() switch
+            {
+                1 => MacAudioCaptureAuthorization.Authorized,
+                2 => MacAudioCaptureAuthorization.Denied,
+                _ => MacAudioCaptureAuthorization.Unknown,
+            };
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return MacAudioCaptureAuthorization.Unknown;
+        }
+    }
 
     // The handle is the delegate's only root: native code may complete after the caller timed out.
     internal static async ValueTask WaitForStopAsync(Action<MacSystemAudioStopCallback> stop)
@@ -203,6 +260,9 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError,
         IntPtr context);
+
+    [DllImport("kanal_audio_native", EntryPoint = "kanal_audio_capture_authorization", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int NativeAuthorization();
 
     [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_stop_with_completion", CallingConvention = CallingConvention.Cdecl)]
     private static extern void NativeStop(
