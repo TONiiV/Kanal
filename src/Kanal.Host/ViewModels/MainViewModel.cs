@@ -205,7 +205,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (shown == _shownMeeting)
                 return;
             if (shown.Id != _shownMeeting.Id)
+            {
+                MarkRetiring();
                 FocusedLanguage = null;
+            }
+
             _shownMeeting = shown;
             RefreshBody();
         };
@@ -402,6 +406,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     private readonly ObservableCollection<ColumnViewModel> _stored = new();
+    private readonly HashSet<ColumnViewModel> _retiring = new();
     private (string? Id, string? TranscriptPath) _shownMeeting;
     private int _bodyVersion;
 
@@ -930,7 +935,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        foreach (var column in Columns.Concat(_stored))
+        foreach (var column in Columns.Concat(_stored).Where(c => !_retiring.Contains(c)))
         {
             var onScreen = shown.Contains(column);
             column.IsFocused = onScreen && column.Language == FocusedLanguage;
@@ -961,9 +966,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ReturnToActiveMeeting() => Sidebar.Select(Sidebar.RecordingMeetingId ?? _sessionRecordId);
 
+    private void MarkRetiring()
+    {
+        if (_yieldToUi is null)
+            return;
+
+        foreach (var column in _stored)
+            _retiring.Add(column);
+    }
+
     private async void RefreshBody()
     {
         var version = ++_bodyVersion;
+        MarkRetiring();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
         IsLoadingRecord = record is not null;
         if (_yieldToUi is not null && _stored.Count > 0)
@@ -972,6 +987,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
 
         _stored.Clear();
+        _retiring.Clear();
         BrowsedRuler.Clear();
         NotifyBody();
         if (record is null)
@@ -1019,9 +1035,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (version != _bodyVersion)
                 return false;
 
-            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            rows = NextSliceRows(rows, cycle.Elapsed.TotalMilliseconds, MaxRetireRows);
             cycle.Restart();
-            rows = Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxRetireRows);
         }
 
         return true;
@@ -1030,11 +1045,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public static Task YieldToInput() =>
         Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask();
 
+    private static int NextSliceRows(int rows, double tookMs, int max) =>
+        Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / Math.Max(1, tookMs))), 1, max);
+
     private const int FirstSliceRows = 3;
     private const int MaxSliceRows = 60;
     private const double SliceCycleMs = 30;
 
-    // Slice size follows the time of the last cycle, layout included: a slow machine gets smaller slices.
     private async Task FillBodyAsync(
         int version, IReadOnlyList<ColumnViewModel> columns,
         IReadOnlyList<IReadOnlyList<BubbleViewModel>> bubbles, IReadOnlyList<Utterance> utterances)
@@ -1057,9 +1074,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (version != _bodyVersion)
                 return;
 
-            var took = Math.Max(1, cycle.Elapsed.TotalMilliseconds);
+            rows = NextSliceRows(rows, cycle.Elapsed.TotalMilliseconds, MaxSliceRows);
             cycle.Restart();
-            rows = Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / took)), 1, MaxSliceRows);
         }
 
         BrowsedRuler.Release();
@@ -1083,16 +1099,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ShownRuler));
         OnPropertyChanged(nameof(HasColumns));
         OnPropertyChanged(nameof(IsBrowsingRecord));
-        OnPropertyChanged(nameof(IsViewingAnotherRecord));
-        OnPropertyChanged(nameof(IsTitleReadOnly));
         OnPropertyChanged(nameof(ShowStartHint));
         OnPropertyChanged(nameof(ShowNoStoredTranscript));
-        OnPropertyChanged(nameof(ShowRecordingBanner));
-        OnPropertyChanged(nameof(RecordingBannerText));
-        OnPropertyChanged(nameof(MeetingTitle));
-        OnPropertyChanged(nameof(CanNameMeeting));
-        OnPropertyChanged(nameof(CanRegenerateTitle));
-        RegenerateTitleCommand.NotifyCanExecuteChanged();
+        NotifyChrome();
         ApplyFocus();
     }
 
@@ -1354,6 +1363,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
             Columns.Add(new ColumnViewModel(lang, CopyToClipboard, PinToPoints));
+        MarkRetiring();
         FocusedLanguage = null;
 
         var asr = plan.Asr!;

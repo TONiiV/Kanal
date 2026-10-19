@@ -59,7 +59,6 @@ public class LongTranscriptSliceTests : IDisposable
         }).Meeting!;
     }
 
-    // A yield the test finishes by hand, one at a time.
     private sealed class HeldYields
     {
         private readonly Queue<TaskCompletionSource> _held = new();
@@ -175,6 +174,82 @@ public class LongTranscriptSliceTests : IDisposable
         Assert.All(old, column => Assert.Empty(column.Bubbles));
         Assert.DoesNotContain(vm.ShownColumns[0], old);
         Assert.All(vm.ShownColumns, column => Assert.Equal(Rows, column.Bubbles.Count));
+    }
+
+    [AvaloniaFact]
+    public void AColumnHiddenByFocusStaysHiddenWhileTheOldMeetingLeaves()
+    {
+        var (store, first, second) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        Open(vm, first);
+        yields.ReleaseAll();
+        var old = vm.ShownColumns.ToList();
+        vm.ToggleColumnFocus(old[0]);
+        Assert.False(old[1].IsShown);
+        var shownAgain = false;
+        old[1].PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ColumnViewModel.IsShown) && old[1].IsShown)
+                shownAgain = true;
+        };
+
+        Open(vm, second);
+
+        Assert.False(old[1].IsShown);
+        yields.ReleaseAll();
+
+        Assert.False(shownAgain, "a hidden column was shown again while it still held its bubbles");
+        Assert.All(old, column => Assert.Empty(column.Bubbles));
+        Assert.All(vm.ShownColumns, column => Assert.True(column.IsShown));
+        Assert.Equal(Rows, vm.ShownColumns[0].Bubbles.Count);
+    }
+
+    [AvaloniaFact]
+    public void ATakeOutThatAnotherMeetingInterruptsStillEndsWithTheLastMeetingOnly()
+    {
+        var (store, first, second) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        Open(vm, first);
+        yields.ReleaseAll();
+        var old = vm.ShownColumns.ToList();
+
+        Open(vm, second);
+        Open(vm, first);
+        yields.ReleaseAll();
+
+        Assert.All(old, column => Assert.Empty(column.Bubbles));
+        Assert.DoesNotContain(vm.ShownColumns[0], old);
+        Assert.Equal(2, vm.ShownColumns.Count);
+        Assert.All(vm.ShownColumns, column => Assert.Equal(Rows, column.Bubbles.Count));
+        Assert.Equal(
+            Enumerable.Range(0, Rows).Select(n => $"a{n}"),
+            vm.ShownRuler.Ticks.Select(t => t.AnchorUtteranceId));
+    }
+
+    [AvaloniaFact]
+    public void TheLiveMeetingChangesWhileTheOldMeetingLeavesAndIsShownAtTheEnd()
+    {
+        var (store, first, _) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        Open(vm, first);
+        yields.ReleaseAll();
+        var old = vm.ShownColumns.ToList();
+
+        vm.Sidebar.SelectedMeeting = null;
+        var live = new ColumnViewModel("zh");
+        vm.Columns.Add(live);
+        live.GetOrAdd("live1").Text = "now";
+
+        Assert.All(old, column => Assert.InRange(column.Bubbles.Count, 1, Rows - 1));
+        yields.ReleaseAll();
+
+        Assert.All(old, column => Assert.Empty(column.Bubbles));
+        Assert.Equal([live], vm.ShownColumns);
+        Assert.Single(live.Bubbles);
+        Assert.False(vm.IsLoadingRecord);
     }
 
     [AvaloniaFact]

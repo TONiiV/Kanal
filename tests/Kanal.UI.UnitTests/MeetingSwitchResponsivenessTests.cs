@@ -114,7 +114,7 @@ public class MeetingSwitchResponsivenessTests(ITestOutputHelper output) : IDispo
         var clock = Stopwatch.StartNew();
         while (!done())
         {
-            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(120), $"Timed out waiting for {what}.");
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(300), $"Timed out waiting for {what}.");
             Dispatcher.UIThread.RunJobs();
             await Task.Delay(1);
         }

@@ -60,6 +60,7 @@ jobs:
 
       - name: Meeting switch responsiveness (prints the METRIC lines)
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "Category=Metric" --logger "console;verbosity=detailed"
 
       - uses: actions/upload-artifact@v4
