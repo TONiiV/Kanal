@@ -287,6 +287,26 @@ public class WorkspaceSidebarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void TheReidentifySubmenuOffersNotSureFirstThenTwoToEightPeople()
+    {
+        var (window, _) = Shown();
+        var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
+
+        var ellipsis = sidebar.GetLogicalDescendants().OfType<Button>()
+            .Where(button => button.Name == "MeetingMenu").Distinct().Single();
+        var reidentify = Opened(ellipsis).Items.OfType<MenuItem>().Single(item => item.Name == "ReidentifySpeakers");
+        var commands = reidentify.Items.OfType<MenuItem>().Where(item => item.Command is not null).ToList();
+
+        Assert.Equal("ReidentifyGuess", commands[0].Name);
+        Assert.Null(commands[0].CommandParameter);
+        Assert.Equal(
+            ["2", "3", "4", "5", "6", "7", "8"],
+            commands.Skip(1).Select(item => Assert.IsType<string>(item.CommandParameter)));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheDeleteMenuItemCarriesAnIconAndReadsAsDestructive()
     {
         var (window, _) = Shown();
