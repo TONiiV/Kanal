@@ -49,7 +49,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         var nextAuthorizationCheck = 0L;
         var authorizationCheckRunning = 0;
 
-        MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, _) =>
+        MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, context) =>
         {
             try
             {
