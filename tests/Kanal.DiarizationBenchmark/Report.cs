@@ -20,7 +20,7 @@ internal static class Report
             .AppendLine()
             .AppendLine($"{meetings.Count} meetings, {run.Costs.Where(c => c.Model == models[0]).GroupBy(c => c.Meeting).Sum(g => g.First().AudioSeconds) / 60:F0} min of audio, {meetings.Sum(m => m.Total)} utterances ({meetings.Sum(m => m.ShortTotal)} under 1 s).")
             .AppendLine($"Room channel: {run.Room}.")
-            .AppendLine($"DER: 10 ms frames, Hungarian speaker mapping, overlap scored as is (a frame with two reference speakers counts twice). Library default clustering threshold: {run.DefaultThreshold:0.0}.")
+            .AppendLine($"DER: the mean of the per-meeting DER. 10 ms frames, Hungarian speaker mapping, overlap scored as is (a frame with two reference speakers counts twice). Library default clustering threshold: {run.DefaultThreshold:0.0}.")
             .AppendLine("Utterance accuracy: SpeakerReidentification.Assign gives each reference utterance a tag; one Hungarian mapping per meeting maps tags to speakers; an untagged utterance is wrong.")
             .AppendLine();
 

@@ -377,9 +377,7 @@ internal static class Corpus
 
     private static short[] ElevenLabs(string voiceId, string text)
     {
-        var key = Environment.GetEnvironmentVariable("ELEVENLABS_API_KEY")
-                  ?? (OperatingSystem.IsWindows() ? Environment.GetEnvironmentVariable("ELEVENLABS_API_KEY", EnvironmentVariableTarget.User) : null)
-                  ?? throw new InvalidOperationException("ELEVENLABS_API_KEY is not set.");
+        var key = Cloud.Key("ELEVENLABS_API_KEY") ?? throw new InvalidOperationException("ELEVENLABS_API_KEY is not set.");
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         using var request = new HttpRequestMessage(HttpMethod.Post,
             $"https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=pcm_16000")

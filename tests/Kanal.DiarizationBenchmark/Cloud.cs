@@ -173,7 +173,6 @@ internal static class Cloud
         return [.. fields.Select(f => new SpeakerTurn(double.Parse(f[3]), double.Parse(f[3]) + double.Parse(f[4]), ids[f[7]]))];
     }
 
-    // Words of one speaker join into a turn until the speaker changes or the gap passes MaxGap.
     public const double MaxGap = 0.5;
 
     public static IReadOnlyList<SpeakerTurn> ScribeTurns(JsonNode result)

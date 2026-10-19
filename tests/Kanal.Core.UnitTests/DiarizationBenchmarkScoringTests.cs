@@ -121,7 +121,7 @@ public class DiarizationBenchmarkScoringTests
 
     private static Result LiveResult(string model, double threshold) =>
         new("m1", "zh", 2, false, false, model, "live", threshold, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
-            2, 2, 8, 10, 0, 0, 8, 10, 0);
+            2, 8, 10, 0, 0, 8, 10, 0);
 
     [Fact]
     public void The_live_result_at_a_threshold_is_found_by_model_and_threshold()

@@ -187,7 +187,7 @@ static Result Attribution(Meeting meeting, string model, string system, double t
     var (longCorrect, longTotal) = Scoring.Accuracy(pairs.Where((_, i) => meeting.Truth[i].Seconds >= 1), map);
     return new Result(meeting.Id, meeting.Lang, meeting.Speakers, meeting.Overlap, meeting.Room, model, system, threshold,
         double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
-        tags.Where(t => t is not null).Distinct().Count(), tags.Where(t => t is not null).Distinct().Count(),
+        tags.Where(t => t is not null).Distinct().Count(),
         correct, total, shortCorrect, shortTotal, longCorrect, longTotal, 0);
 }
 
@@ -463,7 +463,7 @@ string[] List(string name, string fallback) => (Arg(name) ?? fallback).Split(','
 internal sealed record Result(
     string Meeting, string Lang, int Speakers, bool Overlap, bool Room, string Model, string System, double Threshold,
     double Der, double Missed, double FalseAlarm, double Confusion, double DerNoCollar,
-    int Estimated, int Tags, int Correct, int Total, int ShortCorrect, int ShortTotal, int LongCorrect, int LongTotal, double Rtf)
+    int Estimated, int Correct, int Total, int ShortCorrect, int ShortTotal, int LongCorrect, int LongTotal, double Rtf)
 {
     public double Accuracy => Total == 0 ? 0 : Correct / (double)Total;
 }

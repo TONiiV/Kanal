@@ -12,7 +12,7 @@ Issue #111, ADR 0055 slice 6. `tests/Kanal.DiarizationBenchmark` measures how we
 speakers in zh, de and pl. It does not run in CI, because it needs the models, the test audio and
 the local hardware. CI runs its scoring tests (`DiarizationBenchmarkScoringTests`).
 
-**Result first.** Keep the CAM++ embedding (`3dspeaker_campplus_zh_en_16k-common_advanced`). Change
+**Result first.** Keep the CAM++ embedding (`3dspeaker-campplus-zh-en`). Change
 the clustering threshold without a count from the library default 0.5 to 0.8. At 0.5 the post-meeting
 layer finds too many speakers in every language. No language is unusable, but Polish is the weakest,
 and two voices of the same gender and language often merge. The numbers are an optimistic bound:
@@ -56,7 +56,8 @@ Systems:
 
 Metrics:
 
-- DER with missed speech, false alarm and speaker confusion: 10 ms frames, optimal (Hungarian)
+- DER with missed speech, false alarm and speaker confusion. The report gives the mean of the
+  per-meeting DER, so each meeting has the same weight. Settings: 10 ms frames, optimal (Hungarian)
   speaker mapping, a 0.25 s collar and no collar. Overlapped speech counts once for each speaker.
   sherpa-onnx gives one speaker per segment, so the overlap is always partly missed (ADR 0055
   decision 19).
@@ -227,24 +228,28 @@ tags from 47 to 17, but a real room is clearly harder than the synthetic audio.
 - **Polish is the weakest language, but it is not unusable.** CAM++ at 0.8: de 7.2 %, zh 15.6 %,
   mix 14.6 %, pl 15.9 %. zh gets worse above 0.8 (22.8 % at 0.9), because its voices merge first.
 - **Short utterances are mostly wrong.** Under 1 s, the post-meeting layer gets 17 to 28 % right. The
-  live layer gets 0 to 6 %: an utterance under 1 s copies the previous tag, and a backchannel ("ja",
-  "好") is almost always a change of speaker.
+  live layer got 0 to 6 %. The live numbers in this document come from the old rule: an utterance
+  under 1 s copied the previous tag. A backchannel ("ja", "好") is almost always a change of
+  speaker. Commit a9b5b56 (#250) removed that rule. The current rule gives no tag under 1 s.
+  A rerun of the benchmark scores the live "< 1 s" bucket as 0 by construction, because an
+  untagged utterance is wrong. The other live numbers can change with the new rule. They are
+  not remeasured yet.
 - **Overlap is missed, as ADR 0055 decision 19 says.** Missed speech is 3.8 % on the scripted meeting.
 - **Parity.** `SherpaSpeakerDiarizer` and the benchmark engine gave identical turns on mix-2-clean
   (with and without a count) and on zh-2-clean with a count. On zh-2-clean without a count they gave
   31 and 34 turns. The benchmark ran at 3 threads and the product at 8. The thread count probably
   changes the clustering at the margin. This is not investigated.
 
-Recommendations (no product change in this PR):
+Recommendations (this PR makes no product change; item 4 is already done in a9b5b56):
 
 1. Keep `3dspeaker-campplus-zh-en` as the default embedding. No candidate is clearly better. It is
    best on the scripted meeting and on the 62-meeting mean at 0.8. Its licence needs no attribution.
    Only TitaNet is faster.
 2. Set `Clustering.Threshold = 0.8` in `SherpaSpeakerDiarizer` when no count is given.
 3. Make "no count" the default path, or tell the operator that a count can merge speakers.
-4. Raise `LiveSpeakerLabels.DefaultThreshold` from 0.5 to 0.6 (+3.6 points, a few more speakers).
-   Do not copy the previous tag for utterances under 1 s. Leave them untagged until the post-meeting
-   layer runs.
+4. Done in a9b5b56 (#250): `LiveSpeakerLabels.DefaultThreshold` is 0.6 (+3.6 points, a few more
+   speakers) and an utterance under 1 s gets no tag until the post-meeting layer runs. The +3.6
+   points were measured with the old copy-previous rule.
 5. Measure real recordings with a hand-made reference before the next default change.
 
 Caveats:

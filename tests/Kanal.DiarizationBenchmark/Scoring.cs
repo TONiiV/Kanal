@@ -77,7 +77,6 @@ internal static class Scoring
     public static Result? Live(IEnumerable<Result> results, string model, double threshold) =>
         results.LastOrDefault(r => r.System == "live" && r.Model == model && Math.Abs(r.Threshold - threshold) < 1e-6);
 
-    // Hungarian method on the padded square matrix; returns the column of each row, or -1.
     public static int[] Match(double[,] weight)
     {
         int rows = weight.GetLength(0), cols = weight.GetLength(1), n = Math.Max(rows, cols);
@@ -140,7 +139,6 @@ internal static class Scoring
         double Cost(int i, int j) => i <= rows && j <= cols ? -weight[i - 1, j - 1] : 0;
     }
 
-    // The operator's view: each utterance takes the tag that SpeakerReidentification.Assign gives it.
     public static string?[] Attribute(IReadOnlyList<Segment> utterances, IReadOnlyList<SpeakerTurn> turns)
     {
         var list = utterances.Select((u, i) => new Utterance(
