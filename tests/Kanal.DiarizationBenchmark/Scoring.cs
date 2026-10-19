@@ -75,7 +75,7 @@ internal static class Scoring
     }
 
     public static Result? Live(IEnumerable<Result> results, string model, double threshold) =>
-        results.Last(r => r.System == "live" && r.Model == model && Math.Abs(r.Threshold - threshold) < 1e-6);
+        results.LastOrDefault(r => r.System == "live" && r.Model == model && Math.Abs(r.Threshold - threshold) < 1e-6);
 
     // Hungarian method on the padded square matrix; returns the column of each row, or -1.
     public static int[] Match(double[,] weight)

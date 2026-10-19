@@ -125,8 +125,8 @@ foreach (var meeting in (script is null ? Corpus.Meetings(data, languages, count
             results.Add(Attribution(meeting, model.Id, "live", t, tags) with { Rtf = embedSeconds / meeting.Truth.Sum(u => u.Seconds) });
         }
 
-        var live = results.Last(r => r.System == "live" && Math.Abs(r.Threshold - LiveSpeakerLabels.DefaultThreshold) < 1e-6 && r.Model == model.Id);
-        Console.WriteLine($"   {model.Id,-28} live  0.5  acc {live.Accuracy * 100,5:F1} % speakers {live.Estimated}");
+        if (Scoring.Live(results, model.Id, LiveSpeakerLabels.DefaultThreshold) is { } live)
+            Console.WriteLine($"   {model.Id,-28} live  {LiveSpeakerLabels.DefaultThreshold:0.0}  acc {live.Accuracy * 100,5:F1} % speakers {live.Estimated}");
     }
 
     if (parity-- > 0)
