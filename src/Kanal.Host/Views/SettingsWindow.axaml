@@ -135,7 +135,14 @@
                                  IsVisible="{Binding HasChoice}"
                                  ToolTip.Tip="{Binding UseTip}" />
                     <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                        <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                            <Border Background="{DynamicResource BrandWash}" CornerRadius="9" Padding="7,1"
+                                    VerticalAlignment="Center" IsVisible="{Binding IsRecommended}">
+                                <TextBlock Text="{l:T settings.model.recommended}" FontSize="10.5"
+                                           FontWeight="SemiBold" Foreground="{DynamicResource Brand}" />
+                            </Border>
+                        </StackPanel>
                         <TextBlock Text="{Binding MetaLabel}" FontSize="11"
                                    Foreground="{DynamicResource Ink3}" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"

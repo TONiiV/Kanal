@@ -17,9 +17,36 @@ public class TranscriptLanguageTests
     public void TheRoomLanguageIsReadFromTheText(string text, string expected) =>
         Assert.Equal(expected, TranscriptLanguage.Guess(text, Room));
 
+    [Theory]
+    [InlineData("这批支架的料号是 KX-4402，表面处理按上次的标准做。", "de", "pl")]
+    [InlineData("这批支架的料号是 KX-4402，表面处理按上次的标准做。", "en")]
+    [InlineData("这个 bracket 要改", "de", "pl")]
+    public void HanTextWithoutKanaIsChineseInAnyRoom(string text, params string[] room) =>
+        Assert.Equal("zh", TranscriptLanguage.Guess(text, room));
+
     [Fact]
-    public void AScriptOutsideTheRoomFallsBackToTheRoom() =>
-        Assert.Equal("de", TranscriptLanguage.Guess("这批支架的料号", ["de", "pl"]));
+    public void KanaTextIsJapaneseInAnyRoom() =>
+        Assert.Equal("ja", TranscriptLanguage.Guess("この部品の図面はまだ承認されていません。", ["zh", "de"]));
+
+    [Fact]
+    public void HangulTextIsKoreanInAnyRoom() =>
+        Assert.Equal("ko", TranscriptLanguage.Guess("이 부품의 도면은 아직 승인되지 않았습니다.", ["de"]));
+
+    [Fact]
+    public void ALatinTextWithNoSignalInARoomWithoutLatinIsEnglish() =>
+        Assert.Equal("en", TranscriptLanguage.Guess("Okay, thank you.", ["zh"]));
+
+    [Fact]
+    public void ALatinTextWithNoSignalInATwoLanguageRoomWithoutLatinIsEnglish() =>
+        Assert.Equal("en", TranscriptLanguage.Guess("Okay, thank you.", ["zh", "ja"]));
+
+    [Fact]
+    public void ALatinTextInARoomWithoutLatinIsLabelledByItsBestLanguage() =>
+        Assert.Equal("de", TranscriptLanguage.Guess("Die Toleranzen im Zeichnungssatz sind noch nicht freigegeben.", ["zh"]));
+
+    [Fact]
+    public void OneSignalIsEnoughInARoomWithoutLatin() =>
+        Assert.Equal("de", TranscriptLanguage.Guess("Ich komme gleich.", ["zh"]));
 
     [Fact]
     public void ALatinLanguageOutsideTheRoomIsStillRecognised() =>
