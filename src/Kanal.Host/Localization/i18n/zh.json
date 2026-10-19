@@ -203,6 +203,7 @@
   "settings.model.none.note": "不用本地模型——本地翻译类模式将不可用。",
   "settings.model.downloaded": "已下载",
   "settings.model.notdownloaded": "未下载",
+  "settings.model.recommended": "推荐",
   "settings.model.downloadfailed": "下载失败：{0}",
   "download.cancel": "取消下载：{0}",
   "download.done": "已完成",

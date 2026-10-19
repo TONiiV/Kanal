@@ -22,7 +22,8 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
   and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
   the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,
-  download it and select it in the Translation tab.
+  download it and select it in the Translation tab. A *Recommended* label marks it in the list,
+  in English, Chinese, German and Polish.
 - The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
   1 pixel up and left of the centre on screens with 150% scaling.
 - The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
