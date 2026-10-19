@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
+  permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
+  after about 30 seconds. The status line now tells you to allow the permission.
 - You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
   the project folder. Kanal does not use the glossary in a meeting yet.
 - Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import

@@ -6,6 +6,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-19
 
+### An online meeting stops when macOS denies system audio
+
+- **Bug (#151).** With the system-audio permission denied, the Core Audio tap raises no error. The meeting ran on without remote speech. The silent-source hint came after about 30 s.
+- **Signal.** The private function `TCCAccessPreflight("kTCCServiceAudioCapture")` gives the TCC state. Zero buffers alone are not enough, because the computer can be silent. See "System-audio permission on macOS 14.2+" in `docs/online-meeting-audio.md`.
+- **Rule.** `MacSystemAudioCapture` asks TCC when a tap buffer holds only zeros, at most once per second. Only "denied" ends the capture with `permission_denied`. The meeting then stops through `StopAfterAudioFaultAsync` with the localized reason.
+- **Test seam.** `IMacSystemAudioNative.AudioCaptureAuthorization` returns the TCC state. `FakeMacNative` sets it and the buffer content.
+- **Open item.** No real Mac has run this. The operator must run the manual test in the PR.
+
+---
+
 ### Glossary T2: editor in the project settings window
 
 Spec #302. Stacked on T1 (#307).
@@ -16,6 +26,8 @@ Spec #302. Stacked on T1 (#307).
 - **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
 - **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
 - **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+---
 
 ### Glossary T1: per-project storage
 
