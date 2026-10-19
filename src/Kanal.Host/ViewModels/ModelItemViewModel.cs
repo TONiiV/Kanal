@@ -31,6 +31,7 @@ public partial class ModelItemViewModel : ViewModelBase
         : this(model.Id, model.DisplayName, model.Parameters, model.SizeLabel, model.License,
             model.LicenseNote, [model], downloads, transcription: false, model.SizeBytes)
     {
+        IsRecommended = model.Id == LocalModelCatalog.Models[0].Id;
     }
 
     public ModelItemViewModel(AsrModelInfo model, ModelDownloadManager downloads)
@@ -55,6 +56,8 @@ public partial class ModelItemViewModel : ViewModelBase
     }
 
     public bool IsLocal => _downloads is not null;
+
+    public bool IsRecommended { get; }
 
     public string? ModelId { get; }
 
