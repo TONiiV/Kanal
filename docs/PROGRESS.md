@@ -20,6 +20,23 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### Automatic recognition language (ADR 0061)
+
+Transcription never limits the recognition language. Room languages set only the columns, the
+dropdown and the translation targets. Speakers mix zh with en, de or pl. Before the meeting,
+nobody knows which languages they will speak. The rule: the recognition language comes only from
+the system's own judgement, never from a human setting.
+
+- **Gladia** keeps `code_switching` and sends no `languages`. The code already does this.
+- **Benchmarks** (PR #285) choose models by the auto room scores. A forced room is only for diagnosis.
+- **Open item:** `NemotronAsrProvider` conflicts with this rule in two places. For a one-language
+  room, `StartAsync` forces the prompt language. Also, `_forced ?? TranscriptLanguage.Guess(…)`
+  skips the language guess. A separate ticket removes both.
+- **Open item:** `TranscriptLanguage.Guess` uses the room languages as a prior for the label. A
+  Latin language outside the room needs a score of 4 or more. Chinese text in a room without zh
+  becomes ja. The fallback is the first room language. This changes the label, not the recognition.
+  A separate ticket decides whether to keep it.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
@@ -102,6 +119,19 @@ animation, and all ticks had the same thickness and brightness.
   the reset, the drawn values (grow, shrink, settle, leave, a fast move), no jump on a new
   sentence or a scroll, the frame request, and a steady speed reading. `ColumnScrollWiringTests`
   cover the pointer in the real view, the animation frames, and the clipping.
+
+### Recommended badge on the Translation tab
+
+The model row shows a *Recommended* pill next to the name of the first `LocalModelCatalog` entry.
+
+- **No catalog field.** `ModelItemViewModel.IsRecommended` is true when the row id equals
+  `LocalModelCatalog.Models[0].Id`. The catalog already states the rule: the first entry is the
+  recommended default. A second source of truth could drift from the row order.
+- **Translation rows only.** The *None* row and the transcription (ASR) rows never show the pill.
+  Only the `LocalModelInfo` constructor sets `IsRecommended`. The ASR list has no recommendation.
+- **Colours.** The pill uses `BrandWash` for the fill and `Brand` for the text. Both exist in the Light
+  and Dark variants, so no new resource is needed.
+- **Text.** The key `settings.model.recommended` exists in en, zh, de and pl.
 
 ### Hy-MT2 1.8B is the recommended local translation model
 

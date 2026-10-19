@@ -203,6 +203,7 @@
   "settings.model.none.note": "Kein lokales Modell — die Modi mit lokaler Übersetzung bleiben nicht verfügbar.",
   "settings.model.downloaded": "heruntergeladen",
   "settings.model.notdownloaded": "nicht heruntergeladen",
+  "settings.model.recommended": "Empfohlen",
   "settings.model.downloadfailed": "Download fehlgeschlagen: {0}",
   "download.cancel": "Download abbrechen: {0}",
   "download.done": "fertig",
