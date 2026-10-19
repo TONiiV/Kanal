@@ -43,21 +43,28 @@ public static class MeetingBundle
         var partial = target + ".partial";
         try
         {
-            using (var file = new FileStream(partial, FileMode.Create, FileAccess.Write))
-            using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
-            {
-                Put(zip, ManifestFileName, JsonSerializer.Serialize(
-                    StoredManifest.From(meeting), Options));
-                Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(transcript)));
-                if (File.Exists(transcript))
-                    zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
-                if (includeAudio && File.Exists(audio))
-                    zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
+            if (File.Exists(partial))
+                File.SetAttributes(partial, FileAttributes.Normal);
 
-                var attachments = Path.Combine(folder, "attachments");
-                if (Directory.Exists(attachments))
-                    foreach (var path in Directory.EnumerateFiles(attachments).Order())
-                        zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+            using (var file = new FileStream(partial, FileMode.Create, FileAccess.Write))
+            {
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    Put(zip, ManifestFileName, JsonSerializer.Serialize(
+                        StoredManifest.From(meeting), Options));
+                    Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(transcript)));
+                    if (File.Exists(transcript))
+                        zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
+                    if (includeAudio && File.Exists(audio))
+                        zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
+
+                    var attachments = Path.Combine(folder, "attachments");
+                    if (Directory.Exists(attachments))
+                        foreach (var path in Directory.EnumerateFiles(attachments).Order())
+                            zip.CreateEntryFromFile(path, AttachmentsPrefix + Path.GetFileName(path));
+                }
+
+                file.Flush(flushToDisk: true);
             }
 
             File.Move(partial, target, overwrite: true);
@@ -69,7 +76,7 @@ public static class MeetingBundle
             {
                 File.Delete(partial);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
 
