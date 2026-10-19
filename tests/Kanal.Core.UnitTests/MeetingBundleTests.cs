@@ -207,4 +207,96 @@ public class MeetingBundleTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, imported.Problem!.Kind);
         Assert.Empty(store.ListMeetings(workspace.Id).Meetings);
     }
+
+    private static Dictionary<string, byte[]> Snapshot(string folder) =>
+        Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+            .ToDictionary(f => Path.GetRelativePath(folder, f), File.ReadAllBytes);
+
+    [Fact]
+    public void AnImportNeverOverwritesAMeetingFolderThatTheListCannotRead()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("delivery");
+        MeetingBundle.Write(here, meeting, includeAudio: true, bundle);
+
+        var folder = here.MeetingFolder(mine.Id, meeting.Id)!;
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
+        File.WriteAllText(Path.Combine(folder, TranscriptLog.FileName), "the only copy");
+        File.Delete(Path.Combine(folder, "attachments", "quotation.pdf"));
+        var before = Snapshot(folder);
+
+        var imported = MeetingBundle.Import(here, mine.Id, bundle, asNewRecord: false);
+
+        Assert.Null(imported.Meeting);
+        Assert.Equal(StoreProblemKind.FolderTaken, imported.Problem!.Kind);
+        Assert.Equal(folder, imported.Problem.Subject);
+        var after = Snapshot(folder);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (name, bytes) in before)
+            Assert.Equal(bytes, after[name]);
+        Assert.Single(Directory.EnumerateDirectories(Path.GetDirectoryName(folder)!));
+    }
+
+    [Fact]
+    public void AnImportNeverOverwritesAListedMeetingEither()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("delivery");
+        MeetingBundle.Write(here, meeting, includeAudio: false, bundle);
+        var folder = here.MeetingFolder(mine.Id, meeting.Id)!;
+        var before = Snapshot(folder);
+
+        var imported = MeetingBundle.Import(here, mine.Id, bundle, asNewRecord: false);
+
+        Assert.Equal(StoreProblemKind.FolderTaken, imported.Problem!.Kind);
+        Assert.Equal(before.Keys.Order(), Snapshot(folder).Keys.Order());
+        Assert.Equal(before[TranscriptLog.FileName], Snapshot(folder)[TranscriptLog.FileName]);
+    }
+
+    [Fact]
+    public void AnExtractThatFailsLeavesNoMeetingFolderBehind()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("twice");
+        MeetingBundle.Write(here, meeting, includeAudio: false, bundle);
+        using (var zip = ZipFile.Open(bundle, ZipArchiveMode.Update))
+        {
+            using var writer = new StreamWriter(zip.CreateEntry(TranscriptLog.FileName).Open());
+            writer.Write("a second entry with the same name");
+        }
+
+        var (there, theirs) = Opened("supplier");
+        var imported = MeetingBundle.Import(there, theirs.Id, bundle, asNewRecord: false);
+
+        Assert.Null(imported.Meeting);
+        Assert.Equal(StoreProblemKind.Unwritable, imported.Problem!.Kind);
+        var meetings = Path.Combine(Path.GetDirectoryName(there.MeetingFolder(theirs.Id, meeting.Id)!)!);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(meetings));
+        Assert.Empty(there.ListMeetings(theirs.Id).Problems);
+    }
+
+    [Fact]
+    public void AMoveIntoAFolderThatAppearedInTheMeantimeLeavesThatFolderAlone()
+    {
+        Directory.CreateDirectory(_root);
+        var folder = Path.Combine(_root, "meeting");
+        var staging = Path.Combine(_root, "meeting.importing-x");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "theirs");
+        File.WriteAllText(Path.Combine(folder, TranscriptLog.FileName), "the only copy");
+        var before = Snapshot(folder);
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, "audio.wav"), "new");
+        File.WriteAllText(Path.Combine(staging, TranscriptLog.FileName), "imported");
+
+        Assert.ThrowsAny<IOException>(() => MeetingBundle.MoveIntoPlace(staging, folder));
+
+        var after = Snapshot(folder);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (name, bytes) in before)
+            Assert.Equal(bytes, after[name]);
+    }
 }

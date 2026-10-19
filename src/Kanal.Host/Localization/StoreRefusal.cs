@@ -22,6 +22,7 @@ public static class StoreRefusal
         StoreProblemKind.FolderMissing => "workspace.refused.foldermissing",
         StoreProblemKind.Unreadable or StoreProblemKind.RecordMissing or StoreProblemKind.RecordDamaged
             => "workspace.refused.unreadable",
+        StoreProblemKind.FolderTaken => "workspace.refused.foldertaken",
         StoreProblemKind.Misfiled => "workspace.refused.misfiled",
         StoreProblemKind.Unwritable => "workspace.refused.unwritable",
         StoreProblemKind.UnsupportedVersion => "workspace.refused.unsupportedversion",
