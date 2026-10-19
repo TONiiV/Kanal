@@ -56,7 +56,8 @@ text "Loading the transcript…", a busy cursor and a dropdown that did not answ
 
 All three platforms pass the 500 ms limit in the last CI run. The CI step only prints the numbers: a shared runner can be slow, so the step does not fail the run. `LongTranscriptSliceTests` is the guard that always runs.
 
-- **Leaving is slower to finish.** The new meeting shows only after the old columns are empty. In CI the time from the click to the new meeting was 4.5 s on Linux, 6.3 s on Windows and 18 s on macOS. The test posts a layout pass every 4 ms, which starves the slices, so these numbers are too high. Until the old columns are empty, the old bubbles stay on screen under the text "Loading the transcript…", and going back to the live meeting shows its title above the old bubbles. Time it on a real machine before you accept this.
+- **Leaving is slower to finish.** The new meeting shows only after the old columns are empty. In CI the time from the click to the new meeting was 3.7 s on Linux, 6.3 s on Windows and 18 s on macOS. The test posts a layout pass every 4 ms, which starves the slices, so these numbers are too high. Time it on a real machine before you accept this.
+- **The old meeting is hidden at once.** While it leaves, `IsLoadingRecord` is true, the text "Loading the transcript…" shows, and the body and the ruler have opacity 0 (class `loading` in `MeetingRoomView.axaml`). The same holds when the operator goes back to the live meeting. It is opacity and not `IsVisible`, because `IsVisible` passes to every control inside.
 - **Open.** The whole transcript takes longer to appear than before, because the work is the same and it now
   shares the thread with input. The test numbers for this are not real: the test posts a layout pass every 4 ms,
   which starves the slices. Time it on a real machine.

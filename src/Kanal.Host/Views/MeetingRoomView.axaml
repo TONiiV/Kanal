@@ -45,6 +45,11 @@
             <Setter Property="FontSize" Value="19" />
             <Setter Property="LineHeight" Value="33" />
         </Style>
+        <!-- Opacity, not IsVisible: IsVisible passes to every control inside, and the old bubbles are thousands. -->
+        <Style Selector="ItemsControl.loading">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
         <Style Selector="Panel.focused ItemsControl.bubbles">
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="MaxWidth" Value="780" />
@@ -231,7 +236,8 @@
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto">
-        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="16,0,0,10" Padding="12,0,0,0">
+        <ItemsControl Grid.Column="0" ItemsSource="{Binding ShownColumns}" Margin="16,0,0,10" Padding="12,0,0,0"
+                      Classes.loading="{Binding IsLoadingRecord}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
@@ -351,7 +357,7 @@
                     ToolTip.Tip="{l:T ruler.pageup}" AutomationProperties.Name="{l:T ruler.pageup}">
                 <Path Classes="glyph" Data="{c:Icon chevron-up}" />
             </Button>
-            <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}" Classes.loading="{Binding IsLoadingRecord}"
                           VerticalAlignment="Stretch" Background="Transparent" ClipToBounds="False"
                           PointerMoved="OnRulerMoved" PointerExited="OnRulerExited"
                           UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"

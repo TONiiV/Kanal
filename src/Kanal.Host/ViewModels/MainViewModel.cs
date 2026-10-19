@@ -411,6 +411,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private int _bodyVersion;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowStartHint))]
+    [NotifyPropertyChangedFor(nameof(ShowNoStoredTranscript))]
     private bool _isLoadingRecord;
 
     public WorkspaceSidebarViewModel Sidebar { get; }
@@ -959,7 +961,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public string RecordingBannerText => L.Format(
         "browse.recording", Sidebar.TitleOf(Sidebar.RecordingMeetingId) ?? L["meeting.untitled"]);
 
-    public bool ShowStartHint => !HasColumns && !IsBrowsingRecord;
+    public bool ShowStartHint => !HasColumns && !IsBrowsingRecord && !IsLoadingRecord;
 
     public bool ShowNoStoredTranscript => !HasColumns && IsBrowsingRecord && !IsLoadingRecord;
 
@@ -980,8 +982,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var version = ++_bodyVersion;
         MarkRetiring();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
-        IsLoadingRecord = record is not null;
-        if (_yieldToUi is not null && _stored.Count > 0)
+        var leaving = _yieldToUi is not null && _stored.Count > 0;
+        IsLoadingRecord = record is not null || leaving;
+        if (leaving)
             NotifyChrome();
         if (!await RetireStoredAsync(version) || version != _bodyVersion)
             return;
@@ -989,6 +992,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _stored.Clear();
         _retiring.Clear();
         BrowsedRuler.Clear();
+        IsLoadingRecord = record is not null;
         NotifyBody();
         if (record is null)
             return;
