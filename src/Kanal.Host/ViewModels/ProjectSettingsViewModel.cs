@@ -51,6 +51,22 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
 
     public ObservableCollection<ProjectIssueViewModel> Issues { get; }
 
+    public ObservableCollection<GlossaryRowViewModel> Glossary { get; } = [];
+
+    public string GlossaryProblem => "";
+
+    public bool CanEditGlossary => true;
+
+    [RelayCommand(CanExecute = nameof(CanEditGlossary))]
+    private void AddTerm()
+    {
+    }
+
+    [RelayCommand]
+    private void RemoveTerm(GlossaryRowViewModel row)
+    {
+    }
+
     public bool HasIssues => Issues.Count > 0;
 
     public bool OpenAtIssues { get; }
