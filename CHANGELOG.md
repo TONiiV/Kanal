@@ -14,6 +14,32 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
+  the project folder. Kanal does not use the glossary in a meeting yet.
+- Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
+  could replace the transcript and the recording in a meeting folder that the sidebar did not list.
+  Now Kanal refuses the import and shows a message.
+- On a Mac, an online meeting now stops when the output device that Kanal used as its clock
+  disappears. Before, the meeting went on and the computer audio stayed silent. The status bar now
+  says that the computer audio source stopped.
+- Kanal now labels the language of a transcript line by its script first. In a room with two or more
+  languages, a Chinese or Japanese sentence now gets its own language label, also when the room does
+  not contain that language.
+- A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
+  choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
+  speaker separation on the recording on this computer and gives each person their own tag and
+  colour. *Not sure* can find more people than there are, but it rarely joins two people. A number
+  can join two similar voices into one. The first run downloads a 34 MB model. The original tags
+  stay in the transcript file.
+- A room with one language now also transcribes speakers who use another language. Before, local
+  transcription could transcribe only the language of the room.
+- When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
+  reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
+- The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
+  and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
+  the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,
+  download it and select it in the Translation tab. A *Recommended* label marks it in the list,
+  in English, Chinese, German and Polish.
 - The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
   1 pixel up and left of the centre on screens with 150% scaling.
 - The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
@@ -32,8 +58,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.
 - The ruler beside the transcript now shows which sentences are on screen: their ticks are longer
-  and thicker. The tick under the pointer and its neighbours grow, so a tick is easier to hit. The
-  arrows above and below the ruler show the previous or the next page of the transcript.
+  and thicker. The ticks follow the pointer smoothly, like the macOS Dock. The tick under the pointer
+  grows longest, thickest and brightest, and the ticks around it grow less and less. When the pointer
+  moves up or down, the swell trails behind it. When the pointer stops, the swell settles to an even
+  shape. The ticks at rest are thin and dim. The arrows above and below the ruler show the
+  previous or the next page of the transcript.
 - The preview card of the ruler no longer has a dark bar on its right edge.
 - Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to

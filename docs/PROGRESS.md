@@ -4,7 +4,202 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### Glossary T2: editor in the project settings window
+
+Spec #302. Stacked on T1 (#307).
+
+- **Place.** The project settings window is where the operator already manages a project. The glossary section is after the project icon.
+- **Rows.** One text box per language (zh, de, pl, en), the "Keep" check box (do not translate) and a remove button. **Add term** adds an empty row.
+- **Save.** The existing Save & Close button saves the glossary with the name and the icon. Save writes no file when the glossary did not change.
+- **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
+- **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
+- **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+### Glossary T1: per-project storage
+
+Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
+
+- **Model.** `GlossaryEntry(Zh, De, Pl, En, DoNotTranslate)`. An empty cell is `""`. The flag marks part numbers and codes.
+- **Storage.** `kanal-glossary.json` in the project root folder, next to `kanal-workspace.json`. The file moves with the folder. A person can read it without Kanal.
+- **Write.** `RecordFile` writes a temporary file, flushes it and replaces the old file. Save trims each cell and drops rows with no term.
+- **Read.** No file gives an empty glossary. A damaged file gives `Unreadable`, and Save refuses to write over it. A different schema version gives `UnsupportedVersion`.
+- **Delete.** "Delete files" on a project also deletes the glossary file, because Kanal wrote it.
+- **Next.** T2 adds the editor to the project settings window. T3 (#303), T4 (#304) and T5 (#306) are tickets only.
+
+---
+
+### Import never overwrites a meeting folder on disk (issue #236)
+
+- **Bug.** ADR 0054 decision 23 says an import never overwrites. Only the sidebar enforced it. The sidebar asks "skip or save as new" only for a meeting in its list. A meeting folder with a damaged or missing `meeting.json` is not in the list. `MeetingBundle.Import` then wrote over its `transcript.jsonl` and `audio.wav`. These files can be the only copy of a recording.
+- **Second defect.** An extract that failed part way left `meetings/<id>/` with some files and no `meeting.json`.
+- **Fix.** `Import` with `asNewRecord: false` refuses when `meetings/<id>/` exists. The new `StoreProblemKind.FolderTaken` carries the refusal. `StoreRefusal` maps it to `workspace.refused.foldertaken` in en, zh, de and pl.
+- **Staging.** `Import` extracts into `meetings/<id>.importing-<guid>/`. It moves the folder into place only after every entry is extracted. It deletes the staging folder on every exit. `ExtractToFile` no longer uses `overwrite: true`.
+- **Save-as-new.** This path keeps working. The folder of the new record already holds `meeting.json`, so the move puts each extracted entry into that folder.
+- **Rollback.** If the record cannot be saved after the move, `Import` deletes the folder that it created.
+- **Race.** Without save-as-new, `Import` moves the staging folder with `Directory.Move` only. The move fails when a folder appeared since the check. `Import` never merges into that folder and never deletes it. Only save-as-new merges.
+- **Open item.** A crash during an extract leaves the staging folder. The list shows it as a folder without a record.
+
+---
+
+### An online meeting stops when the macOS computer audio source disappears (#152)
+
+- **Bug.** The Core Audio tap runs on a private aggregate device. Its clock is the default output at Start. When that device disappeared, the IOProc stopped calling. The mixer padded silence, and the meeting went on. ADR 0050 requires a stop.
+- **Fix.** `CoreAudioTapSession` listens to `kAudioDevicePropertyDeviceIsAlive` on the clock device and on the aggregate device. A dead device calls the error callback with the fixed text `computer audio device lost`. `MacSystemAudioCapture` maps that text to `AudioCaptureFault.SourceEnded`. The existing path then stops the meeting: `OnlineMeetingCapture` reports `source_ended` for `system`, and the host shows the localized reason.
+- **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
+- **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
+
+## 2026-10-18
+
+### TranscriptLanguage labels by script before the room prior
+
+- **Done.** This closes the ADR 0061 open item about the `TranscriptLanguage.Guess` room prior, for two cases. Issue #295.
+- **Script first.** Hangul gives `ko`. Kana gives `ja`. Han characters without kana give `zh`. The room does not change these labels. Before, Han text in a room without `zh` gave the first Latin room language, for example `de`. Before, it gave `ja` only in a room that contained `ja`.
+- **Latin text.** A room without a Latin language now accepts the best-scoring Latin language at one signal. If none scores, the label is `en`. Before, the label was `room[0]`, for example `zh`. The `zh` column showed the English text without a translation, and MT got the wrong source language.
+- **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check. Issue #297 tracks the Cyrillic fix.
+- **Needs PR #294.** `NemotronAsrProvider` forces the language when a room has one language, so `Guess` does not run there. English in a Chinese-only room is translated only when PR #294 removes that forcing and every final goes through `Guess`.
+
+### Nemotron never gets a fixed language
+
+- **Bug.** `StartAsync` passed the room language to the model as the prompt language when the room had one language. Each final skipped `TranscriptLanguage.Guess` and took the room language as its label.
+- **Fix.** `StartAsync` always starts the stream with `auto`. Each final takes its label from `TranscriptLanguage.Guess`. The `forced` path and `PromptLanguage` (the zh to zh-CN and ja to ja-JP mapping) are removed. Nothing else used them.
+- **Closed item.** This closes the ADR 0061 open item for `NemotronAsrProvider`. See issue #293 and PR #294.
+- **Open item.** The room prior in `TranscriptLanguage.Guess` stays. ADR 0061 tracks it.
+
+### Automatic recognition language (ADR 0061)
+
+Transcription never limits the recognition language. Room languages set only the columns, the
+dropdown and the translation targets. Speakers mix zh with en, de or pl. Before the meeting,
+nobody knows which languages they will speak. The rule: the recognition language comes only from
+the system's own judgement, never from a human setting.
+
+- **Gladia** keeps `code_switching` and sends no `languages`. The code already does this.
+- **Benchmarks** (PR #285) choose models by the auto room scores. A forced room is only for diagnosis.
+- **Open item:** `NemotronAsrProvider` conflicts with this rule in two places. For a one-language
+  room, `StartAsync` forces the prompt language. Also, `_forced ?? TranscriptLanguage.Guess(…)`
+  skips the language guess. A separate ticket removes both.
+- **Open item:** `TranscriptLanguage.Guess` uses the room languages as a prior for the label. A
+  Latin language outside the room needs a score of 4 or more. Chinese text in a room without zh
+  becomes ja. The fallback is the first room language. This changes the label, not the recognition.
+  A separate ticket decides whether to keep it.
+
+### Gladia session does not reconnect after a deliberate stop
+
+- **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
+- **How it showed.** `MeetingSession.DisposeAsync` disposes the ASR session while `PumpAsync` still reads `Events`. The false error reached `ErrorOccurred` and the operator after every meeting. The ASR benchmark (PR #285) logged it after every session.
+- **Fix.** `DisposeAsync` sets the `volatile` flag `_stopping` before it sends `stop_recording`. The filter `catch (WebSocketException) when (_stopping)` ends the loop without an error and without a reconnect. A server Close frame still ends the loop through the `Close` branch and emits `Ended`.
+- **Test seam.** `HangUpOnFirstWriteStream` returns EOF after the first write (`stop_recording`). It holds the next write (the close frame) for 500 ms. Without the hold, `DisposeAsync` cancelled the loop before the loop saw the EOF on Windows and macOS. The red test then passed on those systems. With the hold, the red test failed on every OS.
+
+### Gladia session closes its event stream on every exit
+
+- **Bug.** `GladiaAsrSession.Events` never completed when `DisposeAsync` cancelled the session during the reconnect backoff. A reader that reads `Events` to the end then waits forever.
+- **How it showed.** The ASR benchmark (PR #285) hung on close. It reads `Events` to the end without a token.
+- **No operator impact.** `MeetingSession` reads `Events` with a token. It cancels that token after it disposes the session. Only `tools/Kanal.Doctor` reads without a token.
+- **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
+- **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
+- **Closed item.** The session reported "Connection lost, reconnecting" after a deliberate `stop_recording`. PR #288 fixed this. See "Gladia session does not reconnect after a deliberate stop" above.
+
+---
+
 ## 2026-10-14
+
+### The ruler magnifies like a Dock
+
+Issue #273. The first version of the hover effect had 5 steps around the hovered tick, with no
+animation, and all ticks had the same thickness and brightness.
+
+- **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
+  strip. Each tick gets a weight of its distance `d` (in DIP) to the pointer. The curve is
+  `exp(-(|d|/18)^1.3)`. An exponent of 2 gives a Gaussian. An exponent of 1 gives an exponential.
+  The value 1.3 leans to the exponential: a sharper peak and a heavier tail. The next tick keeps
+  67% of the rise, where a Gaussian keeps 78%. A tick four ticks away keeps 8%, where a Gaussian
+  keeps 2%. The weight is 1 at the pointer. The spread is the 18 DIP in the formula. A tick more
+  than 4 spreads (72 DIP) away has weight 0. The hovered row no longer decides the tick under the
+  pointer, so the curve moves between two ticks without a jump. `Hover(tick)` now only drives the
+  preview card.
+- **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
+  from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
+  Peak: 40, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and
+  `Thickness` travel in one value, `TickShape`. One pointer move notifies each tick once.
+- **Skew while the pointer moves.** The view model keeps a skew between -1 and 1 from the pointer
+  speed. The speed that gives a full skew is 350 DIP/s. A filter with a time constant of 90 ms
+  smooths the skew. On the side the pointer moves towards, the spread shrinks to 60% of 18 DIP at a
+  full skew. On the side the pointer left, it grows to 240%. The tick under the pointer has weight 1
+  at any skew. A pointer that stops thus gives the even shape in about 0.3 s.
+  - `Relax()` pulls the skew to 0 only when the pointer has been still for 50 ms. A frame between
+    two pointer events must not pull a moving pointer's skew down, or the skew would depend on
+    where the frames fall between the events.
+  - The speed and the decay use two time stamps. A move after the last one by less than 1 ms gives
+    no speed. A pointer that leaves the strip resets the skew.
+  - A move of 10 DIP/s counts as slow: the skew is 0.03 and the two sides differ by 0.7 DIP.
+  - The tests give the view model a `TimeProvider` they control.
+- **Drawn values, no transition.** Each tick has target values (`Shape`, `Glow`) and drawn values
+  (`DrawnShape`, `DrawnGlow`). The view draws the drawn values. `Relax()` moves them towards the
+  targets with an exponential filter. The time constant is 15 ms to grow and 60 ms to shrink, so a
+  tick grows fast and eases back. The filter does not depend on the event rate. A XAML transition
+  does: each pointer event restarts it. A recording with transitions showed the bump 100 DIP behind
+  a fast pointer, with the tick under the pointer still at its resting length.
+  - The ruler raises `NeedsFrame` whenever it is settling. The view then calls
+    `TopLevel.RequestAnimationFrame`, and each frame calls `Relax()` on both rulers. The frames
+    stop when no tick is settling. A timer would run when nothing needs drawing, and it would keep
+    the view alive.
+  - A tick whose on-screen state changes is drawn at once. The rest of the bump keeps easing, so a
+    new sentence or a scroll does not make it jump.
+- **Drawing.** A tick is a fixed 28 x 3.5 rectangle (`TickWidth`, `TickHeight`). Its length and
+  thickness are a scale transform (`TickScale`) from `DrawnShape`, so a frame never starts a layout
+  pass. The peak of 40 DIP is wider than the 30 DIP column. The scale draws outside the layout
+  box, 5 DIP on each side. The `ItemsControl` of the ruler clips by default, and it cut the peak to
+  30 DIP in a render of the whole window. It has `ClipToBounds="False"` now, and a test checks that
+  no ancestor of a tick clips. The view sends the pointer position (`PointerMoved`) and the exit
+  (`PointerExited`).
+- **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet.
+  There a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design
+  document now records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick
+  under the pointer 3.5:1 or more.
+- **Known limit.** The ruler that is not shown keeps its last pointer position. This matters only
+  if the shown ruler switches by keyboard while the pointer rests on the strip. The next pointer
+  move or leave corrects it.
+- **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
+  symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
+  resize, one notification for each tick, the skew in both directions, a slow move, the settling,
+  the reset, the drawn values (grow, shrink, settle, leave, a fast move), no jump on a new
+  sentence or a scroll, the frame request, and a steady speed reading. `ColumnScrollWiringTests`
+  cover the pointer in the real view, the animation frames, and the clipping.
+
+### Recommended badge on the Translation tab
+
+The model row shows a *Recommended* pill next to the name of the first `LocalModelCatalog` entry.
+
+- **No catalog field.** `ModelItemViewModel.IsRecommended` is true when the row id equals
+  `LocalModelCatalog.Models[0].Id`. The catalog already states the rule: the first entry is the
+  recommended default. A second source of truth could drift from the row order.
+- **Translation rows only.** The *None* row and the transcription (ASR) rows never show the pill.
+  Only the `LocalModelInfo` constructor sets `IsRecommended`. The ASR list has no recommendation.
+- **Colours.** The pill uses `BrandWash` for the fill and `Brand` for the text. Both exist in the Light
+  and Dark variants, so no new resource is needed.
+- **Text.** The key `settings.model.recommended` exists in en, zh, de and pl.
+
+### Hy-MT2 1.8B is the recommended local translation model
+
+`LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448
+bytes, Apache-2.0). The first entry is the recommended model. The other three entries stay.
+
+- **Measured.** The test used the production prompt on 12 zh/de/pl meeting sentences, 2 targets each.
+  chrF: Hy-MT2 55.5, Qwen3.5 2B 42.6, Qwen3.5 4B 57.3. All 12 part numbers stayed correct.
+  Latency per sentence (2 targets) on a Vulkan GPU: Hy-MT2 1.19 s, Qwen3.5 2B 2.05 s, Qwen3.5 4B
+  3.76 s. On an idle CPU: 2.49 s, 2.93 s, 5.96 s.
+- **No reasoning prefill.** `AssistantPrefill` is null. A Qwen-style `<think>` prefill lowered chrF
+  from 55.5 to 48.0.
+- **Runtime.** The architecture is `hunyuan-dense`. It runs on LLamaSharp 0.27.0 without a change.
+- **No change for existing users.** `ActiveTranslationModelId` null means *None* (cloud
+  translation), not the first catalog entry. An existing id still resolves by `Find`. Only the row
+  order in Settings and the *recommended* position change. A new install does not select Hy-MT2
+  by itself.
+- **Not added: HY-MT1.5.** The Tencent HY Community License excludes the EU, the UK and South Korea.
+  Hy-MT2 uses plain Apache-2.0.
+- **Licence list.** `OpenSourceNotices` lists software packages only, not models. The model row in
+  Settings shows the licence of each model, so Hy-MT2 needs no extra entry there.
 
 ### Cloud translation with DeepL (ADR 0060)
 
@@ -131,6 +326,36 @@ Rejected: LFM2.5 1.2B, SmolLM3 3B and Llama 3.2 1B do not support Polish. Transl
 below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
 
 ## 2026-10-13
+
+### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
+
+The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherpa-onnx `OfflineSpeakerDiarization` on `audio.wav` and gives each final utterance a new tag.
+
+- **Runtime.** The new project `Kanal.Providers.LocalDiarization` references `org.k2fsa.sherpa.onnx` 1.13.8. This is the package and version of PR #181. `SherpaSpeakerDiarizer` is the only class that touches the native library.
+- **Models.** One default pair, no picker ([#179](https://github.com/TONiiV/Kanal/issues/179)). The first run downloads both files through `ModelDownloadManager` and checks SHA-256.
+  - Segmentation: pyannote segmentation 3.0, MIT, 5,992,913 bytes. The GitHub release has only a `.tar.bz2`, and the BCL has no bzip2. The catalog now takes the plain `model.onnx` from Hugging Face, pinned to commit `9403a69`. This closes open item 1 of the slice-2 entry below.
+  - Embedding: 3D-Speaker CAM++ zh/en advanced, Apache-2.0, 28,281,164 bytes, from the GitHub release. Slice 6 ([#111](https://github.com/TONiiV/Kanal/issues/111)) replaces it after zh/de/pl measurements.
+- **Mapping.** Each utterance takes the diarized speaker with the largest total time overlap. Tags are `D01`, `D02`… in the order that people first speak. An utterance that no turn covers keeps its original tag. The stored view gives each tag a palette colour by first appearance, as before.
+- **Timing.** The ASR clock and the recording both start on the first accepted frame. Both skip a pause. So `TStartMs` is the offset into `audio.wav`. A Gladia reconnect restarts the ASR clock but not the recording. Utterances after a reconnect can map to the wrong turn.
+- **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
+- **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
+- **Speaker count.** *Re-identify speakers* is a submenu. *Not sure* is the first item, then 2 to 8 people. A number goes to `NumClusters`. *Not sure* passes no count, and clustering then uses the threshold 0.8 (`SherpaSpeakerDiarizer.Clustering`). The count input in the Speakers tab stays in [#110](https://github.com/TONiiV/Kanal/issues/110).
+- **Why 0.8 and *Not sure* first.** The first real test had 3 people. The library default threshold 0.5 gave 47 tags. The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) then measured both paths:
+  - Without a count, 0.8 gave the lowest DER: 13.5 % on 62 synthetic meetings and 8.1 % on the scripted 6-speaker meeting, against 23.3 % and 28.9 % at 0.5.
+  - With a count, sherpa often returned fewer clusters than asked (17 of 62 meetings). Two similar voices merge, and the operator cannot split them. The real 3-person meeting with count 3 got 2 tags.
+  - A false extra speaker costs one merge; a false merge cannot be undone. So *Not sure* is the default choice.
+  - The real recording still got 17 tags at 0.8. A real room is harder than TTS audio.
+- **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
+- **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
+- **Exports.** A `.kl` bundle carries `speakers.json`, and import accepts it. The bundle's `transcript.md` and the Markdown export of the just-stopped meeting use the new tags. `transcript.jsonl` keeps the original tags.
+
+Open items:
+
+1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
+2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
+3. Hugging Face and GitHub release downloads can be blocked in mainland China.
+4. The speaker tab of the just-stopped meeting still lists the live tags.
 
 ### The ruler shows the screen and pages through the transcript
 
