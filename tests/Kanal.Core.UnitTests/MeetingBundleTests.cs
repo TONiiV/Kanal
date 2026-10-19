@@ -231,6 +231,30 @@ public class MeetingBundleTests : IDisposable
         Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
     }
 
+    [Fact]
+    public void AStaleReadOnlyPartialFileDoesNotStopAnExport()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        var partial = bundle + ".partial";
+        File.WriteAllText(partial, "left by a crash");
+        File.SetAttributes(partial, FileAttributes.ReadOnly);
+
+        try
+        {
+            Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        }
+        finally
+        {
+            if (File.Exists(partial))
+                File.SetAttributes(partial, FileAttributes.Normal);
+        }
+
+        Assert.Contains(MeetingBundle.ManifestFileName, Entries(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
     private static IReadOnlyList<string> Names(string bundle) =>
         [.. Directory.GetFiles(Path.GetDirectoryName(bundle)!, Path.GetFileNameWithoutExtension(bundle) + "*")
             .Select(f => Path.GetFileName(f)).Order()];
