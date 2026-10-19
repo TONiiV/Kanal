@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
+  could replace the transcript and the recording in a meeting folder that the sidebar did not list.
+  Now Kanal refuses the import and shows a message.
 - On a Mac, an online meeting now stops when the output device that Kanal used as its clock
   disappears. Before, the meeting went on and the computer audio stayed silent. The status bar now
   says that the computer audio source stopped.
