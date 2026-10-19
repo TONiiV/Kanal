@@ -10,7 +10,7 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 - **Bug.** The Core Audio tap runs on a private aggregate device. Its clock is the default output at Start. When that device disappeared, the IOProc stopped calling. The mixer padded silence, and the meeting went on. ADR 0050 requires a stop.
 - **Fix.** `CoreAudioTapSession` listens to `kAudioDevicePropertyDeviceIsAlive` on the clock device and on the aggregate device. A dead device calls the error callback with the fixed text `computer audio device lost`. `MacSystemAudioCapture` maps that text to `AudioCaptureFault.SourceEnded`. The existing path then stops the meeting: `OnlineMeetingCapture` reports `source_ended` for `system`, and the host shows the localized reason.
-- **Windows.** No change. Process loopback is bound to no render endpoint, so an output change cannot end it. See "Known risks" in `docs/online-meeting-audio.md`.
+- **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
 - **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
 
 ## 2026-10-18

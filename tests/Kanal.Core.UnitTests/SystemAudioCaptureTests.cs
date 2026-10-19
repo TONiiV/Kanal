@@ -191,7 +191,7 @@ public class SystemAudioCaptureTests
     [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeReportsALostClockDeviceAsSourceEnded()
     {
-        var native = new FakeMacNative("computer audio device lost");
+        var native = new FakeMacNative(MacSystemAudioCapture.DeviceLostMessage);
         var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
 
         var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
@@ -202,6 +202,15 @@ public class SystemAudioCaptureTests
 
         Assert.Equal(AudioCaptureFault.SourceEnded, error.Fault);
         Assert.True(native.Stopped);
+    }
+
+    [Fact]
+    public void TheSwiftBridgeSendsTheTextThatTheCSharpBridgeMatches()
+    {
+        var swift = File.ReadAllText(Path.Combine(
+            InstallerLayoutTests.FindRepoRoot(), "src", "Kanal.Audio", "Native", "MacSystemAudio.swift"));
+
+        Assert.Contains($"\"{MacSystemAudioCapture.DeviceLostMessage}\"", swift, StringComparison.Ordinal);
     }
 
     [Fact]

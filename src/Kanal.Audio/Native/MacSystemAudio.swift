@@ -183,6 +183,7 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             _ = AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
         }
+        callbackQueue.sync {}
         completion()
     }
 
