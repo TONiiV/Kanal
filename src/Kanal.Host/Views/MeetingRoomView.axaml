@@ -88,12 +88,6 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
-        <Style Selector="Rectangle.tick">
-            <Setter Property="Height" Value="2" />
-        </Style>
-        <Style Selector="Rectangle.tick.inview">
-            <Setter Property="Height" Value="3" />
-        </Style>
         <Style Selector="Button.page">
             <Setter Property="Width" Value="22" />
             <Setter Property="Height" Value="22" />
@@ -358,7 +352,8 @@
                 <Path Classes="glyph" Data="{c:Icon chevron-up}" />
             </Button>
             <ItemsControl Grid.Row="1" ItemsSource="{Binding ShownRuler.Ticks}"
-                          VerticalAlignment="Stretch"
+                          VerticalAlignment="Stretch" Background="Transparent" ClipToBounds="False"
+                          PointerMoved="OnRulerMoved" PointerExited="OnRulerExited"
                           UseLayoutRounding="False" SizeChanged="OnRulerSizeChanged"
                           AutomationProperties.Name="{l:T ruler.name}">
                 <ItemsControl.ItemTemplate>
@@ -367,10 +362,13 @@
                                 PointerEntered="OnTickEntered" PointerExited="OnTickExited"
                                 PointerPressed="OnTickPressed"
                                 AutomationProperties.Name="{Binding AccessibleName}">
-                            <Rectangle Classes="tick" Classes.inview="{Binding IsInView}"
-                                       Width="{Binding Reach}"
+                            <Rectangle Classes="tick"
+                                       Width="{x:Static vm:TranscriptRulerViewModel.TickWidth}"
+                                       Height="{x:Static vm:TranscriptRulerViewModel.TickHeight}"
+                                       Opacity="{Binding DrawnGlow}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}" />
+                                       IsHitTestVisible="False" Fill="{Binding SpeakerColor}"
+                                       RenderTransform="{Binding DrawnShape, Converter={x:Static conv:TickScale.Of}}" />
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

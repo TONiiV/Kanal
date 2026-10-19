@@ -50,10 +50,28 @@ public partial class RulerTickViewModel : ViewModelBase
     private bool _isInView;
 
     [ObservableProperty]
-    private double _reach = TranscriptRulerViewModel.RestReach;
+    [NotifyPropertyChangedFor(nameof(Reach), nameof(Thickness))]
+    private TickShape _shape = new(TranscriptRulerViewModel.RestReach, TranscriptRulerViewModel.RestThickness);
+
+    [ObservableProperty]
+    private double _glow = TranscriptRulerViewModel.RestGlow;
+
+    [ObservableProperty]
+    private TickShape _drawnShape = new(TranscriptRulerViewModel.RestReach, TranscriptRulerViewModel.RestThickness);
+
+    [ObservableProperty]
+    private double _drawnGlow = TranscriptRulerViewModel.RestGlow;
+
+    internal bool DrawnInView { get; set; }
+
+    public double Reach => Shape.Reach;
+
+    public double Thickness => Shape.Thickness;
 
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
+
+public readonly record struct TickShape(double Reach, double Thickness);
 
 public sealed partial class TranscriptRulerViewModel : ViewModelBase
 {
@@ -62,14 +80,43 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public const double CardHeight = 96;
     public const double RestReach = 10;
     public const double InViewReach = 16;
+    public const double PeakReach = 40;
+    public const double TickWidth = 28;
+    public const double TickHeight = 3.5;
+    public const double RestThickness = 1;
+    public const double InViewThickness = 2;
+    public const double PeakThickness = 3.5;
+    public const double RestGlow = 0.55;
+    public const double InViewGlow = 0.9;
 
-    private static readonly double[] HoverReach = [28, 21, 15];
+    private const double FocusSpread = 18;
+    private const double FocusShape = 1.3;
+    private const double SkewSpeed = 350;
+    private const double SkewTime = 0.09;
+    private const double SkewFloor = 0.005;
+    private const double LeadShrink = 0.4;
+    private const double TrailGrow = 1.4;
+    private const double MinStep = 0.001;
+    private const double StillAfter = 0.05;
+    private const double DrawAttack = 0.015;
+    private const double DrawRelease = 0.06;
+    private const double DrawStepCap = 0.1;
+    private const double ShapeEpsilon = 0.02;
+    private const double GlowEpsilon = 0.002;
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
     private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private readonly TimeProvider _time;
+    private double? _pointerY;
+    private double? _lastY;
+    private long _moveStamp;
+    private long _skewStamp;
+    private long _stepStamp;
+    private int _unsettled;
+    private double _skew;
     private HashSet<string> _visible = new();
     private HashSet<string>? _whole;
     private int _pageUpTarget = -1;
@@ -77,8 +124,13 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     private int _reserved;
     private double _appliedPitch = double.NaN;
 
-    public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
+    public TranscriptRulerViewModel(
+        Func<string, (string Tag, string Name, string Color)> resolve, TimeProvider? time = null)
+    {
         _resolve = resolve;
+        _time = time ?? TimeProvider.System;
+        _stepStamp = _time.GetTimestamp();
+    }
 
     public ObservableCollection<RulerTickViewModel> Ticks { get; } = new();
 
@@ -99,6 +151,8 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     public event Action<string>? JumpRequested;
 
     public event Action<string, PageDirection>? PageRequested;
+
+    public event Action? NeedsFrame;
 
     public bool CanPageUp => _pageUpTarget >= 0;
 
@@ -174,10 +228,94 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         MarkInView();
     }
 
+    public bool IsSkewed => Math.Abs(_skew) > SkewFloor;
+
+    public bool IsSettling => IsSkewed || _unsettled > 0;
+
+    public void PointerAt(double? y)
+    {
+        _pointerY = y;
+        if (y is null)
+        {
+            _skew = 0;
+            _lastY = null;
+        }
+        else if (_lastY is { } last)
+        {
+            var seconds = Seconds(_moveStamp);
+            if (seconds >= MinStep)
+            {
+                Follow((y.Value - last) / seconds / SkewSpeed);
+                _lastY = y;
+                _moveStamp = _time.GetTimestamp();
+            }
+        }
+        else
+        {
+            _lastY = y;
+            _moveStamp = _skewStamp = _time.GetTimestamp();
+        }
+
+        Magnify();
+    }
+
+    public void Relax()
+    {
+        if (_pointerY is not null && IsSkewed && Seconds(_moveStamp) > StillAfter)
+        {
+            Follow(0);
+            Magnify();
+        }
+
+        Draw();
+    }
+
+    private void Draw()
+    {
+        var now = _time.GetTimestamp();
+        var seconds = Math.Min((now - _stepStamp) / (double)_time.TimestampFrequency, DrawStepCap);
+        _stepStamp = now;
+        if (_unsettled == 0 || seconds <= 0)
+            return;
+
+        var unsettled = 0;
+        foreach (var tick in Ticks)
+        {
+            var shape = tick.Shape;
+            var drawn = tick.DrawnShape;
+            var growing = shape.Reach > drawn.Reach || shape.Thickness > drawn.Thickness;
+            var amount = 1 - Math.Exp(-seconds / (growing ? DrawAttack : DrawRelease));
+            var next = new TickShape(
+                Lerp(drawn.Reach, shape.Reach, amount), Lerp(drawn.Thickness, shape.Thickness, amount));
+            if (Math.Abs(next.Reach - shape.Reach) < ShapeEpsilon && Math.Abs(next.Thickness - shape.Thickness) < ShapeEpsilon)
+                next = shape;
+            var glow = Lerp(tick.DrawnGlow, tick.Glow, amount);
+            if (Math.Abs(glow - tick.Glow) < GlowEpsilon)
+                glow = tick.Glow;
+
+            tick.DrawnShape = next;
+            tick.DrawnGlow = glow;
+            if (next != shape || glow != tick.Glow)
+                unsettled++;
+        }
+
+        _unsettled = unsettled;
+    }
+
+    private double Seconds(long since) => (_time.GetTimestamp() - since) / (double)_time.TimestampFrequency;
+
+    private void Follow(double target)
+    {
+        var seconds = Seconds(_skewStamp);
+        _skew += (Math.Clamp(target, -1, 1) - _skew) * (1 - Math.Exp(-seconds / SkewTime));
+        if (!IsSkewed)
+            _skew = 0;
+        _skewStamp = _time.GetTimestamp();
+    }
+
     public void Hover(RulerTickViewModel? tick)
     {
         HoveredTick = tick;
-        Magnify();
         if (tick is null)
             return;
 
@@ -209,6 +347,10 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         _appliedPitch = double.NaN;
         _visible = new HashSet<string>();
         _whole = null;
+        _pointerY = null;
+        _lastY = null;
+        _skew = 0;
+        _unsettled = 0;
         HoveredTick = null;
         Ticks.Clear();
         TrackLength = 0;
@@ -224,6 +366,7 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         foreach (var tick in Ticks)
             tick.Pitch = pitch;
         TrackLength = pitch * Ticks.Count;
+        Magnify();
     }
 
     private void MarkInView()
@@ -271,16 +414,44 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
 
     private void Magnify()
     {
-        var hovered = HoveredTick is null ? -1 : Ticks.IndexOf(HoveredTick);
+        var unsettled = 0;
         for (var i = 0; i < Ticks.Count; i++)
         {
-            var reach = Ticks[i].IsInView ? InViewReach : RestReach;
-            var distance = hovered < 0 ? int.MaxValue : Math.Abs(i - hovered);
-            if (distance < HoverReach.Length)
-                reach = Math.Max(reach, HoverReach[distance]);
-            Ticks[i].Reach = reach;
+            var tick = Ticks[i];
+            var onScreen = tick.IsInView;
+            var focus = _pointerY is { } y ? Focus(i * tick.Pitch + tick.Pitch / 2 - y) : 0;
+            tick.Shape = new TickShape(
+                Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus),
+                Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus));
+            tick.Glow = Lerp(onScreen ? InViewGlow : RestGlow, 1, focus);
+            if (onScreen != tick.DrawnInView)
+            {
+                tick.DrawnInView = onScreen;
+                tick.DrawnShape = tick.Shape;
+                tick.DrawnGlow = tick.Glow;
+            }
+            else if (tick.DrawnShape != tick.Shape || tick.DrawnGlow != tick.Glow)
+            {
+                unsettled++;
+            }
         }
+
+        if (_unsettled == 0 && unsettled > 0)
+            _stepStamp = _time.GetTimestamp();
+        _unsettled = unsettled;
+        if (IsSettling)
+            NeedsFrame?.Invoke();
     }
+
+    private double Focus(double distance)
+    {
+        var ahead = distance * Math.Sign(_skew) > 0;
+        var spread = FocusSpread * (ahead ? 1 - LeadShrink * Math.Abs(_skew) : 1 + TrailGrow * Math.Abs(_skew));
+        var d = Math.Abs(distance) / spread;
+        return d > 4 ? 0 : Math.Exp(-Math.Pow(d, FocusShape));
+    }
+
+    private static double Lerp(double from, double to, double amount) => from + (to - from) * amount;
 
     private void Write(Entry entry)
     {

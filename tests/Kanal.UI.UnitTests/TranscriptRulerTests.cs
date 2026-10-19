@@ -16,12 +16,20 @@ public class TranscriptRulerTests
     private readonly Dictionary<string, string> _canonical = new();
     private readonly Dictionary<string, string> _names = new();
 
-    private TranscriptRulerViewModel Ruler() => new(tag =>
+    private TranscriptRulerViewModel Ruler(TimeProvider? time = null) => new(tag =>
     {
         var canonical = _canonical.TryGetValue(tag, out var c) ? c : tag;
         var name = _names.TryGetValue(canonical, out var n) ? n : canonical.ToUpperInvariant();
         return (canonical, name, canonical == "s1" ? "#B23A2E" : "#1C6B58");
-    });
+    }, time);
+
+    private sealed class ManualTime : TimeProvider
+    {
+        private long _ticks;
+        public override long GetTimestamp() => _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
 
     private static Utterance Said(
         string id,
@@ -138,40 +146,512 @@ public class TranscriptRulerTests
         Assert.True(ruler.Ticks[1].Reach > ruler.Ticks[0].Reach);
     }
 
-    [AvaloniaFact]
-    public void HoverMagnifiesTheTickMostAndItsTwoNeighboursOnEachSideLess()
+    private TranscriptRulerViewModel NineTicks()
     {
         var ruler = Ruler();
         for (var i = 0; i < 9; i++)
             ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
-        var rest = ruler.Ticks[0].Reach;
+        return ruler;
+    }
 
-        ruler.Hover(ruler.Ticks[4]);
+    private static double CentreOf(TranscriptRulerViewModel ruler, int index) =>
+        index * ruler.Ticks[index].Pitch + ruler.Ticks[index].Pitch / 2;
 
-        var reach = ruler.Ticks.Select(t => t.Reach).ToList();
-        Assert.True(reach[4] > reach[3] && reach[3] > reach[2] && reach[2] > rest);
-        Assert.Equal(reach[3], reach[5]);
-        Assert.Equal(reach[2], reach[6]);
-        Assert.Equal(rest, reach[1]);
-        Assert.Equal(rest, reach[7]);
+    [AvaloniaFact]
+    public void AllTicksAtRestAreThinAndDim()
+    {
+        var ruler = NineTicks();
 
-        ruler.Hover(null);
-
-        Assert.All(ruler.Ticks, t => Assert.Equal(rest, t.Reach));
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestThickness, t.Thickness));
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestGlow, t.Glow));
     }
 
     [AvaloniaFact]
-    public void MagnificationNeverShortensATickOnScreen()
+    public void ThePointerRaisesTheTickUnderItToLongestThickestAndBrightest()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, ruler.Ticks[4].Reach, 6);
+        Assert.Equal(TranscriptRulerViewModel.PeakThickness, ruler.Ticks[4].Thickness, 6);
+        Assert.Equal(1, ruler.Ticks[4].Glow, 6);
+    }
+
+    [AvaloniaFact]
+    public void TheRaiseFallsOffSmoothlyAndEquallyOnBothSidesOfThePointer()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        var reach = ruler.Ticks.Select(t => t.Reach).ToList();
+        Assert.True(reach[4] > reach[5] && reach[5] > reach[6] && reach[6] > reach[7] && reach[7] > reach[8]);
+        Assert.True(reach[8] > TranscriptRulerViewModel.RestReach);
+        Assert.Equal(reach[3], reach[5], 6);
+        Assert.Equal(reach[2], reach[6], 6);
+        Assert.True(ruler.Ticks[5].Glow < 1 && ruler.Ticks[5].Glow > ruler.Ticks[8].Glow);
+        Assert.True(ruler.Ticks[5].Thickness < ruler.Ticks[4].Thickness
+            && ruler.Ticks[5].Thickness > ruler.Ticks[8].Thickness);
+    }
+
+    [AvaloniaFact]
+    public void TheTickUnderThePointerIsAtLeastFortyDipLong()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Assert.True(ruler.Ticks[4].Reach >= 40, $"the tick under the pointer is only {ruler.Ticks[4].Reach:F1} DIP long");
+    }
+
+    [AvaloniaFact]
+    public void ThePeakIsSharperThanAGaussianAndTheTailHeavier()
+    {
+        var ruler = NineTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        double Rise(int index) => ruler.Ticks[index].Reach - TranscriptRulerViewModel.RestReach;
+        Assert.True(Rise(5) < 0.70 * Rise(4), $"the next tick keeps {Rise(5) / Rise(4):P0} of the rise; a Gaussian keeps 78%");
+        Assert.True(Rise(8) > 0.05 * Rise(4), $"four ticks away only {Rise(8) / Rise(4):P1} of the rise is left; a Gaussian leaves 1.8%");
+    }
+
+    [AvaloniaFact]
+    public void APointerBetweenTwoTicksRaisesBothAlike()
+    {
+        var ruler = NineTicks();
+        var seam = ruler.Ticks[3].Pitch * 4;
+
+        ruler.PointerAt(seam);
+
+        Assert.Equal(ruler.Ticks[3].Reach, ruler.Ticks[4].Reach, 6);
+        Assert.Equal(ruler.Ticks[3].Glow, ruler.Ticks[4].Glow, 6);
+        Assert.True(ruler.Ticks[3].Reach < TranscriptRulerViewModel.PeakReach);
+    }
+
+    [AvaloniaFact]
+    public void MovingThePointerAcrossATickGrowsItWithoutAJump()
+    {
+        var ruler = NineTicks();
+        var pitch = ruler.Ticks[0].Pitch;
+        var reach = new List<double>();
+
+        for (var step = 0; step <= 8; step++)
+        {
+            ruler.PointerAt(CentreOf(ruler, 2) - pitch + step * pitch / 4);
+            reach.Add(ruler.Ticks[2].Reach);
+        }
+
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, reach[4], 6);
+        Assert.True(reach[0] < reach[1] && reach[1] < reach[2] && reach[2] < reach[3] && reach[3] < reach[4]);
+        Assert.True(reach[4] > reach[5] && reach[5] > reach[6] && reach[6] > reach[7] && reach[7] > reach[8]);
+        Assert.All(reach.Zip(reach.Skip(1)), pair =>
+            Assert.True(Math.Abs(pair.Second - pair.First) < 3.5, "a quarter pitch of travel must not jump a tick"));
+    }
+
+    [AvaloniaFact]
+    public void ATickFarFromThePointerStaysAtRest()
     {
         var ruler = Ruler();
-        for (var i = 0; i < 9; i++)
+        for (var i = 0; i < 40; i++)
             ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+
+        ruler.PointerAt(CentreOf(ruler, 5));
+
+        Assert.Equal(TranscriptRulerViewModel.RestReach, ruler.Ticks[39].Reach);
+        Assert.Equal(TranscriptRulerViewModel.RestThickness, ruler.Ticks[39].Thickness);
+        Assert.Equal(TranscriptRulerViewModel.RestGlow, ruler.Ticks[39].Glow);
+    }
+
+    [AvaloniaFact]
+    public void LeavingTheRulerReturnsEveryTickToRest()
+    {
+        var ruler = NineTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        ruler.PointerAt(null);
+
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestReach, t.Reach));
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestThickness, t.Thickness));
+        Assert.All(ruler.Ticks, t => Assert.Equal(TranscriptRulerViewModel.RestGlow, t.Glow));
+    }
+
+    [AvaloniaFact]
+    public void TicksOnScreenKeepTheirEmphasisAtRestAndTheRaiseNeverShortensThem()
+    {
+        var ruler = NineTicks();
         ruler.SetVisible(["u6"]);
-        var inView = ruler.Ticks[6].Reach;
+        var onScreen = ruler.Ticks[6];
 
-        ruler.Hover(ruler.Ticks[4]);
+        Assert.Equal(TranscriptRulerViewModel.InViewReach, onScreen.Reach);
+        Assert.True(onScreen.Thickness > TranscriptRulerViewModel.RestThickness);
+        Assert.True(onScreen.Glow > TranscriptRulerViewModel.RestGlow);
 
-        Assert.True(ruler.Ticks[6].Reach >= inView);
+        ruler.PointerAt(CentreOf(ruler, 0));
+
+        Assert.True(onScreen.Reach >= TranscriptRulerViewModel.InViewReach);
+        Assert.True(onScreen.Thickness >= TranscriptRulerViewModel.InViewThickness);
+        Assert.True(onScreen.Glow >= TranscriptRulerViewModel.InViewGlow);
+    }
+
+    [AvaloniaFact]
+    public void ARulerThatChangesSizeKeepsTheRaiseUnderThePointer()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 200; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        ruler.PointerAt(40);
+
+        ruler.SetStripHeight(300);
+
+        var hot = ruler.Ticks.Select((t, i) => (t.Reach, i)).MaxBy(x => x.Reach).i;
+        Assert.InRange(CentreOf(ruler, hot), 40 - ruler.Ticks[0].Pitch, 40 + ruler.Ticks[0].Pitch);
+    }
+
+    [AvaloniaFact]
+    public void AMoveOfThePointerNotifiesEachTickOnceSoOneTransitionRestartsPerTick()
+    {
+        var ruler = Ruler();
+        for (var i = 0; i < 40; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        var changes = new Dictionary<string, int>();
+        foreach (var tick in ruler.Ticks)
+            tick.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == "Shape")
+                    changes[tick.AnchorUtteranceId] = changes.GetValueOrDefault(tick.AnchorUtteranceId) + 1;
+            };
+
+        ruler.PointerAt(CentreOf(ruler, 20));
+
+        Assert.Equal(ruler.Ticks.Count(t => t.Reach > TranscriptRulerViewModel.RestReach), changes.Count);
+        Assert.All(changes.Values, count => Assert.Equal(1, count));
+    }
+
+    private static TranscriptRulerViewModel TwentyOneTicks(TranscriptRulerViewModel ruler, Func<string, int, Utterance> said)
+    {
+        for (var i = 0; i < 21; i++)
+            ruler.Observe(said($"u{i}", i));
+        return ruler;
+    }
+
+    private (TranscriptRulerViewModel Ruler, ManualTime Time) RulerAfterAMove(double dipPerSecond, int direction)
+    {
+        var time = new ManualTime();
+        var ruler = TwentyOneTicks(Ruler(time), (id, i) => Said(id, "s1", $"line {i}"));
+        var y = CentreOf(ruler, 10) - direction * 10 * dipPerSecond * 0.02;
+        ruler.PointerAt(y);
+        for (var step = 0; step < 10; step++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(20));
+            y += direction * dipPerSecond * 0.02;
+            ruler.PointerAt(y);
+        }
+
+        return (ruler, time);
+    }
+
+    private static (double Behind, double Ahead) TwoTicksFromThePointer(TranscriptRulerViewModel ruler, int direction)
+    {
+        var pointer = ruler.Ticks.Select((t, i) => (t.Reach, i)).MaxBy(x => x.Reach).i;
+        return (ruler.Ticks[pointer - 2 * direction].Reach, ruler.Ticks[pointer + 2 * direction].Reach);
+    }
+
+    [AvaloniaFact]
+    public void MovingDownLeavesALongTailAboveAndASharpFrontBelow()
+    {
+        var (ruler, _) = RulerAfterAMove(dipPerSecond: 450, direction: 1);
+
+        var (behind, ahead) = TwoTicksFromThePointer(ruler, 1);
+
+        Assert.True(behind > ahead + 3, $"behind {behind:F1} should be well above ahead {ahead:F1}");
+        Assert.True(ahead > TranscriptRulerViewModel.RestReach);
+    }
+
+    [AvaloniaFact]
+    public void MovingUpMirrorsIt()
+    {
+        var (ruler, _) = RulerAfterAMove(dipPerSecond: 450, direction: -1);
+
+        var (behind, ahead) = TwoTicksFromThePointer(ruler, -1);
+
+        Assert.True(behind > ahead + 3, $"behind {behind:F1} should be well above ahead {ahead:F1}");
+    }
+
+    [AvaloniaFact]
+    public void TheTickNearestThePointerIsAlwaysTheLongestWhateverTheSpeed()
+    {
+        var (ruler, _) = RulerAfterAMove(dipPerSecond: 900, direction: 1);
+
+        var pointer = ruler.Ticks.Select((t, i) => (t.Reach, i)).MaxBy(x => x.Reach);
+
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, pointer.Reach, 3);
+    }
+
+    [AvaloniaFact]
+    public void ASlowMoveBarelySkewsTheBump()
+    {
+        var (ruler, _) = RulerAfterAMove(dipPerSecond: 10, direction: 1);
+
+        var (behind, ahead) = TwoTicksFromThePointer(ruler, 1);
+
+        Assert.InRange(behind - ahead, -1, 1);
+    }
+
+    [AvaloniaFact]
+    public void WhenThePointerStopsTheBumpSettlesToASymmetricBell()
+    {
+        var (ruler, time) = RulerAfterAMove(dipPerSecond: 450, direction: 1);
+        Assert.True(ruler.IsSkewed);
+
+        for (var i = 0; i < 40; i++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(16));
+            ruler.Relax();
+        }
+
+        var (behind, ahead) = TwoTicksFromThePointer(ruler, 1);
+        Assert.False(ruler.IsSkewed);
+        Assert.Equal(behind, ahead, 1);
+    }
+
+    [AvaloniaFact]
+    public void AStillPointerKeepsAnEvenBumpEvenWhenEventsKeepArriving()
+    {
+        var time = new ManualTime();
+        var ruler = TwentyOneTicks(Ruler(time), (id, i) => Said(id, "s1", $"line {i}"));
+        var y = CentreOf(ruler, 10);
+
+        for (var i = 0; i < 20; i++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(16));
+            ruler.PointerAt(y);
+        }
+
+        Assert.False(ruler.IsSkewed);
+        Assert.Equal(ruler.Ticks[8].Reach, ruler.Ticks[12].Reach, 6);
+    }
+
+    [AvaloniaFact]
+    public void LeavingTheRulerForgetsTheSkew()
+    {
+        var (ruler, time) = RulerAfterAMove(dipPerSecond: 450, direction: 1);
+
+        ruler.PointerAt(null);
+        time.Advance(TimeSpan.FromMilliseconds(16));
+        ruler.PointerAt(CentreOf(ruler, 10));
+
+        Assert.False(ruler.IsSkewed);
+        Assert.Equal(ruler.Ticks[8].Reach, ruler.Ticks[12].Reach, 6);
+    }
+
+    private (TranscriptRulerViewModel Ruler, ManualTime Time) RulerWithTenTicks()
+    {
+        var time = new ManualTime();
+        var ruler = Ruler(time);
+        for (var i = 0; i < 10; i++)
+            ruler.Observe(Said($"u{i}", "s1", $"line {i}"));
+        return (ruler, time);
+    }
+
+    private static void Frames(TranscriptRulerViewModel ruler, ManualTime time, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(16));
+            ruler.Relax();
+        }
+    }
+
+    [AvaloniaFact]
+    public void ATickIsDrawnAtRestUntilAFrameMovesItTowardsItsTarget()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, ruler.Ticks[4].Reach, 6);
+        Assert.Equal(TranscriptRulerViewModel.RestReach, ruler.Ticks[4].DrawnShape.Reach);
+        Assert.True(ruler.IsSettling);
+
+        Frames(ruler, time, 1);
+        var first = ruler.Ticks[4].DrawnShape.Reach;
+        Frames(ruler, time, 1);
+        var second = ruler.Ticks[4].DrawnShape.Reach;
+
+        Assert.True(first > TranscriptRulerViewModel.RestReach);
+        Assert.True(second > first);
+        Assert.True(second < TranscriptRulerViewModel.PeakReach);
+    }
+
+    [AvaloniaFact]
+    public void TheTickUnderThePointerIsMostlyThereWithinTwoFrames()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Frames(ruler, time, 2);
+
+        var reach = ruler.Ticks[4].DrawnShape.Reach;
+        var share = (reach - TranscriptRulerViewModel.RestReach)
+            / (TranscriptRulerViewModel.PeakReach - TranscriptRulerViewModel.RestReach);
+        Assert.True(share > 0.7, $"after two frames the tick is only {share:P0} of the way");
+    }
+
+    [AvaloniaFact]
+    public void ATickIsDrawnAtItsTargetOnceTheFramesHaveRun()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+
+        Frames(ruler, time, 40);
+
+        Assert.False(ruler.IsSettling);
+        Assert.All(ruler.Ticks, t => Assert.Equal(t.Shape, t.DrawnShape));
+        Assert.All(ruler.Ticks, t => Assert.Equal(t.Glow, t.DrawnGlow, 6));
+    }
+
+    [AvaloniaFact]
+    public void ATickGrowsFasterThanItShrinks()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Frames(ruler, time, 3);
+        var grown = ruler.Ticks[4].DrawnShape.Reach - TranscriptRulerViewModel.RestReach;
+
+        Frames(ruler, time, 40);
+        ruler.PointerAt(null);
+        Frames(ruler, time, 3);
+        var shrunk = TranscriptRulerViewModel.PeakReach - ruler.Ticks[4].DrawnShape.Reach;
+
+        Assert.True(grown > shrunk, $"grew {grown:F1} but shrank {shrunk:F1} in the same three frames");
+    }
+
+    [AvaloniaFact]
+    public void LeavingTheRulerEasesTheDrawnTicksBackToRestInsteadOfSnapping()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Frames(ruler, time, 40);
+
+        ruler.PointerAt(null);
+
+        Assert.Equal(TranscriptRulerViewModel.RestReach, ruler.Ticks[4].Reach);
+        Assert.Equal(TranscriptRulerViewModel.PeakReach, ruler.Ticks[4].DrawnShape.Reach, 6);
+        Assert.True(ruler.IsSettling);
+
+        Frames(ruler, time, 60);
+
+        Assert.Equal(TranscriptRulerViewModel.RestReach, ruler.Ticks[4].DrawnShape.Reach, 6);
+        Assert.False(ruler.IsSettling);
+    }
+
+    [AvaloniaFact]
+    public void AChangeOfWhatIsOnScreenIsDrawnAtOnce()
+    {
+        var (ruler, _) = RulerWithTenTicks();
+
+        ruler.SetVisible(["u6"]);
+
+        Assert.Equal(TranscriptRulerViewModel.InViewReach, ruler.Ticks[6].DrawnShape.Reach);
+        Assert.Equal(TranscriptRulerViewModel.InViewGlow, ruler.Ticks[6].DrawnGlow, 6);
+        Assert.False(ruler.IsSettling);
+    }
+
+    [AvaloniaFact]
+    public void AFastMoveKeepsTheTickUnderThePointerCloseToItsPeakWhileTheTailTrails()
+    {
+        var time = new ManualTime();
+        var ruler = TwentyOneTicks(Ruler(time), (id, i) => Said(id, "s1", $"line {i}"));
+        var y = CentreOf(ruler, 2);
+        ruler.PointerAt(y);
+
+        for (var step = 0; step < 12; step++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(16));
+            y += 8;
+            ruler.PointerAt(y);
+            ruler.Relax();
+        }
+
+        var under = ruler.Ticks.Select((t, i) => (t.DrawnShape.Reach, i)).MaxBy(x => x.Reach);
+        Assert.True(under.Reach > 20, $"the tick nearest the pointer is drawn at only {under.Reach:F1}");
+        Assert.True(Math.Abs(CentreOf(ruler, under.i) - y) < 3 * ruler.Ticks[0].Pitch,
+            "the drawn peak must stay within three ticks of the pointer");
+    }
+
+    [AvaloniaFact]
+    public void ANewSentenceWhileTheBumpIsMovingDoesNotMakeItJump()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Frames(ruler, time, 1);
+        var drawn = ruler.Ticks[4].DrawnShape.Reach;
+        Assert.True(drawn > TranscriptRulerViewModel.RestReach && drawn < TranscriptRulerViewModel.PeakReach);
+
+        ruler.Observe(Said("u10", "s1", "line 10"));
+
+        Assert.Equal(drawn, ruler.Ticks[4].DrawnShape.Reach);
+        Assert.True(ruler.IsSettling);
+    }
+
+    [AvaloniaFact]
+    public void AChangeOfWhatIsOnScreenWhileTheBumpIsMovingSnapsOnlyTheTicksThatChanged()
+    {
+        var (ruler, time) = RulerWithTenTicks();
+        ruler.PointerAt(CentreOf(ruler, 0));
+        Frames(ruler, time, 1);
+        var drawn = ruler.Ticks[0].DrawnShape.Reach;
+        Assert.True(drawn > TranscriptRulerViewModel.RestReach && drawn < TranscriptRulerViewModel.PeakReach);
+
+        ruler.SetVisible(["u9"]);
+
+        Assert.Equal(drawn, ruler.Ticks[0].DrawnShape.Reach);
+        Assert.Equal(TranscriptRulerViewModel.InViewReach, ruler.Ticks[9].DrawnShape.Reach);
+    }
+
+    [AvaloniaFact]
+    public void TheRulerAsksForAFrameWheneverSomethingNeedsDrawing()
+    {
+        var (ruler, _) = RulerWithTenTicks();
+        var asked = 0;
+        ruler.NeedsFrame += () => asked++;
+
+        ruler.PointerAt(CentreOf(ruler, 4));
+        Assert.True(asked > 0, "a pointer move must ask for a frame");
+
+        asked = 0;
+        ruler.SetVisible(["u9"]);
+        Assert.True(asked > 0, "a change under a bump that is still drawing must ask for a frame");
+    }
+
+    [AvaloniaFact]
+    public void TheTimeBetweenFramesDoesNotChangeTheSpeedTheRulerReads()
+    {
+        (double Behind, double Ahead) Drive(bool framesBetweenEvents)
+        {
+            var time = new ManualTime();
+            var ruler = TwentyOneTicks(Ruler(time), (id, i) => Said(id, "s1", $"line {i}"));
+            var y = CentreOf(ruler, 2);
+            ruler.PointerAt(y);
+            for (var step = 0; step < 40; step++)
+            {
+                time.Advance(TimeSpan.FromMilliseconds(7));
+                if (framesBetweenEvents)
+                    ruler.Relax();
+                time.Advance(TimeSpan.FromMilliseconds(1));
+                y += 1.2;
+                ruler.PointerAt(y);
+            }
+
+            return TwoTicksFromThePointer(ruler, 1);
+        }
+
+        var quiet = Drive(framesBetweenEvents: false);
+        var busy = Drive(framesBetweenEvents: true);
+
+        Assert.Equal(quiet.Behind - quiet.Ahead, busy.Behind - busy.Ahead, 0.75);
     }
 
     [AvaloniaFact]
