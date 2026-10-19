@@ -183,6 +183,65 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### Local translation benchmark
+
+`tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
+because it needs the model files and the local hardware.
+
+It sends 12 meeting sentences (4 each in zh, de and pl) through the production path:
+`LlamaSharpMtProvider` → `LlamaSharpTextGenerator` → llama.cpp. Each sentence goes to the two other
+languages. The report gives, per model:
+
+- the load time of the weights;
+- the mean sentence chrF against the reference translations in `Corpus.cs`;
+- how many translations keep every part number (`KB-4471`, `X5CrNi18-10`, `IP67`) verbatim;
+- script leaks (CJK in a de/pl output, no CJK in a zh output) and empty outputs;
+- for N sentences in flight, the average and p95 latency per sentence and the throughput;
+- the latency per sentence for 1, 2 and 3 target languages, with one sentence in flight.
+
+Two different kinds of load:
+
+- **Target languages.** Each sentence goes to every other meeting language. The provider translates
+  them one after the other, so the latency of one sentence grows with the number of targets. The
+  corpus has English references too. They serve the 3-target latency sweep, where the third target
+  is English. The benchmark does not score English output. The quality columns use the two meeting
+  targets only.
+- **Sentences in flight.** N streams copy a meeting where a new final arrives while earlier finals
+  still translate. Each stream sends its next sentence when the previous one is done, so the model
+  is always busy. The generator runs one request at a time. Thus the latency with N sentences in
+  flight is about N × the latency with one, and the throughput (utt/s) is the real capacity number.
+  The quality columns use only the first stream of the first level.
+
+Run it:
+
+1. Download the models in Kanal Settings, or download other GGUF files.
+2. Run the benchmark from the repo root:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.Benchmark -- --gguf D:/models/Hy-MT2-1.8B-Q4_K_M.gguf --streams 1,2,4
+   ```
+
+Options:
+
+- `--models <folder>`: the folder with the catalog models. The default is `%APPDATA%/Kanal/models`.
+- `--gguf <file>`: an extra model. Repeat it for more models.
+- `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
+- `--streams 1,2,4`: the levels of sentences in flight.
+- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
+
+The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
+
+Smaller candidates to measure (HF API, 2026-10-14):
+
+| Model | GGUF file | Size | Licence | Note |
+|---|---|---:|---|---|
+| Hy-MT2 1.8B | `tencent/Hy-MT2-1.8B-GGUF` · `Hy-MT2-1.8B-Q4_K_M.gguf` | 1.13 GB | Apache-2.0 | Dedicated MT model, zh/de/pl. Newer than the llama.cpp in LLamaSharp 0.27.0: check that it loads. |
+| HY-MT1.5 1.8B | `tencent/HY-MT1.5-1.8B-GGUF` · `HY-MT1.5-1.8B-Q4_K_M.gguf` | 1.13 GB | check LICENSE | Same architecture (`hunyuan-dense`), older GGUF. |
+| Qwen3.5 0.8B | `unsloth/Qwen3.5-0.8B-GGUF` · `Qwen3.5-0.8B-Q4_K_M.gguf` | 0.53 GB | Apache-2.0 | No reasoning by default. Speed floor; Polish expected weak. |
+| Qwen3 1.7B | `unsloth/Qwen3-1.7B-GGUF` · `Qwen3-1.7B-Q4_K_M.gguf` | 1.11 GB | Apache-2.0 | Reasoning model: use `--gguf-nothink`. |
+
+Rejected: LFM2.5 1.2B, SmolLM3 3B and Llama 3.2 1B do not support Polish. TranslateGemma has no model
+below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
 
 ## 2026-10-13
 
