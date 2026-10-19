@@ -18,6 +18,20 @@ The first release. Everything below is what Kanal does on the day it ships.
   1200 sentences blocked the window for 30 to 40 seconds. Now the window answers a click
   within half a second. The transcript fills in over a few seconds, and the ruler fills with it. Leaving
   a long meeting no longer blocks the window either.
+- On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
+  permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
+  after about 30 seconds. The status line now tells you to allow the permission.
+- You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
+  the project folder. Kanal does not use the glossary in a meeting yet.
+- Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
+  could replace the transcript and the recording in a meeting folder that the sidebar did not list.
+  Now Kanal refuses the import and shows a message.
+- On a Mac, an online meeting now stops when the output device that Kanal used as its clock
+  disappears. Before, the meeting went on and the computer audio stayed silent. The status bar now
+  says that the computer audio source stopped.
+- Kanal now labels the language of a transcript line by its script first. In a room with two or more
+  languages, a Chinese or Japanese sentence now gets its own language label, also when the room does
+  not contain that language.
 - A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
   choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
   speaker separation on the recording on this computer and gives each person their own tag and
@@ -26,6 +40,10 @@ The first release. Everything below is what Kanal does on the day it ships.
   stay in the transcript file.
 - A room with one language now also transcribes speakers who use another language. Before, local
   transcription could transcribe only the language of the room.
+- A failed meeting export no longer damages an existing `.kl` file. Before, an export to a file name that
+  already existed erased that file first. If the export then failed, for example because the disk was
+  full or an attachment was locked, the old file was lost. Now Kanal keeps the old file until the new
+  file is complete.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
@@ -43,6 +61,12 @@ The first release. Everything below is what Kanal does on the day it ships.
   The names change in Chinese, English, German and Polish.
 - Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
   A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
+- Local translation now translates a sentence into all meeting languages at the same time. On a
+  graphics card, a sentence with two target languages is ready 2 to 3 times sooner than before.
+- Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
+  Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
+  to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the
+  processor, set `KANAL_ACCELERATOR=cpu`.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.

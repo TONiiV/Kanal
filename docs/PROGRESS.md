@@ -4,7 +4,301 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### An online meeting stops when macOS denies system audio
+
+- **Bug (#151).** With the system-audio permission denied, the Core Audio tap raises no error. The meeting ran on without remote speech. The silent-source hint came after about 30 s.
+- **Signal.** The private function `TCCAccessPreflight("kTCCServiceAudioCapture")` gives the TCC state. Zero buffers alone are not enough, because the computer can be silent. See "System-audio permission on macOS 14.2+" in `docs/online-meeting-audio.md`.
+- **Rule.** `MacSystemAudioCapture` asks TCC when a tap buffer holds only zeros, at most once per second. Only "denied" ends the capture with `permission_denied`. The meeting then stops through `StopAfterAudioFaultAsync` with the localized reason.
+- **Test seam.** `IMacSystemAudioNative.AudioCaptureAuthorization` returns the TCC state. `FakeMacNative` sets it and the buffer content.
+- **Open item.** No real Mac has run this. The operator must run the manual test in the PR.
+
+---
+
+### Glossary T2: editor in the project settings window
+
+Spec #302. Stacked on T1 (#307).
+
+- **Place.** The project settings window is where the operator already manages a project. The glossary section is after the project icon.
+- **Rows.** One text box per language (zh, de, pl, en), the "Keep" check box (do not translate) and a remove button. **Add term** adds an empty row.
+- **Save.** The existing Save & Close button saves the glossary with the name and the icon. Save writes no file when the glossary did not change.
+- **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
+- **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
+- **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+---
+
+### Glossary T1: per-project storage
+
+Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
+
+- **Model.** `GlossaryEntry(Zh, De, Pl, En, DoNotTranslate)`. An empty cell is `""`. The flag marks part numbers and codes.
+- **Storage.** `kanal-glossary.json` in the project root folder, next to `kanal-workspace.json`. The file moves with the folder. A person can read it without Kanal.
+- **Write.** `RecordFile` writes a temporary file, flushes it and replaces the old file. Save trims each cell and drops rows with no term.
+- **Read.** No file gives an empty glossary. A damaged file gives `Unreadable`, and Save refuses to write over it. A different schema version gives `UnsupportedVersion`.
+- **Delete.** "Delete files" on a project also deletes the glossary file, because Kanal wrote it.
+- **Next.** T2 adds the editor to the project settings window. T3 (#303), T4 (#304) and T5 (#306) are tickets only.
+
+---
+
+### Import never overwrites a meeting folder on disk (issue #236)
+
+- **Bug.** ADR 0054 decision 23 says an import never overwrites. Only the sidebar enforced it. The sidebar asks "skip or save as new" only for a meeting in its list. A meeting folder with a damaged or missing `meeting.json` is not in the list. `MeetingBundle.Import` then wrote over its `transcript.jsonl` and `audio.wav`. These files can be the only copy of a recording.
+- **Second defect.** An extract that failed part way left `meetings/<id>/` with some files and no `meeting.json`.
+- **Fix.** `Import` with `asNewRecord: false` refuses when `meetings/<id>/` exists. The new `StoreProblemKind.FolderTaken` carries the refusal. `StoreRefusal` maps it to `workspace.refused.foldertaken` in en, zh, de and pl.
+- **Staging.** `Import` extracts into `meetings/<id>.importing-<guid>/`. It moves the folder into place only after every entry is extracted. It deletes the staging folder on every exit. `ExtractToFile` no longer uses `overwrite: true`.
+- **Save-as-new.** This path keeps working. The folder of the new record already holds `meeting.json`, so the move puts each extracted entry into that folder.
+- **Rollback.** If the record cannot be saved after the move, `Import` deletes the folder that it created.
+- **Race.** Without save-as-new, `Import` moves the staging folder with `Directory.Move` only. The move fails when a folder appeared since the check. `Import` never merges into that folder and never deletes it. Only save-as-new merges.
+- **Open item.** A crash during an extract leaves the staging folder. The list shows it as a folder without a record.
+
+---
+
+### An online meeting stops when the macOS computer audio source disappears (#152)
+
+- **Bug.** The Core Audio tap runs on a private aggregate device. Its clock is the default output at Start. When that device disappeared, the IOProc stopped calling. The mixer padded silence, and the meeting went on. ADR 0050 requires a stop.
+- **Fix.** `CoreAudioTapSession` listens to `kAudioDevicePropertyDeviceIsAlive` on the clock device and on the aggregate device. A dead device calls the error callback with the fixed text `computer audio device lost`. `MacSystemAudioCapture` maps that text to `AudioCaptureFault.SourceEnded`. The existing path then stops the meeting: `OnlineMeetingCapture` reports `source_ended` for `system`, and the host shows the localized reason.
+- **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
+- **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
+
+---
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
 ## 2026-10-18
+
+### Transcription benchmark: ASCEND code-switching set
+
+Kanal never restricts the recognition language. The auto room (zh/de/pl/en) is therefore the result
+that counts. The forced room is a diagnostic only.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Set `ascend`.** The set holds the test split of ASCEND (Lovenia et al. 2022, Hugging Face
+  `CAiRE/ASCEND`, CC-BY-SA-4.0) at revision `737e9800ae31be9932ba8464c80366559bd28424`. It is a
+  default set. The fetch reads the dataset server, not the Parquet files, and downloads only the
+  chosen clips (14 MB). The repository holds no audio and no transcript.
+- **Clip pick.** 60 `mixed`, 15 `zh` and 15 `en` clips of 3–20 s. Clips with an `[UNK]` tag are out.
+  The pick spreads evenly over the speaker and session groups. The test split has 2 speakers in 4
+  sessions, so the groups are few. The mixed clips last 299 s in total.
+- **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
+  token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
+  The report holds two values: the raw MER and the MER with number normalisation of both texts.
+  The table below shows both.
+- **English kept.** The rate of the English reference words that the hypothesis spells as the same
+  Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
+  and spelled letters ("i s m"). The rate applies to `mixed` clips only.
+- **Rooms.** Auto room: zh/de/pl/en. Forced room: `zh` for `mixed` and `zh` clips, `en` for `en` clips.
+  Cohere Transcribe has the forced room only. Gladia has the auto room only.
+- **Run.**
+  1. Fetch the clips: `... -- fetch --sets ascend`.
+  2. Run the engines: `... -- --sets ascend --phases accuracy --model <ids>`.
+  3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
+
+  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+  In the result below, Gladia returned no text for 1 `zh` clip. No Gladia clip failed.
+  The report files stay outside the repository, in `%LocalAppData%/Kanal/asr-bench/reports/ascend-run2/`.
+
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). MER is in %. "MER" is the raw
+value. "MER num." is the MER with number normalisation of both texts. English kept has 150 words.
+Auto room first, because it counts.
+
+| Engine | Room | `mixed` MER (60 clips) | `mixed` MER num. | English kept % | `zh` MER (15) | `en` MER (15) | Empty `mixed` clips |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-ASR 0.6B | auto | 12.3 | 12.2 | 73.3 | 8.3 | 30.5 | 0 |
+| Whisper turbo | auto | 19.6 | 19.4 | 72.7 | 26.1 | 31.9 | 0 |
+| Qwen3-ASR 1.7B | auto | 23.1 | 23.1 | 76.0 | 19.6 | 27.7 | 1 |
+| Gladia | auto | 22.8 | 22.5 | 68.7 | 27.8 | 29.8 | 0 |
+| Nemotron 560 ms | auto | 25.3 | 25.4 | 36.0 | 16.5 | 38.3 | 1 |
+| Qwen3-ASR 0.6B | forced | 12.0 | 12.0 | 73.3 | 8.7 | 27.0 | 0 |
+| Qwen3-ASR 1.7B | forced | 14.5 | 14.5 | 75.3 | 19.1 | 24.8 | 0 |
+| Whisper turbo | forced | 23.6 | 23.4 | 54.7 | 25.7 | 31.9 | 0 |
+| Cohere Transcribe | forced | 25.6 | 25.4 | 30.7 | 18.7 | 25.5 | 0 |
+| Nemotron 560 ms | forced | 28.1 | 28.2 | 4.7 | 15.7 | 36.9 | 3 |
+
+The engines ran twice on the same clips. The scores of the local engines did not change between the runs.
+The Gladia scores did: the first run gave 24.9 % `mixed` MER and 1 empty `mixed` clip. The cloud result varies.
+
+Findings:
+
+1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
+2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
+3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
+5. The numbers are rough. The MER references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The English kept rate leaves them out. The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
+
+### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
+
+The benchmark of 2026-10-17 gave error rates that were not usable. It had three causes.
+Numbers written as words counted as errors. The meeting clips were synthetic Piper speech. Each
+language had only 4 meeting sentences. This change addresses all three causes. It also adds the
+cloud baseline and three more local models.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Gladia engine.** `--model gladia` streams each clip through the product `GladiaAsrProvider`
+  (translation off) at real-time pace, with 1 s of trailing silence. The product sends Gladia no
+  room languages, so Gladia has only the auto room. Gladia is opt-in, because it is a paid API.
+  The key comes from `GLADIA_API_KEY` (process, then User, then Machine on Windows).
+- **English.** Every set except `aishell4` has English. The auto room is zh/de/pl/en.
+- **Number-normalised scores.** `Numbers.Normalize` turns spelled-out cardinals, decimals and
+  percentages into digits in the hypothesis and in the reference (zh 两千 → 2000, de fünftausend →
+  5000, pl dwa tysiące → 2000, en five thousand → 5000). The report shows the raw score and the
+  normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
+  ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
+  stay text. A run like 十分 is still converted, on both sides alike.
+  A bare 百 or 千 at the start of a run is read as 100 or 1000, so 百度 becomes 100度 and 百分比
+  becomes 100分比. Both sides change alike. A real inverse text normaliser would remove this limit.
+  A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
+  (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
+  stays two numbers. None of the 498 reference texts uses a plain space as a separator.
+- **More candidates.** Whisper large-v3, Cohere Transcribe 03-2026 and Qwen3-ASR 1.7B (community
+  export, pinned revision). Cohere Transcribe needs the clip language, so it has no auto room.
+  The licence of the 1.7B export is Apache-2.0 in the
+  [model card](https://huggingface.co/thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8/blob/69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5/README.md)
+  at the pinned revision. The repository has no separate licence file.
+- **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. A plain `fetch`
+  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name gives exit code 2.
+  A failed set, for example with no `ffmpeg`, gives exit code 1. Each set pins a revision or a dataset version.
+  No audio is committed.
+
+| Set | Languages | Clips | Source | Licence |
+|---|---|---:|---|---|
+| `fleurs` | zh de pl en | 20 each | FLEURS test, `google/fleurs` | CC-BY-4.0 |
+| `meeting-piper` | zh de pl en | 12 each | the 12 MT benchmark sentences (4 originals, 8 translations), Piper voices | – |
+| `meeting-11labs` | zh de pl en | 36 each | the same sentences, ElevenLabs `eleven_multilingual_v2`, voices Alice (f), Lily (f), George (m) | – |
+| `voxpopuli` | de pl en | 25 each | VoxPopuli test, `facebook/voxpopuli` at 719aaef | CC0; raw audio: European Parliament |
+| `ami` | en | 25 | AMI test meeting EN2002a, single far-field microphone | CC-BY-4.0 |
+| `aishell4` | zh | 26 | AISHELL-4 test, sessions L_R003S01C02 and L_R004S01C01, channel 0 of the far-field array | CC-BY-SA-4.0 (openslr.org/111) |
+| `commonvoice` | zh de pl en | 25 each | Common Voice Scripted Speech 27.0 test, Mozilla Data Collective | CC0-1.0 |
+
+AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment. The
+AISHELL-4 fetch reads the start of each FLAC file and decodes it with `ffmpeg` (on `PATH`). Common
+Voice needs `MDC_API_KEY` and the accepted dataset terms. The archive lists `test.tsv` before the
+clips, so the fetch reads only the start of the stream (cap 2 GB). ElevenLabs needs
+`ELEVENLABS_API_KEY`. It sent 9,630 characters once; a clip on disk is never requested again.
+
+Run it:
+
+1. Fetch FLEURS and the meeting sets: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --sets fleurs,meeting-piper,meeting-11labs`.
+   FLEURS gets the default 20 clips per language.
+2. Fetch the other sets: `... -- fetch --clips 25 --sets voxpopuli,ami,aishell4,commonvoice`.
+3. Fetch the models: `... -- fetch --candidates all --no-clips`.
+4. Run: `... -- --model nemotron-3.5-asr-560ms-int8,qwen3-asr-0.6b-int8,gladia`. `--note <text>`
+   adds a line to the report.
+
+#### Results of 2026-10-18
+
+The machine is an AMD Ryzen 9 PRO 8945HS on CPU, 4 threads per model. The runs are:
+
+1. Accuracy phase: all sets, all models except Whisper large-v3.
+2. Whisper large-v3: 5 clips per set and language, a small sample. It ran at the same time as the
+   Gladia part of the accuracy phase. The CPU was shared, so its RTF is too high.
+3. Speed phases (real time, streams, threads): alone on the machine.
+
+The Nemotron 560 ms forced room on FLEURS and on meeting-piper zh/de/pl ran next to the processes of
+another benchmark. Only the RTF of these 7 rows is not valid. The 160 ms model is not in this run.
+PR #284 has its numbers.
+
+Error rate in %, number-normalised, auto room (zh/de/pl/en). CER for zh, WER for de/pl/en. Cohere
+and Qwen3-ASR 1.7B show the forced room (see the findings). The raw scores are in the report.
+
+| Set | Lang | Nemotron 560 ms | Whisper turbo | Whisper large-v3 (5 clips) | Qwen3-ASR 0.6B | Qwen3-ASR 1.7B (forced) | Cohere (forced) | Gladia |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fleurs | zh | 20.5 | 32.8 | 31.8 | 5.5 | 6.1 | 28.5 | 9.0 |
+| fleurs | de | 10.7 | 6.9 | 0.9 | 9.6 | 7.1 | 8.0 | 6.0 |
+| fleurs | pl | 21.2 | 13.2 | 18.9 | 50.5 | 36.6 | 18.8 | 12.3 |
+| fleurs | en | 17.0 | 8.2 | 7.7 | 13.9 | 8.6 | 9.1 | 11.1 |
+| commonvoice | zh | 45.0 | 44.8 | 30.7 | 9.2 | 6.8 | 31.2 | 16.8 |
+| commonvoice | de | 11.6 | 22.0 | 28.0 | 17.1 | 10.4 | 14.6 | 6.1 |
+| commonvoice | pl | 24.0 | 17.5 | 11.8 | 46.2 | 35.1 | 18.1 | 6.4 |
+| commonvoice | en | 32.6 | 13.0 | 0.0 | 13.0 | 11.9 | 10.4 | 10.4 |
+| voxpopuli | de | 15.4 | 15.4 | 9.5 | 18.8 | 13.3 | 7.4 | 11.1 |
+| voxpopuli | pl | 35.5 | 37.7 | 16.0 | 40.0 | 27.5 | 16.2 | 33.5 |
+| voxpopuli | en | 10.2 | 28.9 | 4.2 | 8.2 | 7.6 | 6.6 | 25.1 |
+| meeting-11labs | zh | 38.3 | 39.7 | 36.8 | 15.9 | 15.1 | 37.0 | 25.6 |
+| meeting-11labs | de | 21.8 | 13.5 | 11.9 | 11.6 | 17.5 | 11.0 | 14.9 |
+| meeting-11labs | pl | 33.3 | 12.1 | 15.6 | 32.0 | 31.1 | 17.9 | 17.2 |
+| meeting-11labs | en | 19.7 | 7.5 | 7.2 | 13.1 | 10.4 | 8.4 | 10.9 |
+| meeting-piper | zh | 36.0 | 43.8 | 46.4 | 19.1 | 16.6 | 41.0 | 24.0 |
+| meeting-piper | de | 28.2 | 11.8 | 15.7 | 23.5 | 15.9 | 9.4 | 17.1 |
+| meeting-piper | pl | 27.5 | 11.4 | 17.8 | 47.0 | 47.7 | 21.5 | 20.1 |
+| meeting-piper | en | 9.1 | 6.5 | 7.8 | 8.6 | 7.5 | 4.3 | 9.7 |
+| ami | en | 20.2 | 27.1 | 22.6 | 24.6 | 25.9 | 21.7 | 52.1 |
+| aishell4 | zh | 33.2 | 83.2 | 68.0 | 55.5 | 85.2 | 56.2 | 66.6 |
+
+The engine run used the normaliser of commit 80805cb. Later normaliser fixes can change the
+number-normalised column slightly. The raw column is not affected.
+
+Speed (speed phases; RTF of the accuracy phase, offline feed):
+
+| Model | RTF offline | RTF 4 streams (mean) | Final after speech end p50/p95 s | First partial p50 s | Peak working set MB |
+|---|---:|---:|---:|---:|---:|
+| Nemotron 560 ms | 0.17 | 0.31 | 2.34/3.76 | 0.95 | 1088 |
+| Whisper turbo | 0.31 | 0.71 | 3.42/5.44 | 8.91 | 2885 |
+| Whisper large-v3 | 1.48–1.53 (the CPU was shared) | – | – | – | – |
+| Qwen3-ASR 0.6B | 0.19 | 0.30 | 2.19/3.42 | 8.02 | 2687 |
+| Qwen3-ASR 1.7B | 0.34 | 0.67 | 3.62/5.51 | 9.07 | 4069 |
+| Cohere Transcribe | 0.14 | 0.26 | 1.78/2.95 | 7.65 | 3780 |
+| Gladia | real-time pace | – | 1.01/2.09 | 0.81 | 390 |
+
+Offline models give no partials. Their "first partial" is the first final.
+
+Findings:
+
+- **Number normalisation removes a large part of the meeting errors.** Nemotron meeting-piper: en
+  33.3 → 9.1, pl 50.3 → 27.5, zh 45.1 → 36.0. On FLEURS, Common Voice and VoxPopuli the change is
+  small, because these sets spell few numbers.
+- **No local model is best on every language.** Qwen3-ASR is best on zh (FLEURS 5.5, Common Voice
+  9.2, meeting 15–19) and weak on pl (32–50). Whisper and Cohere are good on de/pl/en and weak on zh.
+  Nemotron is in the middle, but it is the only streaming model with real partials.
+- **sherpa-onnx 1.13.8 drops Chinese characters** from Whisper and Cohere (k2-fsa/sherpa-onnx#3964,
+  fixed in #3965 after 1.13.8). Their zh CER shows the bug, not the model. No configuration
+  removes it. Test again with the next sherpa-onnx release.
+- **Gladia picks a wrong language** on accented or far-field speech, because the product sends no
+  room languages. On AMI it wrote Welsh for 6 of 25 English clips (WER 52.1). On VoxPopuli it wrote
+  Slovene, German or English for some pl and en clips. On AISHELL-4 it gave no text for 14 of 26
+  clips. On clean speech Gladia is the most accurate engine (Common Voice de/pl 6.1/6.4).
+  ADR 0061 (PR #291) decides that the product sends no room languages to Gladia. It accepts these errors.
+- **Gladia gives the fastest finals** (p50 1.01 s after speech end against 2.34 s for Nemotron).
+- **The Gladia session does not end** when the session closes during the reconnect wait.
+  `GladiaAsrSession.ReceiveLoopAsync` awaits the backoff delay in its `catch`, so the cancel escapes
+  and the event stream never completes. The benchmark works around it. The product bug needs its
+  own ticket. The server closed 122 of 498 sessions after `stop_recording`, before the session
+  close. These clips lost no text.
+- **Cohere Transcribe needs the clip language.** It has no auto mode, so a mixed room cannot use it
+  as it is.
+- **The Qwen3-ASR 1.7B community export leaks a header** ("language Chinese<asr_text>") into the
+  auto-room text of 103 of 498 clips. The auto-room scores of 1.7B in the report are not valid.
+  The benchmark now removes the header. In the forced room, 1.7B scores about the same as 0.6B on
+  zh. On pl it scores better (FLEURS pl 36.6 against 44.3).
+- **Whisper large-v3 is not real-time** on this CPU (RTF about 1.5). Its sample is too small for a
+  ranking.
+- **AISHELL-4 is hard for every engine** (33–85 %). Nemotron is best there (33.2), with no empty
+  text. Far-field conversational Chinese is the closest set to the real meeting room.
+- **`TranscriptLanguage.Guess` works on English.** It labels 92–100 % of the English finals
+  correctly on FLEURS and the meeting sets. It is lower on Common Voice, VoxPopuli and AMI (63–96 %),
+  where the text is short or in a wrong language.
+- **Part numbers survive badly** (loose, meeting-11labs, of 96): Gladia 53, Whisper turbo 52,
+  Cohere 50, Qwen3-ASR 0.6B 34, Nemotron 4.
+
+Cost: Gladia streamed about 1.25 h of audio, about EUR 0.85. ElevenLabs synthesised 9,630
+characters once, plus about 20 characters to find usable voices.
+
+### TranscriptLanguage labels by script before the room prior
+
+- **Done.** This closes the ADR 0061 open item about the `TranscriptLanguage.Guess` room prior, for two cases. Issue #295.
+- **Script first.** Hangul gives `ko`. Kana gives `ja`. Han characters without kana give `zh`. The room does not change these labels. Before, Han text in a room without `zh` gave the first Latin room language, for example `de`. Before, it gave `ja` only in a room that contained `ja`.
+- **Latin text.** A room without a Latin language now accepts the best-scoring Latin language at one signal. If none scores, the label is `en`. Before, the label was `room[0]`, for example `zh`. The `zh` column showed the English text without a translation, and MT got the wrong source language.
+- **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check. Issue #297 tracks the Cyrillic fix.
+- **Needs PR #294.** `NemotronAsrProvider` forces the language when a room has one language, so `Guess` does not run there. English in a Chinese-only room is translated only when PR #294 removes that forcing and every final goes through `Guess`.
 
 ### Nemotron never gets a fixed language
 
@@ -45,6 +339,143 @@ the system's own judgement, never from a human setting.
 - **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
 - **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
 - **Closed item.** The session reported "Connection lost, reconnecting" after a deliberate `stop_recording`. PR #288 fixed this. See "Gladia session does not reconnect after a deliberate stop" above.
+
+---
+
+## 2026-10-17
+
+### Local transcription benchmark
+
+`tests/Kanal.AsrBenchmark` measures the local transcription models on this machine. It does not run
+in CI, because it needs the model files, the test audio and the local hardware. CI runs its scoring
+tests (`AsrBenchmarkScoringTests`).
+
+Every clip goes through the session of `NemotronAsrProvider` in 20 ms frames, as from the capture
+layer. The benchmark builds the recognizer itself, so that the thread count and the execution
+provider can change. A parity check runs the product provider on the meeting clips: 12 of 12 texts
+were identical. Offline models get Silero VAD segments (500 ms minimum silence). A segment's text is
+a final. Offline models give no partials.
+
+It measures, per model and execution provider:
+
+- the load time, the working set after the load, the peak working set and the peak minus the working
+  set before the load;
+- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room, also over
+  the clips whose reference has no digit;
+- the share of finals that `TranscriptLanguage.Guess` labels correctly in the zh/de/pl room;
+- how many part numbers (`KB-4471`, `X5CrNi18-10`, `IP67`) survive: strict (verbatim) and loose
+  (case and separators ignored);
+- the real-time factor (RTF) with the audio fed as fast as possible. RTF is the session wall time
+  divided by the audio fed. For Nemotron the audio fed includes 2 s of silence padding per clip;
+- with real-time pace: the decode time per chunk, the time from the speech end to the final, and
+  the time from the speech onset to the first partial;
+- 1, 2 and 4 concurrent sessions on one recognizer;
+- 1, 2, 4 and 8 threads for the default model.
+
+Test audio:
+
+- FLEURS test split (`google/fleurs`, CC-BY-4.0), the first 20 clips per language at a pinned
+  revision. `fetch` reads the start of each test archive as a stream, about 42 MB.
+- The 12 meeting sentences of the translation benchmark. `fetch` synthesises them locally with
+  Piper voices through sherpa-onnx (zh huayan, de thorsten, pl gosia). No text leaves the machine.
+  Windows has no local German or Polish SAPI voice; Piper covers all three languages on every OS.
+
+Run it from the repo root:
+
+1. Fetch the audio and the default model, once:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch
+   ```
+
+2. Optional: fetch the three candidate models (2.7 GB) and the Silero VAD:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --candidates all --no-clips
+   ```
+
+3. Run the benchmark:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- --provider cpu --streams 1,2,4 --threads 1,2,4,8
+   ```
+
+Options: `--provider cpu,cuda,coreml`, `--model <id,...>`, `--phases accuracy,realtime,streams,threads`,
+`--clips N` (clips per set and language), `--rt-clips N`, `--burn N` (busy background threads),
+`--data <folder>` (default `LocalApplicationData/Kanal/asr-bench`), `--models <folder>` (default:
+the Kanal models folder), `--out <folder>`. The run writes `kanal-asr-benchmark-<os>-<time>.md` and a
+`.json` file with one flat row per number.
+
+The NuGet runtime of sherpa-onnx 1.13.8 is CPU only on win-x64. A child process detects the fallback
+and the report names it. For CUDA:
+
+1. Download `sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2`
+   (478 MB) from the sherpa-onnx release. Download `nvidia-cudnn-cu13` 9.27 (436 MB wheel) from PyPI.
+2. Put the DLLs from the archive's `lib` folder and the wheel's `nvidia/cudnn/bin` into one folder.
+   The CUDA 13 toolkit supplies cuBLAS and the runtime through `PATH`.
+3. Build with `dotnet build -c Release -p:SherpaNative=<folder> tests/Kanal.AsrBenchmark`. Then run
+   with `--no-build --provider cuda`.
+
+Results on a Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 2026-10-17:
+
+| Model | Load s | Peak MB (process) | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s (n=9) | 4 streams mean RTF (offline feed) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Nemotron 560 ms (default) | 2.2 | 958 | 22.3 | 12.0 | 22.5 | 0.18 | 2.67/3.74 | 0.32 |
+| Nemotron 160 ms | 2.1 | 962 | 25.2 | 14.2 | 24.9 | 0.53 | 2.16/2.62 | 1.26 |
+| Whisper large-v3-turbo | 2.5 | 2744 | 33.0 | 6.9 | 13.5 | 0.25 | 2.50/3.13 | 0.63 |
+| Qwen3-ASR 0.6B | 3.7 | 2804 | 7.9 | 9.6 | 50.5 | 0.20 | 1.88/2.64 | 0.30 |
+
+CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Two limits of these recorded numbers:
+the Nemotron RTF includes 2 s of silence padding per clip, so it is higher than the true RTF; and
+"Peak MB" is the working set of the whole process, not of one model. The benchmark code now divides
+by the audio fed, and it reports the peak minus the baseline before the load. The follow-up PR
+re-measures the full matrix. It adds English, a Gladia cloud baseline and number-normalised scoring.
+The real-time columns come from 9 clips, so p95 is the maximum. Offline models give their first text
+only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
+partial 0.84 s after the onset. The loose part-number counts below were recorded before the
+word-boundary fix. The old check could match across word boundaries. The follow-up PR re-measures
+them. Whisper's strict count is 1 of 4 in German and Polish: 1 of 2 in German, 0 of 2 in Polish.
+
+Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 45 % slower (RTF 0.12).
+4 threads is best (8 threads: RTF 0.118). FLEURS zh CER 21.1, de WER 11.6, pl WER 20.0.
+
+CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
+RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
+0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
+the run stopped there. CUDA is slower than the CPU here. The cause is not measured. Probably the
+CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
+move between the devices for each chunk.
+
+Findings:
+
+- **Nemotron writes numbers as words.** "KB-4471" becomes "KB cztery tysiące czterysta siedemdziesiąt
+  jeden"; "M10" becomes "M zehn". No part number survived, also with the loose check (0 of 8).
+  Whisper kept 4 of 4 in German and Polish (loose). FLEURS references hold digits, so this probably
+  costs Nemotron WER points there too. The recorded numbers do not separate the two faults. The
+  benchmark now also scores the clips without digits; the follow-up re-run gives that number.
+- **Nemotron emits Thai letters on Chinese.** 3 of 24 zh clips contain runs of "อ" where a foreign
+  name was spoken (both rooms).
+- **Whisper drops Chinese characters** ("摩尔多瓦的首都" → "多的首都"). Its zh CER of 33 is too high
+  for this model. The cause is not investigated; the sherpa-onnx Whisper token decoding is a suspect.
+- **Qwen3-ASR 0.6B is weak on Polish** (WER 44–51) but best on Chinese (CER 7.9).
+- **The 160 ms chunk does not pay.** It is 3× slower than 560 ms, and it is less accurate. The final
+  comes only 0.5 s earlier, because the endpoint rules dominate.
+- **The final comes 2.7 s after the speech end** (p50), not 1.6 s. The rule counts blank frames, and
+  the last chunk must fill first.
+- **Run-to-run variance is about 25 %.** The same 6 clips at 4 threads gave RTF 0.178 and 0.228 in
+  one run. Other applications ran on the machine.
+
+Recommendations (no product change in this PR):
+
+- Keep `NumThreads = clamp(ProcessorCount / 2, 1, 4)`. 4 threads was best on both machines; 8 threads
+  gave no gain over 4 (RTF 0.260 against 0.228 here, inside the run-to-run variance).
+- Keep the 560 ms model and the CPU provider. Do not ship CUDA for transcription.
+- Add inverse text normalisation (number words to digits) or a code-aware post-pass before the
+  translation stage. Part numbers are the meeting's key content.
+- Filter Thai-script runs from Nemotron output in a zh/de/pl room.
+- Re-test Whisper large-v3-turbo after the Chinese character loss is explained. It is the only
+  candidate that keeps part numbers, but it has no partials and its process peaked at 2.7 GB working
+  set.
 
 ---
 
@@ -231,6 +662,54 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### All target languages in one batch
+
+Before, `LlamaSharpMtProvider` translated the target languages one after the other. Each call also
+made a new llama.cpp context through `StatelessExecutor`. Now:
+
+- The provider sends all target prompts in one call to `ITextGenerator.GenerateAsync(prompts)`.
+- `LlamaCppBackend` decodes them as parallel sequences in one `BatchedExecutor`.
+- The executor stays alive between calls, so a call no longer makes a new context.
+- `BatchedExecutor` never reuses a sequence id. llama.cpp rejects an id at or above `SeqMax` for
+  recurrent and hybrid models such as Qwen3.5, and at or above 256 for the others. The backend makes
+  a new executor before `SeqMax` ids are used. This is right for both kinds of model.
+- `SeqMax` is 8: two calls with 4 targets, and a new context about every 4 sentences.
+- A hybrid model allocates `SeqMax` recurrent cells for the whole life of the executor. This is an
+  estimate from the model configs, not a measurement: about 310 MiB at 16 cells for Qwen3.5 2B and
+  about 800 MiB for 4B. At 8 cells it is about half. Hy-MT2 and Gemma 3 cost almost nothing.
+- The benchmark is the regression check for the id budget. It makes more than 8 calls on Qwen3.5.
+  Before the fix, the third call failed with `NoKvSlot`.
+
+Measured with Vulkan on an RTX 3000 Ada Laptop GPU, one sentence in flight (seconds per sentence):
+
+| Model | 2 targets before → after | 3 targets before → after | 4 in flight utt/s before → after |
+|---|---:|---:|---:|
+| Hy-MT2 1.8B | 1.26 → 0.39 | 1.90 → 0.45 | 0.81 → 2.22 |
+| Qwen3.5 2B | 1.26 → 0.41 | 1.79 → 0.56 | 0.80 → 2.25 |
+| Qwen3.5 4B | 2.02 → 0.95 | 3.15 → 1.21 | 0.49 → 1.11 |
+
+The chrF stays the same within the run-to-run noise (±1.5). The run used `SeqMax` 16.
+
+### Local translation on the GPU
+
+Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
+CPU, and `GpuLayerCount = 999` had no effect. Now:
+
+- `LLamaSharp.Backend.Vulkan` is always in. It needs only the GPU driver and works with NVIDIA, AMD
+  and Intel GPUs. It adds about 20 MB to the MSI download and 65 MB to the install folder.
+- Apple silicon uses Metal. The osx-arm64 build in `LLamaSharp.Backend.Cpu` already contains it.
+- `LLamaSharp.Backend.Cuda12` is optional (`-p:KanalCuda=true`). It adds about 600 MB and needs the
+  CUDA 12 toolkit, so it is not in the installer.
+- LLamaSharp selects the library: CUDA, then Vulkan, then CPU. It falls back when a library does not
+  load. `LlamaAcceleration` reads the loaded library and `llama_supports_gpu_offload()`, and logs
+  the result as `Accelerator`.
+- `KANAL_ACCELERATOR=cpu|vulkan|cuda` forces one library. With `cpu`, no layer goes to the GPU.
+
+Limits:
+
+- LLamaSharp tries Vulkan only when `vulkaninfo --summary` runs. On Linux this needs `vulkan-tools`.
+- LLamaSharp 0.27 `DryRun` always returns null libraries. Do not use it to detect the backend.
+
 ### Local translation benchmark
 
 `tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
@@ -249,8 +728,8 @@ languages. The report gives, per model:
 
 Two different kinds of load:
 
-- **Target languages.** Each sentence goes to every other meeting language. The provider translates
-  them one after the other, so the latency of one sentence grows with the number of targets. The
+- **Target languages.** Each sentence goes to every other meeting language. The provider decodes
+  all targets of a sentence in one batch. On a GPU, 3 targets take little more time than 1. The
   corpus has English references too. They serve the 3-target latency sweep, where the third target
   is English. The benchmark does not score English output. The quality columns use the two meeting
   targets only.
@@ -275,7 +754,8 @@ Options:
 - `--gguf <file>`: an extra model. Repeat it for more models.
 - `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
 - `--streams 1,2,4`: the levels of sentences in flight.
-- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
+- `-p:KanalCuda=true` (before `--`): add the CUDA 12 backend. Vulkan and Metal are always in.
+- `KANAL_ACCELERATOR=cpu` (environment): force the CPU, to compare it with the GPU.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
 

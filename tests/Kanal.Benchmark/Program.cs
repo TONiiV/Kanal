@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using Kanal.Benchmark;
 using Kanal.Core.Text;
 using Kanal.Providers.LocalMt;
+using LLama.Native;
 
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 Console.OutputEncoding = Encoding.UTF8;
@@ -12,14 +13,19 @@ Console.OutputEncoding = Encoding.UTF8;
 var modelsDir = Arg("--models")
     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kanal", "models");
 var levels = (Arg("--streams") ?? "1,2,4").Split(',').Select(int.Parse).ToArray();
-var backend = typeof(Corpus).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-    .FirstOrDefault(a => a.Key == "LlamaBackend")?.Value ?? "?";
+string offload = "?";
+NativeLibraryConfig.All.WithLogCallback((_, message) =>
+{
+    if (Regex.Match(message, @"offloaded (\d+/\d+) layers") is { Success: true } m)
+        offload = m.Groups[1].Value;
+});
+var backend = LlamaAcceleration.EnsureConfigured();
 
 var candidates = LocalModelCatalog.Models
     .Select(m => (Name: m.DisplayName, Path: Path.Combine(modelsDir, m.FileName), Prefill: m.AssistantPrefill))
     .Where(c => File.Exists(c.Path))
     .Concat(Args("--gguf").Select(p => (Path.GetFileNameWithoutExtension(p), p, (string?)null)))
-    .Concat(Args("--gguf-nothink").Select(p => (Path.GetFileNameWithoutExtension(p), p, (string?)LocalModelCatalog.QwenNoThink)))
+    .Concat(Args("--gguf-nothink").Select(p => (Path.GetFileNameWithoutExtension(p) + " no-think", p, (string?)LocalModelCatalog.QwenNoThink)))
     .ToList();
 
 if (candidates.Count == 0)
@@ -34,11 +40,11 @@ var summary = new StringBuilder()
     .AppendLine($"Backend `{backend}` · {Environment.ProcessorCount} logical CPUs · {Environment.OSVersion} · " +
                 $"{Corpus.Sentences.Count} sentences × 2 targets · sentences in flight {string.Join("/", levels)}")
     .AppendLine()
-    .Append("| Model | Load s | chrF | Codes kept | Script leak | Empty |")
+    .Append("| Model | Load s | GPU layers | chrF | Codes kept | Script leak | Empty |")
     .AppendJoin("", levels.Select(n => $" {n} in flight avg/p95 s | {n} in flight utt/s |"))
     .Append(" 1 target s | 2 targets s | 3 targets s |")
     .AppendLine()
-    .Append("|---|---:|---:|---:|---:|---:|")
+    .Append("|---|---:|---:|---:|---:|---:|---:|")
     .AppendJoin("", levels.Select(_ => "---:|---:|"))
     .Append("---:|---:|---:|")
     .AppendLine();
@@ -49,6 +55,7 @@ foreach (var (name, path, prefill) in candidates)
     Console.WriteLine($"== {name} ({path})");
     await using var mt = new LlamaSharpMtProvider(new LlamaSharpTextGenerator(path, prefill));
 
+    offload = "?";
     var load = Stopwatch.StartNew();
     try
     {
@@ -99,7 +106,7 @@ foreach (var (name, path, prefill) in candidates)
     })).ToList();
     var withCodes = scored.Where(s => Scoring.Codes(s.Sentence.Text).Count > 0).ToList();
 
-    summary.Append($"| {name} | {loadSeconds:F1} | {scored.Average(s => s.ChrF):F1} | " +
+    summary.Append($"| {name} | {loadSeconds:F1} | {offload} | {scored.Average(s => s.ChrF):F1} | " +
                    $"{withCodes.Count(s => Scoring.KeepsCodes(s.Sentence.Text, s.Output))}/{withCodes.Count} | " +
                    $"{scored.Count(s => Scoring.LeaksScript(s.Target, s.Output))} | {scored.Count(s => s.Output.Length == 0)} |")
         .AppendJoin("", perLevel)
