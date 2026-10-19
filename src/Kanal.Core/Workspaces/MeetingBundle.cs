@@ -174,7 +174,7 @@ public static class MeetingBundle
     }
 
     // Directory.Move fails when the target exists, so a folder that appeared since the check is not overwritten.
-    private static void MoveIntoPlace(string staging, string folder)
+    internal static void MoveIntoPlace(string staging, string folder)
     {
         if (!Directory.Exists(folder))
         {

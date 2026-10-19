@@ -253,4 +253,26 @@ public class MeetingBundleTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(meetings));
         Assert.Empty(there.ListMeetings(theirs.Id).Problems);
     }
+
+    [Fact]
+    public void AMoveIntoAFolderThatAppearedInTheMeantimeLeavesThatFolderAlone()
+    {
+        Directory.CreateDirectory(_root);
+        var folder = Path.Combine(_root, "meeting");
+        var staging = Path.Combine(_root, "meeting.importing-x");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "theirs");
+        File.WriteAllText(Path.Combine(folder, TranscriptLog.FileName), "the only copy");
+        var before = Snapshot(folder);
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, "audio.wav"), "new");
+        File.WriteAllText(Path.Combine(staging, TranscriptLog.FileName), "imported");
+
+        Assert.ThrowsAny<IOException>(() => MeetingBundle.MoveIntoPlace(staging, folder));
+
+        var after = Snapshot(folder);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (name, bytes) in before)
+            Assert.Equal(bytes, after[name]);
+    }
 }
