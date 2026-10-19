@@ -224,6 +224,7 @@ public class SystemAudioCaptureTests
         native.Deliver();
         Assert.True(await frames.MoveNextAsync());
 
+        Assert.False(await native.QueryAsync(QuietPeriod));
         Assert.Equal(1, native.AuthorizationQueries);
     }
 
@@ -238,9 +239,8 @@ public class SystemAudioCaptureTests
         await using var frames = capture.CaptureAsync(cts.Token).GetAsyncEnumerator(cts.Token);
         Assert.True(await frames.MoveNextAsync());
         Assert.True(await native.QueryAsync());
-        native.Deliver();
-        Assert.True(await frames.MoveNextAsync());
 
+        Assert.False(await native.QueryAsync(QuietPeriod));
         Assert.Equal(1, native.AuthorizationQueries);
     }
 
@@ -259,6 +259,7 @@ public class SystemAudioCaptureTests
         native.Deliver();
         Assert.True(await frames.MoveNextAsync());
 
+        Assert.False(await native.QueryAsync(QuietPeriod));
         Assert.Equal(0, native.AuthorizationQueries);
     }
 
@@ -277,6 +278,7 @@ public class SystemAudioCaptureTests
         native.Deliver();
         Assert.True(await frames.MoveNextAsync());
 
+        Assert.False(await native.QueryAsync(QuietPeriod));
         Assert.Equal(0, native.AuthorizationQueries);
     }
 
@@ -436,6 +438,8 @@ public class SystemAudioCaptureTests
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
 
+    private static readonly TimeSpan QuietPeriod = TimeSpan.FromMilliseconds(200);
+
     private static CancellationTokenSource Bounded()
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -472,8 +476,8 @@ public class SystemAudioCaptureTests
             return authorization;
         }
 
-        public async Task<bool> QueryAsync() =>
-            await _queried.WaitAsync(Patience, TestContext.Current.CancellationToken);
+        public async Task<bool> QueryAsync(TimeSpan? within = null) =>
+            await _queried.WaitAsync(within ?? Patience, TestContext.Current.CancellationToken);
 
         public void Deliver() => Send(_onFrame!, 48_000);
 
