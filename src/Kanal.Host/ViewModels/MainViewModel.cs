@@ -1055,11 +1055,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var version = ++_bodyVersion;
         MarkRetiring();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
-        var leaving = _yieldToUi is not null && _stored.Count > 0;
-        IsLoadingRecord = record is not null || leaving;
+        var leaving = record is not null && _yieldToUi is not null && _stored.Count > 0;
+        IsLoadingRecord = record is not null;
         if (leaving)
             NotifyChrome();
-        if (!await RetireStoredAsync(version) || version != _bodyVersion)
+        if (record is not null && (!await RetireStoredAsync(version) || version != _bodyVersion))
             return;
 
         _stored.Clear();
