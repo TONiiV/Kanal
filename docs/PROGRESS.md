@@ -49,8 +49,8 @@ text "Loading the transcript…", a busy cursor and a dropdown that did not answ
 
 | Longest wait of one click, 1200 sentences × 3 languages | Before | After |
 |---|---|---|
-| Windows, open a long meeting | 39 076 ms | 162 ms |
-| Windows, leave a long meeting | 2 152 ms | 204 ms |
+| Windows, open a long meeting | 39 076 ms | 157 ms |
+| Windows, leave a long meeting | 2 152 ms | 219 ms |
 | macOS, open (an earlier commit of this change) | 38 880 ms | 180 ms |
 | Linux, open (an earlier commit of this change) | 34 634 ms | 131 ms |
 
