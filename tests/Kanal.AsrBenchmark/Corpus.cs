@@ -20,6 +20,9 @@ internal sealed record Clip(string Set, string Lang, string Id, string Reference
 }
 
 [ExcludeFromCodeCoverage]
+internal sealed record AscendClip(string Id, string Language, double Seconds, string Text, long Session, long Speaker, string Src);
+
+[ExcludeFromCodeCoverage]
 internal static class Corpus
 {
     public const int Rate = 16_000;
@@ -27,6 +30,8 @@ internal static class Corpus
     private const double MinClipSeconds = 3;
 
     private const double MaxClipSeconds = 20;
+
+    public const string AscendSet = "ascend";
 
     public static readonly string[] Languages = ["zh", "de", "pl", "en"];
 
@@ -121,6 +126,7 @@ internal static class Corpus
         ["ami"] = FetchAmiAsync,
         ["aishell4"] = FetchAishell4Async,
         ["commonvoice"] = FetchCommonVoiceAsync,
+        [AscendSet] = FetchAscendAsync,
     };
 
     public static readonly string[] OptInSets = ["meeting-11labs", "commonvoice"];
@@ -501,6 +507,105 @@ internal static class Corpus
         }
 
         return rows;
+    }
+
+    internal static string RoomLanguage(string lang) => lang == "mixed" ? "zh" : lang;
+
+    internal static List<AscendClip> PickAscend(
+        IReadOnlyList<AscendClip> rows,
+        string language, int count)
+    {
+        var groups = rows
+            .Where(r => r.Language == language && r.Seconds is >= MinClipSeconds and <= MaxClipSeconds)
+            .Where(r => !r.Text.Contains("[UNK]") && Clean(r.Text).Length > 0)
+            .GroupBy(r => (r.Session, r.Speaker))
+            .OrderBy(g => g.Key)
+            .Select(g => g.OrderBy(r => r.Id, StringComparer.Ordinal).ToList())
+            .ToList();
+        var quota = new int[groups.Count];
+        for (var left = count; left > 0 && groups.Where((g, i) => quota[i] < g.Count).Any();)
+            for (var i = 0; i < groups.Count && left > 0; i++)
+                if (quota[i] < groups[i].Count)
+                {
+                    quota[i]++;
+                    left--;
+                }
+
+        return groups
+            .SelectMany((g, i) => Enumerable.Range(0, quota[i]).Select(k => g[k * g.Count / quota[i]]))
+            .OrderBy(r => r.Id, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    // ASCEND (Lovenia et al. 2022), CC-BY-SA-4.0, through CAiRE/ASCEND.
+    private const string AscendRevision = "737e9800ae31be9932ba8464c80366559bd28424";
+
+    internal static readonly (string Language, int Count)[] AscendGroups = [("mixed", 60), ("zh", 15), ("en", 15)];
+
+    private static async Task<List<string>> FetchAscendAsync(HttpClient http, string data, int count)
+    {
+        var all = new List<AscendClip>();
+        var total = 1;
+        for (var offset = 0; offset < total; offset += 100)
+        {
+            using var page = JsonDocument.Parse(await WithRetryAsync(() => GetRowsPageAsync(http,
+                $"https://datasets-server.huggingface.co/rows?dataset=CAiRE/ASCEND&config=main&split=test&offset={offset}&length=100")));
+            total = page.RootElement.GetProperty("num_rows_total").GetInt32();
+            var rows = page.RootElement.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("row")).ToList();
+            all.AddRange(rows.Select(r => new AscendClip(r.GetProperty("id").GetString()!, r.GetProperty("language").GetString()!,
+                r.GetProperty("duration").GetDouble(), r.GetProperty("transcription").GetString()!,
+                r.GetProperty("session_id").GetInt64(), r.GetProperty("original_speaker_id").GetInt64(),
+                r.GetProperty("audio")[0].GetProperty("src").GetString()!)));
+        }
+
+        if (all.Count == 0 || !all[0].Src.Contains(AscendRevision))
+            throw new InvalidDataException($"ASCEND: the dataset server no longer serves revision {AscendRevision}.");
+        if (total != AscendTestRows || all.Count != AscendTestRows)
+            throw new InvalidDataException($"ASCEND: the test split has {total} rows and {all.Count} were read. Expected {AscendTestRows}.");
+
+        var result = new List<string>();
+        foreach (var (language, quota) in AscendGroups)
+        {
+            var picked = PickAscend(all, language, quota);
+            var folder = Path.Combine(data, AscendSet, language);
+            Directory.CreateDirectory(folder);
+            foreach (var r in picked)
+            {
+                var id = $"s{r.Session}-p{r.Speaker}-{r.Id}";
+                await File.WriteAllBytesAsync(Path.Combine(folder, id + ".wav"), await WithRetryAsync(() => http.GetByteArrayAsync(r.Src)));
+                result.Add(string.Join('\t', AscendSet, language, id, $"{AscendSet}/{language}/{id}.wav", Regex.Replace(r.Text, @"\s+", " ").Trim()));
+            }
+
+            Console.WriteLine($"{AscendSet} {language}: {picked.Count} clips from {picked.Select(r => (r.Session, r.Speaker)).Distinct().Count()} speaker and session groups");
+        }
+
+        return result;
+    }
+
+    private const int AscendTestRows = 1315;
+
+    private static async Task<string> GetRowsPageAsync(HttpClient http, string url)
+    {
+        using var response = await http.GetAsync(url);
+        if ((int)response.StatusCode == 429 && response.Headers.RetryAfter?.Delta is { } wait)
+            await Task.Delay(wait);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    internal static async Task<T> WithRetryAsync<T>(Func<Task<T>> action, TimeSpan? delay = null)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await action();
+            }
+            catch (Exception e) when (attempt < 4 && e is HttpRequestException or TaskCanceledException)
+            {
+                await Task.Delay((delay ?? TimeSpan.FromSeconds(3)) * attempt);
+            }
+        }
     }
 
     internal static List<(int Tier, double Begin, double End, string Text)> PickAishell4(

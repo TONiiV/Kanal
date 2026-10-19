@@ -74,6 +74,66 @@ Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the oper
 
 ## 2026-10-18
 
+### Transcription benchmark: ASCEND code-switching set
+
+Kanal never restricts the recognition language. The auto room (zh/de/pl/en) is therefore the result
+that counts. The forced room is a diagnostic only.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Set `ascend`.** The set holds the test split of ASCEND (Lovenia et al. 2022, Hugging Face
+  `CAiRE/ASCEND`, CC-BY-SA-4.0) at revision `737e9800ae31be9932ba8464c80366559bd28424`. It is a
+  default set. The fetch reads the dataset server, not the Parquet files, and downloads only the
+  chosen clips (14 MB). The repository holds no audio and no transcript.
+- **Clip pick.** 60 `mixed`, 15 `zh` and 15 `en` clips of 3–20 s. Clips with an `[UNK]` tag are out.
+  The pick spreads evenly over the speaker and session groups. The test split has 2 speakers in 4
+  sessions, so the groups are few. The mixed clips last 299 s in total.
+- **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
+  token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
+  The report holds two values: the raw MER and the MER with number normalisation of both texts.
+  The table below shows both.
+- **English kept.** The rate of the English reference words that the hypothesis spells as the same
+  Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
+  and spelled letters ("i s m"). The rate applies to `mixed` clips only.
+- **Rooms.** Auto room: zh/de/pl/en. Forced room: `zh` for `mixed` and `zh` clips, `en` for `en` clips.
+  Cohere Transcribe has the forced room only. Gladia has the auto room only.
+- **Run.**
+  1. Fetch the clips: `... -- fetch --sets ascend`.
+  2. Run the engines: `... -- --sets ascend --phases accuracy --model <ids>`.
+  3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
+
+  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+  In the result below, Gladia returned no text for 1 `zh` clip. No Gladia clip failed.
+  The report files stay outside the repository, in `%LocalAppData%/Kanal/asr-bench/reports/ascend-run2/`.
+
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). MER is in %. "MER" is the raw
+value. "MER num." is the MER with number normalisation of both texts. English kept has 150 words.
+Auto room first, because it counts.
+
+| Engine | Room | `mixed` MER (60 clips) | `mixed` MER num. | English kept % | `zh` MER (15) | `en` MER (15) | Empty `mixed` clips |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-ASR 0.6B | auto | 12.3 | 12.2 | 73.3 | 8.3 | 30.5 | 0 |
+| Whisper turbo | auto | 19.6 | 19.4 | 72.7 | 26.1 | 31.9 | 0 |
+| Qwen3-ASR 1.7B | auto | 23.1 | 23.1 | 76.0 | 19.6 | 27.7 | 1 |
+| Gladia | auto | 22.8 | 22.5 | 68.7 | 27.8 | 29.8 | 0 |
+| Nemotron 560 ms | auto | 25.3 | 25.4 | 36.0 | 16.5 | 38.3 | 1 |
+| Qwen3-ASR 0.6B | forced | 12.0 | 12.0 | 73.3 | 8.7 | 27.0 | 0 |
+| Qwen3-ASR 1.7B | forced | 14.5 | 14.5 | 75.3 | 19.1 | 24.8 | 0 |
+| Whisper turbo | forced | 23.6 | 23.4 | 54.7 | 25.7 | 31.9 | 0 |
+| Cohere Transcribe | forced | 25.6 | 25.4 | 30.7 | 18.7 | 25.5 | 0 |
+| Nemotron 560 ms | forced | 28.1 | 28.2 | 4.7 | 15.7 | 36.9 | 3 |
+
+The engines ran twice on the same clips. The scores of the local engines did not change between the runs.
+The Gladia scores did: the first run gave 24.9 % `mixed` MER and 1 empty `mixed` clip. The cloud result varies.
+
+Findings:
+
+1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
+2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
+3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
+5. The numbers are rough. The MER references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The English kept rate leaves them out. The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
+
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
 
 The benchmark of 2026-10-17 gave error rates that were not usable. It had three causes.
