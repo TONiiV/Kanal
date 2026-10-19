@@ -50,6 +50,16 @@ Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the oper
 - **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
 - **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
 
+---
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
 ## 2026-10-18
 
 ### TranscriptLanguage labels by script before the room prior
