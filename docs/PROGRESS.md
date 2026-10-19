@@ -6,6 +6,43 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-19
 
+### Operator decisions: offline core, core experience layers, glossary, F-1
+
+Docs PR #178 records these decisions. They change PRD v0.4 §00 and §06, `CONTEXT.md` and two ADR notes.
+
+**Direction.**
+
+1. **Offline is the core. Cloud is secondary.** A future mobile app also centres on offline local models. This replaces "intelligence has priority over offline privacy" (2026-10-08).
+2. **Core experience layers, in priority order.** 0 hear correctly (ASR, especially part numbers). 1 translate correctly and fast (target 3 s or less). 2 errors are visible. 3 never fail silently. 4 never lose data. Work on a layer starts when the layer above it works.
+3. **Benchmark conclusions** ([dashboard](https://claude.ai/artifact/AA3ZPjPFKDf53mCojqYyhW)). ASR is the main source of errors. No model keeps part numbers intact. Nemotron is best on real far-field data and worst on synthetic data. Polish is the weakest language. This repository holds no new numbers for these four statements.
+
+**F track and glossary.**
+
+1. **F-1 has a new definition.** It checks the part numbers and terms that the ASR recognised against the project glossary. The old definition compared the source and the translation. That check cannot find a wrong part number, because the source and the translation are wrong together. V-3 still compares the source and the translation.
+2. **Glossary v1 is manual entry, with no import.** Kanal saves it per project in `kanal-glossary.json` in the project folder. Each row has four cells (zh, de, pl, en) and a "do not translate" flag. The `CONTEXT.md` entry says "manual entry" instead of "import".
+3. **Import comes later.** XLSX, XLS and CSV import by column mapping, with rules (T4 #304). Other formats need a local model or an agent. With neither, the UI shows a hint.
+4. **Threshold.** The key-fact error rate defaults to 2 %. The operator changes it in settings.
+5. **Exception to the 2026-10-08 freeze.** T1 and T2 are on `main`. T3 #303, T4 #304 and T5 #306 are ready for an agent. They support layers 0 and 2.
+
+**Intelligence provider (agent).** It does tasks 1 to 5 only: term extraction, semantic checks, minutes, meeting titles and listening-agent answers. It never does live translation. Codex comes first. The consent text names the vendor.
+
+**Models.**
+
+1. **Diarization.** `Nemotron-3-Diarization` is benchmarked against the catalog models in B-6. The operator does not choose the diarization model.
+2. **ASR.** The operator chooses the model. The benchmark winner is labelled "Recommended".
+
+**Mainland China access.** C-6 (LAN relay) solves it. GitHub Pages does not move to Cloudflare Workers or EdgeOne. E-track T10 is cancelled. C-6 comes after T3, T4 and T5.
+
+**Open PRs.**
+
+1. **#141, continue a meeting as runs.** When the operator presses Record again on a meeting page, a dialog asks "Continue this meeting" or "New meeting". The PR description says that Record continues the meeting without a question. The PR must change.
+2. **#248, meeting agent.** Kept. Not pursued for now.
+3. **#272, meeting switch.** Switching back to the meeting that is recording shows the live transcript at once, with no loading state. This answers the open question in the PR description.
+
+**Notes added to ADRs.** ADR 0053 and ADR 0061 now say that #294 resolved the `NemotronAsrProvider` language conflict.
+
+---
+
 ### Persistent warning bar for cloud translation failures
 
 Issue #279, part of spec #278.
@@ -1759,10 +1796,13 @@ validation gate (phase 1.5) and two new tracks. This entry records which finding
 5. Key facts are extracted by rules, not by a model. A checker must not invent values.
 6. Glossary import: XLSX, XLS and CSV by column mapping (ExcelDataReader, MIT). Other formats need
    an intelligence provider. Without one, the entry is disabled with its reason.
+   Changed 2026-10-19: glossary v1 is manual entry. Import comes later.
 7. The intelligence provider serves glossary extraction, semantic checks, minutes, titles and the
    listening agent. Live translation is not in its scope for now. Codex comes first. The consent
    dialog names each intelligence vendor. Intelligence has priority over offline privacy.
    ADR 0057 records the design.
+   Changed 2026-10-19: offline is the core. ADR 0057 is now the colour-scheme ADR, so the
+   intelligence ADR has no number yet.
 
 ## 2026-10-07
 

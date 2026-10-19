@@ -57,11 +57,11 @@ A value in an utterance that must survive translation unchanged: a number with i
 _Avoid_: Entity, keyword
 
 **Glossary**:
-A list of term pairs across the room languages that the operator imports from project files such as a BOM or a specification sheet.
+A list of terms for one project, which the operator enters by hand. Each row has one cell for each of zh, de, pl and en, and a "do not translate" flag. Kanal saves it in `kanal-glossary.json` in the project folder.
 _Avoid_: Vocabulary (Gladia's name for its own input), dictionary
 
 **Intelligence provider**:
-A source of language-model inference for Kanal: a local model, the operator's own subscription through a locally installed CLI, or an API key. The listening agent, minutes and glossary extraction use it; none of them is it.
+A source of language-model inference for Kanal: a local model, the operator's own subscription through a locally installed CLI, or an API key. Term extraction, semantic checks, minutes, meeting titles and listening-agent answers use it; none of them is it. It never translates live speech.
 _Avoid_: Agent, AI, listening agent
 
 **Colour scheme**:
