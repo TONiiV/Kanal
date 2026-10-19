@@ -157,7 +157,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         var due = Volatile.Read(ref nextCheck);
         return now >= due
             && Interlocked.CompareExchange(
-                ref nextCheck, long.MaxValue, due) == due;
+                ref nextCheck, now + _clock.TimestampFrequency * AuthorizationCheckIntervalSeconds, due) == due;
     }
 
     private static bool IsPermissionFailure(string detail) =>
