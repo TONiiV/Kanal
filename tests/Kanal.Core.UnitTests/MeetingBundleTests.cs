@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Kanal.Core.Meetings;
 using Kanal.Core.Workspaces;
 
 namespace Kanal.Core.UnitTests;
@@ -105,6 +106,29 @@ public class MeetingBundleTests : IDisposable
     }
 
     [Fact]
+    public void ReidentifiedSpeakersTravelWithTheBundleEvenWithoutAudio()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var source = here.MeetingFolder(mine.Id, meeting.Id)!;
+        SpeakerReidentification.Write(source, new Dictionary<string, string> { ["u1"] = "D01", ["u2"] = "D02" });
+        var bundle = Bundle("speakers");
+
+        Assert.Null(MeetingBundle.Write(here, meeting, includeAudio: false, bundle));
+
+        var (there, theirs) = Opened("supplier");
+        var record = MeetingBundle.Import(there, theirs.Id, bundle, asNewRecord: false).Meeting!;
+        var folder = there.MeetingFolder(theirs.Id, record.Id)!;
+
+        var markdown = File.ReadAllText(Path.Combine(folder, MeetingBundle.TranscriptFileName));
+        Assert.Contains("**D01** (de)", markdown);
+        Assert.Contains("**D02** (zh)", markdown);
+        Assert.DoesNotContain("**S1**", markdown);
+        Assert.Equal(["D01", "D02"], SpeakerReidentification.Read(folder).Values.Order());
+        Assert.Contains("\"speakerTag\":\"S1\"", File.ReadAllText(Path.Combine(folder, TranscriptLog.FileName)));
+    }
+
+    [Fact]
     public void ABundleWithoutAudioIsTheSizeOfItsTranscript()
     {
         var (store, workspace) = Opened("laptop");
@@ -182,5 +206,172 @@ public class MeetingBundleTests : IDisposable
         Assert.Null(imported.Meeting);
         Assert.Equal(StoreProblemKind.Unreadable, imported.Problem!.Kind);
         Assert.Empty(store.ListMeetings(workspace.Id).Meetings);
+    }
+
+    [Fact]
+    public void AFailedExportLeavesAnExistingBundleUntouched()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        var before = File.ReadAllBytes(bundle);
+
+        var attachment = Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments", "quotation.pdf");
+        using var lockedAttachment = new FileStream(attachment, FileMode.Open, FileAccess.Read, FileShare.None);
+        var problem = MeetingBundle.Write(store, meeting, includeAudio: false, bundle);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem!.Kind);
+        Assert.Equal(before, File.ReadAllBytes(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
+    [Fact]
+    public void AFailedExportLeavesNoFileWhereNoBundleWasBefore()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+
+        var attachment = Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments", "quotation.pdf");
+        using var lockedAttachment = new FileStream(attachment, FileMode.Open, FileAccess.Read, FileShare.None);
+        var problem = MeetingBundle.Write(store, meeting, includeAudio: false, bundle);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem!.Kind);
+        Assert.Empty(Names(bundle));
+    }
+
+    [Fact]
+    public void AnExportReplacesAnExistingBundleAndLeavesNoTemporaryFile()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        File.WriteAllText(bundle, "an earlier export");
+
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+
+        Assert.Contains(MeetingBundle.ManifestFileName, Entries(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
+    [Fact]
+    public void AStaleReadOnlyPartialFileDoesNotStopAnExport()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        var partial = bundle + ".partial";
+        File.WriteAllText(partial, "left by a crash");
+        File.SetAttributes(partial, FileAttributes.ReadOnly);
+
+        try
+        {
+            Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        }
+        finally
+        {
+            if (File.Exists(partial))
+                File.SetAttributes(partial, FileAttributes.Normal);
+        }
+
+        Assert.Contains(MeetingBundle.ManifestFileName, Entries(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
+    private static IReadOnlyList<string> Names(string bundle) =>
+        [.. Directory.GetFiles(Path.GetDirectoryName(bundle)!, Path.GetFileNameWithoutExtension(bundle) + "*")
+            .Select(f => Path.GetFileName(f)).Order()];
+
+    private static Dictionary<string, byte[]> Snapshot(string folder) =>
+        Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+            .ToDictionary(f => Path.GetRelativePath(folder, f), File.ReadAllBytes);
+
+    [Fact]
+    public void AnImportNeverOverwritesAMeetingFolderThatTheListCannotRead()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("delivery");
+        MeetingBundle.Write(here, meeting, includeAudio: true, bundle);
+
+        var folder = here.MeetingFolder(mine.Id, meeting.Id)!;
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "{ not json");
+        File.WriteAllText(Path.Combine(folder, TranscriptLog.FileName), "the only copy");
+        File.Delete(Path.Combine(folder, "attachments", "quotation.pdf"));
+        var before = Snapshot(folder);
+
+        var imported = MeetingBundle.Import(here, mine.Id, bundle, asNewRecord: false);
+
+        Assert.Null(imported.Meeting);
+        Assert.Equal(StoreProblemKind.FolderTaken, imported.Problem!.Kind);
+        Assert.Equal(folder, imported.Problem.Subject);
+        var after = Snapshot(folder);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (name, bytes) in before)
+            Assert.Equal(bytes, after[name]);
+        Assert.Single(Directory.EnumerateDirectories(Path.GetDirectoryName(folder)!));
+    }
+
+    [Fact]
+    public void AnImportNeverOverwritesAListedMeetingEither()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("delivery");
+        MeetingBundle.Write(here, meeting, includeAudio: false, bundle);
+        var folder = here.MeetingFolder(mine.Id, meeting.Id)!;
+        var before = Snapshot(folder);
+
+        var imported = MeetingBundle.Import(here, mine.Id, bundle, asNewRecord: false);
+
+        Assert.Equal(StoreProblemKind.FolderTaken, imported.Problem!.Kind);
+        Assert.Equal(before.Keys.Order(), Snapshot(folder).Keys.Order());
+        Assert.Equal(before[TranscriptLog.FileName], Snapshot(folder)[TranscriptLog.FileName]);
+    }
+
+    [Fact]
+    public void AnExtractThatFailsLeavesNoMeetingFolderBehind()
+    {
+        var (here, mine) = Opened("laptop");
+        var meeting = Recorded(here, mine, "Delivery call");
+        var bundle = Bundle("twice");
+        MeetingBundle.Write(here, meeting, includeAudio: false, bundle);
+        using (var zip = ZipFile.Open(bundle, ZipArchiveMode.Update))
+        {
+            using var writer = new StreamWriter(zip.CreateEntry(TranscriptLog.FileName).Open());
+            writer.Write("a second entry with the same name");
+        }
+
+        var (there, theirs) = Opened("supplier");
+        var imported = MeetingBundle.Import(there, theirs.Id, bundle, asNewRecord: false);
+
+        Assert.Null(imported.Meeting);
+        Assert.Equal(StoreProblemKind.Unwritable, imported.Problem!.Kind);
+        var meetings = Path.Combine(Path.GetDirectoryName(there.MeetingFolder(theirs.Id, meeting.Id)!)!);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(meetings));
+        Assert.Empty(there.ListMeetings(theirs.Id).Problems);
+    }
+
+    [Fact]
+    public void AMoveIntoAFolderThatAppearedInTheMeantimeLeavesThatFolderAlone()
+    {
+        Directory.CreateDirectory(_root);
+        var folder = Path.Combine(_root, "meeting");
+        var staging = Path.Combine(_root, "meeting.importing-x");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, WorkspaceStore.MeetingFileName), "theirs");
+        File.WriteAllText(Path.Combine(folder, TranscriptLog.FileName), "the only copy");
+        var before = Snapshot(folder);
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, "audio.wav"), "new");
+        File.WriteAllText(Path.Combine(staging, TranscriptLog.FileName), "imported");
+
+        Assert.ThrowsAny<IOException>(() => MeetingBundle.MoveIntoPlace(staging, folder));
+
+        var after = Snapshot(folder);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        foreach (var (name, bytes) in before)
+            Assert.Equal(bytes, after[name]);
     }
 }
