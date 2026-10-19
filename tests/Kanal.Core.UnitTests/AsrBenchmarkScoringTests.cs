@@ -110,4 +110,14 @@ public class AsrBenchmarkScoringTests
         samples[12_000] = 200;
         Assert.Equal(8_000, Scoring.SpeechEnd(samples, 320));
     }
+
+    [Theory]
+    [InlineData("language Chinese<asr_text>你好", "你好")]
+    [InlineData("language English<asr_text> hello ", "hello")]
+    [InlineData("language None<asr_text>", "")]
+    [InlineData(" 你好 ", "你好")]
+    public void The_qwen3_header_is_removed_from_the_text(string text, string expected)
+    {
+        Assert.Equal(expected, Scoring.StripAsrHeader(text));
+    }
 }
