@@ -6,6 +6,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-19
 
+### An online meeting stops when macOS denies system audio
+
+- **Bug (#151).** With the system-audio permission denied, the Core Audio tap raises no error. The meeting ran on without remote speech. The silent-source hint came after about 30 s.
+- **Signal.** The private function `TCCAccessPreflight("kTCCServiceAudioCapture")` gives the TCC state. Zero buffers alone are not enough, because the computer can be silent. See "System-audio permission on macOS 14.2+" in `docs/online-meeting-audio.md`.
+- **Rule.** `MacSystemAudioCapture` asks TCC when a tap buffer holds only zeros, at most once per second. Only "denied" ends the capture with `permission_denied`. The meeting then stops through `StopAfterAudioFaultAsync` with the localized reason.
+- **Test seam.** `IMacSystemAudioNative.AudioCaptureAuthorization` returns the TCC state. `FakeMacNative` sets it and the buffer content.
+- **Open item.** No real Mac has run this. The operator must run the manual test in the PR.
+
+---
+
 ### Glossary T2: editor in the project settings window
 
 Spec #302. Stacked on T1 (#307).
@@ -16,6 +26,8 @@ Spec #302. Stacked on T1 (#307).
 - **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
 - **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
 - **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+---
 
 ### Glossary T1: per-project storage
 
@@ -183,6 +195,66 @@ Limits:
 - The voices are synthetic and read part numbers letter by letter. Real speech can differ.
 - MT runs on the CPU only. Hy-MT2 gets one prompt per target language. The batched prompt of PR #276 is not in this base.
 - Route B has no clean latency for the 70 clips with several finals.
+
+### Transcription benchmark: ASCEND code-switching set
+
+Kanal never restricts the recognition language. The auto room (zh/de/pl/en) is therefore the result
+that counts. The forced room is a diagnostic only.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Set `ascend`.** The set holds the test split of ASCEND (Lovenia et al. 2022, Hugging Face
+  `CAiRE/ASCEND`, CC-BY-SA-4.0) at revision `737e9800ae31be9932ba8464c80366559bd28424`. It is a
+  default set. The fetch reads the dataset server, not the Parquet files, and downloads only the
+  chosen clips (14 MB). The repository holds no audio and no transcript.
+- **Clip pick.** 60 `mixed`, 15 `zh` and 15 `en` clips of 3–20 s. Clips with an `[UNK]` tag are out.
+  The pick spreads evenly over the speaker and session groups. The test split has 2 speakers in 4
+  sessions, so the groups are few. The mixed clips last 299 s in total.
+- **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
+  token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
+  The report holds two values: the raw MER and the MER with number normalisation of both texts.
+  The table below shows both.
+- **English kept.** The rate of the English reference words that the hypothesis spells as the same
+  Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
+  and spelled letters ("i s m"). The rate applies to `mixed` clips only.
+- **Rooms.** Auto room: zh/de/pl/en. Forced room: `zh` for `mixed` and `zh` clips, `en` for `en` clips.
+  Cohere Transcribe has the forced room only. Gladia has the auto room only.
+- **Run.**
+  1. Fetch the clips: `... -- fetch --sets ascend`.
+  2. Run the engines: `... -- --sets ascend --phases accuracy --model <ids>`.
+  3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
+
+  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+  In the result below, Gladia returned no text for 1 `zh` clip. No Gladia clip failed.
+  The report files stay outside the repository, in `%LocalAppData%/Kanal/asr-bench/reports/ascend-run2/`.
+
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). MER is in %. "MER" is the raw
+value. "MER num." is the MER with number normalisation of both texts. English kept has 150 words.
+Auto room first, because it counts.
+
+| Engine | Room | `mixed` MER (60 clips) | `mixed` MER num. | English kept % | `zh` MER (15) | `en` MER (15) | Empty `mixed` clips |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-ASR 0.6B | auto | 12.3 | 12.2 | 73.3 | 8.3 | 30.5 | 0 |
+| Whisper turbo | auto | 19.6 | 19.4 | 72.7 | 26.1 | 31.9 | 0 |
+| Qwen3-ASR 1.7B | auto | 23.1 | 23.1 | 76.0 | 19.6 | 27.7 | 1 |
+| Gladia | auto | 22.8 | 22.5 | 68.7 | 27.8 | 29.8 | 0 |
+| Nemotron 560 ms | auto | 25.3 | 25.4 | 36.0 | 16.5 | 38.3 | 1 |
+| Qwen3-ASR 0.6B | forced | 12.0 | 12.0 | 73.3 | 8.7 | 27.0 | 0 |
+| Qwen3-ASR 1.7B | forced | 14.5 | 14.5 | 75.3 | 19.1 | 24.8 | 0 |
+| Whisper turbo | forced | 23.6 | 23.4 | 54.7 | 25.7 | 31.9 | 0 |
+| Cohere Transcribe | forced | 25.6 | 25.4 | 30.7 | 18.7 | 25.5 | 0 |
+| Nemotron 560 ms | forced | 28.1 | 28.2 | 4.7 | 15.7 | 36.9 | 3 |
+
+The engines ran twice on the same clips. The scores of the local engines did not change between the runs.
+The Gladia scores did: the first run gave 24.9 % `mixed` MER and 1 empty `mixed` clip. The cloud result varies.
+
+Findings:
+
+1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
+2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
+3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
+5. The numbers are rough. The MER references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The English kept rate leaves them out. The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
 
 ### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
 
@@ -671,6 +743,34 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### All target languages in one batch
+
+Before, `LlamaSharpMtProvider` translated the target languages one after the other. Each call also
+made a new llama.cpp context through `StatelessExecutor`. Now:
+
+- The provider sends all target prompts in one call to `ITextGenerator.GenerateAsync(prompts)`.
+- `LlamaCppBackend` decodes them as parallel sequences in one `BatchedExecutor`.
+- The executor stays alive between calls, so a call no longer makes a new context.
+- `BatchedExecutor` never reuses a sequence id. llama.cpp rejects an id at or above `SeqMax` for
+  recurrent and hybrid models such as Qwen3.5, and at or above 256 for the others. The backend makes
+  a new executor before `SeqMax` ids are used. This is right for both kinds of model.
+- `SeqMax` is 8: two calls with 4 targets, and a new context about every 4 sentences.
+- A hybrid model allocates `SeqMax` recurrent cells for the whole life of the executor. This is an
+  estimate from the model configs, not a measurement: about 310 MiB at 16 cells for Qwen3.5 2B and
+  about 800 MiB for 4B. At 8 cells it is about half. Hy-MT2 and Gemma 3 cost almost nothing.
+- The benchmark is the regression check for the id budget. It makes more than 8 calls on Qwen3.5.
+  Before the fix, the third call failed with `NoKvSlot`.
+
+Measured with Vulkan on an RTX 3000 Ada Laptop GPU, one sentence in flight (seconds per sentence):
+
+| Model | 2 targets before → after | 3 targets before → after | 4 in flight utt/s before → after |
+|---|---:|---:|---:|
+| Hy-MT2 1.8B | 1.26 → 0.39 | 1.90 → 0.45 | 0.81 → 2.22 |
+| Qwen3.5 2B | 1.26 → 0.41 | 1.79 → 0.56 | 0.80 → 2.25 |
+| Qwen3.5 4B | 2.02 → 0.95 | 3.15 → 1.21 | 0.49 → 1.11 |
+
+The chrF stays the same within the run-to-run noise (±1.5). The run used `SeqMax` 16.
+
 ### Local translation on the GPU
 
 Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
@@ -709,8 +809,8 @@ languages. The report gives, per model:
 
 Two different kinds of load:
 
-- **Target languages.** Each sentence goes to every other meeting language. The provider translates
-  them one after the other, so the latency of one sentence grows with the number of targets. The
+- **Target languages.** Each sentence goes to every other meeting language. The provider decodes
+  all targets of a sentence in one batch. On a GPU, 3 targets take little more time than 1. The
   corpus has English references too. They serve the 3-target latency sweep, where the third target
   is English. The benchmark does not score English output. The quality columns use the two meeting
   targets only.

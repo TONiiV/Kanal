@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
+  permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
+  after about 30 seconds. The status line now tells you to allow the permission.
 - You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
   the project folder. Kanal does not use the glossary in a meeting yet.
 - Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
@@ -54,6 +57,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   The names change in Chinese, English, German and Polish.
 - Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
   A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
+- Local translation now translates a sentence into all meeting languages at the same time. On a
+  graphics card, a sentence with two target languages is ready 2 to 3 times sooner than before.
 - Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
   Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
   to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the

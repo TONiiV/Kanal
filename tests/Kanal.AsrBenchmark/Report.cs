@@ -18,7 +18,7 @@ internal static class Report
             .AppendLine($"{machine}")
             .AppendLine()
             .AppendLine($"Clips: {string.Join(", ", clips.GroupBy(c => $"{c.Set}/{c.Lang}").Select(g => $"{g.Key} {g.Count()} ({g.Sum(c => c.Seconds):F0} s)"))}.")
-            .AppendLine("Sets: `fleurs`: FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). `meeting-piper`: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper. `meeting-11labs`: the same sentences from ElevenLabs `eleven_multilingual_v2`, premade voices Alice (f), Lily (f) and George (m). `commonvoice`: Common Voice Scripted Speech 27.0 test split (Ardila et al. 2020, CC0-1.0, Mozilla Data Collective). `voxpopuli`: VoxPopuli test (Wang et al. 2021, CC0; raw audio: European Parliament). `ami`: AMI Meeting Corpus test meeting EN2002a, single far-field microphone (Carletta et al. 2005, CC-BY-4.0). `aishell4`: AISHELL-4 test, channel 0 of the far-field array (Fu et al. 2021, CC-BY-SA-4.0). AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment.")
+            .AppendLine("Sets: `fleurs`: FLEURS test split (Conneau et al. 2022, `google/fleurs`, CC-BY-4.0). `meeting-piper`: the 12 sentences of the MT benchmark in each language (4 originals, 8 translations), synthesised locally with Piper. `meeting-11labs`: the same sentences from ElevenLabs `eleven_multilingual_v2`, premade voices Alice (f), Lily (f) and George (m). `commonvoice`: Common Voice Scripted Speech 27.0 test split (Ardila et al. 2020, CC0-1.0, Mozilla Data Collective). `voxpopuli`: VoxPopuli test (Wang et al. 2021, CC0; raw audio: European Parliament). `ami`: AMI Meeting Corpus test meeting EN2002a, single far-field microphone (Carletta et al. 2005, CC-BY-4.0). `aishell4`: AISHELL-4 test, channel 0 of the far-field array (Fu et al. 2021, CC-BY-SA-4.0). `ascend`: ASCEND test split (Lovenia et al. 2022, `CAiRE/ASCEND`, CC-BY-SA-4.0): Mandarin–English conversation recorded in Hong Kong, 60 `mixed` Chinese-English clips and 15 `zh` and 15 `en` clips of 3–20 s, spread over the speakers and sessions, scored with MER in its own table. AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment.")
             .AppendLine("Every local run feeds 20 ms frames through `NemotronAsrProvider`'s session. RTF = session wall time / audio fed. Audio fed = clip plus the padding of the engine: Nemotron adds 2 s of silence (1 s at the open, 1 s at the finish), the offline engines add none. CER for zh, WER for de/pl/en. Raw scores use no number normalisation. The numbers columns first turn spelled-out cardinals, decimals and percentages into digits in both texts (`Numbers.Normalize`). The no-digit columns score only clips whose reference has no digit. Gladia: the product `GladiaAsrProvider` without translation, fed at real-time pace with 1 s of trailing silence. The product sends Gladia no room languages, so Gladia has only the auto room. The Gladia RTF and decode time come from the pacing and not from Gladia, so the report shows – for them.")
             .AppendLine();
 
@@ -39,7 +39,7 @@ internal static class Report
             .AppendLine("| Model | Provider | Set | Lang | Metric | Forced % | Auto % | Numbers forced/auto % | No-digit clips n | No-digit forced/auto % | Language guess % | Empty (forced/auto) | Codes kept strict (forced/auto) | Codes kept loose (forced/auto) | RTF forced | RTF auto | Decode p50/p95 ms |")
             .AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var (model, provider, threads) in engines)
-        foreach (var set in clips.Select(c => c.Set).Distinct())
+        foreach (var set in clips.Select(c => c.Set).Distinct().Where(s => s != Corpus.AscendSet))
         foreach (var lang in Corpus.Languages)
         {
             bool F(Row r) => Match(r, model, provider, threads, set, lang, "forced");
@@ -57,6 +57,27 @@ internal static class Report
                           $"{V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} | " +
                           (codes is null ? "– | – | " : $"{V(F, "codes_kept_strict", "F0")}/{V(A, "codes_kept_strict", "F0")} of {codes} | {V(F, "codes_kept_loose", "F0")}/{V(A, "codes_kept_loose", "F0")} of {codes} | ") +
                           speed + " |");
+        }
+
+        if (rows.Any(r => r.Set == Corpus.AscendSet))
+        {
+            md.AppendLine().AppendLine("## ASCEND code-switching (mixed error rate)").AppendLine()
+                .AppendLine("MER: edit distance over tokens, one token per Chinese character and one per Latin word, divided by the reference tokens. Forced: a room with the language of the clip (`mixed` clips get `zh`). Auto: a zh/de/pl/en room. English kept: share of the English reference words that the hypothesis spells as the same Latin word, counted once each. A model that turns English terms into Chinese scores low.")
+                .AppendLine()
+                .AppendLine("| Model | Provider | Group | Clips | MER forced % | MER auto % | MER numbers forced/auto % | English kept forced/auto % | Empty (forced/auto) |")
+                .AppendLine("|---|---|---|---:|---:|---:|---:|---:|---:|");
+            foreach (var (model, provider, threads) in engines)
+            foreach (var lang in Corpus.AscendGroups.Select(g => g.Language))
+            {
+                bool F(Row r) => Match(r, model, provider, threads, Corpus.AscendSet, lang, "forced");
+                bool A(Row r) => Match(r, model, provider, threads, Corpus.AscendSet, lang, "auto");
+                if (!rows.Any(F) && !rows.Any(A))
+                    continue;
+                md.AppendLine($"| {model} | {provider} | {lang} | {V(r => F(r) || A(r), "clips", "F0")} | {V(F, "mer_pct", "F1")} | {V(A, "mer_pct", "F1")} | " +
+                              $"{V(F, "mer_numbers_pct", "F1")}/{V(A, "mer_numbers_pct", "F1")} | {V(F, "english_kept_pct", "F1")}/{V(A, "english_kept_pct", "F1")} | {V(F, "empty_clips", "F0")}/{V(A, "empty_clips", "F0")} |");
+            }
+
+            md.AppendLine().AppendLine($"English words in the `mixed` references: {V(r => r.Set == Corpus.AscendSet && r.Language == "mixed", "english_words", "F0")}.");
         }
 
         var parity = rows.FirstOrDefault(r => r.Metric == "parity_identical");

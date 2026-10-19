@@ -120,4 +120,99 @@ public class AsrBenchmarkScoringTests
     {
         Assert.Equal(expected, Scoring.StripAsrHeader(text));
     }
+
+    [Fact]
+    public void Mixed_tokens_are_one_per_Chinese_character_and_one_per_Latin_word()
+    {
+        Assert.Equal(["呃", "what", "s", "the", "呃"], Scoring.MixedTokens("呃what's the呃"));
+        Assert.Equal(["我", "的", "parents", "是", "chemistry", "老", "师"], Scoring.MixedTokens("我的 Parents 是 chemistry老师。"));
+        Assert.Equal(["2000", "次"], Scoring.MixedTokens("2000次"));
+        Assert.Empty(Scoring.MixedTokens(" ，。 "));
+    }
+
+    [Fact]
+    public void Mixed_tokens_read_traditional_characters_and_full_width_letters_like_the_plain_forms()
+    {
+        Assert.Equal(["学", "校"], Scoring.MixedTokens("學校"));
+        Assert.Equal(["ism", "课"], Scoring.MixedTokens("ＩＳＭ課"));
+    }
+
+    [Fact]
+    public void Mer_counts_edits_over_characters_and_words_together()
+    {
+        const string reference = "我的 parents 是 chemistry 老师";
+        Assert.Equal((0, 7), Scoring.MixedErrors("我的parents是chemistry老师。", reference));
+        Assert.Equal((1, 7), Scoring.MixedErrors("我的 parent 是 chemistry 老师", reference));
+        Assert.Equal((1, 7), Scoring.MixedErrors("我的 parents 是 chemistry 老", reference));
+        Assert.Equal((7, 7), Scoring.MixedErrors("", reference));
+    }
+
+    [Fact]
+    public void Mer_counts_an_English_word_that_became_Chinese_as_one_substitution_plus_one_insertion()
+    {
+        Assert.Equal((2, 4), Scoring.MixedErrors("我喜欢化学", "我喜欢 chemistry"));
+    }
+
+    [Fact]
+    public void Mer_applies_the_number_normalisation_to_both_texts_only_when_asked()
+    {
+        Assert.Equal((2, 3), Scoring.MixedErrors("两千次 pieces", "2000次 pieces"));
+        Assert.Equal((0, 3), Scoring.MixedErrors("两千次 pieces", "2000次 pieces", numbers: true));
+        Assert.Equal((0, 4), Scoring.MixedErrors("我要 five thousand pieces", "我要 5,000 pieces", numbers: true));
+    }
+
+    [Fact]
+    public void English_kept_counts_the_reference_words_that_the_hypothesis_spells_in_Latin_script()
+    {
+        const string reference = "我的 parents 是 chemistry 老师 and history";
+        Assert.Equal((4, 4), Scoring.EnglishKept("我的 Parents 是 Chemistry 老师 and history", reference));
+        Assert.Equal((2, 4), Scoring.EnglishKept("我的 parents 是 化学 老师 and", reference));
+        Assert.Equal((0, 4), Scoring.EnglishKept("我的父母是化学老师和历史", reference));
+        Assert.Equal((0, 4), Scoring.EnglishKept("", reference));
+    }
+
+    [Fact]
+    public void English_kept_matches_each_hypothesis_word_once_and_ignores_numbers()
+    {
+        Assert.Equal((2, 4), Scoring.EnglishKept("The cat", "the cat the dog"));
+        Assert.Equal((1, 1), Scoring.EnglishKept("2000 bolts", "有 2000 个 bolts"));
+        Assert.Equal((0, 0), Scoring.EnglishKept("我们需要测试", "我们需要测试 2000"));
+    }
+
+    [Fact]
+    public void English_kept_leaves_out_fillers()
+    {
+        Assert.Equal((1, 1), Scoring.EnglishKept("chemistry", "um 我喜欢 uh chemistry hmm mm Erm"));
+        Assert.Equal((0, 0), Scoring.EnglishKept("", "um uh"));
+    }
+
+    [Fact]
+    public void English_kept_leaves_out_spelled_letters_but_keeps_a_lone_single_letter_word()
+    {
+        Assert.Equal((0, 0), Scoring.EnglishKept("ISM", "那个 i s m"));
+        Assert.Equal((1, 1), Scoring.EnglishKept("ISM information", "那个 i s m information"));
+        Assert.Equal((4, 4), Scoring.EnglishKept("I like a plan", "I like a plan"));
+    }
+
+    [Fact]
+    public void Mer_splits_a_word_glued_to_Chinese_characters_before_it_normalises_numbers()
+    {
+        Assert.Equal((0, 4), Scoring.MixedErrors("我要five件", "我要5件", numbers: true));
+        Assert.Equal((0, 4), Scoring.MixedErrors("我要 five 件", "我要5件", numbers: true));
+    }
+
+    [Fact]
+    public void English_kept_counts_a_contraction_as_one_word_and_does_not_read_its_letters_as_spelled()
+    {
+        Assert.Equal((2, 2), Scoring.EnglishKept("I'm here", "I'm here"));
+        Assert.Equal((3, 3), Scoring.EnglishKept("it's a plan", "it's a plan"));
+        Assert.Equal((2, 2), Scoring.EnglishKept("don’t go", "don’t go"));
+        Assert.Equal((1, 2), Scoring.EnglishKept("I am here", "I'm here"));
+    }
+
+    [Fact]
+    public void Mer_reads_traditional_characters_before_it_normalises_numbers()
+    {
+        Assert.Equal((0, 3), Scoring.MixedErrors("兩千次 pieces", "两千次 pieces", numbers: true));
+    }
 }

@@ -9,11 +9,11 @@ namespace Kanal.AsrBenchmark;
 internal static class Feeder
 {
     public static async Task<ClipRun> RunClipAsync(Func<List<double>, IAsrProvider> make, Clip clip, string[] room, bool realtime,
-        double padding = 0, bool paced = false, Action<AsrEvent.Transcript, Stopwatch>? onTranscript = null)
+        double padding = 0, bool paced = false, CancellationToken ct = default, Action<AsrEvent.Transcript, Stopwatch>? onTranscript = null)
     {
         const int frame = Corpus.Rate / 50;
         var decodeMs = new List<double>();
-        var session = await make(decodeMs).StartAsync(new AsrSessionOptions(Corpus.Rate, room), CancellationToken.None);
+        var session = await make(decodeMs).StartAsync(new AsrSessionOptions(Corpus.Rate, room), ct);
         var clock = Stopwatch.StartNew();
         var events = new List<(double At, AsrEvent.Transcript Event)>();
         var reader = Task.Run(async () =>
@@ -33,26 +33,32 @@ internal static class Feeder
         var end = Scoring.SpeechEnd(samples, frame);
         var total = samples.Length + (int)((realtime ? 4 : paced ? padding : 0) * Corpus.Rate);
         double onsetAt = 0, endAt = 0;
-        for (var i = 0; i < total; i += frame)
+        try
         {
-            if (realtime || paced)
+            for (var i = 0; i < total; i += frame)
             {
-                var wait = TimeSpan.FromSeconds(i / (double)Corpus.Rate) - clock.Elapsed;
-                if (wait > TimeSpan.Zero)
-                    await Task.Delay(wait);
-            }
+                if (realtime || paced)
+                {
+                    var wait = TimeSpan.FromSeconds(i / (double)Corpus.Rate) - clock.Elapsed;
+                    if (wait > TimeSpan.Zero)
+                        await Task.Delay(wait, ct);
+                }
 
-            if (i == onset)
-                onsetAt = clock.Elapsed.TotalSeconds;
-            var chunk = i < samples.Length
-                ? Kanal.Audio.PcmConvert.ShortsToBytes(samples.AsSpan(i, Math.Min(frame, samples.Length - i)))
-                : new byte[frame * 2];
-            await session.PushAudioAsync(chunk);
-            if (i + frame == end || (i < end && i + frame > end))
-                endAt = clock.Elapsed.TotalSeconds;
+                if (i == onset)
+                    onsetAt = clock.Elapsed.TotalSeconds;
+                var chunk = i < samples.Length
+                    ? Kanal.Audio.PcmConvert.ShortsToBytes(samples.AsSpan(i, Math.Min(frame, samples.Length - i)))
+                    : new byte[frame * 2];
+                await session.PushAudioAsync(chunk, ct);
+                if (i + frame == end || (i < end && i + frame > end))
+                    endAt = clock.Elapsed.TotalSeconds;
+            }
+        }
+        finally
+        {
+            await session.DisposeAsync();
         }
 
-        await session.DisposeAsync();
         await reader;
         var seconds = clock.Elapsed.TotalSeconds;
         var finals = events.Where(e => e.Event.IsFinal).ToList();
