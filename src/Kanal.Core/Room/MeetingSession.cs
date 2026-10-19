@@ -58,6 +58,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
+    public event Action? TranslationApplied;
     public event Action<bool>? TranscribingChanged;
 
     /// <summary>
@@ -246,7 +247,11 @@ public sealed class MeetingSession : IAsyncDisposable
 
             var updated = Room.ApplyTranslations(utterance.Id, utterance.Revision, translations);
             if (updated is not null)
+            {
+                if (translations.Count > 0)
+                    TranslationApplied?.Invoke();
                 await PublishSafeAsync(new TranslationUpsert(utterance.Id, utterance.Revision, translations));
+            }
         }
         catch (OperationCanceledException)
         {

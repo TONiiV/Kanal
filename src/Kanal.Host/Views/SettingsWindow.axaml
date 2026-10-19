@@ -172,7 +172,7 @@
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
-        <TabControl TabStripPlacement="Left" Padding="22,0,0,0">
+        <TabControl TabStripPlacement="Left" Padding="22,0,0,0" SelectedIndex="{Binding SelectedTab, Mode=TwoWay}">
             <TabItem AutomationProperties.Name="{l:T settings.tab.general}">
                 <TabItem.Header>
                     <StackPanel Classes="tab">

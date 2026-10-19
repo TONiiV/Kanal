@@ -125,6 +125,7 @@
   "error.mt.quota": "云端翻译的额度已用完。句子不再翻译。",
   "error.mt.key": "云端翻译的密钥不被接受。请在设置中检查。",
   "error.mt.unavailable": "云端翻译服务没有响应。部分句子没有翻译。",
+  "mt.warning.settings": "打开设置",
   "status.nothingtoexport": "没有可导出的内容。",
   "status.exportcancelled": "已取消导出。",
   "status.exported": "已导出至 {0}",
