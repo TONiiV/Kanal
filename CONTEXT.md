@@ -52,6 +52,18 @@ _Avoid_: Text-to-speech
 **Decision map**:
 A view connecting a meeting topic to alternative proposals and a resulting decision, with references to the source transcript. A model-suggested decision remains a candidate until a person confirms it.
 
+**Key fact**:
+A value in an utterance that must survive translation unchanged: a number with its unit, a tolerance, a part number, a standard number or a date.
+_Avoid_: Entity, keyword
+
+**Glossary**:
+A list of terms for one project, which the operator enters by hand. Each row has one cell for each of zh, de, pl and en, and a "do not translate" flag. Kanal saves it in `kanal-glossary.json` in the project folder.
+_Avoid_: Vocabulary (Gladia's name for its own input), dictionary
+
+**Intelligence provider**:
+A source of language-model inference for Kanal: a local model, the operator's own subscription through a locally installed CLI, or an API key. Term extraction, semantic checks, minutes, meeting titles and listening-agent answers use it; none of them is it. It never translates live speech.
+_Avoid_: Agent, AI, listening agent
+
 **Colour scheme**:
 The host's choice between Light, Dark and System, where System follows the operating system. It is a per-machine preference and never reaches the mobile caption page.
 _Avoid_: Theme, dark mode (as a setting name)
