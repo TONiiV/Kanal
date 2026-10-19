@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Kanal.Core.Diagnostics;
+using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 
 namespace Kanal.Core.Workspaces;
@@ -40,15 +41,19 @@ public static class MeetingBundle
 
         var transcript = Path.Combine(folder, TranscriptLog.FileName);
         var audio = Path.Combine(folder, WorkspaceStore.AudioFileName);
+        var speakers = Path.Combine(folder, SpeakerReidentification.FileName);
         try
         {
             using var file = new FileStream(target, FileMode.Create, FileAccess.Write);
             using var zip = new ZipArchive(file, ZipArchiveMode.Create);
             Put(zip, ManifestFileName, JsonSerializer.Serialize(
                 StoredManifest.From(meeting), Options));
-            Put(zip, TranscriptFileName, Markdown(meeting, TranscriptLog.Read(transcript)));
+            Put(zip, TranscriptFileName, Markdown(meeting, SpeakerReidentification.Apply(
+                TranscriptLog.Read(transcript), SpeakerReidentification.Read(folder))));
             if (File.Exists(transcript))
                 zip.CreateEntryFromFile(transcript, TranscriptLog.FileName);
+            if (File.Exists(speakers))
+                zip.CreateEntryFromFile(speakers, SpeakerReidentification.FileName);
             if (includeAudio && File.Exists(audio))
                 zip.CreateEntryFromFile(audio, WorkspaceStore.AudioFileName);
 
@@ -225,6 +230,7 @@ public static class MeetingBundle
     // workspace above the meeting, and an absolute one anywhere on the disk.
     private static bool Wanted(string name) =>
         name is TranscriptFileName or TranscriptLog.FileName or WorkspaceStore.AudioFileName
+            or SpeakerReidentification.FileName
         || (name.StartsWith(AttachmentsPrefix, StringComparison.Ordinal)
             && PlainName(name[AttachmentsPrefix.Length..]));
 
