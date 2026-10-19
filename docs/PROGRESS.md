@@ -19,6 +19,27 @@ Issue #279, part of spec #278.
 - **Button.** `OpenTranslationSettingsCommand` calls `MainViewModel.ShowTranslationSettings`. `WorkspaceSidebarView` sets that hook. It opens the Settings window with `SelectedTab = SettingsViewModel.TranslationTab`.
 - **Log.** The Warning entry in `RoomLog` stays.
 - **Test seam.** `PlanFilter` replaces the machine-translation provider with a scripted one. A `TaskCompletionSource` gate holds later calls. The clear test therefore does not race the pump.
+### Glossary T2: editor in the project settings window
+
+Spec #302. Stacked on T1 (#307).
+
+- **Place.** The project settings window is where the operator already manages a project. The glossary section is after the project icon.
+- **Rows.** One text box per language (zh, de, pl, en), the "Keep" check box (do not translate) and a remove button. **Add term** adds an empty row.
+- **Save.** The existing Save & Close button saves the glossary with the name and the icon. Save writes no file when the glossary did not change.
+- **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
+- **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
+- **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+### Glossary T1: per-project storage
+
+Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
+
+- **Model.** `GlossaryEntry(Zh, De, Pl, En, DoNotTranslate)`. An empty cell is `""`. The flag marks part numbers and codes.
+- **Storage.** `kanal-glossary.json` in the project root folder, next to `kanal-workspace.json`. The file moves with the folder. A person can read it without Kanal.
+- **Write.** `RecordFile` writes a temporary file, flushes it and replaces the old file. Save trims each cell and drops rows with no term.
+- **Read.** No file gives an empty glossary. A damaged file gives `Unreadable`, and Save refuses to write over it. A different schema version gives `UnsupportedVersion`.
+- **Delete.** "Delete files" on a project also deletes the glossary file, because Kanal wrote it.
+- **Next.** T2 adds the editor to the project settings window. T3 (#303), T4 (#304) and T5 (#306) are tickets only.
 
 ---
 
