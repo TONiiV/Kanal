@@ -14,6 +14,23 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check. Issue #297 tracks the Cyrillic fix.
 - **Needs PR #294.** `NemotronAsrProvider` forces the language when a room has one language, so `Guess` does not run there. English in a Chinese-only room is translated only when PR #294 removes that forcing and every final goes through `Guess`.
 
+### Automatic recognition language (ADR 0061)
+
+Transcription never limits the recognition language. Room languages set only the columns, the
+dropdown and the translation targets. Speakers mix zh with en, de or pl. Before the meeting,
+nobody knows which languages they will speak. The rule: the recognition language comes only from
+the system's own judgement, never from a human setting.
+
+- **Gladia** keeps `code_switching` and sends no `languages`. The code already does this.
+- **Benchmarks** (PR #285) choose models by the auto room scores. A forced room is only for diagnosis.
+- **Open item:** `NemotronAsrProvider` conflicts with this rule in two places. For a one-language
+  room, `StartAsync` forces the prompt language. Also, `_forced ?? TranscriptLanguage.Guess(…)`
+  skips the language guess. A separate ticket removes both.
+- **Open item:** `TranscriptLanguage.Guess` uses the room languages as a prior for the label. A
+  Latin language outside the room needs a score of 4 or more. Chinese text in a room without zh
+  becomes ja. The fallback is the first room language. This changes the label, not the recognition.
+  A separate ticket decides whether to keep it.
+
 ### Gladia session does not reconnect after a deliberate stop
 
 - **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
