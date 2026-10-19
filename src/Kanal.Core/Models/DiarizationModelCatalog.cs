@@ -50,7 +50,8 @@ public sealed record DiarizationModelInfo(
     long SizeBytes,
     string Sha256,
     ModelLicense License,
-    string? LicenseNote = null) : IDownloadableFile
+    string? LicenseNote = null,
+    string? Url = null) : IDownloadableFile
 {
     private readonly ModelLicense _license = Permitted(License);
 
@@ -60,7 +61,7 @@ public sealed record DiarizationModelInfo(
         init => _license = Permitted(value);
     }
 
-    public string DownloadUrl =>
+    public string DownloadUrl => Url ??
         $"https://github.com/k2-fsa/sherpa-onnx/releases/download/{ReleaseTag}/{FileName}";
 
     public string SizeLabel => string.Create(CultureInfo.InvariantCulture, $"{SizeBytes / (1024.0 * 1024):0.#} MB");
@@ -81,8 +82,8 @@ public static class DiarizationModelCatalog
     // Upstream misspelt "recognition". Corrected, every embedding URL is a 404.
     private const string EmbeddingTag = "speaker-recongition-models";
 
-    // The published asset is a bz2 archive of model.onnx and model.int8.onnx; the BCL has no
-    // bzip2, so unpacking belongs to the slice that loads the model.
+    // The release ships this model only as .tar.bz2 and the BCL has no bzip2. The same
+    // model.onnx is on Hugging Face, pinned to a commit so the hash cannot drift.
     public static IReadOnlyList<DiarizationModelInfo> Segmentation { get; } =
     [
         new(
@@ -90,10 +91,11 @@ public static class DiarizationModelCatalog
             DisplayName: "pyannote segmentation 3.0",
             Role: DiarizationModelRole.Segmentation,
             ReleaseTag: SegmentationTag,
-            FileName: "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-            SizeBytes: 6_958_444,
-            Sha256: "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
-            License: ModelLicense.Mit),
+            FileName: "pyannote-segmentation-3-0.onnx",
+            SizeBytes: 5_992_913,
+            Sha256: "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+            License: ModelLicense.Mit,
+            Url: "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/9403a6902bb58e3d5ae8c7e77c3422de279db2e0/model.onnx"),
     ];
 
     // Candidates rather than a ranking: the default is decided by measured DER on zh/de/pl.
@@ -139,6 +141,11 @@ public static class DiarizationModelCatalog
     ];
 
     public static IReadOnlyList<DiarizationModelInfo> Models { get; } = [.. Segmentation, .. Embeddings];
+
+    // One pair and no picker (#179). Slice 6 (#111) replaces the embedding after zh/de/pl measurements.
+    public static DiarizationModelInfo DefaultSegmentation => Segmentation[0];
+
+    public static DiarizationModelInfo DefaultEmbedding => Embeddings[0];
 
     public static DiarizationModelInfo? Find(string? id) =>
         id is null ? null : Models.FirstOrDefault(m => m.Id == id);

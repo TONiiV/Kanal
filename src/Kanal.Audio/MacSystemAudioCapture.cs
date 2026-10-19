@@ -16,6 +16,8 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
 
     private const int AuthorizationCheckIntervalSeconds = 1;
 
+    internal const string DeviceLostMessage = "computer audio device lost";
+
     private readonly IMacSystemAudioNative _native;
     private readonly TimeSpan _stopTimeout;
     private readonly TimeProvider _clock;
@@ -109,6 +111,13 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         MacSystemAudioErrorCallback onError = (message, _) =>
         {
             var detail = Marshal.PtrToStringUTF8(message) ?? "unknown native error";
+            if (detail == DeviceLostMessage)
+            {
+                frames.Writer.TryComplete(new AudioCaptureException(AudioCaptureFault.SourceEnded,
+                    "Computer audio capture stopped: the output device that clocks it disappeared. Start again."));
+                return;
+            }
+
             var denied = IsPermissionFailure(detail);
             var advice = denied
                 ? PermissionAdvice

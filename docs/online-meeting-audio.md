@@ -90,7 +90,7 @@ in-room meeting stays live and says capture stopped. The same code reaches the l
 |---|---|---|---|
 | `permission_denied` | microphone / system | The OS refused access. | Windows: Settings → Privacy & security → Microphone → allow desktop apps. macOS: System Settings → Privacy & Security → Microphone, and Screen & System Audio Recording (the system-audio list where the OS version shows one), for Kanal; quit and reopen Kanal after changing it. |
 | `device_unavailable` | microphone / system | The device was unplugged, disabled, switched, or is held exclusively by another app; or a Doctor index is not listed. | Re-plug or re-enable it, run `devices`, pick it again in the microphone menu — during an in-room meeting too, without stopping it. Turn off exclusive mode in the device's Windows sound properties. |
-| `source_ended` | microphone / system | The source stopped delivering without an error (driver reset, Bluetooth profile switch). | Pick the device again; for Bluetooth, see below. |
+| `source_ended` | microphone / system | The source stopped delivering without an error (driver reset, Bluetooth profile switch). On macOS, the output device that clocks computer audio can also disappear. | Microphone: pick the device again; for Bluetooth, see below. Computer audio: start again. |
 | `source_failed` | microphone / system / mixer | Any other platform error; the message carries the platform's text. | Read the attached exception in the log; retry with `system` or `online` in Doctor. |
 | `clock_stalled` | mixer | The mixer fell more than 2 s behind the clock: the computer slept or was saturated. | Keep the laptop awake and on power; close heavy apps; start again. |
 | `consumer_stalled` | mixer | The transcription connection accepted no audio for 60 s. Shorter stalls are buffered and delivered late, never dropped. | Check the network and the transcription provider; start again. |
@@ -148,7 +148,8 @@ Everything here needs real hardware and a second person. None of it is covered b
 | macOS 14.2+: with the permission denied, the meeting stops within a few seconds of Start and shows the localized reason, with no 30 s wait (see "System-audio permission on macOS 14.2+") | — | NOT YET VERIFIED |
 | macOS 14.2+: with the permission denied and the computer silent, nothing else changes: a quiet start never stops the meeting (see the same section) | — | NOT YET VERIFIED |
 | A notification sound with Do Not Disturb off appears in the transcript input (documents the limitation) | NOT YET VERIFIED | NOT YET VERIFIED |
-| macOS 14.2+: the output that was the default at Start disappears mid-meeting → computer audio keeps arriving, or a visible stop, not endless padded silence (see known risks) | — | NOT YET VERIFIED |
+| macOS 14.2+: unplug the output that was the default at Start (the aggregate's clock device) mid-meeting → the meeting stops with the computer-audio `source_ended` reason, not endless padded silence (see known risks) | — | NOT YET VERIFIED |
+| Windows: unplug or switch the default output mid-meeting → computer audio keeps arriving, or a visible stop, never endless padded silence (see known risks) | NOT YET VERIFIED | — |
 | Windows 10 2004+: process loopback captures every app's audio but not Kanal's own (see known risks) | NOT YET VERIFIED | — |
 | Windows 10 before 2004: Online meeting shows as unavailable with the required version | NOT YET VERIFIED | — |
 | macOS 14.2+: a USB/Bluetooth headset that is both output and microphone → its microphone is not mixed into the computer-audio source (see known risks) | — | NOT YET VERIFIED |
@@ -157,14 +158,16 @@ Everything here needs real hardware and a second person. None of it is covered b
 ## Known risks
 
 The first two concern the macOS Core Audio tap in `src/Kanal.Audio/Native/MacSystemAudio.swift`, the
-third the Windows adapter in `src/Kanal.Audio/WasapiLoopbackAudioCapture.cs`. All are untested on
-hardware; they are follow-ups, not handled in this release.
+last two the Windows adapter in `src/Kanal.Audio/WasapiLoopbackAudioCapture.cs`. All are untested on
+hardware. The headset microphone and the Windows process loopback are follow-ups, not handled in
+this release.
 
-- **No error after start (macOS).** The tap is global — every process on every output device — but the
-  private aggregate device that carries it uses the default output at Start as its clock. The session
-  has no device-alive or tap listener: if that device dies or the tap is invalidated after Start, the
-  native callback simply stops; the mixer then pads silence and the hint shows *No computer sound
-  detected* instead of a `device_unavailable` stop.
+- **Clock device loss (macOS).** The tap is global — every process on every output device — but the
+  private aggregate device that carries it uses the default output at Start as its clock. The native
+  session listens to `kAudioDevicePropertyDeviceIsAlive` on that clock device and on the aggregate
+  device. When either dies, the session reports `source_ended` for the computer audio and the online
+  meeting stops. An invalidated tap with both devices alive is not detected: the mixer pads silence
+  and the hint shows *No computer sound detected*. The listener is untested on hardware.
 - **Headset microphone in the computer-audio source (macOS).** The aggregate lists the default output
   as its clock sub-device, and every input buffer of the IOProc is downmixed. When that default output
   is a headset that is also a microphone, the headset microphone may be mixed into the computer-audio
@@ -174,6 +177,12 @@ hardware; they are follow-ups, not handled in this release.
 - **Process loopback (Windows).** Computer audio is captured with WASAPI process loopback excluding
   Kanal's own process tree (Windows 10 2004, build 19041, or later), at 44.1 kHz 16-bit stereo, then
   downmixed and resampled. It compiles but has not been run on Windows.
+- **Output device change (Windows).** Process loopback is a virtual device (`VAD\Process_Loopback`). It
+  is bound to no render endpoint, so an unplugged or switched output is expected not to end the stream. The manual test at the top of this file verifies it. This
+  matches the 2026-10-03 amendment of ADR 0050: computer audio is all audio of the computer, with no
+  selected output that can disappear. The Windows adapter needs no device-loss listener. If WASAPI
+  does report an error, `WasapiPcmCapture` passes it on and the host stops the meeting with
+  `device_unavailable` or `source_failed`.
 
 ## System-audio permission on macOS 14.2+
 

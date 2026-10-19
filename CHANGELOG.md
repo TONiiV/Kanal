@@ -17,6 +17,20 @@ The first release. Everything below is what Kanal does on the day it ships.
 - On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
   permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
   after about 30 seconds. The status line now tells you to allow the permission.
+- On a Mac, an online meeting now stops when the output device that Kanal used as its clock
+  disappears. Before, the meeting went on and the computer audio stayed silent. The status bar now
+  says that the computer audio source stopped.
+- Kanal now labels the language of a transcript line by its script first. In a room with two or more
+  languages, a Chinese or Japanese sentence now gets its own language label, also when the room does
+  not contain that language.
+- A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
+  choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
+  speaker separation on the recording on this computer and gives each person their own tag and
+  colour. *Not sure* can find more people than there are, but it rarely joins two people. A number
+  can join two similar voices into one. The first run downloads a 34 MB model. The original tags
+  stay in the transcript file.
+- A room with one language now also transcribes speakers who use another language. Before, local
+  transcription could transcribe only the language of the room.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

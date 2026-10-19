@@ -141,6 +141,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public Func<MeetingItemViewModel, Task>? GenerateTitleFor { get; set; }
 
+    // One run at a time: each one holds the whole recording in memory.
+    [ObservableProperty]
+    private string? _reidentifyingMeetingId;
+
+    public Func<MeetingItemViewModel, int?, Task>? ReidentifySpeakersFor { get; set; }
+
     public event Action<string, string>? MeetingRenamed;
 
     public event Action<string>? MeetingFilesChanged;
@@ -443,6 +449,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     partial void OnNamingMeetingIdChanged(string? value) => ShowNamingState();
 
+    partial void OnReidentifyingMeetingIdChanged(string? value) => ShowNamingState();
+
     private void ShowNamingState()
     {
         foreach (var meeting in Meetings)
@@ -456,6 +464,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             : RoomBusy ? "meeting.generatetitle.running"
             : null;
         meeting.CanGenerateTitle = meeting.NamingBlockedBy is null && NamingMeetingId is null;
+        meeting.ReidentifyBlockedBy = meeting.Record.AudioPath is null ? "meeting.reidentify.noaudio"
+            : RoomBusy ? "meeting.reidentify.running"
+            : null;
+        meeting.CanReidentifySpeakers = meeting.ReidentifyBlockedBy is null && ReidentifyingMeetingId is null;
         return meeting;
     }
 
@@ -483,7 +495,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
             Meetings.Add(ShowNamingState(new MeetingItemViewModel(
-                record, RenameFromRow, GenerateTitleAsync,
+                record, RenameFromRow, GenerateTitleAsync, ReidentifySpeakersAsync,
                 ImportIntoAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
@@ -580,6 +592,9 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private Task GenerateTitleAsync(MeetingItemViewModel item) =>
         GenerateTitleFor?.Invoke(item) ?? Task.CompletedTask;
+
+    private Task ReidentifySpeakersAsync(MeetingItemViewModel item, int? people) =>
+        ReidentifySpeakersFor?.Invoke(item, people) ?? Task.CompletedTask;
 
     private async Task ImportIntoAsync(MeetingItemViewModel item)
     {
