@@ -193,6 +193,7 @@ diarization tag, while clients resolve the canonical speaker at render time.
 | `src/Kanal.Host` | Avalonia operator UI, pipeline planning, settings, recording, QR generation and export |
 | `tests/Kanal.Core.UnitTests` | Unit tests for audio, providers, serialization, room state, orchestration, and other non-visual services |
 | `tests/Kanal.UI.UnitTests` | Headless unit tests for deterministic host view-model and application-state behavior; rendering and layout are intentionally out of scope |
+| `tests/Kanal.Benchmark` | Local console benchmark for the local translation models: latency under concurrent streams, chrF, part-number retention. See `docs/PROGRESS.md` |
 | `web/index.html` | Static mobile client; `docs/index.html` is its byte-identical GitHub Pages copy |
 | `gateway/` | Relay gateway: Cloudflare Worker plus per-room and device-registry Durable Objects, with its own vitest suite |
 | `tools/Kanal.Doctor` | Microphone and live-ASR diagnostics |
