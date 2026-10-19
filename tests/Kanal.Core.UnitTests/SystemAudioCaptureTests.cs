@@ -208,13 +208,13 @@ public class SystemAudioCaptureTests
     }
 
     [Theory]
-    [InlineData(MacAudioCaptureAuthorization.Authorized)]
-    [InlineData(MacAudioCaptureAuthorization.Unknown)]
+    [InlineData(1)]
+    [InlineData(0)]
     [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeAsksMacOsAndKeepsRunningWhenTheTapDeliversZerosAndMacOsDoesNotSayDenied(
-        MacAudioCaptureAuthorization authorization)
+        int authorization)
     {
-        var native = new FakeMacNative(silent: true, authorization: authorization);
+        var native = new FakeMacNative(silent: true, authorization: (MacAudioCaptureAuthorization)authorization);
         var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native, clock: new StillClock());
         using var cts = Bounded();
 
