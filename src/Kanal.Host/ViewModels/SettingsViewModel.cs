@@ -98,6 +98,11 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
+    public const int TranslationTab = 4;
+
+    [ObservableProperty]
+    private int _selectedTab;
+
     public SettingsViewModel(ModelRows? modelRows = null)
         : this(
             SettingsStore.Load(),

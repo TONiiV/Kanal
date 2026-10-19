@@ -808,6 +808,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _status = Localizer.Instance["status.idle"];
 
+    public string? MtWarningCode => null;
+
+    public bool HasMtWarning => false;
+
+    public string MtWarningText => "";
+
+    public Func<Task>? ShowTranslationSettings { get; set; }
+
+    [RelayCommand]
+    private Task OpenTranslationSettings() => Task.CompletedTask;
+
     /// <summary>Where the selected mode transcribes, named before Start rather than guessed.</summary>
     [ObservableProperty]
     private string _transcriptionStatus = "";
