@@ -183,4 +183,55 @@ public class MeetingBundleTests : IDisposable
         Assert.Equal(StoreProblemKind.Unreadable, imported.Problem!.Kind);
         Assert.Empty(store.ListMeetings(workspace.Id).Meetings);
     }
+
+    [Fact]
+    public void AFailedExportLeavesAnExistingBundleUntouched()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        var before = File.ReadAllBytes(bundle);
+
+        var attachment = Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments", "quotation.pdf");
+        using var lockedAttachment = new FileStream(attachment, FileMode.Open, FileAccess.Read, FileShare.None);
+        var problem = MeetingBundle.Write(store, meeting, includeAudio: false, bundle);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem!.Kind);
+        Assert.Equal(before, File.ReadAllBytes(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
+    [Fact]
+    public void AFailedExportLeavesNoFileWhereNoBundleWasBefore()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+
+        var attachment = Path.Combine(store.MeetingFolder(workspace.Id, meeting.Id)!, "attachments", "quotation.pdf");
+        using var lockedAttachment = new FileStream(attachment, FileMode.Open, FileAccess.Read, FileShare.None);
+        var problem = MeetingBundle.Write(store, meeting, includeAudio: false, bundle);
+
+        Assert.Equal(StoreProblemKind.Unwritable, problem!.Kind);
+        Assert.Empty(Names(bundle));
+    }
+
+    [Fact]
+    public void AnExportReplacesAnExistingBundleAndLeavesNoTemporaryFile()
+    {
+        var (store, workspace) = Opened("laptop");
+        var meeting = Recorded(store, workspace, "Delivery call");
+        var bundle = Bundle("delivery");
+        File.WriteAllText(bundle, "an earlier export");
+
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+
+        Assert.Contains(MeetingBundle.ManifestFileName, Entries(bundle));
+        Assert.Equal([Path.GetFileName(bundle)], Names(bundle));
+    }
+
+    private static IReadOnlyList<string> Names(string bundle) =>
+        [.. Directory.GetFiles(Path.GetDirectoryName(bundle)!, Path.GetFileNameWithoutExtension(bundle) + "*")
+            .Select(Path.GetFileName).Order()!];
 }
