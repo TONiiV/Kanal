@@ -34,6 +34,11 @@ public class MtWarningBarTests
     private static Task Fails(string code) =>
         throw new MtProviderException("refused", code);
 
+    private static Task Silent(CancellationToken ct) => Task.Delay(Timeout.Infinite, ct);
+
+    private static Task StopAsync(MainViewModel vm) =>
+        vm.StopCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(30));
+
     private static async Task PumpUntilAsync(Func<bool> condition, int timeoutMs = 15_000)
     {
         var deadline = Environment.TickCount64 + timeoutMs;
@@ -48,9 +53,10 @@ public class MtWarningBarTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static async Task<MainViewModel> StartedAsync(ScriptedMt mt)
+    private static async Task<MainViewModel> StartedAsync(ScriptedMt mt, Action<MainViewModel>? beforeStart = null)
     {
         var vm = TestViewModels.Demo();
+        beforeStart?.Invoke(vm);
         vm.PlanFilter = plan => plan with
         {
             Asr = new FakeAsrProvider(
@@ -59,44 +65,44 @@ public class MtWarningBarTests
                 loop: true),
             Mt = mt,
         };
-        await vm.StartCommand.ExecuteAsync(null);
+        await vm.StartCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(30));
         return vm;
     }
 
     [AvaloniaFact]
     public async Task AKeyErrorFromCloudTranslationRaisesTheWarning()
     {
-        var vm = await StartedAsync(new ScriptedMt((_, _) => Fails(MtProviderException.InvalidKey)));
+        var vm = await StartedAsync(new ScriptedMt((call, ct) => call == 0 ? Fails(MtProviderException.InvalidKey) : Silent(ct)));
 
         await PumpUntilAsync(() => vm.HasMtWarning);
 
         Assert.Equal("mt.key", vm.MtWarningCode);
         Assert.Equal(Localizer.Instance["error.mt.key"], vm.MtWarningText);
         Assert.Contains("cloud translation", vm.MtWarningText);
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
     public async Task AnUnrelatedStatusWriteKeepsTheWarning()
     {
-        var vm = await StartedAsync(new ScriptedMt((_, _) => Fails(MtProviderException.InvalidKey)));
+        var vm = await StartedAsync(new ScriptedMt((call, ct) => call == 0 ? Fails(MtProviderException.InvalidKey) : Silent(ct)));
         await PumpUntilAsync(() => vm.HasMtWarning);
 
         vm.Status = "Recording started.";
 
         Assert.True(vm.HasMtWarning);
         Assert.Equal("mt.key", vm.MtWarningCode);
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
     public async Task AFailureThatIsNotAnMtErrorRaisesNoWarning()
     {
-        var vm = await StartedAsync(new ScriptedMt((_, _) => throw new InvalidOperationException("boom")));
+        var vm = await StartedAsync(new ScriptedMt((call, ct) => call == 0 ? throw new InvalidOperationException("boom") : Silent(ct)));
         await PumpUntilAsync(() => vm.Status.Contains("boom"));
 
         Assert.False(vm.HasMtWarning);
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
@@ -116,16 +122,16 @@ public class MtWarningBarTests
         await PumpUntilAsync(() => !vm.HasMtWarning);
 
         Assert.Null(vm.MtWarningCode);
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
     public async Task EndingTheMeetingClearsTheWarning()
     {
-        var vm = await StartedAsync(new ScriptedMt((_, _) => Fails(MtProviderException.QuotaExceeded)));
+        var vm = await StartedAsync(new ScriptedMt((call, ct) => call == 0 ? Fails(MtProviderException.QuotaExceeded) : Silent(ct)));
         await PumpUntilAsync(() => vm.HasMtWarning);
 
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
 
         Assert.False(vm.HasMtWarning);
         Assert.Null(vm.MtWarningCode);
@@ -134,30 +140,27 @@ public class MtWarningBarTests
     [AvaloniaFact]
     public async Task ARepeatedCodeKeepsOneWarning()
     {
-        var mt = new ScriptedMt((_, _) => Fails(MtProviderException.Unavailable));
-        var vm = await StartedAsync(mt);
-        await PumpUntilAsync(() => vm.HasMtWarning);
-
+        var mt = new ScriptedMt((call, ct) => call < 4 ? Fails(MtProviderException.Unavailable) : Silent(ct));
         var changes = 0;
-        vm.PropertyChanged += (_, e) =>
+        var vm = await StartedAsync(mt, vm => vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(MainViewModel.MtWarningCode) or nameof(MainViewModel.HasMtWarning))
+            if (e.PropertyName == nameof(MainViewModel.MtWarningCode))
                 changes++;
-        };
-        var seen = mt.Calls;
-        await PumpUntilAsync(() => mt.Calls >= seen + 3);
-        await PumpUntilAsync(() => true);
+        });
+        await PumpUntilAsync(() => mt.Calls >= 5);
+        await Task.Delay(100);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.True(vm.HasMtWarning);
         Assert.Equal("mt.unavailable", vm.MtWarningCode);
-        Assert.Equal(0, changes);
-        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal(1, changes);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
     public async Task TheBarShowsTheTextAndTheButtonOpensTheTranslationSettings()
     {
-        var vm = await StartedAsync(new ScriptedMt((_, _) => Fails(MtProviderException.InvalidKey)));
+        var vm = await StartedAsync(new ScriptedMt((call, ct) => call == 0 ? Fails(MtProviderException.InvalidKey) : Silent(ct)));
         var window = new MainWindow { DataContext = vm };
         window.Show();
         var opened = 0;
@@ -179,7 +182,7 @@ public class MtWarningBarTests
         Assert.Equal(1, opened);
 
         window.Close();
-        await vm.StopCommand.ExecuteAsync(null);
+        await StopAsync(vm);
     }
 
     [AvaloniaFact]
