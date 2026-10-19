@@ -32,6 +32,82 @@ internal static partial class Scoring
         return (Distance(Words(hypothesis), words), words.Length);
     }
 
+    public static string[] MixedTokens(string text)
+    {
+        var tokens = new List<string>();
+        var word = new StringBuilder();
+        void Flush()
+        {
+            if (word.Length > 0)
+                tokens.Add(word.ToString());
+            word.Clear();
+        }
+
+        foreach (var c in SimplifiedChinese.Normalize(Compat(text)).ToLowerInvariant())
+        {
+            if (c is >= '一' and <= '鿿' or >= '㐀' and <= '䶿')
+            {
+                Flush();
+                tokens.Add(c.ToString());
+            }
+            else if (char.IsLetterOrDigit(c))
+            {
+                word.Append(c);
+            }
+            else
+            {
+                Flush();
+            }
+        }
+
+        Flush();
+        return [.. tokens];
+    }
+
+    public static (int Errors, int ReferenceLength) MixedErrors(string hypothesis, string reference, bool numbers = false)
+    {
+        if (numbers)
+            (hypothesis, reference) = (MixedNumbers(hypothesis), MixedNumbers(reference));
+        var tokens = MixedTokens(reference);
+        return (Distance(MixedTokens(hypothesis), tokens), tokens.Length);
+    }
+
+    public static (int Kept, int Total) EnglishKept(string hypothesis, string reference)
+    {
+        hypothesis = Contraction().Replace(Compat(hypothesis), "");
+        reference = Contraction().Replace(Compat(reference), "");
+        var available = MixedTokens(hypothesis).Where(IsEnglishWord).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
+        var words = EnglishWords(reference);
+        var kept = 0;
+        foreach (var word in words)
+            if (available.TryGetValue(word, out var left) && left > 0)
+            {
+                available[word] = left - 1;
+                kept++;
+            }
+
+        return (kept, words.Count);
+    }
+
+    private static readonly HashSet<string> Fillers = ["um", "umm", "uh", "uhh", "er", "erm", "mm", "mmm", "hm", "hmm"];
+
+    private static bool IsEnglishWord(string token) => token.Any(char.IsAsciiLetter);
+
+    private static bool IsSingleLetter(string token) => token.Length == 1 && char.IsAsciiLetter(token[0]);
+
+    // A run of single letters is a spelled word ("i s m"): the reference has no single Latin word for it. A lone "a" or "I" stays.
+    private static List<string> EnglishWords(string reference)
+    {
+        var tokens = MixedTokens(reference);
+        return tokens
+            .Where((t, i) => IsEnglishWord(t) && !Fillers.Contains(t)
+                             && !(IsSingleLetter(t) && (i > 0 && IsSingleLetter(tokens[i - 1]) || i + 1 < tokens.Length && IsSingleLetter(tokens[i + 1]))))
+            .ToList();
+    }
+
+    private static string MixedNumbers(string text) =>
+        Numbers.Normalize("en", Numbers.Normalize("zh", ScriptEdge().Replace(SimplifiedChinese.Normalize(Compat(text)), " ")));
+
     public static IReadOnlyList<string> Codes(string source) =>
         CodeToken().Matches(Compat(source))
             .Select(m => m.Value)
@@ -115,6 +191,13 @@ internal static partial class Scoring
 
     private static string LoosePattern(string code) =>
         "(?<![A-Za-z0-9])" + string.Join(@"[\s\-./]*", code.Where(char.IsAsciiLetterOrDigit).Select(c => c.ToString())) + "(?![A-Za-z0-9])";
+
+    [GeneratedRegex(@"(?<=[\u4e00-\u9fff\u3400-\u4dbf])(?=[A-Za-z])|(?<=[A-Za-z])(?=[\u4e00-\u9fff\u3400-\u4dbf])")]
+    private static partial Regex ScriptEdge();
+
+    // A contraction stays one word: split at the apostrophe, "I'm" would look like a spelled word.
+    [GeneratedRegex(@"(?<=[A-Za-z])['\u2019](?=[A-Za-z])")]
+    private static partial Regex Contraction();
 
     [GeneratedRegex(@"[^\p{L}\p{N}]+")]
     private static partial Regex NotWordChar();
