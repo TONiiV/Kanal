@@ -416,6 +416,28 @@ public class OnlineCaptureTests
     }
 
     [AvaloniaFact]
+    public async Task AnOnlineMeetingStopsWithALocalizedReasonWhenTheComputerAudioEnds()
+    {
+        using var rig = new Rig();
+        rig.Online();
+        await rig.StartAsync();
+        await Until(() => rig.Asr.Pushes > 0);
+
+        rig.Computer.End();
+        await Until(() => !rig.Vm.IsRunning && !rig.Vm.IsStopping);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(
+            L.Format("status.audiofailed",
+                L.Format("capture.fault.source_ended", L["capture.source.system"])),
+            rig.Vm.Status);
+        var fault = Assert.Single(rig.Lines, l => l.Message.StartsWith("capture_fault"));
+        Assert.Contains("code=source_ended source=system mode=online", fault.Message);
+        Assert.Equal(1, rig.Microphone.Closes);
+        Assert.Equal(1, rig.Computer.Closes);
+    }
+
+    [AvaloniaFact]
     public async Task AnInRoomStreamThatEndsSaysSoAndKeepsTheRoomLive()
     {
         using var rig = new Rig();
