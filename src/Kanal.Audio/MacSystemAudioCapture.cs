@@ -142,6 +142,15 @@ internal interface IMacSystemAudioNative
         MacSystemAudioErrorCallback onError);
 
     ValueTask StopAsync(IntPtr handle);
+
+    MacAudioCaptureAuthorization AudioCaptureAuthorization();
+}
+
+internal enum MacAudioCaptureAuthorization
+{
+    Unknown = 0,
+    Authorized = 1,
+    Denied = 2,
 }
 
 internal sealed class MacSystemAudioNative : IMacSystemAudioNative
@@ -156,6 +165,23 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
 
     public ValueTask StopAsync(IntPtr handle) =>
         WaitForStopAsync(callback => NativeStop(handle, callback, IntPtr.Zero));
+
+    public MacAudioCaptureAuthorization AudioCaptureAuthorization()
+    {
+        try
+        {
+            return NativeAuthorization() switch
+            {
+                1 => MacAudioCaptureAuthorization.Authorized,
+                2 => MacAudioCaptureAuthorization.Denied,
+                _ => MacAudioCaptureAuthorization.Unknown,
+            };
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return MacAudioCaptureAuthorization.Unknown;
+        }
+    }
 
     // The handle is the delegate's only root: native code may complete after the caller timed out.
     internal static async ValueTask WaitForStopAsync(Action<MacSystemAudioStopCallback> stop)
@@ -194,6 +220,9 @@ internal sealed class MacSystemAudioNative : IMacSystemAudioNative
         MacSystemAudioFrameCallback onFrame,
         MacSystemAudioErrorCallback onError,
         IntPtr context);
+
+    [DllImport("kanal_audio_native", EntryPoint = "kanal_audio_capture_authorization", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int NativeAuthorization();
 
     [DllImport("kanal_audio_native", EntryPoint = "kanal_system_audio_stop_with_completion", CallingConvention = CallingConvention.Cdecl)]
     private static extern void NativeStop(

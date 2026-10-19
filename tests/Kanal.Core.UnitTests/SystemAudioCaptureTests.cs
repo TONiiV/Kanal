@@ -189,6 +189,91 @@ public class SystemAudioCaptureTests
 
     [Fact]
     [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeStopsWithPermissionDeniedWhenTheTapDeliversZerosAndMacOsSaysDenied()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Denied);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
+
+        var error = await Assert.ThrowsAsync<AudioCaptureException>(async () =>
+        {
+            await foreach (var _ in capture.CaptureAsync(TestContext.Current.CancellationToken))
+            {
+            }
+        });
+
+        Assert.Equal(AudioCaptureFault.PermissionDenied, error.Fault);
+        Assert.Contains("System Audio Recording", error.Message, StringComparison.Ordinal);
+        Assert.True(native.Stopped);
+    }
+
+    [Theory]
+    [InlineData(MacAudioCaptureAuthorization.Authorized)]
+    [InlineData(MacAudioCaptureAuthorization.Unknown)]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeKeepsRunningWhenTheTapDeliversZerosAndMacOsDoesNotSayDenied(
+        MacAudioCaptureAuthorization authorization)
+    {
+        var native = new FakeMacNative(silent: true, authorization: authorization);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        var frames = 0;
+        try
+        {
+            await foreach (var _ in capture.CaptureAsync(cts.Token))
+                frames++;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.Equal(1, frames);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeKeepsRunningWhenSoundArrivesEvenIfMacOsSaysDenied()
+    {
+        var native = new FakeMacNative(authorization: MacAudioCaptureAuthorization.Denied);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.CoreAudioProcessTap, native);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        var frames = 0;
+        try
+        {
+            await foreach (var _ in capture.CaptureAsync(cts.Token))
+                frames++;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.Equal(1, frames);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
+    public async Task MacBridgeDoesNotAskMacOsAboutTheSystemAudioPermissionForScreenCaptureKit()
+    {
+        var native = new FakeMacNative(silent: true, authorization: MacAudioCaptureAuthorization.Denied);
+        var capture = new MacSystemAudioCapture(SystemAudioBackend.ScreenCaptureKit, native);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        var frames = 0;
+        try
+        {
+            await foreach (var _ in capture.CaptureAsync(cts.Token))
+                frames++;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.Equal(1, frames);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("macos13.0")]
     public async Task MacBridgeReportsAnyOtherNativeFailureAsASourceFailure()
     {
         var native = new FakeMacNative("tap creation failed (OSStatus 560947818)");
@@ -254,6 +339,7 @@ public class SystemAudioCaptureTests
         {
             Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_start"));
             Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_system_audio_stop_with_completion"));
+            Assert.NotEqual(IntPtr.Zero, NativeLibrary.GetExport(library, "kanal_audio_capture_authorization"));
         }
         finally
         {
@@ -343,8 +429,12 @@ public class SystemAudioCaptureTests
     private sealed class FakeMacNative(
         string? failure = null,
         int[]? sampleRates = null,
-        bool stopHangs = false) : IMacSystemAudioNative
+        bool stopHangs = false,
+        bool silent = false,
+        MacAudioCaptureAuthorization authorization = MacAudioCaptureAuthorization.Unknown) : IMacSystemAudioNative
     {
+        public MacAudioCaptureAuthorization AudioCaptureAuthorization() => authorization;
+
         public SystemAudioBackend? Backend { get; private set; }
         public bool Stopped { get; private set; }
 
@@ -374,7 +464,7 @@ public class SystemAudioCaptureTests
             }
             else
             {
-                var samples = Enumerable.Range(0, 100).Select(i => (short)(i * 100)).ToArray();
+                var samples = Enumerable.Range(0, 100).Select(i => silent ? (short)0 : (short)(i * 100)).ToArray();
                 var bytes = samples.Length * sizeof(short);
                 var data = Marshal.AllocHGlobal(bytes);
                 try
