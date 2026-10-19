@@ -20,12 +20,15 @@ The first release. Everything below is what Kanal does on the day it ships.
   colour. *Not sure* can find more people than there are, but it rarely joins two people. A number
   can join two similar voices into one. The first run downloads a 34 MB model. The original tags
   stay in the transcript file.
+- A room with one language now also transcribes speakers who use another language. Before, local
+  transcription could transcribe only the language of the room.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
   and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
   the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,
-  download it and select it in the Translation tab.
+  download it and select it in the Translation tab. A *Recommended* label marks it in the list,
+  in English, Chinese, German and Polish.
 - The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
   1 pixel up and left of the centre on screens with 150% scaling.
 - The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
