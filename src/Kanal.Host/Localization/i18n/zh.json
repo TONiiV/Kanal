@@ -411,6 +411,7 @@
   "workspace.refused.foldermissing": "找不到该文件夹：{0}。请接上它所在的磁盘，或选择另一个文件夹。",
   "workspace.refused.unreadable": "Kanal 无法读取 {0}。请修复它或把它移走，然后重试。",
   "workspace.refused.misfiled": "{0} 中的会议记录属于另一个文件夹。请把该文件夹移走，然后重试。",
+  "workspace.refused.foldertaken": "Kanal 没有导入该文件。磁盘上已有会议文件夹 {0}，其中的文件没有改动。请把该文件夹移走，然后重试。",
   "workspace.refused.unwritable": "Kanal 无法修改 {0}。请关闭正在使用其中文件的程序，检查剩余空间和文件夹权限，然后重试。",
   "workspace.refused.unsupportedversion": "本版 Kanal 无法读取 {0}。请更新 Kanal，然后重试。",
   "workspace.refused.other": "Kanal 无法完成此操作。详情见日志。",
