@@ -102,6 +102,143 @@ the system's own judgement, never from a human setting.
 
 ---
 
+## 2026-10-17
+
+### Local transcription benchmark
+
+`tests/Kanal.AsrBenchmark` measures the local transcription models on this machine. It does not run
+in CI, because it needs the model files, the test audio and the local hardware. CI runs its scoring
+tests (`AsrBenchmarkScoringTests`).
+
+Every clip goes through the session of `NemotronAsrProvider` in 20 ms frames, as from the capture
+layer. The benchmark builds the recognizer itself, so that the thread count and the execution
+provider can change. A parity check runs the product provider on the meeting clips: 12 of 12 texts
+were identical. Offline models get Silero VAD segments (500 ms minimum silence). A segment's text is
+a final. Offline models give no partials.
+
+It measures, per model and execution provider:
+
+- the load time, the working set after the load, the peak working set and the peak minus the working
+  set before the load;
+- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room, also over
+  the clips whose reference has no digit;
+- the share of finals that `TranscriptLanguage.Guess` labels correctly in the zh/de/pl room;
+- how many part numbers (`KB-4471`, `X5CrNi18-10`, `IP67`) survive: strict (verbatim) and loose
+  (case and separators ignored);
+- the real-time factor (RTF) with the audio fed as fast as possible. RTF is the session wall time
+  divided by the audio fed. For Nemotron the audio fed includes 2 s of silence padding per clip;
+- with real-time pace: the decode time per chunk, the time from the speech end to the final, and
+  the time from the speech onset to the first partial;
+- 1, 2 and 4 concurrent sessions on one recognizer;
+- 1, 2, 4 and 8 threads for the default model.
+
+Test audio:
+
+- FLEURS test split (`google/fleurs`, CC-BY-4.0), the first 20 clips per language at a pinned
+  revision. `fetch` reads the start of each test archive as a stream, about 42 MB.
+- The 12 meeting sentences of the translation benchmark. `fetch` synthesises them locally with
+  Piper voices through sherpa-onnx (zh huayan, de thorsten, pl gosia). No text leaves the machine.
+  Windows has no local German or Polish SAPI voice; Piper covers all three languages on every OS.
+
+Run it from the repo root:
+
+1. Fetch the audio and the default model, once:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch
+   ```
+
+2. Optional: fetch the three candidate models (2.7 GB) and the Silero VAD:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --candidates all --no-clips
+   ```
+
+3. Run the benchmark:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- --provider cpu --streams 1,2,4 --threads 1,2,4,8
+   ```
+
+Options: `--provider cpu,cuda,coreml`, `--model <id,...>`, `--phases accuracy,realtime,streams,threads`,
+`--clips N` (clips per set and language), `--rt-clips N`, `--burn N` (busy background threads),
+`--data <folder>` (default `LocalApplicationData/Kanal/asr-bench`), `--models <folder>` (default:
+the Kanal models folder), `--out <folder>`. The run writes `kanal-asr-benchmark-<os>-<time>.md` and a
+`.json` file with one flat row per number.
+
+The NuGet runtime of sherpa-onnx 1.13.8 is CPU only on win-x64. A child process detects the fallback
+and the report names it. For CUDA:
+
+1. Download `sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2`
+   (478 MB) from the sherpa-onnx release. Download `nvidia-cudnn-cu13` 9.27 (436 MB wheel) from PyPI.
+2. Put the DLLs from the archive's `lib` folder and the wheel's `nvidia/cudnn/bin` into one folder.
+   The CUDA 13 toolkit supplies cuBLAS and the runtime through `PATH`.
+3. Build with `dotnet build -c Release -p:SherpaNative=<folder> tests/Kanal.AsrBenchmark`. Then run
+   with `--no-build --provider cuda`.
+
+Results on a Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 2026-10-17:
+
+| Model | Load s | Peak MB (process) | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s (n=9) | 4 streams mean RTF (offline feed) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Nemotron 560 ms (default) | 2.2 | 958 | 22.3 | 12.0 | 22.5 | 0.18 | 2.67/3.74 | 0.32 |
+| Nemotron 160 ms | 2.1 | 962 | 25.2 | 14.2 | 24.9 | 0.53 | 2.16/2.62 | 1.26 |
+| Whisper large-v3-turbo | 2.5 | 2744 | 33.0 | 6.9 | 13.5 | 0.25 | 2.50/3.13 | 0.63 |
+| Qwen3-ASR 0.6B | 3.7 | 2804 | 7.9 | 9.6 | 50.5 | 0.20 | 1.88/2.64 | 0.30 |
+
+CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Two limits of these recorded numbers:
+the Nemotron RTF includes 2 s of silence padding per clip, so it is higher than the true RTF; and
+"Peak MB" is the working set of the whole process, not of one model. The benchmark code now divides
+by the audio fed, and it reports the peak minus the baseline before the load. The follow-up PR
+re-measures the full matrix. It adds English, a Gladia cloud baseline and number-normalised scoring.
+The real-time columns come from 9 clips, so p95 is the maximum. Offline models give their first text
+only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
+partial 0.84 s after the onset. The loose part-number counts below were recorded before the
+word-boundary fix. The old check could match across word boundaries. The follow-up PR re-measures
+them. Whisper's strict count is 1 of 4 in German and Polish: 1 of 2 in German, 0 of 2 in Polish.
+
+Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 45 % slower (RTF 0.12).
+4 threads is best (8 threads: RTF 0.118). FLEURS zh CER 21.1, de WER 11.6, pl WER 20.0.
+
+CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
+RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
+0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
+the run stopped there. CUDA is slower than the CPU here. The cause is not measured. Probably the
+CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
+move between the devices for each chunk.
+
+Findings:
+
+- **Nemotron writes numbers as words.** "KB-4471" becomes "KB cztery tysiące czterysta siedemdziesiąt
+  jeden"; "M10" becomes "M zehn". No part number survived, also with the loose check (0 of 8).
+  Whisper kept 4 of 4 in German and Polish (loose). FLEURS references hold digits, so this probably
+  costs Nemotron WER points there too. The recorded numbers do not separate the two faults. The
+  benchmark now also scores the clips without digits; the follow-up re-run gives that number.
+- **Nemotron emits Thai letters on Chinese.** 3 of 24 zh clips contain runs of "อ" where a foreign
+  name was spoken (both rooms).
+- **Whisper drops Chinese characters** ("摩尔多瓦的首都" → "多的首都"). Its zh CER of 33 is too high
+  for this model. The cause is not investigated; the sherpa-onnx Whisper token decoding is a suspect.
+- **Qwen3-ASR 0.6B is weak on Polish** (WER 44–51) but best on Chinese (CER 7.9).
+- **The 160 ms chunk does not pay.** It is 3× slower than 560 ms, and it is less accurate. The final
+  comes only 0.5 s earlier, because the endpoint rules dominate.
+- **The final comes 2.7 s after the speech end** (p50), not 1.6 s. The rule counts blank frames, and
+  the last chunk must fill first.
+- **Run-to-run variance is about 25 %.** The same 6 clips at 4 threads gave RTF 0.178 and 0.228 in
+  one run. Other applications ran on the machine.
+
+Recommendations (no product change in this PR):
+
+- Keep `NumThreads = clamp(ProcessorCount / 2, 1, 4)`. 4 threads was best on both machines; 8 threads
+  gave no gain over 4 (RTF 0.260 against 0.228 here, inside the run-to-run variance).
+- Keep the 560 ms model and the CPU provider. Do not ship CUDA for transcription.
+- Add inverse text normalisation (number words to digits) or a code-aware post-pass before the
+  translation stage. Part numbers are the meeting's key content.
+- Filter Thai-script runs from Nemotron output in a zh/de/pl room.
+- Re-test Whisper large-v3-turbo after the Chinese character loss is explained. It is the only
+  candidate that keeps part numbers, but it has no partials and its process peaked at 2.7 GB working
+  set.
+
+---
+
 ## 2026-10-14
 
 ### The ruler magnifies like a Dock
