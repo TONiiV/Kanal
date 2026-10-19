@@ -14,9 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
-- Each project now has a glossary. Open the project settings and type each term in Chinese,
-  German, Polish and English. Mark part numbers and codes as "Keep", so that they are not
-  translated. Kanal saves the glossary in the project folder and needs no network for it.
+- You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
+  the project folder. Kanal does not use the glossary in a meeting yet.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

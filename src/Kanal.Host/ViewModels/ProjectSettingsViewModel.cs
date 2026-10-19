@@ -151,7 +151,8 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
     {
-        var glossary = Glossary.Select(row => row.ToEntry()).ToList();
+        var glossary = Glossary.Select(row => row.ToEntry())
+            .Where(entry => (entry.Zh + entry.De + entry.Pl + entry.En).Trim().Length > 0).ToList();
         if (CanEditGlossary && !glossary.SequenceEqual(_savedGlossary)
             && Refused(_store.SaveGlossary(Project.Id, glossary)))
             return;

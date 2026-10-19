@@ -401,7 +401,7 @@
   "workspace.icon": "PROJEKTSYMBOL",
   "workspace.glossary": "GLOSSAR",
   "workspace.glossary.note": "Geben Sie jeden Begriff in den Sprachen ein, die Sie kennen. Kanal übersetzt die Begriffe nicht.",
-  "workspace.glossary.keep": "Fix",
+  "workspace.glossary.keep": "Behalten",
   "workspace.glossary.donottranslate": "Diesen Begriff nicht übersetzen",
   "workspace.glossary.add": "Begriff hinzufügen",
   "workspace.glossary.remove": "Begriff entfernen",

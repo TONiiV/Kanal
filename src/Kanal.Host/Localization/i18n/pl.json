@@ -401,7 +401,7 @@
   "workspace.icon": "IKONA PROJEKTU",
   "workspace.glossary": "GLOSARIUSZ",
   "workspace.glossary.note": "Wpisz każdy termin w językach, które znasz. Kanal nie tłumaczy terminów.",
-  "workspace.glossary.keep": "Stały",
+  "workspace.glossary.keep": "Zachowaj",
   "workspace.glossary.donottranslate": "Nie tłumacz tego terminu",
   "workspace.glossary.add": "Dodaj termin",
   "workspace.glossary.remove": "Usuń termin",
