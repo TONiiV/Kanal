@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Kanal now labels the language of a transcript line by its script first. In a room with two or more
+  languages, a Chinese or Japanese sentence now gets its own language label, also when the room does
+  not contain that language.
 - A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
   choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
   speaker separation on the recording on this computer and gives each person their own tag and

@@ -6,6 +6,14 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-18
 
+### TranscriptLanguage labels by script before the room prior
+
+- **Done.** This closes the ADR 0061 open item about the `TranscriptLanguage.Guess` room prior, for two cases. Issue #295.
+- **Script first.** Hangul gives `ko`. Kana gives `ja`. Han characters without kana give `zh`. The room does not change these labels. Before, Han text in a room without `zh` gave the first Latin room language, for example `de`. Before, it gave `ja` only in a room that contained `ja`.
+- **Latin text.** A room without a Latin language now accepts the best-scoring Latin language at one signal. If none scores, the label is `en`. Before, the label was `room[0]`, for example `zh`. The `zh` column showed the English text without a translation, and MT got the wrong source language.
+- **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check. Issue #297 tracks the Cyrillic fix.
+- **Needs PR #294.** `NemotronAsrProvider` forces the language when a room has one language, so `Guess` does not run there. English in a Chinese-only room is translated only when PR #294 removes that forcing and every final goes through `Guess`.
+
 ### Nemotron never gets a fixed language
 
 - **Bug.** `StartAsync` passed the room language to the model as the prompt language when the room had one language. Each final skipped `TranscriptLanguage.Guess` and took the room language as its label.
