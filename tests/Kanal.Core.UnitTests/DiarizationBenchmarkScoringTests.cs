@@ -118,4 +118,26 @@ public class DiarizationBenchmarkScoringTests
             [new SpeakerTurn(0, 1.0, 0), new SpeakerTurn(2.0, 2.5, 0), new SpeakerTurn(2.6, 3.0, 1)],
             Cloud.ScribeTurns(result));
     }
+
+    private static Result LiveResult(string model, double threshold) =>
+        new("m1", "zh", 2, false, false, model, "live", threshold, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN,
+            2, 2, 8, 10, 0, 0, 8, 10, 0);
+
+    [Fact]
+    public void The_live_result_at_a_threshold_is_found_by_model_and_threshold()
+    {
+        var results = new[] { LiveResult("a", 0.5), LiveResult("b", 0.6), LiveResult("a", 0.6), LiveResult("a", 0.7) };
+
+        var live = Scoring.Live(results, "a", 0.6);
+
+        Assert.Same(results[2], live);
+    }
+
+    [Fact]
+    public void No_live_result_at_the_default_threshold_gives_null_and_does_not_throw()
+    {
+        var results = new[] { LiveResult("a", 0.5), LiveResult("a", 0.7) };
+
+        Assert.Null(Scoring.Live(results, "a", 0.6));
+    }
 }
