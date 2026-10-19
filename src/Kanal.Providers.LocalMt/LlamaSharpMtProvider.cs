@@ -4,9 +4,8 @@ using Kanal.Core.Providers;
 namespace Kanal.Providers.LocalMt;
 
 /// <summary>
-/// In-process translation provider: one prompt per target language through an
-/// <see cref="ITextGenerator"/>. Sequential on purpose — a local model shares
-/// one context and gains nothing from parallel requests.
+/// In-process translation provider: one prompt per target language, all in one batch
+/// through an <see cref="ITextGenerator"/>.
 /// </summary>
 public sealed class LlamaSharpMtProvider : IMtProvider, IWarmupProvider, IDisposable, IAsyncDisposable
 {
@@ -30,19 +29,19 @@ public sealed class LlamaSharpMtProvider : IMtProvider, IWarmupProvider, IDispos
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var empty = new List<string>();
+        var targets = to.Where(t => !string.Equals(t, from, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (targets.Count == 0)
+            return result;
 
-        foreach (var target in to)
+        ct.ThrowIfCancellationRequested();
+        var raw = await _generator.GenerateAsync(targets.Select(t => MtPrompt.Build(text, t)).ToList(), ct);
+        for (var i = 0; i < targets.Count; i++)
         {
-            if (string.Equals(target, from, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            ct.ThrowIfCancellationRequested();
-            var raw = await _generator.GenerateAsync(MtPrompt.Build(text, target), ct);
-            var cleaned = MtOutputCleaner.Clean(raw);
+            var cleaned = MtOutputCleaner.Clean(raw[i]);
             if (cleaned.Length > 0)
-                result[target] = cleaned;
+                result[targets[i]] = cleaned;
             else
-                empty.Add(target);
+                empty.Add(targets[i]);
         }
 
         // Nothing at all coming back is a broken translator, and it is indistinguishable on

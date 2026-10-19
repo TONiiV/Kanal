@@ -561,6 +561,34 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### All target languages in one batch
+
+Before, `LlamaSharpMtProvider` translated the target languages one after the other. Each call also
+made a new llama.cpp context through `StatelessExecutor`. Now:
+
+- The provider sends all target prompts in one call to `ITextGenerator.GenerateAsync(prompts)`.
+- `LlamaCppBackend` decodes them as parallel sequences in one `BatchedExecutor`.
+- The executor stays alive between calls, so a call no longer makes a new context.
+- `BatchedExecutor` never reuses a sequence id. llama.cpp rejects an id at or above `SeqMax` for
+  recurrent and hybrid models such as Qwen3.5, and at or above 256 for the others. The backend makes
+  a new executor before `SeqMax` ids are used. This is right for both kinds of model.
+- `SeqMax` is 8: two calls with 4 targets, and a new context about every 4 sentences.
+- A hybrid model allocates `SeqMax` recurrent cells for the whole life of the executor. This is an
+  estimate from the model configs, not a measurement: about 310 MiB at 16 cells for Qwen3.5 2B and
+  about 800 MiB for 4B. At 8 cells it is about half. Hy-MT2 and Gemma 3 cost almost nothing.
+- The benchmark is the regression check for the id budget. It makes more than 8 calls on Qwen3.5.
+  Before the fix, the third call failed with `NoKvSlot`.
+
+Measured with Vulkan on an RTX 3000 Ada Laptop GPU, one sentence in flight (seconds per sentence):
+
+| Model | 2 targets before → after | 3 targets before → after | 4 in flight utt/s before → after |
+|---|---:|---:|---:|
+| Hy-MT2 1.8B | 1.26 → 0.39 | 1.90 → 0.45 | 0.81 → 2.22 |
+| Qwen3.5 2B | 1.26 → 0.41 | 1.79 → 0.56 | 0.80 → 2.25 |
+| Qwen3.5 4B | 2.02 → 0.95 | 3.15 → 1.21 | 0.49 → 1.11 |
+
+The chrF stays the same within the run-to-run noise (±1.5). The run used `SeqMax` 16.
+
 ### Local translation on the GPU
 
 Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
@@ -599,8 +627,8 @@ languages. The report gives, per model:
 
 Two different kinds of load:
 
-- **Target languages.** Each sentence goes to every other meeting language. The provider translates
-  them one after the other, so the latency of one sentence grows with the number of targets. The
+- **Target languages.** Each sentence goes to every other meeting language. The provider decodes
+  all targets of a sentence in one batch. On a GPU, 3 targets take little more time than 1. The
   corpus has English references too. They serve the 3-target latency sweep, where the third target
   is English. The benchmark does not score English output. The quality columns use the two meeting
   targets only.
