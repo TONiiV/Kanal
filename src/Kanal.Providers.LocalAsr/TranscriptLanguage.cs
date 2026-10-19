@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 namespace Kanal.Providers.LocalAsr;
 
 // ponytail: script + stopword vote; a short Latin sentence with no stopword falls to the first
-// Latin room language. Upgrade path: a dedicated language-identification model.
+// Latin room language, or "en" when the room has none. Upgrade path: a dedicated language-identification model.
+// In a room with no scored Latin language, one stopword decides, so "I see." can label pl.
 public static class TranscriptLanguage
 {
     private static readonly Dictionary<string, (string Letters, HashSet<string> Words)> Latin = new()
@@ -24,32 +25,40 @@ public static class TranscriptLanguage
 
     public static string Guess(string text, IReadOnlyList<string> room)
     {
-        var script = ByScript(text, room);
+        var cjk = ByCjkScript(text);
+        if (cjk is not null)
+            return cjk;
+
+        var script = ByCyrillic(text, room);
         if (script is not null && room.Contains(script))
             return script;
 
         var lower = text.ToLowerInvariant();
         var words = Regex.Split(lower, @"\P{L}+");
 
+        var roomHasLatin = room.Any(Latin.ContainsKey);
         var best = Latin
             .Select(l => (code: l.Key, score:
                 3 * lower.Count(l.Value.Letters.Contains) + 2 * words.Count(l.Value.Words.Contains)))
-            .Where(c => c.score >= (room.Contains(c.code) ? 1 : OutsideRoomMinimum))
+            .Where(c => c.score >= (room.Contains(c.code) || !roomHasLatin ? 1 : OutsideRoomMinimum))
             .OrderByDescending(c => c.score)
             .ThenByDescending(c => room.Contains(c.code))
             .FirstOrDefault();
 
-        return best.code ?? room.FirstOrDefault(Latin.ContainsKey) ?? room[0];
+        return best.code ?? room.FirstOrDefault(Latin.ContainsKey) ?? "en";
     }
 
-    private static string? ByScript(string text, IReadOnlyList<string> room)
+    private static string? ByCjkScript(string text)
     {
         if (text.Any(c => c is >= '가' and <= '힯'))
             return "ko";
         if (text.Any(c => c is >= '぀' and <= 'ヿ'))
             return "ja";
-        if (text.Any(c => c is >= '一' and <= '鿿'))
-            return room.Contains("zh") ? "zh" : "ja";
+        return text.Any(c => c is >= '一' and <= '鿿') ? "zh" : null;
+    }
+
+    private static string? ByCyrillic(string text, IReadOnlyList<string> room)
+    {
         if (text.Any(c => c is >= 'Ѐ' and <= 'ӿ'))
             return text.Any(c => "іїєґІЇЄҐ".Contains(c)) || !room.Contains("ru") ? "uk" : "ru";
         return null;

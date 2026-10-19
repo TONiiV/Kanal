@@ -1,6 +1,6 @@
 # 发言人分离：实时暂定标签，会后权威重算
 
-状态：proposed，2026-09-08。切片 3 已实现（2026-10-13，[#108](https://github.com/TONiiV/Kanal/issues/108)）：会后分离写入会议文件夹的 `speakers.json`，`transcript.jsonl` 不改写；原始标签不经 `Speaker.MergedFrom` 保留，因为一个标签拆成多人无法用合并表达。暂不分块：整段录音一次读入内存（约 230 MB/小时），产品经理 2026-10-13 接受；重算进行中允许开始新会议（见 `docs/PROGRESS.md` 2026-10-13）。切片 4 已实现（2026-10-13，[#109](https://github.com/TONiiV/Kanal/issues/109)）：定稿句子按 CAM++ 嵌入在线聚类得到暂定标签 `V01?`…，阈值 0.5、短于 1 s 的句子沿用上一句的标签；ASR 原标签存入 `Utterance.AsrSpeakerTag`；聚类中心只在本场会议的内存里，不跨会议保存。落地 [#13](https://github.com/TONiiV/Kanal/issues/13) 与
+状态：proposed，2026-09-08。切片 3 已实现（2026-10-13，[#108](https://github.com/TONiiV/Kanal/issues/108)）：会后分离写入会议文件夹的 `speakers.json`，`transcript.jsonl` 不改写；原始标签不经 `Speaker.MergedFrom` 保留，因为一个标签拆成多人无法用合并表达。暂不分块：整段录音一次读入内存（约 230 MB/小时），产品经理 2026-10-13 接受；重算进行中允许开始新会议（见 `docs/PROGRESS.md` 2026-10-13）。切片 4 已实现（2026-10-13，[#109](https://github.com/TONiiV/Kanal/issues/109)）：定稿句子按 CAM++ 嵌入在线聚类得到暂定标签 `V01?`…，阈值 0.6、短于 1 s 的句子不打标签（[#250](https://github.com/TONiiV/Kanal/pull/250) 的 a9b5b56）；ASR 原标签存入 `Utterance.AsrSpeakerTag`；聚类中心只在本场会议的内存里，不跨会议保存。落地 [#13](https://github.com/TONiiV/Kanal/issues/13) 与
 [`docs/design/meeting-evidence.md`](../design/meeting-evidence.md) 一直悬着的「发言人识别」范围问题。
 运行时选择继承 [ADR 0053](0053-local-transcription-model-and-runtime.md)。
 
@@ -105,7 +105,12 @@ pyannote，是**事后**处理。没有一个本地优先的会议工具在做�
     （[#1466](https://github.com/k2-fsa/sherpa-onnx/issues/1466)，维护者的回复就是「自己调」）。
     而这恰好是操作员**看一眼会议室就知道**的一个数——这是本方案相对流式模型的一项结构性优势，
     不该浪费。
+    **修订 2026-10-19：** 实测结论相反。人数可选，「不确定」排第一，不给人数时阈值取 0.8；给了人数后，
+    sherpa 常返回比所给更少的簇（62 场中 17 场），相近的两个声音被合并。数字见 `docs/PROGRESS.md`
+    （切片 3，「Why 0.8 and *Not sure* first」）与 PR #286。
 13. 右栏发言人页签提供人数输入与「重新分离」；留空则走阈值路径。改人数触发重算，重算仍然非破坏。
+    **修订 2026-10-19：** 人数入口先放在会议侧栏「重新分离发言人」子菜单：「不确定」第一项，其后 2 到 8 人。
+    右栏页签的人数输入仍归 [#110](https://github.com/TONiiV/Kanal/issues/110)，沿用同一顺序。
 
 ### E. 模型与目录
 

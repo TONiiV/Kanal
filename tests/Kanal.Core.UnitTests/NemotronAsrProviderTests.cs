@@ -106,20 +106,20 @@ public class NemotronAsrProviderTests
     {
         var stream = new ScriptedStream();
         var provider = new NemotronAsrProvider(_ => stream);
-        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(new byte[] { 0x00, 0x40, 0x00, 0xC0 });
+        await session.PushAudioAsync(new byte[] { 0x00, 0x40, 0x00, 0xC0 }, TestContext.Current.CancellationToken);
         await session.DisposeAsync();
 
         Assert.Equal([0.5f, -0.5f], Assert.Single(stream.Accepted));
     }
 
     [Theory]
-    [InlineData(new[] { "zh" }, "zh-CN")]
-    [InlineData(new[] { "ja" }, "ja-JP")]
-    [InlineData(new[] { "pl" }, "pl")]
+    [InlineData(new[] { "zh" }, "auto")]
+    [InlineData(new[] { "ja" }, "auto")]
+    [InlineData(new[] { "de" }, "auto")]
     [InlineData(new[] { "zh", "de", "pl" }, "auto")]
-    public async Task ARoomOfOneLanguageForcesItAndAnyOtherRoomDetects(string[] room, string expected)
+    public async Task EveryRoomStartsTheStreamWithAutoLanguage(string[] room, string expected)
     {
         string? asked = null;
         var provider = new NemotronAsrProvider(language =>
@@ -128,17 +128,18 @@ public class NemotronAsrProviderTests
             return new ScriptedStream();
         });
 
-        await (await provider.StartAsync(new AsrSessionOptions(16_000, room), default)).DisposeAsync();
+        await (await provider.StartAsync(new AsrSessionOptions(16_000, room), TestContext.Current.CancellationToken)).DisposeAsync();
 
         Assert.Equal(expected, asked);
     }
 
     [Fact]
-    public async Task AForcedLanguageIsAlsoTheSourceLanguage()
+    public async Task InARoomOfOneLanguageTheFinalIsLabelledByItsText()
     {
-        var events = await RunAsync(new ScriptedStream(("KX-4402", true)), chunks: 1, room: ["zh"]);
+        var events = await RunAsync(
+            new ScriptedStream(("We are not sure that this is the right time for it", true)), chunks: 1, room: ["de"]);
 
-        Assert.Equal("zh", Assert.Single(events.OfType<AsrEvent.Transcript>()).SrcLang);
+        Assert.Equal("en", Assert.Single(events.OfType<AsrEvent.Transcript>()).SrcLang);
     }
 
     [Fact]
@@ -157,13 +158,13 @@ public class NemotronAsrProviderTests
     {
         var provider = new NemotronAsrProvider(_ =>
             new ScriptedStream(("x", false)) { Throw = new InvalidOperationException("boom") });
-        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var session = await provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
-        await session.PushAudioAsync(Chunk);
+        await session.PushAudioAsync(Chunk, TestContext.Current.CancellationToken);
         await foreach (var _ in session.Events)
         {
         }
-        await session.PushAudioAsync(Chunk);
+        await session.PushAudioAsync(Chunk, TestContext.Current.CancellationToken);
 
         var audio = (System.Threading.Channels.Channel<float[]>)session.GetType()
             .GetField("_audio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -183,7 +184,7 @@ public class NemotronAsrProviderTests
             return new ScriptedStream();
         });
 
-        var start = provider.StartAsync(new AsrSessionOptions(16_000, Room), default);
+        var start = provider.StartAsync(new AsrSessionOptions(16_000, Room), TestContext.Current.CancellationToken);
 
         Assert.False(start.IsCompleted);
         gate.Set();

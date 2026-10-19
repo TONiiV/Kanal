@@ -25,6 +25,7 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     private const string LogCategory = "workspace";
 
     private readonly WorkspaceStore _store;
+    private readonly IReadOnlyList<GlossaryEntry> _savedGlossary;
 
     public ProjectSettingsViewModel(
         WorkspaceStore store,
@@ -39,6 +40,11 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
         CanResolve = !projectRecording;
         Issues = [.. (issues ?? []).Select(Offered)];
         OpenAtIssues = openAtIssues && Issues.Count > 0;
+        var glossary = store.ReadGlossary(project.Id);
+        _savedGlossary = glossary.Entries ?? [];
+        Glossary = [.. _savedGlossary.Select(entry => new GlossaryRowViewModel(entry))];
+        CanEditGlossary = glossary.Problem is null;
+        GlossaryProblem = glossary.Problem is { } problem ? StoreRefusal.Report(problem, LogCategory) : "";
         _name = project.Name;
         _glyph = project.IconGlyph;
         _imagePath = project.IconPath;
@@ -50,6 +56,18 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     public IReadOnlyList<string> Glyphs => ProjectIcons.Glyphs;
 
     public ObservableCollection<ProjectIssueViewModel> Issues { get; }
+
+    public ObservableCollection<GlossaryRowViewModel> Glossary { get; }
+
+    public string GlossaryProblem { get; }
+
+    public bool CanEditGlossary { get; }
+
+    [RelayCommand(CanExecute = nameof(CanEditGlossary))]
+    private void AddTerm() => Glossary.Add(new GlossaryRowViewModel());
+
+    [RelayCommand(CanExecute = nameof(CanEditGlossary))]
+    private void RemoveTerm(GlossaryRowViewModel row) => Glossary.Remove(row);
 
     public bool HasIssues => Issues.Count > 0;
 
@@ -133,6 +151,12 @@ public sealed partial class ProjectSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
     {
+        var glossary = Glossary.Select(row => row.ToEntry())
+            .Where(entry => (entry.Zh + entry.De + entry.Pl + entry.En).Trim().Length > 0).ToList();
+        if (CanEditGlossary && !glossary.SequenceEqual(_savedGlossary)
+            && Refused(_store.SaveGlossary(Project.Id, glossary)))
+            return;
+
         var icon = ImagePath is not null && ImagePath != Project.IconPath
                 ? _store.SetWorkspaceIconFile(Project.Id, ImagePath)
             : ImagePath is null && Glyph is not null && Glyph != Project.IconGlyph

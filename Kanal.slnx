@@ -10,6 +10,8 @@
     <Project Path="src/Kanal.Providers.LocalMt/Kanal.Providers.LocalMt.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Kanal.AsrBenchmark/Kanal.AsrBenchmark.csproj" />
+    <Project Path="tests/Kanal.Benchmark/Kanal.Benchmark.csproj" />
     <Project Path="tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj" />
     <Project Path="tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj" />
   </Folder>

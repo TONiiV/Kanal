@@ -135,7 +135,14 @@
                                  IsVisible="{Binding HasChoice}"
                                  ToolTip.Tip="{Binding UseTip}" />
                     <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                        <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" />
+                            <Border Background="{DynamicResource BrandWash}" CornerRadius="9" Padding="7,1"
+                                    VerticalAlignment="Center" IsVisible="{Binding IsRecommended}">
+                                <TextBlock Text="{l:T settings.model.recommended}" FontSize="10.5"
+                                           FontWeight="SemiBold" Foreground="{DynamicResource Brand}" />
+                            </Border>
+                        </StackPanel>
                         <TextBlock Text="{Binding MetaLabel}" FontSize="11"
                                    Foreground="{DynamicResource Ink3}" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11" TextWrapping="Wrap"
@@ -165,7 +172,7 @@
         <Button DockPanel.Dock="Bottom" Content="{l:T settings.save}" Click="OnSaveClick"
                 HorizontalAlignment="Right" Margin="0,18,0,0" Classes="accent" />
 
-        <TabControl TabStripPlacement="Left" Padding="22,0,0,0">
+        <TabControl TabStripPlacement="Left" Padding="22,0,0,0" SelectedIndex="{Binding SelectedTab, Mode=TwoWay}">
             <TabItem AutomationProperties.Name="{l:T settings.tab.general}">
                 <TabItem.Header>
                     <StackPanel Classes="tab">
