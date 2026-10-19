@@ -21,6 +21,16 @@ public class TranslationModelSettingsTests
     }
 
     [Fact]
+    public void OnlyTheFirstCatalogModelIsRecommended()
+    {
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+
+        var recommended = Assert.Single(vm.TranslationModels, m => m.IsRecommended);
+        Assert.Equal(LocalModelCatalog.Models[0].Id, recommended.ModelId);
+        Assert.All(vm.TranscriptionModels, m => Assert.False(m.IsRecommended));
+    }
+
+    [Fact]
     public void StoredSelectionIsRestored()
     {
         var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "qwen3.5-4b" }, () => null);

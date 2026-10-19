@@ -234,6 +234,31 @@ public class RefusedStoreOperationTests : IDisposable
         Assert.Contains(sink.Lines, l => l.Message.StartsWith($"Unreadable on {bundle}: "));
     }
 
+    [AvaloniaTheory]
+    [InlineData("zh")]
+    [InlineData("de")]
+    [InlineData("pl")]
+    public async Task AnImportOverAFolderThatTheListCannotReadIsRefusedInTheInterfaceLanguage(string language)
+    {
+        using var _ = Speaking(language);
+        using var __ = Listening(out var sink);
+        var (store, _, workspace, meeting) = Opened();
+        var bundle = Path.Combine(Folder("incoming"), "held" + MeetingBundle.Extension);
+        Assert.Null(MeetingBundle.Write(store, meeting, includeAudio: false, bundle));
+        var folder = store.MeetingFolder(workspace.Id, meeting.Id)!;
+        var record = Path.Combine(folder, WorkspaceStore.MeetingFileName);
+        File.WriteAllText(record, "{ not json");
+        var vm = new WorkspaceSidebarViewModel(store);
+        vm.SelectedWorkspace = vm.Workspaces.Single(w => w.Id == workspace.Id);
+
+        await vm.ImportMeetingFromAsync(bundle);
+
+        Assert.Equal(Localizer.Instance.Format("workspace.refused.foldertaken", folder), vm.ProblemNote);
+        Assert.DoesNotContain("never overwrites", vm.ProblemNote);
+        Assert.Equal("{ not json", File.ReadAllText(record));
+        Assert.Contains(sink.Lines, l => l.Message.StartsWith($"FolderTaken on {folder}: "));
+    }
+
     [AvaloniaFact]
     public void ATitleAnotherMeetingHoldsKeepsItsOwnSentence()
     {
@@ -257,6 +282,7 @@ public class RefusedStoreOperationTests : IDisposable
     [InlineData(StoreProblemKind.Unreadable, "workspace.refused.unreadable")]
     [InlineData(StoreProblemKind.Unwritable, "workspace.refused.unwritable")]
     [InlineData(StoreProblemKind.UnsupportedVersion, "workspace.refused.unsupportedversion")]
+    [InlineData(StoreProblemKind.FolderTaken, "workspace.refused.foldertaken")]
     public void EveryKindOfRefusalHasASentenceAndOnlyTheLogGetsTheDetail(StoreProblemKind kind, string key)
     {
         Assert.True(Strings.Tables["en"].ContainsKey(key), key);
