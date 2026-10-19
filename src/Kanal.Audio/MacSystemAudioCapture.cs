@@ -64,13 +64,14 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                 Marshal.Copy(data, bytes, 0, byteCount);
                 if (Backend == SystemAudioBackend.CoreAudioProcessTap
                     && !bytes.AsSpan().ContainsAnyExcept((byte)0)
-                    )
+                    && _clock.GetTimestamp() >= Volatile.Read(ref nextAuthorizationCheck)
+                    && Interlocked.Exchange(ref authorizationCheckRunning, 1) == 0)
                 {
                     _ = Task.Run(() =>
                     {
                         try
                         {
-                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied && false)
+                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
                                 frames.Writer.TryComplete(new AudioCaptureException(
                                     AudioCaptureFault.PermissionDenied,
                                     "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +

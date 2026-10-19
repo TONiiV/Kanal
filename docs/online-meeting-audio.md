@@ -146,7 +146,7 @@ Everything here needs real hardware and a second person. None of it is covered b
 | Signed bundle: permission **deny** → `permission_denied`, actionable message, no crash | — | NOT YET VERIFIED |
 | Signed bundle: permission **revoked** while Kanal runs → a visible stop or refusal, no crash | — | NOT YET VERIFIED |
 | macOS 14.2+: with the permission denied, the meeting stops within a few seconds of Start and shows the localized reason, with no 30 s wait (see "System-audio permission on macOS 14.2+") | — | NOT YET VERIFIED |
-| macOS 14.2+: with the permission denied and the computer silent, nothing else changes: a quiet start never stops the meeting (see the same section) | — | NOT YET VERIFIED |
+| macOS 14.2+: with the permission granted and the computer silent, the meeting keeps running for at least 2 minutes: a quiet start never stops it (see the same section) | — | NOT YET VERIFIED |
 | A notification sound with Do Not Disturb off appears in the transcript input (documents the limitation) | NOT YET VERIFIED | NOT YET VERIFIED |
 | macOS 14.2+: unplug the output that was the default at Start (the aggregate's clock device) mid-meeting → the meeting stops with the computer-audio `source_ended` reason, not endless padded silence (see known risks) | — | NOT YET VERIFIED |
 | Windows: unplug or switch the default output mid-meeting → computer audio keeps arriving, or a visible stop, never endless padded silence (see known risks) | NOT YET VERIFIED | — |
