@@ -27,6 +27,9 @@ internal static class StoreProblems
     public static StoreProblem NotAMeetingId(string id) =>
         new(StoreProblemKind.Invalid, id, "That is not a meeting id.");
 
+    public static StoreProblem FolderTaken(string folder) =>
+        new(StoreProblemKind.FolderTaken, folder, "That meeting folder is already on disk. An import never overwrites it.");
+
     public static StoreProblem Unreadable(string path, string detail) =>
         new(StoreProblemKind.Unreadable, path, detail);
 

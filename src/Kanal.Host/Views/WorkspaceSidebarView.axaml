@@ -290,6 +290,10 @@
                                                                    Foreground="{DynamicResource Ink2}" />
                                                     </StackPanel>
                                                 </StackPanel>
+                                                <TextBlock x:Name="MeetingRowReidentifying" Text="{Binding ReidentifyNote}"
+                                                           FontSize="10.5" IsVisible="{Binding IsReidentifying}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Ink2}" />
                                             </StackPanel>
                                             <Button Grid.Column="1" Classes="ghost" x:Name="MeetingMenu" Padding="7,6"
                                                     VerticalAlignment="Center"
@@ -309,6 +313,24 @@
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon regenerate}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Name="ReidentifySpeakers"
+                                                                  Header="{Binding ReidentifySpeakersHeader}"
+                                                                  IsEnabled="{Binding CanReidentifySpeakers}">
+                                                            <MenuItem.Icon>
+                                                                <Path Classes="glyph" Data="{c:Icon people}" Width="13" Height="13" />
+                                                            </MenuItem.Icon>
+                                                            <MenuItem Name="ReidentifyGuess" Header="{l:T meeting.reidentify.guess}"
+                                                                      Command="{Binding ReidentifySpeakersCommand}" />
+                                                            <Separator />
+                                                            <MenuItem Header="{l:T meeting.reidentify.ask}" IsEnabled="False" />
+                                                            <MenuItem Header="2" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="2" />
+                                                            <MenuItem Header="3" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="3" />
+                                                            <MenuItem Header="4" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="4" />
+                                                            <MenuItem Header="5" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="5" />
+                                                            <MenuItem Header="6" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="6" />
+                                                            <MenuItem Header="7" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="7" />
+                                                            <MenuItem Header="8" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="8" />
                                                         </MenuItem>
                                                         <Separator />
                                                         <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"

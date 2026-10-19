@@ -28,7 +28,8 @@ internal static class TestViewModels
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
         bool development = true,
-        ModelDownloadManager? downloads = null)
+        ModelDownloadManager? downloads = null,
+        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -49,7 +50,8 @@ internal static class TestViewModels
             offUiThread: offUiThread,
             captureFactory: () => new SilentCapture(),
             systemCaptureFactory: () => null,
-            development: development)
+            development: development,
+            diarizerFactory: diarizerFactory)
         {
             RelayEnabled = false,
         };

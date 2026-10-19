@@ -11,6 +11,8 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     // A session that outlives its stop keeps calling these thunks; leaking them beats a call into freed memory.
     private static readonly List<object> Leaked = [];
 
+    internal const string DeviceLostMessage = "computer audio device lost";
+
     private readonly IMacSystemAudioNative _native;
     private readonly TimeSpan _stopTimeout;
 
@@ -76,6 +78,13 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         MacSystemAudioErrorCallback onError = (message, _) =>
         {
             var detail = Marshal.PtrToStringUTF8(message) ?? "unknown native error";
+            if (detail == DeviceLostMessage)
+            {
+                frames.Writer.TryComplete(new AudioCaptureException(AudioCaptureFault.SourceEnded,
+                    "Computer audio capture stopped: the output device that clocks it disappeared. Start again."));
+                return;
+            }
+
             var denied = IsPermissionFailure(detail);
             var advice = denied
                 ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
