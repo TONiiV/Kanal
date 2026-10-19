@@ -14,6 +14,8 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
+  reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
   and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
   the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,
@@ -33,8 +35,11 @@ The first release. Everything below is what Kanal does on the day it ships.
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.
 - The ruler beside the transcript now shows which sentences are on screen: their ticks are longer
-  and thicker. The tick under the pointer and its neighbours grow, so a tick is easier to hit. The
-  arrows above and below the ruler show the previous or the next page of the transcript.
+  and thicker. The ticks follow the pointer smoothly, like the macOS Dock. The tick under the pointer
+  grows longest, thickest and brightest, and the ticks around it grow less and less. When the pointer
+  moves up or down, the swell trails behind it. When the pointer stops, the swell settles to an even
+  shape. The ticks at rest are thin and dim. The arrows above and below the ruler show the
+  previous or the next page of the transcript.
 - The preview card of the ruler no longer has a dark bar on its right edge.
 - Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its
   speaker and time, also when no listening model is connected. Click the cross on the pinned point to
