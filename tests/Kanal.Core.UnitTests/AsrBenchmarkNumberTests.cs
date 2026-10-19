@@ -129,7 +129,18 @@ public class AsrBenchmarkNumberTests
     [InlineData("百万元", "1000000元")]
     [InlineData("千万元", "10000000元")]
     [InlineData("1,000万元", "10000000元")]
+    [InlineData("1,000万", "10000000")]
+    [InlineData("今年，100万元", "今年,1000000元")]
+    [InlineData("1.5万，2万", "15000,20000")]
     public void Chinese_digits_with_a_unit_and_idioms_are_read(string text, string expected)
+    {
+        Assert.Equal(expected, Numbers.Normalize("zh", text));
+    }
+
+    [Theory]
+    [InlineData("百度", "100度")]
+    [InlineData("百分比", "100分比")]
+    public void A_bare_hundred_or_thousand_word_is_read_as_a_number(string text, string expected)
     {
         Assert.Equal(expected, Numbers.Normalize("zh", text));
     }
