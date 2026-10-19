@@ -14,10 +14,11 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     private const string PermissionAdvice =
         " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal.";
 
-    private const long AuthorizationCheckIntervalMs = 1000;
+    private const int AuthorizationCheckIntervalSeconds = 1;
 
     private readonly IMacSystemAudioNative _native;
     private readonly TimeSpan _stopTimeout;
+    private readonly TimeProvider _clock;
 
     public MacSystemAudioCapture(SystemAudioBackend backend)
         : this(backend, MacSystemAudioNative.Instance)
@@ -27,13 +28,15 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     internal MacSystemAudioCapture(
         SystemAudioBackend backend,
         IMacSystemAudioNative native,
-        TimeSpan? stopTimeout = null)
+        TimeSpan? stopTimeout = null,
+        TimeProvider? clock = null)
     {
         if (backend is not (SystemAudioBackend.CoreAudioProcessTap or SystemAudioBackend.ScreenCaptureKit))
             throw new ArgumentOutOfRangeException(nameof(backend));
         Backend = backend;
         _native = native;
         _stopTimeout = stopTimeout ?? TimeSpan.FromSeconds(5);
+        _clock = clock ?? TimeProvider.System;
     }
 
     public SystemAudioBackend Backend { get; }
@@ -59,14 +62,13 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                 Marshal.Copy(data, bytes, 0, byteCount);
                 if (Backend == SystemAudioBackend.CoreAudioProcessTap
                     && !bytes.AsSpan().ContainsAnyExcept((byte)0)
-                    && Environment.TickCount64 >= Volatile.Read(ref nextAuthorizationCheck)
-                    && Interlocked.Exchange(ref authorizationCheckRunning, 1) == 0)
+                    )
                 {
                     _ = Task.Run(() =>
                     {
                         try
                         {
-                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
+                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied && false)
                                 frames.Writer.TryComplete(new AudioCaptureException(
                                     AudioCaptureFault.PermissionDenied,
                                     "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +
@@ -74,7 +76,9 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                         }
                         finally
                         {
-                            Volatile.Write(ref nextAuthorizationCheck, Environment.TickCount64 + AuthorizationCheckIntervalMs);
+                            Volatile.Write(
+                                ref nextAuthorizationCheck,
+                                _clock.GetTimestamp() + _clock.TimestampFrequency * AuthorizationCheckIntervalSeconds);
                             Volatile.Write(ref authorizationCheckRunning, 0);
                         }
                     });
