@@ -63,6 +63,20 @@ jobs:
         continue-on-error: true
         run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "Category=Metric" --logger "console;verbosity=detailed"
 
+      - name: Screenshots of the meeting switch (temporary)
+        if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
+        continue-on-error: true
+        env:
+          KANAL_SKIA: "1"
+          KANAL_SHOTS: ${{ github.workspace }}/shots
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "Category=Screenshot" --logger "console;verbosity=detailed"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
+        with:
+          name: shots
+          path: shots/*.png
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.os }}
