@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
+using Kanal.Core.Relay;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -48,6 +49,23 @@ public class WarmupViewModelTests
         {
             Interlocked.Increment(ref Starts);
             return inner.StartAsync(options, ct);
+        }
+    }
+
+    private sealed class WarmableAsr(IAsrProvider inner, Task gate) : IAsrProvider, IWarmupProvider
+    {
+        public int WarmUpCalls;
+
+        public string Id => inner.Id;
+        public AsrCapabilities Caps => inner.Caps;
+
+        public Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            inner.StartAsync(options, ct);
+
+        public async Task WarmUpAsync(CancellationToken ct)
+        {
+            Interlocked.Increment(ref WarmUpCalls);
+            await gate.WaitAsync(ct);
         }
     }
 
@@ -102,6 +120,30 @@ public class WarmupViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task TheRelayRoomIsCreatedWhileTheModelLoads()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (vm, _, _) = DemoWithGatedModel(gate.Task);
+        var relayRequested = false;
+        vm.RelayEnabled = true;
+        vm.RelayPublisherFactory = (_, _) =>
+        {
+            relayRequested = true;
+            return Task.FromResult<IRelayPublisher>(new NullRelayPublisher());
+        };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+
+        Assert.True(relayRequested, "the relay waited for the model to finish loading.");
+
+        gate.SetResult();
+        await starting;
+        Assert.True(vm.IsRunning);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
     public async Task AFailedLoadIsReportedAndNothingStarts()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -149,6 +191,57 @@ public class WarmupViewModelTests
 
         await vm.StartCommand.ExecuteAsync(null);
 
+        Assert.True(vm.IsRunning);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task ALocalTranscriptionModelLoadsFirstAndAFailedLoadStopsTheStart()
+    {
+        var asrGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = TestViewModels.Demo();
+        var mt = new GatedWarmupMt(Task.CompletedTask);
+        WarmableAsr? asr = null;
+        vm.PlanFilter = plan =>
+        {
+            asr = new WarmableAsr(plan.Asr!, asrGate.Task);
+            return plan with { Asr = asr, Mt = mt };
+        };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+
+        Assert.Equal(1, asr!.WarmUpCalls);
+        Assert.Contains("Loading the transcription model", vm.Status);
+        Assert.Equal(0, mt.WarmUpCalls);
+
+        asrGate.SetException(new FileNotFoundException("encoder missing"));
+        await starting;
+        await PumpAsync(50);
+
+        Assert.Contains("Transcription model failed to load", vm.Status);
+        Assert.Contains("encoder missing", vm.Status);
+        Assert.Equal(0, mt.WarmUpCalls);
+        Assert.False(vm.IsRunning);
+    }
+
+    [AvaloniaFact]
+    public async Task ALoadedTranscriptionModelIsFollowedByTheTranslationModel()
+    {
+        var asrGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = TestViewModels.Demo();
+        var mt = new GatedWarmupMt(Task.CompletedTask);
+        vm.PlanFilter = plan => plan with { Asr = new WarmableAsr(plan.Asr!, asrGate.Task), Mt = mt };
+
+        var starting = vm.StartCommand.ExecuteAsync(null);
+        await PumpAsync(100);
+        Assert.Equal(0, mt.WarmUpCalls);
+
+        asrGate.SetResult();
+        await starting;
+        await PumpAsync(50);
+
+        Assert.Equal(1, mt.WarmUpCalls);
         Assert.True(vm.IsRunning);
         await vm.StopCommand.ExecuteAsync(null);
     }

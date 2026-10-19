@@ -1,0 +1,238 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Kanal.Host.ViewModels"
+        xmlns:l="using:Kanal.Host.Localization"
+        xmlns:c="using:Kanal.Host.Controls"
+        x:Class="Kanal.Host.Views.ProjectSettingsWindow"
+        x:DataType="vm:ProjectSettingsViewModel"
+        Title="{l:T workspace.settings.title}"
+        Width="640" MaxHeight="720" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource Sans}"
+        TextElement.Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Sheet}">
+
+    <Window.Styles>
+        <Style Selector="Path.glyph#IssueIcon">
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Path.glyph#IssueIcon.alarm">
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="Path.glyph#IssueIcon.resolved">
+            <Setter Property="Fill" Value="{DynamicResource Ink3}" />
+        </Style>
+        <Style Selector="TextBlock#IssueOutcome">
+            <Setter Property="Foreground" Value="{DynamicResource Ink2}" />
+        </Style>
+        <Style Selector="TextBlock#IssueOutcome.refused">
+            <Setter Property="Foreground" Value="{DynamicResource Alarm}" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel Margin="24,20,24,20">
+        <Button DockPanel.Dock="Bottom" x:Name="Save" Classes="accent" Content="{l:T settings.save}"
+                Command="{Binding SaveCommand}" HorizontalAlignment="Right" Margin="0,18,0,0" />
+
+        <TextBlock DockPanel.Dock="Bottom" x:Name="Problem" Text="{Binding Problem}" TextWrapping="Wrap"
+                   Margin="0,14,0,0" FontSize="11.5" LineHeight="17" Foreground="{DynamicResource Alarm}"
+                   IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <ScrollViewer x:Name="SettingsScroller" HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{l:T workspace.name}" Classes="label" />
+                <Border Classes="rule" />
+                <TextBox x:Name="ProjectName" Text="{Binding Name}"
+                         AutomationProperties.Name="{l:T workspace.name.field}" />
+
+                <TextBlock Text="{l:T workspace.icon}" Classes="label" Margin="0,28,0,0" />
+                <Border Classes="rule" />
+                <TextBlock x:Name="IconFileName" Text="{Binding ImageFileName}" FontSize="11.5"
+                           Foreground="{DynamicResource Ink3}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"
+                           IsVisible="{Binding ImageFileName, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border Width="44" Height="44" CornerRadius="8" Background="{DynamicResource Paper}"
+                            BorderBrush="{DynamicResource Rule}" BorderThickness="1">
+                        <Panel Width="24" Height="24">
+                            <Image x:Name="IconImage" Width="24" Height="24"
+                                   Source="{Binding ImagePath, Converter={x:Static c:ProjectIcons.Image}}" />
+                            <Path Classes="glyph" Width="24" Height="24" Fill="{DynamicResource Ink}"
+                                  Data="{Binding Glyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                                  IsVisible="{Binding #IconImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                        </Panel>
+                    </Border>
+                    <Button x:Name="ChooseGlyph" Content="{l:T workspace.icon.choose}" VerticalAlignment="Center">
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                <ItemsControl x:Name="Glyphs" ItemsSource="{Binding Glyphs}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="4" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="x:String">
+                                            <Button Classes="ghost icon" Click="OnGlyphClick"
+                                                    ToolTip.Tip="{Binding Converter={x:Static c:ProjectIcons.Label}}"
+                                                    AutomationProperties.Name="{Binding Converter={x:Static c:ProjectIcons.Label}}">
+                                                <Path Classes="glyph" Width="18" Height="18"
+                                                      Data="{Binding Converter={x:Static c:ProjectIcons.Glyph}}" />
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button x:Name="ChooseFile" Content="{l:T workspace.icon.file}" VerticalAlignment="Center"
+                            Command="{Binding ChooseImageCommand}" />
+                    <Button x:Name="ResetIcon" Content="{l:T workspace.icon.reset}" VerticalAlignment="Center"
+                            Command="{Binding ResetIconCommand}" IsVisible="{Binding IsCustomIcon}" />
+                </StackPanel>
+
+                <TextBlock Text="{l:T workspace.glossary}" Classes="label" Margin="0,28,0,0" />
+                <Border Classes="rule" />
+                <TextBlock Text="{l:T workspace.glossary.note}" FontSize="11.5" LineHeight="17" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Ink3}" Margin="0,0,0,8" />
+                <TextBlock x:Name="GlossaryProblem" Text="{Binding GlossaryProblem}" FontSize="11.5" LineHeight="17"
+                           TextWrapping="Wrap" Foreground="{DynamicResource Alarm}"
+                           IsVisible="{Binding !CanEditGlossary}" />
+                <StackPanel x:Name="GlossaryEditor" Grid.IsSharedSizeScope="True" Spacing="6"
+                            IsVisible="{Binding CanEditGlossary}">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Keep" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Remove" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="中文" Classes="label" />
+                        <TextBlock Grid.Column="1" Text="Deutsch" Classes="label" />
+                        <TextBlock Grid.Column="2" Text="Polski" Classes="label" />
+                        <TextBlock Grid.Column="3" Text="English" Classes="label" />
+                        <TextBlock Grid.Column="4" Text="{l:T workspace.glossary.keep}" Classes="label"
+                                   HorizontalAlignment="Center"
+                                   ToolTip.Tip="{l:T workspace.glossary.donottranslate}" />
+                    </Grid>
+                    <ItemsControl x:Name="GlossaryRows" ItemsSource="{Binding Glossary}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GlossaryRowViewModel">
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Keep" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Remove" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" x:Name="TermZh" Text="{Binding Zh}"
+                                             AutomationProperties.Name="中文" />
+                                    <TextBox Grid.Column="1" x:Name="TermDe" Text="{Binding De}"
+                                             AutomationProperties.Name="Deutsch" />
+                                    <TextBox Grid.Column="2" x:Name="TermPl" Text="{Binding Pl}"
+                                             AutomationProperties.Name="Polski" />
+                                    <TextBox Grid.Column="3" x:Name="TermEn" Text="{Binding En}"
+                                             AutomationProperties.Name="English" />
+                                    <CheckBox Grid.Column="4" x:Name="DoNotTranslate" IsChecked="{Binding DoNotTranslate}"
+                                              HorizontalAlignment="Center" MinWidth="0" Padding="0"
+                                              ToolTip.Tip="{l:T workspace.glossary.donottranslate}"
+                                              AutomationProperties.Name="{l:T workspace.glossary.donottranslate}" />
+                                    <Button Grid.Column="5" x:Name="RemoveTerm" Classes="ghost icon"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="{l:T workspace.glossary.remove}"
+                                            AutomationProperties.Name="{l:T workspace.glossary.remove}"
+                                            Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).RemoveTermCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Path Classes="glyph" Data="{c:Icon trash}" Width="13" Height="13" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="AddTerm" Content="{l:T workspace.glossary.add}" HorizontalAlignment="Left"
+                            Command="{Binding AddTermCommand}" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <StackPanel x:Name="IssuesSection" IsVisible="{Binding HasIssues}" Margin="0,28,0,0">
+                    <TextBlock Text="{l:T workspace.issues.section}" Classes="label" />
+                    <Border Classes="rule" />
+                    <TextBlock x:Name="ResolveBlocked" Text="{Binding ResolveBlockedNote}" FontSize="11.5"
+                               LineHeight="17" TextWrapping="Wrap" Foreground="{DynamicResource Alarm}"
+                               Margin="0,0,0,8" IsVisible="{Binding !CanResolve}" />
+                    <ItemsControl x:Name="IssueList" ItemsSource="{Binding Issues}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ProjectIssueViewModel">
+                                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="1" CornerRadius="8"
+                                        Padding="14,12">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                        <Path x:Name="IssueIcon" Classes="glyph" Classes.alarm="{Binding IsAlarm}"
+                                              Classes.resolved="{Binding IsResolved}"
+                                              Data="{c:Icon warning}" Width="14" Height="14"
+                                              VerticalAlignment="Top" Margin="0,2,0,0" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="IssueCause" Text="{Binding Cause}" FontSize="12.5"
+                                                       FontWeight="SemiBold" LineHeight="18" TextWrapping="Wrap" />
+                                            <SelectableTextBlock x:Name="IssuePath" Text="{Binding Location}"
+                                                                 FontSize="11.5" LineHeight="17" TextWrapping="Wrap"
+                                                                 Foreground="{DynamicResource Ink3}" Margin="0,3,0,0"
+                                                                 SelectionBrush="{DynamicResource BrandWash}" />
+                                            <TextBlock x:Name="IssueOutcome" Text="{Binding Outcome}"
+                                                       Classes.refused="{Binding IsRefused}"
+                                                       IsVisible="{Binding HasOutcome}" FontSize="11.5"
+                                                       LineHeight="17" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                            <Button x:Name="Resolve" Content="{l:T workspace.issues.resolve}"
+                                                    IsVisible="{Binding ShowsResolve}" Margin="0,10,0,0"
+                                                    Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).ResolveCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <StackPanel x:Name="RelocateActions" Orientation="Horizontal" Spacing="8"
+                                                        IsVisible="{Binding ShowsRelocate}" Margin="0,10,0,0">
+                                                <Button x:Name="ChooseFolder"
+                                                        Content="{l:T workspace.issues.choosefolder}"
+                                                        Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).RelocateCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button x:Name="RemoveFromList" Content="{l:T workspace.remove.listonly}"
+                                                        Command="{Binding $parent[Window].((vm:ProjectSettingsViewModel)DataContext).RemoveFromListCommand}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <TextBlock x:Name="DangerLabel" Text="{l:T workspace.danger}" Classes="label" Margin="0,28,0,0" />
+                <Border Classes="rule" />
+                <Border BorderBrush="{DynamicResource Rule}" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{l:T workspace.remove}" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="{l:T workspace.remove.note}" FontSize="11.5" TextWrapping="Wrap"
+                                       LineHeight="17" Foreground="{DynamicResource Ink3}" Margin="0,3,0,0" />
+                            <TextBlock x:Name="RemoveBlocked" Text="{Binding RemoveBlockedNote}" FontSize="11.5"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource Alarm}" Margin="0,4,0,0"
+                                       IsVisible="{Binding !CanRemove}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" x:Name="Remove" Classes="danger" VerticalAlignment="Center"
+                                Content="{l:T workspace.remove.button}" Command="{Binding RemoveCommand}" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

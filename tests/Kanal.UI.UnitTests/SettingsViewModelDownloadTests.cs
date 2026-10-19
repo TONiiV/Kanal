@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Core.Models;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.UI.UnitTests;
@@ -10,7 +11,7 @@ namespace Kanal.UI.UnitTests;
 public class SettingsViewModelDownloadTests
 {
     /// <summary>A response body that never yields until the request is cancelled.</summary>
-    private sealed class StalledHandler : HttpMessageHandler
+    internal sealed class StalledHandler : HttpMessageHandler
     {
         private readonly TaskCompletionSource _started =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -48,33 +49,11 @@ public class SettingsViewModelDownloadTests
         }
     }
 
-    /// <summary>
-    /// Disposing the settings state mid-download must cancel its running work so reopening the
-    /// settings surface cannot offer a second concurrent download of the same model.
-    /// </summary>
-    [AvaloniaFact]
-    public async Task CancellingSettingsStateStopsARunningDownload()
+    private static string NewDir() =>
+        Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N"));
+
+    private static void TryDelete(string dir)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N"));
-        var handler = new StalledHandler();
-        var item = new TranslationModelItemViewModel(
-            LocalModelCatalog.Models[0], new ModelDownloadManager(dir, new HttpClient(handler)));
-
-        var vm = new SettingsViewModel(new AppSettings(), () => null);
-        vm.TranslationModels.Clear();
-        vm.TranslationModels.Add(item);
-
-        var download = item.DownloadCommand.ExecuteAsync(null);
-        await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.True(item.IsDownloading);
-
-        vm.CancelDownloads();
-
-        await download.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.False(item.IsDownloading);
-        Assert.Equal("", item.Error); // a cancelled download is not a failure
-        Assert.False(Directory.Exists(dir) && Directory.EnumerateFiles(dir).Any());
-
         try
         {
             Directory.Delete(dir, recursive: true);
@@ -82,5 +61,76 @@ public class SettingsViewModelDownloadTests
         catch
         {
         }
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingSettingsKeepsADownloadRunning()
+    {
+        var dir = NewDir();
+        var handler = new StalledHandler();
+        var rows = new ModelRows(new ModelDownloadManager(dir, new HttpClient(handler)));
+        var vm = new SettingsViewModel(new AppSettings(), () => null, modelRows: rows);
+        var item = vm.TranslationModels.First(m => m.IsLocal);
+
+        var download = item.DownloadCommand.ExecuteAsync(null);
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
+
+        vm.OnWindowClosed();
+
+        Assert.True(item.IsDownloading);
+        Assert.False(download.IsCompleted);
+
+        rows.CancelAll();
+        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        TryDelete(dir);
+    }
+
+    [AvaloniaFact]
+    public async Task ReopeningSettingsShowsTheRunningDownloadWithAWorkingCancel()
+    {
+        var dir = NewDir();
+        var handler = new StalledHandler();
+        var rows = new ModelRows(new ModelDownloadManager(dir, new HttpClient(handler)));
+        var first = new SettingsViewModel(new AppSettings(), () => null, modelRows: rows);
+        var item = first.TranscriptionModels[0];
+
+        var download = item.DownloadCommand.ExecuteAsync(null);
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        item.Progress = 0.4;
+        first.OnWindowClosed();
+
+        var second = new SettingsViewModel(new AppSettings(), () => null, modelRows: rows);
+        var reopened = second.TranscriptionModels[0];
+
+        Assert.Same(item, reopened);
+        Assert.True(reopened.IsDownloading);
+        Assert.Equal(0.4, reopened.Progress);
+
+        reopened.Download.CancelCommand.Execute(null);
+
+        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(reopened.IsDownloading);
+        Assert.Equal("", reopened.Error);
+        TryDelete(dir);
+    }
+
+    [AvaloniaFact]
+    public async Task DisposingTheMainViewModelCancelsEveryRunningDownload()
+    {
+        var dir = NewDir();
+        var handler = new StalledHandler();
+        var vm = TestViewModels.Hermetic(
+            downloads: new ModelDownloadManager(dir, new HttpClient(handler)));
+        var translation = vm.ModelRows.Translation.First(m => m.IsLocal);
+
+        var download = translation.DownloadCommand.ExecuteAsync(null);
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(10));
+
+        vm.Dispose();
+
+        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(translation.IsDownloading);
+        Assert.Equal("", translation.Error);
+        TryDelete(dir);
     }
 }

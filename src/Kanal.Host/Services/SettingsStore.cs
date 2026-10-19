@@ -10,33 +10,46 @@ namespace Kanal.Host.Services;
 
 public sealed record ApiKeyEntry(string Name, string Provider, string Key);
 
-// Falls back to Info rather than throwing: the stock converter's throw cost the whole file.
-public sealed class LogLevelConverter : JsonConverter<LogLevel>
+public enum ColourScheme
 {
-    public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    Light,
+    Dark,
+    System,
+}
+
+// Falls back rather than throwing: the stock converter's throw cost the whole file.
+public abstract class LenientEnumConverter<T>(T fallback) : JsonConverter<T>
+    where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
     {
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
-                return Enum.TryParse<LogLevel>(reader.GetString(), ignoreCase: true, out var byName)
+                return Enum.TryParse<T>(reader.GetString(), ignoreCase: true, out var byName)
                        && Enum.IsDefined(byName)
                     ? byName
-                    : LogLevel.Info;
+                    : fallback;
             case JsonTokenType.Number:
-                return reader.TryGetInt32(out var ordinal) && Enum.IsDefined((LogLevel)ordinal)
-                    ? (LogLevel)ordinal
-                    : LogLevel.Info;
+                return reader.TryGetInt32(out var ordinal)
+                       && Enum.IsDefined(typeof(T), ordinal)
+                    ? (T)Enum.ToObject(typeof(T), ordinal)
+                    : fallback;
             case JsonTokenType.StartObject or JsonTokenType.StartArray:
-                reader.Skip(); // whatever this is, it is not a level — step over it intact
-                return LogLevel.Info;
+                reader.Skip(); // whatever this is, it is not a value of T — step over it intact
+                return fallback;
             default:
-                return LogLevel.Info;
+                return fallback;
         }
     }
 
-    public override void Write(Utf8JsonWriter writer, LogLevel value, JsonSerializerOptions options) =>
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString());
 }
+
+public sealed class LogLevelConverter() : LenientEnumConverter<LogLevel>(LogLevel.Info);
+
+public sealed class ColourSchemeConverter() : LenientEnumConverter<ColourScheme>(ColourScheme.Light);
 
 public sealed class AppSettings
 {
@@ -50,6 +63,9 @@ public sealed class AppSettings
     /// the default: translation by the cloud ASR provider (Gladia).
     /// </summary>
     public string? ActiveTranslationModelId { get; set; }
+
+    // Null means the catalog default, so the default follows later catalog changes.
+    public string? ActiveTranscriptionModelId { get; set; }
 
     /// <summary>Where the export dialog opens. Null or blank falls back to Documents\Kanal.</summary>
     public string? TranscriptFolder { get; set; }
@@ -75,6 +91,11 @@ public sealed class AppSettings
     /// </summary>
     public string? AppLanguage { get; set; }
 
+    [JsonConverter(typeof(ColourSchemeConverter))]
+    public ColourScheme ColourScheme { get; set; } = ColourScheme.Light;
+
+    public string AccentTheme { get; set; } = "kanal";
+
     [JsonConverter(typeof(LogLevelConverter))]
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
 
@@ -92,6 +113,8 @@ public sealed class AppSettings
 public static class SettingsStore
 {
     public const string GladiaEnvVar = "GLADIA_API_KEY";
+
+    public const string DeepLEnvVar = "DEEPL_API_KEY";
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -171,6 +194,27 @@ public static class SettingsStore
 
     private const string LogCategory = "settings";
 
+    public static void SaveColourScheme(ColourScheme scheme)
+    {
+        var settings = Load();
+        settings.ColourScheme = scheme;
+        Save(settings);
+    }
+
+    public static void SaveAccentTheme(string id)
+    {
+        var settings = Load();
+        settings.AccentTheme = id;
+        Save(settings);
+    }
+
+    public static void SaveAppLanguage(string code)
+    {
+        var settings = Load();
+        settings.AppLanguage = code;
+        Save(settings);
+    }
+
     public static void Save(AppSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
@@ -208,6 +252,24 @@ public static class SettingsStore
             ? (active.Key.Trim(), active.Name)
             : null;
     }
+
+    public static (string Key, string? Name)? ResolveDeepLKey(AppSettings settings)
+    {
+        if (ResolveStoredDeepLKey(settings) is { } stored)
+            return stored;
+
+        var fromEnv = ReadEnvAllScopes(DeepLEnvVar);
+        return fromEnv is null ? null : (fromEnv, null);
+    }
+
+    public static (string Key, string? Name)? ResolveStoredDeepLKey(AppSettings settings)
+    {
+        var stored = settings.ApiKeys.FirstOrDefault(k =>
+            k.Provider.Equals(DeepLProvider, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(k.Key));
+        return stored is null ? null : (stored.Key.Trim(), stored.Name);
+    }
+
+    public const string DeepLProvider = "deepl";
 
     public static string? ReadEnvAllScopes(string name)
     {

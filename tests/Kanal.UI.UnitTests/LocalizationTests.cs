@@ -61,6 +61,14 @@ public class LocalizationTests
         ("de", "mode.demo.short"),
         ("de", "mode.cloudcloud.short"),
         ("pl", "mode.demo.short"),
+        ("de", "workspace.name"),
+        ("de", "workspace.issues.details"),
+        ("de", "workspace.glyph.local"),
+        ("de", "workspace.glyph.cloud"),
+        ("pl", "workspace.glyph.folder"),
+        ("de", "appearance.scheme.system"),
+        ("de", "appearance.theme.iris"),
+        ("pl", "appearance.theme.ocean"),
     ];
 
     [Theory]
@@ -306,6 +314,46 @@ public class AppLanguageTests
         }
     }
 
+    [AvaloniaFact]
+    public void ChoosingALanguageSavesItAtOnce()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var saved = new List<string>();
+            var vm = new SettingsViewModel(new AppSettings(), () => null, saveAppLanguage: saved.Add);
+            Assert.Empty(saved);
+
+            vm.AppLanguage = Localizer.Available.First(l => l.Code == "pl");
+
+            Assert.Equal(["pl"], saved);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    [AvaloniaFact]
+    public void AFailedLanguageSaveDoesNotStopTheSwitch()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            var vm = new SettingsViewModel(
+                new AppSettings(), () => null,
+                saveAppLanguage: _ => throw new IOException("disk full"));
+
+            vm.AppLanguage = Localizer.Available.First(l => l.Code == "de");
+
+            Assert.Equal("de", Localizer.Instance.Current);
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
     /// <summary>Choosing it in the dialog takes effect at once, not on the next launch.</summary>
     [AvaloniaFact]
     public void ChoosingALanguageAppliesImmediately()
@@ -408,6 +456,31 @@ public class AppLanguageTests
             Assert.Contains(
                 row.StatusLabel,
                 new[] { zh["settings.model.downloaded"], zh["settings.model.notdownloaded"] });
+        }
+        finally
+        {
+            Localizer.Instance.Current = previous;
+        }
+    }
+
+    [AvaloniaFact]
+    public void ALanguageSwitchRefreshesTheTranscriptionRows()
+    {
+        var previous = Localizer.Instance.Current;
+        try
+        {
+            Localizer.Instance.Current = "en";
+            var vm = new SettingsViewModel(new AppSettings(), () => null);
+            var row = vm.TranscriptionModels[0];
+            var changed = new List<string?>();
+            row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            Localizer.Instance.Current = "zh";
+
+            Assert.Contains(nameof(row.UseTip), changed);
+            Assert.Contains(nameof(row.StatusLabel), changed);
+            Assert.Equal(Strings.Tables["zh"]["settings.asrmodel.usetip"], row.UseTip);
+            vm.OnWindowClosed();
         }
         finally
         {

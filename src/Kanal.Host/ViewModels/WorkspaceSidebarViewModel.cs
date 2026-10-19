@@ -30,13 +30,20 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private readonly List<MeetingRecord> _held = [];
     private readonly Func<DateTimeOffset> _clock;
     private readonly MeetingGroupViewModel[] _groups;
+    private readonly Func<Action, Task> _offUiThread;
 
     public WorkspaceSidebarViewModel(
-        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null)
+        WorkspaceStore store, Action<string>? openFolder = null, Func<DateTimeOffset>? clock = null,
+        Func<Action, Task>? offUiThread = null)
     {
         _store = store;
         _openFolder = openFolder ?? SystemFolders.Open;
         _clock = clock ?? (() => DateTimeOffset.Now);
+        _offUiThread = offUiThread ?? (work =>
+        {
+            work();
+            return Task.CompletedTask;
+        });
         _groups = [.. Enum.GetValues<MeetingAge>().Select(age => new MeetingGroupViewModel(age, Choose))];
         Refresh();
         Localizer.Instance.PropertyChanged += (_, e) =>
@@ -45,6 +52,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
                 return;
 
             OnPropertyChanged(nameof(EmptyNote));
+            OnPropertyChanged(nameof(IssueCountText));
+            foreach (var issue in Issues)
+                issue.OnLanguageChanged();
+            if (_issueNote.Length > 0 && ProblemNote == _issueNote)
+                ShowUnopenableIssues();
             foreach (var meeting in Meetings)
                 meeting.OnLanguageChanged();
             foreach (var group in _groups)
@@ -58,9 +70,34 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public ObservableCollection<MeetingGroupViewModel> MeetingGroups { get; } = new();
 
+    public ObservableCollection<ProjectIssueViewModel> Issues { get; } = new();
+
+    public bool HasIssues => Issues.Count > 0;
+
+    public bool IssuesAreAlarm => Issues.Any(issue => issue.IsAlarm);
+
+    public string IssueCountText => Issues.Count == 1
+        ? L["workspace.issues.one"]
+        : L.Format("workspace.issues.many", Issues.Count);
+
+    [ObservableProperty]
+    private IReadOnlyDictionary<string, bool> _projectIssueStates = new Dictionary<string, bool>();
+
+    private readonly Dictionary<string, IReadOnlyList<ProjectIssueViewModel>> _issuesByProject = [];
+
+    private IReadOnlyList<StoreProblem> _projectListProblems = [];
+
+    private string _issueNote = "";
+
+    public IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project) =>
+        project.Id == SelectedWorkspace?.Id
+            ? [.. Issues]
+            : _issuesByProject.GetValueOrDefault(project.Id, []);
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewMeetingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportMeetingRecordCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowIssuesCommand))]
     private Workspace? _selectedWorkspace;
 
     [ObservableProperty]
@@ -87,6 +124,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     public Func<string, Task<BundleImportChoice>>? ChooseImportChoice { get; set; }
 
+    public Func<ProjectSettingsViewModel, Task>? ShowProjectSettings { get; set; }
+
     [ObservableProperty]
     private string? _recordingMeetingId;
 
@@ -101,6 +140,12 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     private string? _namingMeetingId;
 
     public Func<MeetingItemViewModel, Task>? GenerateTitleFor { get; set; }
+
+    // One run at a time: each one holds the whole recording in memory.
+    [ObservableProperty]
+    private string? _reidentifyingMeetingId;
+
+    public Func<MeetingItemViewModel, int?, Task>? ReidentifySpeakersFor { get; set; }
 
     public event Action<string, string>? MeetingRenamed;
 
@@ -201,6 +246,21 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         });
     }
 
+    public void DiscardRecord(MeetingRecord opened, MeetingRecord? selectedBefore)
+    {
+        if (opened.Id == selectedBefore?.Id)
+        {
+            SaveRecord(selectedBefore);
+            return;
+        }
+
+        if (Refused(_store.DeleteMeeting(opened.WorkspaceId, opened.Id)))
+            return;
+
+        LoadMeetings([]);
+        Select(selectedBefore?.Id);
+    }
+
     public string? FolderOf(MeetingRecord record) =>
         _store.MeetingFolder(record.WorkspaceId, record.Id);
 
@@ -227,22 +287,139 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         return saved;
     }
 
+    // The project list drops its selection mid-rebuild; reloading on that null would close the open meeting.
+    private bool _refreshing;
+
     public void Refresh()
     {
         var listing = _store.ListWorkspaces();
         var keep = SelectedWorkspace?.Id;
-        Workspaces.Clear();
-        foreach (var workspace in listing.Workspaces)
-            Workspaces.Add(workspace);
+        _refreshing = true;
+        try
+        {
+            Workspaces.Clear();
+            foreach (var workspace in listing.Workspaces)
+                Workspaces.Add(workspace);
 
-        SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
-        LoadMeetings(listing.Problems);
+            SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == keep) ?? Workspaces.FirstOrDefault();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+
+        _projectListProblems = Logged([.. listing.Problems
+            .Where(p => !listing.Workspaces.Any(w => IsFolderOf(p, w)))
+            .Distinct()]);
+        var earlier = _issuesByProject.ToDictionary(pair => pair.Key, pair => pair.Value);
+        _issuesByProject.Clear();
+        var generation = ++_scanGeneration;
+        var toScan = new List<Workspace>();
+        foreach (var workspace in Workspaces.Where(w => w.Id != SelectedWorkspace?.Id))
+        {
+            // A missing root is not looked up twice: on an offline share each lookup waits for the timeout.
+            var missing = listing.Problems.Where(p => IsFolderOf(p, workspace)).ToList();
+            if (missing.Count > 0)
+                _issuesByProject[workspace.Id] = IssuesOf(workspace, missing);
+            else
+            {
+                toScan.Add(workspace);
+                if (earlier.TryGetValue(workspace.Id, out var shown))
+                    _issuesByProject[workspace.Id] = shown;
+            }
+        }
+
+        LoadMeetings([.. listing.Problems.Where(p => SelectedWorkspace is { } current && IsFolderOf(p, current))]);
+        _ = ScanOthersAsync(toScan, generation);
+    }
+
+    private int _scanGeneration;
+
+    private async Task ScanOthersAsync(IReadOnlyList<Workspace> projects, int generation)
+    {
+        if (projects.Count == 0)
+            return;
+
+        var found = new Dictionary<string, IReadOnlyList<StoreProblem>>();
+        try
+        {
+            await _offUiThread(() =>
+            {
+                foreach (var project in projects)
+                    found[project.Id] = _store.ListMeetings(project.Id).Problems;
+            });
+            if (generation != _scanGeneration)
+                return;
+
+            foreach (var project in projects.Where(p => p.Id != SelectedWorkspace?.Id))
+                _issuesByProject[project.Id] = IssuesOf(project, found.GetValueOrDefault(project.Id, []));
+            PublishIssueStates();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogCategory, $"The scan of the other projects failed: {ex.Message}", ex);
+        }
+    }
+
+    private static bool IsFolderOf(StoreProblem problem, Workspace project) =>
+        problem.Kind == StoreProblemKind.FolderMissing && problem.Subject == project.RootPath;
+
+    private static IReadOnlyList<ProjectIssueViewModel> IssuesOf(Workspace project, IEnumerable<StoreProblem> problems) =>
+        [.. Logged([.. problems.Distinct()]).Select(p => ProjectIssueViewModel.For(p, project))];
+
+    private static IReadOnlyList<StoreProblem> Logged(IReadOnlyList<StoreProblem> problems)
+    {
+        foreach (var problem in problems)
+            Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        return problems;
+    }
+
+    private void ShowIssues()
+    {
+        Issues.Clear();
+        var origin = Workspaces.Count == 0 ? IssueOrigin.ProjectList : IssueOrigin.ProjectListRow;
+        foreach (var problem in _projectListProblems)
+            Issues.Add(ProjectIssueViewModel.For(problem, SelectedWorkspace, origin));
+        if (SelectedWorkspace is { } current)
+            foreach (var issue in _issuesByProject.GetValueOrDefault(current.Id, []))
+                Issues.Add(issue);
+
+        PublishIssueStates();
+        OnPropertyChanged(nameof(HasIssues));
+        OnPropertyChanged(nameof(IssuesAreAlarm));
+        OnPropertyChanged(nameof(IssueCountText));
+        ShowUnopenableIssues();
+    }
+
+    private void PublishIssueStates()
+    {
+        var states = _issuesByProject.Where(pair => pair.Value.Count > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.Any(issue => issue.IsAlarm));
+        if (SelectedWorkspace is { } workspace)
+        {
+            states.Remove(workspace.Id);
+            if (Issues.Count > 0)
+                states[workspace.Id] = IssuesAreAlarm;
+        }
+
+        ProjectIssueStates = states;
+    }
+
+    // Details opens the settings of a project; with none listed, the note is the only place left.
+    private void ShowUnopenableIssues()
+    {
+        if (SelectedWorkspace is not null || Issues.Count == 0)
+            return;
+
+        _issueNote = string.Join("\n", Issues.Select(issue => $"{issue.Cause} {issue.Location}"));
+        ProblemNote = _issueNote;
     }
 
     partial void OnSelectedWorkspaceChanged(Workspace? value)
     {
         OnPropertyChanged(nameof(HasWorkspace));
-        LoadMeetings([]);
+        if (!_refreshing)
+            LoadMeetings([]);
     }
 
     partial void OnSelectedMeetingChanged(MeetingItemViewModel? value)
@@ -257,8 +434,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     partial void OnSearchChanged(string value) => Show();
 
+    private string? _recordingProjectId;
+
     partial void OnRecordingMeetingIdChanged(string? value)
     {
+        _recordingProjectId = value is null ? null : RecordOf(value)?.WorkspaceId ?? SelectedWorkspace?.Id;
         foreach (var meeting in Meetings)
             meeting.IsRecording = meeting.Id == value;
     }
@@ -268,6 +448,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
     partial void OnRoomBusyChanged(bool value) => ShowNamingState();
 
     partial void OnNamingMeetingIdChanged(string? value) => ShowNamingState();
+
+    partial void OnReidentifyingMeetingIdChanged(string? value) => ShowNamingState();
 
     private void ShowNamingState()
     {
@@ -282,6 +464,10 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             : RoomBusy ? "meeting.generatetitle.running"
             : null;
         meeting.CanGenerateTitle = meeting.NamingBlockedBy is null && NamingMeetingId is null;
+        meeting.ReidentifyBlockedBy = meeting.Record.AudioPath is null ? "meeting.reidentify.noaudio"
+            : RoomBusy ? "meeting.reidentify.running"
+            : null;
+        meeting.CanReidentifySpeakers = meeting.ReidentifyBlockedBy is null && ReidentifyingMeetingId is null;
         return meeting;
     }
 
@@ -294,9 +480,11 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             var listing = _store.ListMeetings(workspace.Id);
             _held.AddRange(listing.Meetings.OrderByDescending(m => m.CreatedAt));
             problems.AddRange(listing.Problems);
+            _issuesByProject[workspace.Id] = IssuesOf(workspace, problems);
         }
 
-        ProblemNote = problems.Count == 0 ? "" : L.Format("workspace.problems", problems.Count);
+        ProblemNote = "";
+        ShowIssues();
         Show();
     }
 
@@ -307,7 +495,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         Meetings.Clear();
         foreach (var record in _held.Where(Matches))
             Meetings.Add(ShowNamingState(new MeetingItemViewModel(
-                record, RenameFromRow, GenerateTitleAsync,
+                record, RenameFromRow, GenerateTitleAsync, ReidentifySpeakersAsync,
                 ImportIntoAsync, ExportBundleAsync, OpenFolderAsync, DeleteAsync)
             {
                 IsRecording = record.Id == RecordingMeetingId,
@@ -366,6 +554,32 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Id == workspace!.Id);
     }
 
+    [RelayCommand]
+    private Task OpenProjectSettingsAsync(Workspace? project) => ShowSettingsAsync(project, openAtIssues: false);
+
+    [RelayCommand(CanExecute = nameof(HasWorkspace))]
+    private Task ShowIssuesAsync() => ShowSettingsAsync(SelectedWorkspace, openAtIssues: true);
+
+    private async Task ShowSettingsAsync(Workspace? project, bool openAtIssues)
+    {
+        if (project is null || ShowProjectSettings is null)
+            return;
+
+        var settings = new ProjectSettingsViewModel(
+            _store, project, recording: RecordingMeetingId is not null, IssuesOf(project), openAtIssues,
+            projectRecording: RecordingMeetingId is not null && _recordingProjectId == project.Id)
+        {
+            ReloadIssues = () =>
+            {
+                Refresh();
+                return IssuesOf(project);
+            },
+        };
+        await ShowProjectSettings(settings);
+        if (settings.Changed)
+            Refresh();
+    }
+
     [RelayCommand(CanExecute = nameof(HasWorkspace))]
     private async Task ImportMeetingRecordAsync()
     {
@@ -378,6 +592,9 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
 
     private Task GenerateTitleAsync(MeetingItemViewModel item) =>
         GenerateTitleFor?.Invoke(item) ?? Task.CompletedTask;
+
+    private Task ReidentifySpeakersAsync(MeetingItemViewModel item, int? people) =>
+        ReidentifySpeakersFor?.Invoke(item, people) ?? Task.CompletedTask;
 
     private async Task ImportIntoAsync(MeetingItemViewModel item)
     {
@@ -406,7 +623,7 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         }
 
         var (manifest, problem) = MeetingBundle.ReadManifest(source);
-        if (Refused(problem))
+        if (Refused(problem, ImportKey(problem, source)))
             return;
 
         var asNewRecord = false;
@@ -422,7 +639,8 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
             asNewRecord = true;
         }
 
-        if (Refused(MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem))
+        var imported = MeetingBundle.Import(_store, SelectedWorkspace!.Id, source, asNewRecord).Problem;
+        if (Refused(imported, ImportKey(imported, source)))
             return;
 
         ProblemNote = "";
@@ -467,15 +685,17 @@ public sealed partial class WorkspaceSidebarViewModel : ViewModelBase
         LoadMeetings([]);
     }
 
-    private bool Refused(StoreProblem? problem)
+    private static string? ImportKey(StoreProblem? problem, string bundlePath) =>
+        problem is { Kind: StoreProblemKind.Unreadable } && problem.Subject == bundlePath
+            ? "workspace.import.unreadable"
+            : null;
+
+    private bool Refused(StoreProblem? problem, string? key = null)
     {
         if (problem is null)
             return false;
 
-        ProblemNote = problem.Kind == StoreProblemKind.TitleTaken
-            ? L.Format("workspace.titletaken", problem.Subject)
-            : problem.Detail;
-        Log.Warning(LogCategory, $"{problem.Kind} on {problem.Subject}: {problem.Detail}");
+        ProblemNote = StoreRefusal.Report(problem, LogCategory, key);
         return true;
     }
 

@@ -4,6 +4,9 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,6 +16,7 @@ using Kanal.Core.Models;
 using Kanal.Host.Diagnostics;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
+using Kanal.Providers.LocalAsr;
 using Kanal.Providers.LocalMt;
 using CoreLogLevel = Kanal.Core.Diagnostics.LogLevel;
 
@@ -25,6 +29,54 @@ public sealed partial class LogLevelOption(LogLevel level) : ViewModelBase
     public string Name => Localizer.Instance[$"log.level.{Level.ToString().ToLowerInvariant()}"];
 
     public void RefreshText() => OnPropertyChanged(nameof(Name));
+}
+
+public sealed partial class ColourSchemeOption(ColourScheme scheme) : ViewModelBase
+{
+    public ColourScheme Scheme { get; } = scheme;
+
+    public string Name => Localizer.Instance[$"appearance.scheme.{Scheme.ToString().ToLowerInvariant()}"];
+
+    public ThemeVariant Left => Scheme == ColourScheme.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+
+    public ThemeVariant Right => Scheme == ColourScheme.Light ? ThemeVariant.Light : ThemeVariant.Dark;
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+
+    public override string ToString() => Name;
+}
+
+public sealed class AccentThemeOption(AccentTheme theme) : ViewModelBase
+{
+    public AccentTheme Theme { get; } = theme;
+
+    public string Name => Localizer.Instance[$"appearance.theme.{Theme.Id}"];
+
+    public IBrush LightOrb { get; } = Orb(theme.Light.BrandColour);
+
+    public IBrush DarkOrb { get; } = Orb(theme.Dark.BrandColour);
+
+    private static RadialGradientBrush Orb(Color brand) => new()
+    {
+        Center = new RelativePoint(0.35, 0.3, RelativeUnit.Relative),
+        GradientOrigin = new RelativePoint(0.35, 0.3, RelativeUnit.Relative),
+        RadiusX = RelativeScalar.Parse("75%"),
+        RadiusY = RelativeScalar.Parse("75%"),
+        GradientStops =
+        [
+            new GradientStop(Mix(brand, Colors.White, 0.4), 0),
+            new GradientStop(brand, 0.7),
+        ],
+    };
+
+    private static Color Mix(Color from, Color to, double t) => Color.FromRgb(
+        (byte)Math.Round(from.R + (to.R - from.R) * t),
+        (byte)Math.Round(from.G + (to.G - from.G) * t),
+        (byte)Math.Round(from.B + (to.B - from.B) * t));
+
+    public void RefreshText() => OnPropertyChanged(nameof(Name));
+
+    public override string ToString() => Name;
 }
 
 public partial class ApiKeyItemViewModel : ViewModelBase
@@ -46,8 +98,19 @@ public partial class ApiKeyItemViewModel : ViewModelBase
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase
 {
-    public SettingsViewModel()
-        : this(SettingsStore.Load(), deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher)
+    public const int TranslationTab = 4;
+
+    [ObservableProperty]
+    private int _selectedTab;
+
+    public SettingsViewModel(ModelRows? modelRows = null)
+        : this(
+            SettingsStore.Load(),
+            deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
+            saveColourScheme: SettingsStore.SaveColourScheme,
+            saveAccentTheme: SettingsStore.SaveAccentTheme,
+            saveAppLanguage: SettingsStore.SaveAppLanguage,
+            modelRows: modelRows)
     {
     }
 
@@ -59,6 +122,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// Test seam for the advice wording: the tests pin a platform so their assertions hold on
     /// whatever OS CI happens to run.
     /// </param>
+    /// <param name="modelRows">
+    /// The app-owned download rows (<c>MainViewModel.ModelRows</c>). Without them the window
+    /// builds its own, so parallel tests cannot share selection or download state.
+    /// </param>
     /// <param name="deviceWatcherFactory">
     /// Hot-plug notifications for the test-device dropdown; tests fire a fake by hand.
     /// </param>
@@ -67,8 +134,15 @@ public partial class SettingsViewModel : ViewModelBase
         Func<IAudioCaptureService?>? captureFactory = null,
         bool? isMacOs = null,
         Func<IAudioDeviceWatcher?>? deviceWatcherFactory = null,
-        Action<string>? openFolder = null)
+        Action<string>? openFolder = null,
+        Action<ColourScheme>? saveColourScheme = null,
+        Action<string>? saveAppLanguage = null,
+        Action<string>? saveAccentTheme = null,
+        ModelRows? modelRows = null)
     {
+        _saveAppLanguage = saveAppLanguage ?? (_ => { });
+        _saveColourScheme = saveColourScheme ?? (_ => { });
+        _saveAccentTheme = saveAccentTheme ?? (_ => { });
         _openFolder = openFolder ?? SystemFolders.Open;
         _isMac = isMacOs ?? OperatingSystem.IsMacOS();
         CaptureFactory = captureFactory ?? AudioCaptureFactory.TryCreate;
@@ -94,17 +168,26 @@ public partial class SettingsViewModel : ViewModelBase
         if (Keys.Count > 0 && !Keys.Any(k => k.IsActive))
             Keys[0].IsActive = true;
 
+        _deepLKey = SettingsStore.ResolveStoredDeepLKey(settings)?.Key ?? "";
+
         _envVarIsSet = SettingsStore.ReadEnvAllScopes(SettingsStore.GladiaEnvVar) is not null;
 
-        var downloads = new ModelDownloadManager(SettingsStore.ModelsPath);
-        TranslationModels.Add(new TranslationModelItemViewModel());
-        foreach (var model in LocalModelCatalog.Models)
-            TranslationModels.Add(new TranslationModelItemViewModel(model, downloads));
+        var rows = modelRows ?? new ModelRows(new ModelDownloadManager(SettingsStore.ModelsPath));
+        foreach (var row in rows.Translation)
+            TranslationModels.Add(row);
+        foreach (var row in rows.Transcription)
+            TranscriptionModels.Add(row);
 
         var active = TranslationModels.FirstOrDefault(
                          m => m.IsLocal && m.ModelId == settings.ActiveTranslationModelId)
                      ?? TranslationModels[0];
-        active.IsActive = true;
+        var activeTranscription = TranscriptionModels.FirstOrDefault(m => m.ModelId == settings.ActiveTranscriptionModelId)
+                                  ?? TranscriptionModels[0];
+        foreach (var row in TranslationModels.Concat(TranscriptionModels))
+        {
+            row.IsActive = ReferenceEquals(row, active) || ReferenceEquals(row, activeTranscription);
+            row.RefreshDownloaded();
+        }
 
         _transcriptFolder = settings.TranscriptFolder ?? "";
         _recordAudio = settings.RecordAudio;
@@ -116,12 +199,14 @@ public partial class SettingsViewModel : ViewModelBase
         _appLanguage = Localizer.Available.FirstOrDefault(l => l.Code == chosen)
                        ?? Localizer.Available[0];
 
+        _scheme = Schemes.First(o => o.Scheme == settings.ColourScheme);
+        _theme = Themes.First(o => o.Theme == AccentThemes.Find(settings.AccentTheme));
         _logLevel = LogLevels.FirstOrDefault(o => o.Level == settings.LogLevel) ?? LogLevels[1];
         _logMaxFileSizeMb = SettingsStore.ResolveLogMaxFileSizeMb(settings);
 
         // The switch happens in this window, so this window least of all may stay in the old
-        // language. Unsubscribed in CancelDownloads — the same close-time cleanup the downloads
-        // use — so the static localizer does not keep dead view models reachable.
+        // language. Unsubscribed in OnWindowClosed so the static localizer does not keep dead view
+        // models reachable.
         Localizer.Instance.PropertyChanged += OnLanguageChanged;
     }
 
@@ -137,10 +222,14 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(LogFailureNote));
         OnPropertyChanged(nameof(VersionLabel));
         OnPropertyChanged(nameof(LicenseNote));
-        foreach (var model in TranslationModels)
+        foreach (var model in TranslationModels.Concat(TranscriptionModels))
             model.RefreshText();
         foreach (var level in LogLevels)
             level.RefreshText();
+        foreach (var scheme in Schemes)
+            scheme.RefreshText();
+        foreach (var theme in Themes)
+            theme.RefreshText();
 
         // The verdict is re-spoken only where it is still a standing state rather than the
         // record of a measurement or a failure: "not tested" before any test, "listening"
@@ -164,7 +253,12 @@ public partial class SettingsViewModel : ViewModelBase
 
     public ObservableCollection<ApiKeyItemViewModel> Keys { get; } = new();
 
-    public ObservableCollection<TranslationModelItemViewModel> TranslationModels { get; } = new();
+    [ObservableProperty]
+    private string _deepLKey = "";
+
+    public ObservableCollection<ModelItemViewModel> TranslationModels { get; } = new();
+
+    public ObservableCollection<ModelItemViewModel> TranscriptionModels { get; } = new();
 
     private readonly bool _envVarIsSet;
 
@@ -197,10 +291,77 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private AppLanguage? _appLanguage;
 
+    private readonly Action<string> _saveAppLanguage;
+
     partial void OnAppLanguageChanged(AppLanguage? value)
     {
-        if (value is not null)
-            Localizer.Instance.Current = value.Code;
+        if (value is null)
+            return;
+
+        Localizer.Instance.Current = value.Code;
+        try
+        {
+            _saveAppLanguage(value.Code);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The app language could not be saved.", ex);
+        }
+    }
+
+    public IReadOnlyList<ColourSchemeOption> Schemes { get; } =
+        [new(ColourScheme.System), new(ColourScheme.Light), new(ColourScheme.Dark)];
+
+    private readonly Action<ColourScheme> _saveColourScheme;
+
+    [ObservableProperty]
+    private ColourSchemeOption _scheme;
+
+    // A Ctrl+click on the selected card clears the selection; restore it instead of
+    // AlwaysSelected, which selects the first card before the binding lands.
+    partial void OnSchemeChanged(ColourSchemeOption? oldValue, ColourSchemeOption value)
+    {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Scheme = oldValue!);
+            return;
+        }
+
+        Appearance.Apply(value.Scheme);
+        try
+        {
+            _saveColourScheme(value.Scheme);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The colour scheme could not be saved.", ex);
+        }
+    }
+
+    public IReadOnlyList<AccentThemeOption> Themes { get; } = [.. AccentThemes.All.Select(t => new AccentThemeOption(t))];
+
+    private readonly Action<string> _saveAccentTheme;
+
+    [ObservableProperty]
+    private AccentThemeOption _theme;
+
+    partial void OnThemeChanged(AccentThemeOption? oldValue, AccentThemeOption value)
+    {
+        if (value is null)
+        {
+            Dispatcher.UIThread.Post(() => Theme = oldValue!);
+            return;
+        }
+
+        Appearance.Apply(value.Theme);
+        try
+        {
+            _saveAccentTheme(value.Theme.Id);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("settings", "The accent theme could not be saved.", ex);
+        }
     }
 
     // ---- microphone test -------------------------------------------------------------------
@@ -499,19 +660,11 @@ public partial class SettingsViewModel : ViewModelBase
             key.IsActive = ReferenceEquals(key, item);
     }
 
-    /// <summary>
-    /// Stops anything still downloading. The window owns this view model, and MainWindow builds
-    /// a new pair every time Settings opens: a download left running behind a closed dialog is
-    /// invisible, uncancellable, and collides with the download the next dialog offers.
-    /// </summary>
-    public void CancelDownloads()
+    public void OnWindowClosed()
     {
-        // Part of the same window-closed cleanup: without this the static localizer keeps
-        // every closed Settings dialog's view model alive and keeps refreshing it.
+        // Without this the static localizer keeps every closed Settings dialog's view model
+        // alive and keeps refreshing it.
         Localizer.Instance.PropertyChanged -= OnLanguageChanged;
-
-        foreach (var model in TranslationModels)
-            model.CancelDownload();
 
         // Same reasoning: a microphone left open behind a closed dialog is invisible and
         // uncancellable, and it holds the device the next meeting wants.
@@ -543,12 +696,19 @@ public partial class SettingsViewModel : ViewModelBase
             .Where(k => !string.IsNullOrWhiteSpace(k.Name) && !string.IsNullOrWhiteSpace(k.Key))
             .Select(k => new ApiKeyEntry(k.Name.Trim(), "gladia", k.Key.Trim())));
         settings.ActiveGladiaKeyName = Keys.FirstOrDefault(k => k.IsActive)?.Name.Trim();
+        settings.ApiKeys.RemoveAll(k => k.Provider == SettingsStore.DeepLProvider);
+        if (!string.IsNullOrWhiteSpace(DeepLKey))
+            settings.ApiKeys.Add(new ApiKeyEntry("DeepL", SettingsStore.DeepLProvider, DeepLKey.Trim()));
         settings.ActiveTranslationModelId =
             TranslationModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        var asrId = TranscriptionModels.FirstOrDefault(m => m.IsActive)?.ModelId;
+        settings.ActiveTranscriptionModelId = asrId == AsrModelCatalog.Models[0].Id ? null : asrId;
         settings.TranscriptFolder = Folder(TranscriptFolder);
         settings.RecordAudio = RecordAudio;
         settings.RecordOnlineAudio = RecordOnlineAudio;
         settings.AppLanguage = AppLanguage?.Code;
+        settings.ColourScheme = Scheme.Scheme;
+        settings.AccentTheme = Theme.Theme.Id;
         settings.LogLevel = LogLevel?.Level ?? CoreLogLevel.Info;
         settings.LogMaxFileSizeMb = LogMaxFileSizeMb is null
             ? _lastLogSize

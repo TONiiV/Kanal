@@ -6,6 +6,7 @@ Kanal organises meeting transcription, translation and summaries within user-sel
 
 **Workspace**:
 A named scope for a project, company, team or personal use, containing its own meeting records. Workspaces are peers rather than a company/project hierarchy.
+The UI says "project" for a Workspace.
 _Avoid_: Project scope
 
 **Meeting record**:
@@ -29,6 +30,10 @@ _Avoid_: Relay device credential
 **Mobile caption page**:
 The page a participant opens on their phone to read captions from a Kanal session.
 _Avoid_: Relay backend
+
+**Room language**:
+A language that a meeting shows and translates into. The host shows one column for each room language. The mobile page offers them in a dropdown. A room language never limits which language transcription may recognise.
+_Avoid_: Recognition language, source language
 
 **App update**:
 A newer release of the desktop host. Models, the mobile caption page and the relay are updated separately and are not app updates.
@@ -58,3 +63,11 @@ _Avoid_: Vocabulary (Gladia's name for its own input), dictionary
 **Intelligence provider**:
 A source of language-model inference for Kanal: a local model, the operator's own subscription through a locally installed CLI, or an API key. The listening agent, minutes and glossary extraction use it; none of them is it.
 _Avoid_: Agent, AI, listening agent
+
+**Colour scheme**:
+The host's choice between Light, Dark and System, where System follows the operating system. It is a per-machine preference and never reaches the mobile caption page.
+_Avoid_: Theme, dark mode (as a setting name)
+
+**Accent theme**:
+A named set of brand colours, with one light and one dark variant, that tints the host's controls. It never changes reading surfaces, ink, recording state or speaker colours.
+_Avoid_: Skin, colour scheme

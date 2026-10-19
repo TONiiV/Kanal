@@ -1,8 +1,14 @@
 # ADR 0053: Nemotron 3.5 ASR Streaming on sherpa-onnx for local transcription
 
-**Status:** Proposed  
+**Status:** Accepted — implemented 2026-10-04; deviations found on the real model are in `docs/PROGRESS.md`  
 **Date:** 2026-09-08  
 **Issues:** [#72](https://github.com/TONiiV/Kanal/issues/72), [#49](https://github.com/TONiiV/Kanal/issues/49)
+
+> **Amended 2026-10-18:** language conditioning no longer follows the room. Every stream must pass
+> `auto`. Room languages never limit recognition, because no one knows beforehand which language a
+> speaker will use. `NemotronAsrProvider` still sends the room language for a one-language room.
+> [ADR 0061](0061-automatic-recognition-language.md) records this as an open item. The "Language
+> conditioning" item below is superseded.
 
 ## Context
 
@@ -39,8 +45,8 @@ lookup that silently falls through to auto.
 
 **It streams natively, so Kanal does not have to.** Cache-aware FastConformer-RNNT: encoder
 self-attention and convolution caches are carried across chunks, so frames are strictly
-non-overlapping and there is no buffered re-decode. Chunk size is a runtime choice among 80, 160,
-320, 560 and 1120 ms — a latency/accuracy dial, no retraining.
+non-overlapping and there is no buffered re-decode. The model is published at 80, 160,
+320, 560 and 1120 ms chunk sizes — a latency/accuracy dial, no retraining.
 
 **Licence is OpenMDW-1.1** (`https://openmdw.ai/license/1-1/`), not Apache-2.0 and not OSI-listed.
 It is permissive in intent, but it is the Gemma case, not the Qwen case, and needs a review note in
@@ -78,24 +84,30 @@ separate decision with its own evidence, not part of this one.
 **3. Transcription models become a catalog in Settings, mirroring translation models.** Same
 operator-visible shape: pick, download on demand, run in process, no vendor branch anywhere.
 
-**4. A catalog record owns a list of parts.** `IDownloadableModel` — file name, URL, size, SHA-256 —
+**4. A catalog record owns a list of parts.** `IDownloadableFile` — file name, URL, size, SHA-256 —
 describes one file; the record holds the four and readiness is "every part present and verified".
 Progress is the sum. `ModelDownloadManager` is shared, not duplicated: it moved to
 `Kanal.Core.Models` and retargeted to the interface.
 
 **5. Readiness is a state the UI acts on**, not a guess: not downloaded, downloading, ready, failed.
+The disk decides *not downloaded* and *ready*. The view model that runs the download owns
+*downloading* and *failed*.
 A model that is not ready never silently changes what the meeting does — the `PipelinePlanner`
 "chosen but not downloaded" reason that already exists for MT is reused.
 
 **6. Translation stays post-processing, explicitly.** `Caps.Translation` is `false` and finals flow
 to whatever `IMtProvider` the mode resolved. This is the existing capability route; the orchestrator
 does not change. The rest of `Caps` is
-`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: true`, `Latency: Near`, and a
-`Languages` set taken from the model's own prompt dictionary rather than hand-written.
+`Streaming: true`, `Diarization: false`, `AutoLanguageDetect: false`, `Latency: Near`, and a
+`Languages` set of 33 codes. The code lists them by hand, from the model's prompt dictionary.
+The model takes the language as input and reports none, so `AutoLanguageDetect` is `false`.
+`TranscriptLanguage` reads the source language back from the text (see `docs/PROGRESS.md`).
 
-**7. Chunk size is a setting with a default, not a constant.** 560 ms is the starting point — the
-accuracy/latency knee on the model card's own FLEURS curve — and it is recorded here so the number
-that ships can be argued with rather than discovered in a diff.
+**7. Chunk size is a catalog entry, with a default.** Each chunk size ships a different encoder
+file, so a change of chunk size is a new download and not a runtime switch. The catalog has one
+entry: 560 ms. 560 ms is the accuracy/latency knee on the model card's own FLEURS curve. The 160 ms
+and 1120 ms sizes shipped first and were removed: the operator should not choose a chunk size. They
+can return as catalog entries if a measurement asks for them.
 
 ## Consequences
 
@@ -109,7 +121,8 @@ that ships can be argued with rather than discovered in a diff.
 - The OpenMDW-1.1 licence needs a review note in the catalog and a look before any redistribution.
 - A second native dependency (`org.k2fsa.sherpa.onnx`) joins LLamaSharp, with the same
   per-platform-runtime packaging question. Windows + NVIDIA is verified first; CPU and Apple Silicon
-  are investigated and their status recorded rather than assumed.
+  are investigated and their status recorded rather than assumed. The NVIDIA path is deferred:
+  the `win-x64` runtime package ships a CPU-only ONNX Runtime, so the provider runs on CPU.
 - Language conditioning is per stream. A room whose source language is set explicitly should pass
   it; a room that is not should pass `auto`, which the model supports and which matches the
   unconstrained-recognition decision already taken for Gladia.
@@ -121,11 +134,11 @@ that ships can be argued with rather than discovered in a diff.
 
 One PR each, TDD, suite green at every step.
 
-1. `IDownloadableModel` + `ModelDownloadManager` retarget — pure refactor. **Done, PR #88.**
-2. `AsrModelCatalog` (multi-part records, verified sizes and hashes) + `ActiveTranscriptionModelId`
-   + readiness over the shared downloader.
-3. Settings *Transcription* section — download, progress, select, delete — reusing the translation
-   section's controls.
+1. `IDownloadableFile` + `ModelDownloadManager` retarget — pure refactor. **Done, PR #88.**
+2. `AsrModelCatalog` (multi-file records, verified sizes and hashes) + `ActiveTranscriptionModelId`
+   + disk readiness over the shared downloader. **Done, PR #126.**
+3. Settings *Transcription* section — download, progress, the *downloading* and *failed* states,
+   select, delete — reusing the translation section's controls.
 4. `NemotronAsrProvider` over `org.k2fsa.sherpa.onnx`: `IAsrSession`, `IWarmupProvider`, per-stream
    language including the `zh` → `zh-CN` mapping, partial and final emission.
 5. `PipelinePlanner`: `StageKind.Local` transcription resolves to the provider; `reason.localasr`

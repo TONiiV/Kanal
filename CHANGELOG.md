@@ -10,14 +10,164 @@ date until it is released. A pull request that adds a feature, fixes a bug or ma
 measurably better adds its own bullet under that heading as it lands — nothing else does. The
 newest heading has to match the version the build reports, and a test holds the two together.
 
-## 1.0.1
+## 1.0.0
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A warning bar now appears under the toolbar when cloud translation fails during a meeting. The bar
+  states the reason and has an *Open settings* button for the Translation tab. Before, a later status
+  message replaced the warning. The bar stays until one translation succeeds or the meeting ends.
+- On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
+  permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
+  after about 30 seconds. The status line now tells you to allow the permission.
+- You can now edit the glossary of a project in the project settings. Kanal saves the glossary in
+  the project folder. Kanal does not use the glossary in a meeting yet.
+- Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import
+  could replace the transcript and the recording in a meeting folder that the sidebar did not list.
+  Now Kanal refuses the import and shows a message.
+- On a Mac, an online meeting now stops when the output device that Kanal used as its clock
+  disappears. Before, the meeting went on and the computer audio stayed silent. The status bar now
+  says that the computer audio source stopped.
+- Kanal now labels the language of a transcript line by its script first. In a room with two or more
+  languages, a Chinese or Japanese sentence now gets its own language label, also when the room does
+  not contain that language.
+- A recorded meeting can now tell its speakers apart. Open the meeting's menu in the sidebar and
+  choose *Re-identify speakers*, then *Not sure* or the number of people who spoke. Kanal runs
+  speaker separation on the recording on this computer and gives each person their own tag and
+  colour. *Not sure* can find more people than there are, but it rarely joins two people. A number
+  can join two similar voices into one. The first run downloads a 34 MB model. The original tags
+  stay in the transcript file.
+- A room with one language now also transcribes speakers who use another language. Before, local
+  transcription could transcribe only the language of the room.
+- A failed meeting export no longer damages an existing `.kl` file. Before, an export to a file name that
+  already existed erased that file first. If the export then failed, for example because the disk was
+  full or an attachment was locked, the old file was lost. Now Kanal keeps the old file until the new
+  file is complete.
+- When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
+  reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
+- The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
+  and uses the Apache-2.0 licence. It translated meeting sentences about as well as the 4B model in
+  the list, and about 3 times faster on a GPU. Your chosen model stays the same. To use Hy-MT2 1.8B,
+  download it and select it in the Translation tab. A *Recommended* label marks it in the list,
+  in English, Chinese, German and Polish.
+- The icon inside the download ring is now in the centre. Before, the translation and transcription icons sat
+  1 pixel up and left of the centre on screens with 150% scaling.
+- The mode *Local transcription · Cloud translation* now works. Add a cloud translation API key in
+  Settings, in the Translation tab. Kanal sends only text to the translation service, never audio.
+  If the quota is used up or the key is wrong, the status line says so once and translation stops
+  for that meeting. If the service does not answer, the status line says so.
+- The "Points and decisions" tab is now called **Keypoints**. The menu item is now Pin to Keypoints.
+  The names change in Chinese, English, German and Polish.
+- Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
+  A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
+- Local translation now translates a sentence into all meeting languages at the same time. On a
+  graphics card, a sentence with two target languages is ready 2 to 3 times sooner than before.
+- Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
+  Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
+  to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the
+  processor, set `KANAL_ACCELERATOR=cpu`.
+- With local transcription, a sentence in a language outside the meeting's languages now shows its
+  own language and is translated into every meeting language. Before, an English sentence in a
+  Chinese, German and Polish meeting showed as PL and was not translated into Polish.
+- The ruler beside the transcript now shows which sentences are on screen: their ticks are longer
+  and thicker. The ticks follow the pointer smoothly, like the macOS Dock. The tick under the pointer
+  grows longest, thickest and brightest, and the ticks around it grow less and less. When the pointer
+  moves up or down, the swell trails behind it. When the pointer stops, the swell settles to an even
+  shape. The ticks at rest are thin and dim. The arrows above and below the ruler show the
+  previous or the next page of the transcript.
+- The preview card of the ruler no longer has a dark bar on its right edge.
+- Right-click a transcript line and choose Pin to Keypoints. The line shows in the Keypoints tab with its
+  speaker and time, also when no listening model is connected. Click the cross on the pinned point to
+  unpin it. Pinned keypoints are not saved with the meeting record yet.
+- You can now select text in the transcript. Select text in one line and press Ctrl+C to copy it. Press
+  Ctrl+A to select the whole line. Right-click a line for Copy and Copy with speaker and time.
+- A model download now shows in the status bar. Each running download is a small progress
+  ring around the model icon. Point at the ring to see the name, the percentage and the
+  megabytes, then click the cross to cancel. The ring turns green when the download completes,
+  grey when you cancel, and red when it fails.
+- In Settings, a model that downloads now shows the same progress ring as the status bar, in the
+  place of the Download button. Point at the ring and click the cross to cancel. The row shows
+  the percentage and the megabytes next to the ring.
+- A model download keeps running when you close Settings. Open Settings again to see the progress
+  or to cancel. The mode list updates when the download completes. Closing Kanal still stops the
+  download.
+- Project settings: choosing an icon from the Choose icon list now changes the project icon.
+- Transcription can now run on this laptop. Settings → Transcription → Local models downloads the
+  Nemotron 3.5 speech model (about 680 MB). The *Local transcription · Local
+  translation* mode is available when this model and a translation model are downloaded. In this
+  mode, the meeting audio stays on this laptop. The model recognises Chinese, German, Polish,
+  English and about 30 more languages. It does not separate speakers yet: every sentence has the
+  same speaker label.
+- The ruler beside the transcript now shows one tick for each sentence, in the colour of its speaker.
+  A long meeting still fits on the ruler, and a click on a tick jumps to that sentence.
+- The Speakers tab is always in the right column. Before the first speaker, it shows a short
+  note. Each speaker row has a name box, a colour choice, the number of utterances and a "merge
+  into" list. A colour change also reaches the phones.
+- Kanal no longer damages a meeting record when the computer stops during a save. A meeting folder
+  that Kanal cannot open now shows as unreadable, not as a meeting without a record.
+- Each issue in project settings now has a button that repairs it. Kanal rebuilds a damaged
+  meeting record from its transcript, or moves the folder to `kanal-set-aside` when it cannot. A
+  copied meeting folder becomes a separate meeting. A missing project folder gets "Choose folder…"
+  or "Remove from list". Kanal creates a missing meetings folder and removes a damaged row of the
+  project list. Kanal deletes no file. The row shows the result in one line. While a project
+  records a meeting, its issues show no buttons.
+- Each settings tab shows an icon next to its name.
+- The Kanal icon is now a silver tile with a silver K and a purple reply stroke. The exe, the
+  installer, the window and the splash use it. The logo in the sidebar, the settings and the
+  meeting room uses the same mark. The mobile caption page keeps its coloured icon.
+- In the Dark colour scheme, the window icon and the Kanal logo use a dark version, so they stay
+  clear on a dark sheet. A scheme change, also by the operating system under System, switches
+  them at once. The exe and installer icon stays the light version.
+- Settings has a new Appearance tab. Choose Light, Dark or System for the colour scheme. System
+  follows the operating system, also during a meeting. Your choice applies at once and stays on
+  this computer. Light is the default, so Kanal looks the same until you change it.
+- The Appearance tab has five accent themes: Kanal indigo, Grove, Ocean, Iris and Graphite. A
+  theme changes the colour of buttons, selected items, checked boxes and the settings tab marker.
+  Reading surfaces, text, recording state and speaker colours stay the same. Your choice applies
+  at once and stays on this computer. Kanal indigo is the default.
+- The app language in Settings now saves when you pick it. Kanal shows that language at the next
+  start, also when you close Settings without "Save & Close".
+- Speaker colours are new, and speaker names are easier to read. Each name now has a clear contrast on the
+  host and on a phone, in light and in dark mode. The colour rules and dots stay visible on both sheets.
+  A meeting that you reopen shows the new colours, because a saved meeting stores no speaker colour.
+- Speaker names on the host now use a light tone in dark mode. They stay readable when you change the colour
+  scheme during a meeting.
+- You can now change the microphone while a meeting records. Pick another one in the microphone
+  menu. Kanal moves capture to it. The meeting continues. If you pick a microphone while paused,
+  Kanal uses it on resume. The capture profile (In room / Online meeting) stays locked after
+  recording starts.
+- The window no longer freezes at start when a project is on a slow network share. Kanal now checks
+  the other projects for issues in the background. The warning marks in the project list appear when
+  that check ends.
+- When the current project has issues, a banner above the settings gear shows how many. A
+  damaged meeting record makes it red. A missing folder makes it yellow. "Details" opens the project
+  settings at the new Issues section, which gives each issue its cause and its path. In the project
+  list, a warning mark shows each project with issues. This replaces the note "N records could not
+  be read".
+- If Kanal cannot create the default project at start-up, the log now names the folder and the
+  reason. Before, the log said nothing in some cases, for example when the folder was a file.
+- The Windows installer now shows its steps, with Kanal artwork: welcome page with the licence, install, finish. Run the msi again
+  on a computer that has Kanal to get Repair or Remove. A new msi replaces the installed Kanal, even with
+  the same version number.
+- When Kanal refuses an action on a project or a meeting, for example a rename, a save, a delete
+  or an import, the message is now in the interface language. Before, the sidebar showed English.
+  The message names the folder or file when that helps. The log keeps the technical detail.
+- Each project in the project list has a gear button. It opens the project settings. There you
+  rename the project and choose an icon: a built-in icon or an image file of up to 2 MB. Kanal
+  copies the image into the project folder as `kanal-icon` plus the image extension, for example
+  `kanal-icon.png`, so the icon moves with the folder. The project list shows the icon. The
+  settings also remove a project. You choose to remove it from the list only, or to delete its
+  meeting files too. Deleted files do not go to the trash. Other files in the project folder
+  stay. Kanal does not delete files when the folder does not hold this project. Kanal does not
+  remove a project while a meeting is recording.
+- Rename in the menu of a meeting row now puts the cursor in the name field. Before, you had to
+  click the field first.
+- Text in an input box now sits in the vertical centre of the box.
 - You can now download the installers from the GitHub Releases page. The macOS dmg is signed and
   notarised. The Windows installer is an msi. Each file has a `.sha256` file for checking the download.
 - A collapsed sidebar no longer leaves a light strip at the window edge on Windows.
-- The settings button at the bottom of the sidebar now shows a gear icon only. The "Settings" label is gone.
+- The settings button at the bottom of the sidebar now shows an outline gear icon only.
+  The "Settings" label is gone.
 - A meeting now travels as one `.kl` file. Export this meeting writes a `.kl` file. Import meeting
   accepts only a `.kl` file and refuses any other file with a message. Any other file that you
   import into a meeting becomes an attachment of that meeting. Before, a PDF or a slide deck
@@ -37,6 +187,8 @@ The first release. Everything below is what Kanal does on the day it ships.
   microphone is silent. `docs/online-meeting-audio.md` covers diagnosis.
 - The text on every button is now centred vertically. Before, it sat 2 to 6 pixels above the
   centre, most visibly on Save & Close and View open-source acknowledgements.
+- The capture mode In the room is now called Offline meeting. The mode menu shows only the
+  names and icons.
 - On macOS, the red, yellow and green window buttons are now 20% larger. They sit in the
   vertical centre of the header instead of near its top edge. In full screen, the header content
   moves to the left edge, because the buttons are gone.
@@ -49,6 +201,11 @@ The first release. Everything below is what Kanal does on the day it ships.
 - The mode list no longer offers Demo — scripted on a normal install. Kanal opens on Cloud
   transcription · Cloud translation instead; without an API key, that row says one is needed. To
   test with Demo, start Kanal with the environment variable `KANAL_ENV=development`.
+- Pressing record no longer leaves the screen silent while the room opens. Once you confirm the
+  consent dialog, the stop button shows a spinner, the status line says "Connecting…", and the
+  meeting's name is already in the heading and the sidebar. The mobile relay and the transcription
+  service now connect at the same time instead of one after the other, so the room opens sooner.
+  Pressing stop during that wait cancels the start and leaves no meeting behind.
 - The window now has one top row across the sidebar, the meeting and the assistant, with the
   recording buttons always centred on the meeting; narrowing the window trims the outer ends of the
   toolbar instead of squeezing buttons.

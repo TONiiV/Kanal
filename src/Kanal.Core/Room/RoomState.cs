@@ -12,12 +12,11 @@ public sealed class RoomState
 {
     private static readonly string[] Colours =
     [
-        "#B23A2E", "#1C6B58", "#2B57A0", "#9A6B10",
-        "#6B4FA0", "#A03A6E", "#4A7A2E", "#8A5A3A",
+        "#3F7BD4", "#1F8A55", "#AE5EA8", "#038384",
+        "#8B77D5", "#9B6B47", "#788919", "#0092BD",
     ];
 
-    // Read back when a stored transcript is reopened: a meeting read a week later has to give
-    // each speaker the colour they had in the room.
+    // Stored meetings keep no colour. A change to this list recolours every reopened meeting.
     public static IReadOnlyList<string> Palette => Colours;
 
     private readonly object _gate = new();
@@ -117,6 +116,26 @@ public sealed class RoomState
                 ? s
                 : new Speaker(canonical, null, [], Colours[_speakers.Count % Colours.Length]);
             updated = existing with { DisplayName = displayName };
+            _speakers[canonical] = updated;
+        }
+
+        SpeakerUpserted?.Invoke(updated);
+        return updated;
+    }
+
+    public Speaker SetSpeakerColour(string tag, string colour)
+    {
+        if (!Colours.Contains(colour))
+            throw new ArgumentException("Colour is not in the speaker palette.", nameof(colour));
+
+        Speaker updated;
+        lock (_gate)
+        {
+            var canonical = ResolveTag(tag);
+            var existing = _speakers.TryGetValue(canonical, out var s)
+                ? s
+                : new Speaker(canonical, null, [], Colours[_speakers.Count % Colours.Length]);
+            updated = existing with { Color = colour };
             _speakers[canonical] = updated;
         }
 

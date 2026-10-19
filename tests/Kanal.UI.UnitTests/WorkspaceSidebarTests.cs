@@ -105,7 +105,7 @@ public class WorkspaceSidebarTests : IDisposable
         vm.Refresh();
 
         Assert.Equal("Delivery call", Assert.Single(vm.Meetings).Title);
-        Assert.NotEqual("", vm.ProblemNote);
+        Assert.Equal(Path.Combine(meetings, "not-a-meeting"), Assert.Single(vm.Issues).Subject);
     }
 
     [Fact]
@@ -279,9 +279,29 @@ public class WorkspaceSidebarTests : IDisposable
             .Where(button => button.Name == "MeetingMenu").Distinct().Single();
 
         Assert.Equal(
-            ["RenameMeeting", "GenerateMeetingTitle", "ImportIntoMeeting", "ExportMeeting",
+            ["RenameMeeting", "GenerateMeetingTitle", "ReidentifySpeakers", "ImportIntoMeeting", "ExportMeeting",
              "OpenMeetingFolder", "DeleteMeeting"],
             Reachable(Opened(ellipsis)));
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheReidentifySubmenuOffersNotSureFirstThenTwoToEightPeople()
+    {
+        var (window, _) = Shown();
+        var sidebar = window.GetLogicalDescendants().OfType<WorkspaceSidebarView>().Single();
+
+        var ellipsis = sidebar.GetLogicalDescendants().OfType<Button>()
+            .Where(button => button.Name == "MeetingMenu").Distinct().Single();
+        var reidentify = Opened(ellipsis).Items.OfType<MenuItem>().Single(item => item.Name == "ReidentifySpeakers");
+        var commands = reidentify.Items.OfType<MenuItem>().Where(item => item.Command is not null).ToList();
+
+        Assert.Equal("ReidentifyGuess", commands[0].Name);
+        Assert.Null(commands[0].CommandParameter);
+        Assert.Equal(
+            ["2", "3", "4", "5", "6", "7", "8"],
+            commands.Skip(1).Select(item => Assert.IsType<string>(item.CommandParameter)));
 
         window.Close();
     }
@@ -297,7 +317,8 @@ public class WorkspaceSidebarTests : IDisposable
         var delete = Opened(ellipsis).Items.OfType<MenuItem>().Single(item => item.Name == "DeleteMeeting");
 
         Assert.NotNull(delete.Icon);
-        var alarm = (ISolidColorBrush)Application.Current!.Resources["Alarm"]!;
+        Assert.True(Application.Current!.TryGetResource("Alarm", Application.Current.ActualThemeVariant, out var found));
+        var alarm = (ISolidColorBrush)found!;
         var foreground = Assert.IsAssignableFrom<ISolidColorBrush>(delete.Foreground);
         Assert.Equal(alarm.Color, foreground.Color);
 

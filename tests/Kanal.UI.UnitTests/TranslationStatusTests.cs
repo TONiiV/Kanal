@@ -27,7 +27,9 @@ internal static class TestViewModels
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
-        bool development = true)
+        bool development = true,
+        ModelDownloadManager? downloads = null,
+        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -35,8 +37,9 @@ internal static class TestViewModels
         // which made "unavailable without a key" assertions vacuous on a machine that has one.
         return new MainViewModel(
             () => resolved,
-            () => new ModelDownloadManager(dir),
+            () => downloads ?? new ModelDownloadManager(dir),
             SettingsStore.ResolveStoredGladiaKey,
+            resolveTranslationKey: SettingsStore.ResolveStoredDeepLKey,
             utcNow: utcNow,
             // Same reason as the settings seam: a real registry would list the developer's own
             // workspaces into every headless run.
@@ -47,7 +50,8 @@ internal static class TestViewModels
             offUiThread: offUiThread,
             captureFactory: () => new SilentCapture(),
             systemCaptureFactory: () => null,
-            development: development)
+            development: development,
+            diarizerFactory: diarizerFactory)
         {
             RelayEnabled = false,
         };
@@ -171,6 +175,28 @@ public class TranslationStatusTests
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(Path.Combine(dir, model.FileName), [0x47, 0x47, 0x55, 0x46]);
         vm.RefreshPipelineStatus();
+
+        Assert.True(cloudLocal.IsAvailable);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    /// <summary>A download that finishes after Settings closed unblocks the mode list on its own.</summary>
+    [AvaloniaFact]
+    public void ADownloadFinishingInTheBackgroundMakesTheModeAvailable()
+    {
+        var model = LocalModelCatalog.Models[0];
+        var dir = TestViewModels.EmptyModelsDir();
+        var settings = new AppSettings();
+        settings.ApiKeys.Add(new ApiKeyEntry("meeting-room", "gladia", "k"));
+        settings.ActiveGladiaKeyName = "meeting-room";
+        settings.ActiveTranslationModelId = model.Id;
+        var vm = TestViewModels.Hermetic(settings, dir);
+        var cloudLocal = vm.Modes.First(o => o.Mode.Id == PipelineModeId.CloudLocal);
+        Assert.False(cloudLocal.IsAvailable);
+
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, model.FileName), [0x47, 0x47, 0x55, 0x46]);
+        vm.ModelRows.Translation.First(r => r.ModelId == model.Id).RefreshDownloaded();
 
         Assert.True(cloudLocal.IsAvailable);
         Directory.Delete(dir, recursive: true);

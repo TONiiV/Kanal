@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Kanal.Host.Localization;
 using Kanal.Host.Services;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
         {
             if (DataContext is not MainViewModel vm) return;
             vm.ChooseExportPath = ChooseExportPathAsync;
+            vm.WriteClipboard = text => Clipboard is { } clipboard ? clipboard.SetTextAsync(text) : Task.CompletedTask;
             vm.Shell.IsFullScreen = WindowState == WindowState.FullScreen;
         };
     }

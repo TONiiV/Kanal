@@ -17,12 +17,12 @@
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource Paper}" />
+            <Setter Property="Background" Value="{DynamicResource Paper}" />
         </Style>
 
         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource BrandWash}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{DynamicResource BrandWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brand}" />
             <Setter Property="BorderThickness" Value="2,0,0,0" />
         </Style>
         <Style Selector="TextBox#MeetingRowEditor /template/ Border#PART_BorderElement">
@@ -30,7 +30,7 @@
         </Style>
         <Style Selector="TextBox#MeetingRowEditor:pointerover /template/ Border#PART_BorderElement, TextBox#MeetingRowEditor:focus /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
         </Style>
         <Style Selector="Button.grouphead">
@@ -46,11 +46,39 @@
             <Setter Property="RenderTransform" Value="rotate(90deg)" />
         </Style>
         <Style Selector="Path.glyph.danger">
-            <Setter Property="Fill" Value="{StaticResource Alarm}" />
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="ComboBox#WorkspacePicker ComboBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Border#IssuesBanner">
+            <Setter Property="Background" Value="{DynamicResource WarningWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Border#IssuesBanner.alarm">
+            <Setter Property="Background" Value="{DynamicResource AlarmWash}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="Path.glyph#IssuesIcon, Path.glyph#ProjectIssueMark">
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Border#IssuesBanner.alarm Path.glyph#IssuesIcon, Path.glyph#ProjectIssueMark.alarm">
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
+        </Style>
+        <Style Selector="Button.ghost#IssuesDetails">
+            <Setter Property="Foreground" Value="{DynamicResource Brand}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,4" />
+        </Style>
+        <Style Selector="Button#ProjectSettings Path.glyph">
+            <Setter Property="Fill" Value="{DynamicResource Ink3}" />
+        </Style>
+        <Style Selector="Button#ProjectSettings:pointerover Path.glyph">
+            <Setter Property="Fill" Value="{DynamicResource Brand}" />
         </Style>
     </UserControl.Styles>
 
-    <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0">
+    <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,1,0">
         <DockPanel>
             <Border DockPanel.Dock="Top" Classes="chrome-head" Padding="12,0,8,0">
                 <DockPanel LastChildFill="False">
@@ -63,7 +91,7 @@
                     </Button>
                     <StackPanel DockPanel.Dock="Left" x:Name="WorkspaceTitle" Margin="6,0,0,0"
                                 Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Image Source="/Assets/kanal-splash-mark.png" Width="43" Height="43" Stretch="Uniform"
+                        <Image Source="{DynamicResource BrandMark}" Width="43" Height="43" Stretch="Uniform"
                                AutomationProperties.Name="Kanal" />
                         <TextBlock x:Name="Wordmark" Text="KANAL" FontSize="15" FontWeight="Bold"
                                    LetterSpacing="1.2" VerticalAlignment="Center" />
@@ -71,7 +99,7 @@
                 </DockPanel>
             </Border>
 
-            <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0"
+            <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Rule}" BorderThickness="0,1,0,0"
                     Margin="16,0" Padding="0,10">
                 <Button x:Name="Settings" Classes="ghost icon" Click="OnSettingsClick"
                         HorizontalAlignment="Left"
@@ -81,15 +109,33 @@
                 </Button>
             </Border>
 
+            <Border DockPanel.Dock="Bottom" x:Name="IssuesBanner" Classes.alarm="{Binding Sidebar.IssuesAreAlarm}"
+                    IsVisible="{Binding Sidebar.HasIssues}"
+                    Margin="16,0,16,12" Padding="10,3,3,3" BorderThickness="1"
+                    CornerRadius="{StaticResource ControlRadius}"
+                    AutomationProperties.Name="{Binding Sidebar.IssueCountText}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <Path x:Name="IssuesIcon" Classes="glyph" Data="{c:Icon warning}" Width="15" Height="15"
+                          VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" x:Name="IssuesCount" Text="{Binding Sidebar.IssueCountText}"
+                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}" />
+                    <Button Grid.Column="2" x:Name="IssuesDetails" Classes="ghost"
+                            Content="{l:T workspace.issues.details}"
+                            Command="{Binding Sidebar.ShowIssuesCommand}"
+                            AutomationProperties.Name="{l:T workspace.issues.details}" />
+                </Grid>
+            </Border>
+
             <TextBlock DockPanel.Dock="Bottom" x:Name="WorkspaceProblem"
                        Text="{Binding Sidebar.ProblemNote}" TextWrapping="Wrap"
                        Margin="16,0,16,12" FontSize="11.5" LineHeight="17"
-                       Foreground="{StaticResource Alarm}"
+                       Foreground="{DynamicResource Alarm}"
                        IsVisible="{Binding Sidebar.ProblemNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,18,16,0" ColumnSpacing="8">
                 <TextBox x:Name="MeetingSearch" Classes="search" Text="{Binding Sidebar.Search}"
-                         Watermark="{l:T workspace.search}"
+                         PlaceholderText="{l:T workspace.search}"
                          AutomationProperties.Name="{l:T workspace.search}">
                     <TextBox.InnerLeftContent>
                         <Path Classes="glyph" Data="{c:Icon search}" Width="15" Height="15" Margin="11,0,0,0" />
@@ -112,7 +158,13 @@
                     <ComboBox.SelectionBoxItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
                             <StackPanel Orientation="Horizontal" Spacing="9">
-                                <Path Classes="glyph" Data="{c:Icon folder}" Width="15" Height="15" />
+                                <Panel Width="15" Height="15" VerticalAlignment="Center">
+                                    <Image x:Name="ProjectImage" Width="15" Height="15"
+                                           Source="{Binding IconPath, Converter={x:Static c:ProjectIcons.Image}}" />
+                                    <Path Classes="glyph" Width="15" Height="15"
+                                          Data="{Binding IconGlyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                                          IsVisible="{Binding #ProjectImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                                </Panel>
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
@@ -120,7 +172,41 @@
                     </ComboBox.SelectionBoxItemTemplate>
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="ws:Workspace">
-                            <TextBlock Text="{Binding Name}" />
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="9">
+                                <Panel Width="15" Height="15" VerticalAlignment="Center">
+                                    <Image x:Name="ProjectImage" Width="15" Height="15"
+                                           Source="{Binding IconPath, Converter={x:Static c:ProjectIcons.Image}}" />
+                                    <Path Classes="glyph" Width="15" Height="15"
+                                          Data="{Binding IconGlyph, Converter={x:Static c:ProjectIcons.Glyph}}"
+                                          IsVisible="{Binding #ProjectImage.Source, Converter={x:Static ObjectConverters.IsNull}}" />
+                                </Panel>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Path Grid.Column="2" x:Name="ProjectIssueMark" Classes="glyph"
+                                      Data="{c:Icon warning}" Width="13" Height="13" VerticalAlignment="Center"
+                                      ToolTip.Tip="{l:T workspace.issues.mark}"
+                                      AutomationProperties.Name="{l:T workspace.issues.mark}">
+                                    <Path.IsVisible>
+                                        <MultiBinding Converter="{x:Static c:ProjectIcons.IssueMark}">
+                                            <Binding Path="Id" />
+                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectIssueStates" />
+                                        </MultiBinding>
+                                    </Path.IsVisible>
+                                    <Classes.alarm>
+                                        <MultiBinding Converter="{x:Static c:ProjectIcons.IssueAlarm}">
+                                            <Binding Path="Id" />
+                                            <Binding Path="$parent[ComboBox].((vm:MainViewModel)DataContext).Sidebar.ProjectIssueStates" />
+                                        </MultiBinding>
+                                    </Classes.alarm>
+                                </Path>
+                                <Button Grid.Column="3" x:Name="ProjectSettings" Classes="ghost icon"
+                                        Width="24" Height="24" Padding="0" Margin="0,-4,-6,-4"
+                                        Click="OnProjectSettingsClick"
+                                        ToolTip.Tip="{l:T workspace.settings.tip}"
+                                        AutomationProperties.Name="{l:T workspace.settings.tip}">
+                                    <Path Classes="glyph" Data="{c:Icon settings}" Width="14" Height="14" />
+                                </Button>
+                            </Grid>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -145,7 +231,7 @@
 
             <TextBlock DockPanel.Dock="Top" x:Name="NoMeetings" Text="{Binding Sidebar.EmptyNote}"
                        Margin="16,18,16,0" FontSize="12" TextWrapping="Wrap"
-                       Foreground="{StaticResource Ink3}"
+                       Foreground="{DynamicResource Ink3}"
                        IsVisible="{Binding !Sidebar.Meetings.Count}" />
 
             <ScrollViewer Margin="8,10,8,10">
@@ -160,9 +246,9 @@
                                         <Path Classes="glyph chevron" Classes.open="{Binding IsExpanded}"
                                               Data="{c:Icon chevron-right}" Width="12" Height="12" />
                                         <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" Foreground="{StaticResource Ink2}" />
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource Ink2}" />
                                         <TextBlock Text="{Binding Items.Count}" FontSize="11"
-                                                   VerticalAlignment="Center" Foreground="{StaticResource Ink3}" />
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource Ink3}" />
                                     </StackPanel>
                                 </Button>
                                 <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
@@ -177,33 +263,37 @@
                                                 <TextBlock x:Name="MeetingRowTitle" Text="{Binding Title}" FontSize="12.5"
                                                            TextTrimming="CharacterEllipsis"
                                                            IsVisible="{Binding !IsRenaming}"
-                                                           Foreground="{StaticResource Ink}" />
+                                                           Foreground="{DynamicResource Ink}" />
                                                 <TextBox x:Name="MeetingRowEditor" Text="{Binding Draft}"
                                                          IsVisible="{Binding IsRenaming}"
                                                          FontSize="13" Padding="0" MinHeight="0" Margin="0,0,6,0"
                                                          VerticalContentAlignment="Center"
-                                                         SelectionBrush="{StaticResource Brand}"
-                                                         SelectionForegroundBrush="{StaticResource OnBrand}"
+                                                         SelectionBrush="{DynamicResource Brand}"
+                                                         SelectionForegroundBrush="{DynamicResource OnBrand}"
                                                          BorderThickness="0,0,0,1"
-                                                         BorderBrush="{StaticResource Ink}"
-                                                         Background="Transparent" Foreground="{StaticResource Ink}"
+                                                         BorderBrush="{DynamicResource Ink}"
+                                                         Background="Transparent" Foreground="{DynamicResource Ink}"
                                                          KeyDown="OnRowEditorKeyDown" LostFocus="OnRowEditorLostFocus"
                                                          AutomationProperties.Name="{l:T meeting.rename}" />
                                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                                     <TextBlock Text="{Binding When}" FontSize="11"
-                                                               Foreground="{StaticResource Ink2}" />
+                                                               Foreground="{DynamicResource Ink2}" />
                                                     <TextBlock x:Name="MeetingRowNaming" Text="{l:T title.naming}"
                                                                FontSize="10.5" IsVisible="{Binding IsNaming}"
-                                                               Foreground="{StaticResource Ink2}" />
+                                                               Foreground="{DynamicResource Ink2}" />
                                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                                                 IsVisible="{Binding IsRecording}">
                                                         <Ellipse Width="5" Height="5" VerticalAlignment="Center"
-                                                                 Fill="{StaticResource Record}" />
+                                                                 Fill="{DynamicResource Record}" />
                                                         <TextBlock x:Name="ActiveMeetingMark" FontSize="10.5"
                                                                    Text="{l:T workspace.recording}"
-                                                                   Foreground="{StaticResource Ink2}" />
+                                                                   Foreground="{DynamicResource Ink2}" />
                                                     </StackPanel>
                                                 </StackPanel>
+                                                <TextBlock x:Name="MeetingRowReidentifying" Text="{Binding ReidentifyNote}"
+                                                           FontSize="10.5" IsVisible="{Binding IsReidentifying}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Ink2}" />
                                             </StackPanel>
                                             <Button Grid.Column="1" Classes="ghost" x:Name="MeetingMenu" Padding="7,6"
                                                     VerticalAlignment="Center"
@@ -212,8 +302,7 @@
                                                 <Button.Flyout>
                                                     <MenuFlyout>
                                                         <MenuItem Name="RenameMeeting" Header="{l:T meeting.rename}"
-                                                                  Click="OnRenameClick"
-                                                                  Command="{Binding BeginRenameCommand}">
+                                                                  Click="OnRenameClick">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon pencil}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
@@ -224,6 +313,24 @@
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph" Data="{c:Icon regenerate}" Width="13" Height="13" />
                                                             </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Name="ReidentifySpeakers"
+                                                                  Header="{Binding ReidentifySpeakersHeader}"
+                                                                  IsEnabled="{Binding CanReidentifySpeakers}">
+                                                            <MenuItem.Icon>
+                                                                <Path Classes="glyph" Data="{c:Icon people}" Width="13" Height="13" />
+                                                            </MenuItem.Icon>
+                                                            <MenuItem Name="ReidentifyGuess" Header="{l:T meeting.reidentify.guess}"
+                                                                      Command="{Binding ReidentifySpeakersCommand}" />
+                                                            <Separator />
+                                                            <MenuItem Header="{l:T meeting.reidentify.ask}" IsEnabled="False" />
+                                                            <MenuItem Header="2" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="2" />
+                                                            <MenuItem Header="3" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="3" />
+                                                            <MenuItem Header="4" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="4" />
+                                                            <MenuItem Header="5" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="5" />
+                                                            <MenuItem Header="6" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="6" />
+                                                            <MenuItem Header="7" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="7" />
+                                                            <MenuItem Header="8" Command="{Binding ReidentifySpeakersCommand}" CommandParameter="8" />
                                                         </MenuItem>
                                                         <Separator />
                                                         <MenuItem Name="ImportIntoMeeting" Header="{l:T meeting.import}"
@@ -246,7 +353,7 @@
                                                         </MenuItem>
                                                         <Separator />
                                                         <MenuItem Name="DeleteMeeting" Header="{l:T meeting.delete}"
-                                                                  Foreground="{StaticResource Alarm}"
+                                                                  Foreground="{DynamicResource Alarm}"
                                                                   Command="{Binding DeleteCommand}">
                                                             <MenuItem.Icon>
                                                                 <Path Classes="glyph danger" Data="{c:Icon trash}" Width="13" Height="13" />

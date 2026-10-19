@@ -1,6 +1,6 @@
 # Kanal
 
-<img src="design/kanal-icon.png" width="200" alt="Kanal icon">
+<img src="design/icon/kanal-tile-light.png" width="200" alt="Kanal icon">
 
 **One room. Every language.**\
 同一场会议，每个人的语言。
@@ -52,7 +52,7 @@ offline.
 
 | Data | Where it goes |
 |---|---|
-| Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes once a local ASR provider exists. |
+| Microphone audio | Sent to the cloud speech provider in cloud-transcription modes. It stays on the host in local-transcription modes. |
 | Captions and room state | Sent through the authenticated Kanal gateway (a Cloudflare Worker) to the meeting's private room object, which fans them out to joined phones. Messages include transcript text, translations, speaker labels, language configuration, and pause/recording/lifecycle state. Nothing is stored server-side. |
 | Joined-phone cache | The mobile client stores the current room transcript and state in browser `localStorage` so it can render before a reconnect snapshot arrives. |
 | Local recording | Live microphone modes record a WAV file by default in the configured audio folder. Recording pauses with the room and can be disabled in Settings. Kanal never publishes the WAV file. |
@@ -108,8 +108,8 @@ and explain what is missing.
 | Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Offered only with `KANAL_ENV=development`; no keys needed |
 | Cloud transcription · cloud translation | Gladia live | Gladia live | Audio | Available with a Gladia key |
 | Cloud transcription · local translation | Gladia live | Selected local GGUF model | Audio | Available with a Gladia key and downloaded model |
-| Local transcription · cloud translation | Not implemented | Standalone cloud MT not implemented | Text only | Unavailable |
-| Local transcription · local translation | Not implemented | Selected local GGUF model | Nothing | Unavailable until local ASR lands |
+| Local transcription · cloud translation | Selected local Nemotron 3.5 model | Standalone cloud MT not implemented | Text only | Unavailable |
+| Local transcription · local translation | Selected local Nemotron 3.5 model | Selected local GGUF model | Nothing | Available with both models downloaded |
 
 When started from the production UI, every mode publishes text and room state through the mobile
 relay. Cloud-to-local mode disables translation inside the cloud ASR session; the
@@ -193,6 +193,7 @@ diarization tag, while clients resolve the canonical speaker at render time.
 | `src/Kanal.Host` | Avalonia operator UI, pipeline planning, settings, recording, QR generation and export |
 | `tests/Kanal.Core.UnitTests` | Unit tests for audio, providers, serialization, room state, orchestration, and other non-visual services |
 | `tests/Kanal.UI.UnitTests` | Headless unit tests for deterministic host view-model and application-state behavior; rendering and layout are intentionally out of scope |
+| `tests/Kanal.Benchmark` | Local console benchmark for the local translation models: latency under concurrent streams, chrF, part-number retention. See `docs/PROGRESS.md` |
 | `web/index.html` | Static mobile client; `docs/index.html` is its byte-identical GitHub Pages copy |
 | `gateway/` | Relay gateway: Cloudflare Worker plus per-room and device-registry Durable Objects, with its own vitest suite |
 | `tools/Kanal.Doctor` | Microphone and live-ASR diagnostics |
@@ -203,7 +204,7 @@ The original product requirements and design trade-offs are documented in Chines
 
 ## Development and testing
 
-Build and run the complete test suite from the repository root:
+CI builds the solution and runs the complete test suite with these commands:
 
 ```bash
 dotnet build Kanal.slnx --configuration Release
@@ -225,17 +226,6 @@ cmp web/index.html docs/index.html
 CI runs both suites on Windows and macOS, and on Linux as an optional job. The `coverage` job
 merges the reports of all platforms. The run page shows the summary table. The `coverage-report`
 artifact holds the full HTML report, line by line.
-
-To make the same report on your machine:
-
-```bash
-dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
-dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --collect "XPlat Code Coverage" --results-directory coverage
-dotnet tool restore
-dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:Html -filefilters:"-**/obj/**"
-```
-
-Open `coverage-report/index.html`. Delete `coverage/` before the next run, or old reports merge in.
 
 For pipeline diagnosis:
 
@@ -259,9 +249,9 @@ question before starting a broad change.
 ## Current limitations and roadmap
 
 - Live microphone capture is available on Windows and macOS, but not Linux.
-- Local transcription is not implemented, so a fully local live pipeline is not available.
-- There is no standalone cloud text-translation provider, so local-to-cloud mode is also
-  unavailable.
+- Local transcription has no speaker separation yet: every sentence carries one speaker label.
+- Local-to-cloud mode needs a DeepL API key in Settings. DeepL is the only standalone cloud
+  text-translation provider today.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.
 - Mobile delivery depends on the authenticated gateway being reachable. Another relay can be
   added behind `IRelayPublisher`, but Kanal ships with no alternative today. The default

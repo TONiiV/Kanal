@@ -2,7 +2,6 @@ using Kanal.Core.Models;
 
 namespace Kanal.Providers.LocalMt;
 
-/// <summary>One downloadable translation model. All values verified against the HF API 2026-07-31.</summary>
 /// <param name="AssistantPrefill">
 /// Text injected after the chat template's assistant header, before the model writes a token.
 /// This is how a reasoning model is told not to reason: Qwen3.x opens a <c>&lt;think&gt;</c>
@@ -23,9 +22,9 @@ public sealed record LocalModelInfo(
     string? LicenseNote = null,
     string? AssistantPrefill = null) : IDownloadableFile
 {
-    public string DownloadUrl => $"https://huggingface.co/{Repo}/resolve/main/{FileName}";
+    public string DownloadUrl => HuggingFace.FileUrl(Repo, FileName);
 
-    public string SizeLabel => $"{SizeBytes / (1024.0 * 1024 * 1024):0.0} GB";
+    public string SizeLabel => ModelSize.Label(SizeBytes);
 }
 
 /// <summary>
@@ -41,10 +40,19 @@ public static class LocalModelCatalog
     /// 40 s and an empty translation; reasoning skipped, 1 s and a usable one. Note that the
     /// documented <c>/no_think</c> marker did <em>not</em> work: the model reasoned anyway.
     /// </summary>
-    private const string QwenNoThink = "<think>\n\n</think>\n\n";
+    public const string QwenNoThink = "<think>\n\n</think>\n\n";
 
     public static IReadOnlyList<LocalModelInfo> Models { get; } =
     [
+        new(
+            Id: "hy-mt2-1.8b",
+            DisplayName: "Hy-MT2 1.8B",
+            Parameters: "1.8B · Q4_K_M",
+            Repo: "tencent/Hy-MT2-1.8B-GGUF",
+            FileName: "Hy-MT2-1.8B-Q4_K_M.gguf",
+            SizeBytes: 1_133_080_448,
+            Sha256: "dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699",
+            License: "Apache-2.0"),
         new(
             Id: "qwen3.5-4b",
             DisplayName: "Qwen3.5 4B",

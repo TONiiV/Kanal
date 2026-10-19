@@ -21,6 +21,16 @@ public class TranslationModelSettingsTests
     }
 
     [Fact]
+    public void OnlyTheFirstCatalogModelIsRecommended()
+    {
+        var vm = new SettingsViewModel(new AppSettings(), () => null);
+
+        var recommended = Assert.Single(vm.TranslationModels, m => m.IsRecommended);
+        Assert.Equal(LocalModelCatalog.Models[0].Id, recommended.ModelId);
+        Assert.All(vm.TranscriptionModels, m => Assert.False(m.IsRecommended));
+    }
+
+    [Fact]
     public void StoredSelectionIsRestored()
     {
         var vm = new SettingsViewModel(new AppSettings { ActiveTranslationModelId = "qwen3.5-4b" }, () => null);
@@ -61,13 +71,14 @@ public class TranslationModelSettingsTests
     {
         var downloads = new ModelDownloadManager(
             Path.Combine(Path.GetTempPath(), "kanal-tests", Guid.NewGuid().ToString("N")));
-        var item = new TranslationModelItemViewModel(LocalModelCatalog.Models[0], downloads);
+        var item = new ModelItemViewModel(LocalModelCatalog.Models[0], downloads);
 
         Assert.Equal("not downloaded", item.StatusLabel);
 
         item.IsDownloading = true;
         item.Progress = 0.42;
-        Assert.Equal("downloading 42%", item.StatusLabel);
+        Assert.StartsWith("42% · ", item.StatusLabel);
+        Assert.Equal(item.ProgressLabel, item.StatusLabel);
 
         item.IsDownloading = false;
         item.IsDownloaded = true;

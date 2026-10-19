@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
-using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Kanal.Core.Workspaces;
@@ -17,7 +16,7 @@ public partial class WorkspaceSidebarView : UserControl
 {
     public WorkspaceSidebarView()
     {
-        AvaloniaXamlLoader.Load(this);
+        InitializeComponent();
         DataContextChanged += (_, _) =>
         {
             if (DataContext is not MainViewModel vm)
@@ -30,6 +29,8 @@ public partial class WorkspaceSidebarView : UserControl
             vm.Sidebar.ConfirmDeleteMeeting = ConfirmDeleteAsync;
             vm.Sidebar.ConfirmExportBundle = ConfirmExportBundleAsync;
             vm.Sidebar.ChooseImportChoice = ChooseImportChoiceAsync;
+            vm.Sidebar.ShowProjectSettings = ShowProjectSettingsAsync;
+            vm.ShowTranslationSettings = () => ShowSettingsAsync(SettingsViewModel.TranslationTab);
         };
     }
 
@@ -37,6 +38,8 @@ public partial class WorkspaceSidebarView : UserControl
     {
         if (sender is not MenuItem { DataContext: MeetingItemViewModel meeting })
             return;
+
+        meeting.BeginRenameCommand.Execute(null);
 
         // Posted: the editor is not visible yet while the flyout closes, and cannot take focus.
         Dispatcher.UIThread.Post(
@@ -71,13 +74,29 @@ public partial class WorkspaceSidebarView : UserControl
     private void OnRowEditorLostFocus(object? sender, RoutedEventArgs e) =>
         ((sender as Control)?.DataContext as MeetingItemViewModel)?.CommitRenameCommand.Execute(null);
 
-    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e) => await ShowSettingsAsync(0);
+
+    private async Task ShowSettingsAsync(int tab)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
             return;
 
-        await new SettingsWindow().ShowDialog(owner);
-        (DataContext as MainViewModel)?.RefreshPipelineStatus();
+        var vm = DataContext as MainViewModel;
+        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows) { SelectedTab = tab }).ShowDialog(owner);
+        vm?.RefreshPipelineStatus();
+    }
+
+    private void OnProjectSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        WorkspacePicker.IsDropDownOpen = false;
+        if ((sender as Control)?.DataContext is Workspace project && DataContext is MainViewModel vm)
+            vm.Sidebar.OpenProjectSettingsCommand.Execute(project);
+    }
+
+    private async Task ShowProjectSettingsAsync(ProjectSettingsViewModel settings)
+    {
+        if (TopLevel.GetTopLevel(this) is Window owner)
+            await new ProjectSettingsWindow(settings).ShowDialog(owner);
     }
 
     private async Task<bool> ConfirmDeleteAsync(MeetingItemViewModel meeting)

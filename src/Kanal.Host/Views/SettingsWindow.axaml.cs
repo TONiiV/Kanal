@@ -130,7 +130,7 @@ public partial class SettingsWindow : Window
     /// <summary>Covers every way out of the dialog — Save, Cancel and the window chrome.</summary>
     protected override void OnClosed(EventArgs e)
     {
-        (DataContext as SettingsViewModel)?.CancelDownloads();
+        (DataContext as SettingsViewModel)?.OnWindowClosed();
         base.OnClosed(e);
     }
 }

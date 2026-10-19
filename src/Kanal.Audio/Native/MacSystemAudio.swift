@@ -12,6 +12,8 @@ public typealias ErrorCallback = @convention(c) (
 ) -> Void
 public typealias StopCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
 
+private let deviceLostMessage = "computer audio device lost"
+
 private enum NativeBackend: Int32 {
     case coreAudioProcessTap = 2
     case screenCaptureKit = 3
@@ -45,7 +47,7 @@ private final class CaptureHandle: @unchecked Sendable {
         switch backend {
         case .coreAudioProcessTap:
             if #available(macOS 14.2, *) {
-                session = CoreAudioTapSession(frame: frame, context: context)
+                session = CoreAudioTapSession(frame: frame, error: error, context: context)
             } else {
                 session = UnsupportedSession("Core Audio process taps require macOS 14.2 or later")
             }
@@ -121,23 +123,46 @@ public func kanalSystemAudioStopWithCompletion(
     handle.stop { completion(sendableContext.value) }
 }
 
+private typealias TCCPreflight = @convention(c) (CFString, CFDictionary?) -> Int32
+
+private let tccPreflight: TCCPreflight? = {
+    guard let handle = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW),
+          let symbol = dlsym(handle, "TCCAccessPreflight")
+    else { return nil }
+    return unsafeBitCast(symbol, to: TCCPreflight.self)
+}()
+
+// Private TCC SPI, as in AudioCap: Apple has no public call for this permission. Returns 0 unknown, 1 authorized, 2 denied.
+@_cdecl("kanal_audio_capture_authorization")
+public func kanalAudioCaptureAuthorization() -> Int32 {
+    guard let preflight = tccPreflight else { return 0 }
+    switch preflight("kTCCServiceAudioCapture" as CFString, nil) {
+    case 0: return 1
+    case 1: return 2
+    default: return 0
+    }
+}
+
 @available(macOS 14.2, *)
 private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession {
     private let frame: FrameCallback
+    private let errorCallback: ErrorCallback
     private let context: UnsafeMutableRawPointer?
     private let callbackQueue = DispatchQueue(label: "app.kanal.system-audio.tap", qos: .userInitiated)
+    private var aliveListeners: [(AudioObjectID, AudioObjectPropertyListenerBlock)] = []
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateDeviceID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
     private var format = AudioStreamBasicDescription()
 
-    init(frame: @escaping FrameCallback, context: UnsafeMutableRawPointer?) {
+    init(frame: @escaping FrameCallback, error: @escaping ErrorCallback, context: UnsafeMutableRawPointer?) {
         self.frame = frame
+        self.errorCallback = error
         self.context = context
     }
 
     func start() throws {
-        let uid = try Self.defaultOutputDeviceUID()
+        let output = try Self.defaultOutputDevice()
         let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         description.name = "Kanal computer audio"
         description.uuid = UUID()
@@ -149,8 +174,10 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             "AudioHardwareCreateProcessTap")
         do {
             try readTapFormat()
-            try createAggregateDevice(outputUID: uid, tapUUID: description.uuid.uuidString)
+            try createAggregateDevice(outputUID: output.uid, tapUUID: description.uuid.uuidString)
             try createAndStartIOProc()
+            watchAlive(output.id)
+            watchAlive(aggregateDeviceID)
         } catch {
             stop {}
             throw error
@@ -158,6 +185,11 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
     }
 
     func stop(completion: @escaping @Sendable () -> Void) {
+        for (device, block) in aliveListeners {
+            var address = Self.aliveAddress
+            _ = AudioObjectRemovePropertyListenerBlock(device, &address, callbackQueue, block)
+        }
+        aliveListeners = []
         if aggregateDeviceID != kAudioObjectUnknown {
             _ = AudioDeviceStop(aggregateDeviceID, ioProcID)
             if let ioProcID {
@@ -171,7 +203,34 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             _ = AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
         }
+        callbackQueue.sync {}
         completion()
+    }
+
+    private static var aliveAddress: AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsAlive,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+    }
+
+    // The aggregate's clock is the default output at Start; when that device dies the IOProc just stops calling.
+    private func watchAlive(_ device: AudioObjectID) {
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self, !Self.isAlive(device) else { return }
+            reportError(NativeAudioError.message(deviceLostMessage), to: self.errorCallback, context: self.context)
+        }
+        var address = Self.aliveAddress
+        if AudioObjectAddPropertyListenerBlock(device, &address, callbackQueue, block) == noErr {
+            aliveListeners.append((device, block))
+        }
+    }
+
+    private static func isAlive(_ device: AudioObjectID) -> Bool {
+        var address = aliveAddress
+        var alive: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive) == noErr && alive != 0
     }
 
     private func readTapFormat() throws {
@@ -227,7 +286,7 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
             context: context)
     }
 
-    private static func defaultOutputDeviceUID() throws -> String {
+    private static func defaultOutputDevice() throws -> (id: AudioObjectID, uid: String) {
         var deviceID = AudioObjectID(kAudioObjectUnknown)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
@@ -251,7 +310,7 @@ private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession
         guard let uid else {
             throw NativeAudioError.message("default output device has no persistent UID")
         }
-        return uid.takeUnretainedValue() as String
+        return (deviceID, uid.takeUnretainedValue() as String)
     }
 }
 

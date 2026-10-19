@@ -5,12 +5,14 @@
     <Nullable>enable</Nullable>
     <!-- The version the About section shows and CHANGELOG.md's newest entry names. A test holds
          the two together, so releasing is: add the changelog entry, bump this. -->
-    <Version>1.0.1</Version>
+    <Version>1.0.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Embeds the icon in the exe's Win32 resources. MainWindow.axaml only sets
          the window icon, which Explorer, pinned shortcuts and Alt-Tab never read.
          Ignored by non-Windows builds, so it needs no OS condition. -->
     <ApplicationIcon>Assets\kanal.ico</ApplicationIcon>
+    <!-- AVLN3001: the dialogs take constructor arguments and are built in code, never by the runtime XAML loader. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +22,10 @@
     <!-- The repository's own changelog, shown in the application: one file, so the version an
          operator reads on screen cannot drift from the one a reader sees on GitHub. -->
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="Kanal.Host.CHANGELOG.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kanal.UI.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,7 +44,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Kanal.Core\Kanal.Core.csproj" />
     <ProjectReference Include="..\Kanal.Audio\Kanal.Audio.csproj" />
+    <ProjectReference Include="..\Kanal.Providers.DeepL\Kanal.Providers.DeepL.csproj" />
     <ProjectReference Include="..\Kanal.Providers.Gladia\Kanal.Providers.Gladia.csproj" />
+    <ProjectReference Include="..\Kanal.Providers.LocalDiarization\Kanal.Providers.LocalDiarization.csproj" />
+    <ProjectReference Include="..\Kanal.Providers.LocalAsr\Kanal.Providers.LocalAsr.csproj" />
     <ProjectReference Include="..\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
   </ItemGroup>
 

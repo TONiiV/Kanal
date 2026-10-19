@@ -128,7 +128,7 @@ public class OnlineMeetingCaptureTests
         var drain = run.Drain();
         var chunks = seconds * 1000 / periodMs;
 
-        await run.SendNumberedChunksAsync(chunks, chunk, periodMs);
+        await run.SendNumberedChunksAsync(drain, chunks, chunk, periodMs);
         var mic = await run.FinishAsync(drain, tailMs: 100);
 
         var sent = (long)chunk * chunks;
@@ -173,7 +173,7 @@ public class OnlineMeetingCaptureTests
         var chunks = seconds * 1000 / periodMs;
         var excess = (int)(chunk - periodMs * 16L);
 
-        await run.SendNumberedChunksAsync(chunks, chunk, periodMs);
+        await run.SendNumberedChunksAsync(drain, chunks, chunk, periodMs);
         var mic = await run.FinishAsync(drain, tailMs: 100);
 
         var sent = (long)chunk * chunks;
@@ -366,11 +366,29 @@ public class OnlineMeetingCaptureTests
     internal sealed class Drainer
     {
         private readonly Dictionary<int, int> _perChunk = [];
+        private TaskCompletionSource _progress = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private long _frames, _audible;
 
         public Task Task { get; set; } = Task.CompletedTask;
-        public long Frames => Interlocked.Read(ref _frames);
-        public long Audible => Interlocked.Read(ref _audible);
+        public long Frames { get { lock (_perChunk) return _frames; } }
+        public long Audible { get { lock (_perChunk) return _audible; } }
+
+        public async Task ReachAsync(long frames)
+        {
+            while (true)
+            {
+                Task progress;
+                lock (_perChunk)
+                {
+                    if (_frames >= frames) return;
+                    progress = _progress.Task;
+                }
+                Assert.False(Task.IsCompleted, $"the capture ended after {Frames} of {frames} frames: " +
+                    $"{(Task.Exception?.GetBaseException() as AudioCaptureException)?.Code ?? "no fault"}");
+                try { await Task.WhenAny(progress, Task).WaitAsync(Patience); }
+                catch (TimeoutException) { Assert.Fail($"drained {Frames} of {frames} frames"); }
+            }
+        }
 
         public (int Chunk, int Samples)[] Incomplete(int from, int to, int min, int max)
         {
@@ -384,19 +402,21 @@ public class OnlineMeetingCaptureTests
 
         public void Add(ReadOnlySpan<byte> frame)
         {
-            var audible = 0;
+            TaskCompletionSource progress;
             lock (_perChunk)
             {
                 foreach (var sample in PcmConvert.BytesToShorts(frame))
                 {
                     if (sample == 0) continue;
-                    audible++;
+                    _audible++;
                     var chunk = ChunkOf(sample);
                     _perChunk[chunk] = _perChunk.GetValueOrDefault(chunk) + 1;
                 }
+                _frames++;
+                progress = _progress;
+                _progress = new(TaskCreationOptions.RunContinuationsAsynchronously);
             }
-            Interlocked.Add(ref _audible, audible);
-            Interlocked.Increment(ref _frames);
+            progress.TrySetResult();
         }
     }
 
@@ -488,10 +508,16 @@ public class OnlineMeetingCaptureTests
             return drainer;
         }
 
-        public async Task SendNumberedChunksAsync(int chunks, int chunk, int periodMs)
+        private long ClockFrames =>
+            Clock.GetTimestamp() * 16000 / TimeSpan.TicksPerSecond / OnlineMeetingCapture.FrameSamples;
+
+        public async Task SendNumberedChunksAsync(Drainer drainer, int chunks, int chunk, int periodMs)
         {
+            const int lagFrames = 16000 / OnlineMeetingCapture.FrameSamples;
             for (var k = 0; k < chunks; k++)
             {
+                // Without this wait, the clock can get ConsumerStallLimit ahead of the drainer, and the mixer faults.
+                await drainer.ReachAsync(ClockFrames - lagFrames);
                 await Clock.StepAsync(periodMs);
                 await Mic.Send(Constant(ChunkValue(k), chunk));
             }
@@ -501,16 +527,12 @@ public class OnlineMeetingCaptureTests
         {
             await Clock.StepAsync(tailMs);
             await Clock.IdleAsync();
-            var frames = Clock.GetTimestamp() * 16000 / TimeSpan.TicksPerSecond / OnlineMeetingCapture.FrameSamples;
-            var deadline = DateTime.UtcNow + Patience;
-            while (drainer.Frames < frames)
-            {
-                Assert.True(DateTime.UtcNow < deadline, $"drained {drainer.Frames} of {frames} frames");
-                await Task.Delay(1);
-            }
+            await drainer.ReachAsync(ClockFrames);
             Assert.Null(Fault);
-            await DisposeAsync();
+            // The drainer must stop calling MoveNextAsync before the stream is disposed, or DisposeAsync throws.
+            await _cts.CancelAsync();
             await drainer.Task.WaitAsync(Patience);
+            await DisposeAsync();
             return Diagnostics.Last(d => d is { Event: "stopped", Source: OnlineMeetingCapture.MicrophoneSource });
         }
 

@@ -4,7 +4,1685 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### Persistent warning bar for cloud translation failures
+
+Issue #279, part of spec #278.
+
+- **Problem.** A non-fatal translation error wrote one status-bar line. The next status write replaced it. After `mt.key` or `mt.quota`, the provider sends no more requests. The translation columns stayed empty with no warning on screen.
+- **State.** `MainViewModel.MtWarningCode` holds the `mt.*` code of the last non-fatal error. `Status` does not touch it. A repeated code does not raise `PropertyChanged`, so the bar does not flicker or stack. `HasMtWarning` and `MtWarningText` derive from the code. The text follows the application language.
+- **Clear rules.** `MeetingSession.TranslationApplied` fires when the room accepts a translation that has text. A locked provider returns an empty result. That result does not clear the bar. The bar clears on that event. It also clears when the session ends, when the operator stops the meeting, and when a new meeting starts.
+- **Stale events.** Each session captures `_mtWarningEpoch`. Stop and session end increase the epoch. A late event from an old session cannot raise a bar after the meeting ended.
+- **Key change.** The translation provider is built at meeting start. A new key takes effect at the next start, and the start clears the bar. No separate "key changed" path exists.
+- **View.** `MtWarningBar` sits under the capture note in `IconBarView`. It uses `Warning` and `WarningWash`, which exist in the Light and Dark variants. The text says "cloud translation" and names no vendor.
+- **Button.** `OpenTranslationSettingsCommand` calls `MainViewModel.ShowTranslationSettings`. `WorkspaceSidebarView` sets that hook. It opens the Settings window with `SelectedTab = SettingsViewModel.TranslationTab`.
+- **Log.** The Warning entry in `RoomLog` stays.
+- **Test seam.** `PlanFilter` replaces the machine-translation provider with a scripted one. A `TaskCompletionSource` gate holds later calls. The clear test therefore does not race the pump.
+
+---
+
+### An online meeting stops when macOS denies system audio
+
+- **Bug (#151).** With the system-audio permission denied, the Core Audio tap raises no error. The meeting ran on without remote speech. The silent-source hint came after about 30 s.
+- **Signal.** The private function `TCCAccessPreflight("kTCCServiceAudioCapture")` gives the TCC state. Zero buffers alone are not enough, because the computer can be silent. See "System-audio permission on macOS 14.2+" in `docs/online-meeting-audio.md`.
+- **Rule.** `MacSystemAudioCapture` asks TCC when a tap buffer holds only zeros, at most once per second. Only "denied" ends the capture with `permission_denied`. The meeting then stops through `StopAfterAudioFaultAsync` with the localized reason.
+- **Test seam.** `IMacSystemAudioNative.AudioCaptureAuthorization` returns the TCC state. `FakeMacNative` sets it and the buffer content.
+- **Open item.** No real Mac has run this. The operator must run the manual test in the PR.
+
+---
+
+### Glossary T2: editor in the project settings window
+
+Spec #302. Stacked on T1 (#307).
+
+- **Place.** The project settings window is where the operator already manages a project. The glossary section is after the project icon.
+- **Rows.** One text box per language (zh, de, pl, en), the "Keep" check box (do not translate) and a remove button. **Add term** adds an empty row.
+- **Save.** The existing Save & Close button saves the glossary with the name and the icon. Save writes no file when the glossary did not change.
+- **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
+- **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
+- **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
+---
+
+### Glossary T1: per-project storage
+
+Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
+
+- **Model.** `GlossaryEntry(Zh, De, Pl, En, DoNotTranslate)`. An empty cell is `""`. The flag marks part numbers and codes.
+- **Storage.** `kanal-glossary.json` in the project root folder, next to `kanal-workspace.json`. The file moves with the folder. A person can read it without Kanal.
+- **Write.** `RecordFile` writes a temporary file, flushes it and replaces the old file. Save trims each cell and drops rows with no term.
+- **Read.** No file gives an empty glossary. A damaged file gives `Unreadable`, and Save refuses to write over it. A different schema version gives `UnsupportedVersion`.
+- **Delete.** "Delete files" on a project also deletes the glossary file, because Kanal wrote it.
+- **Next.** T2 adds the editor to the project settings window. T3 (#303), T4 (#304) and T5 (#306) are tickets only.
+
+---
+
+### Import never overwrites a meeting folder on disk (issue #236)
+
+- **Bug.** ADR 0054 decision 23 says an import never overwrites. Only the sidebar enforced it. The sidebar asks "skip or save as new" only for a meeting in its list. A meeting folder with a damaged or missing `meeting.json` is not in the list. `MeetingBundle.Import` then wrote over its `transcript.jsonl` and `audio.wav`. These files can be the only copy of a recording.
+- **Second defect.** An extract that failed part way left `meetings/<id>/` with some files and no `meeting.json`.
+- **Fix.** `Import` with `asNewRecord: false` refuses when `meetings/<id>/` exists. The new `StoreProblemKind.FolderTaken` carries the refusal. `StoreRefusal` maps it to `workspace.refused.foldertaken` in en, zh, de and pl.
+- **Staging.** `Import` extracts into `meetings/<id>.importing-<guid>/`. It moves the folder into place only after every entry is extracted. It deletes the staging folder on every exit. `ExtractToFile` no longer uses `overwrite: true`.
+- **Save-as-new.** This path keeps working. The folder of the new record already holds `meeting.json`, so the move puts each extracted entry into that folder.
+- **Rollback.** If the record cannot be saved after the move, `Import` deletes the folder that it created.
+- **Race.** Without save-as-new, `Import` moves the staging folder with `Directory.Move` only. The move fails when a folder appeared since the check. `Import` never merges into that folder and never deletes it. Only save-as-new merges.
+- **Open item.** A crash during an extract leaves the staging folder. The list shows it as a folder without a record.
+
+---
+
+### An online meeting stops when the macOS computer audio source disappears (#152)
+
+- **Bug.** The Core Audio tap runs on a private aggregate device. Its clock is the default output at Start. When that device disappeared, the IOProc stopped calling. The mixer padded silence, and the meeting went on. ADR 0050 requires a stop.
+- **Fix.** `CoreAudioTapSession` listens to `kAudioDevicePropertyDeviceIsAlive` on the clock device and on the aggregate device. A dead device calls the error callback with the fixed text `computer audio device lost`. `MacSystemAudioCapture` maps that text to `AudioCaptureFault.SourceEnded`. The existing path then stops the meeting: `OnlineMeetingCapture` reports `source_ended` for `system`, and the host shows the localized reason.
+- **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
+- **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
+
+---
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
+## 2026-10-18
+
+### End-to-end speech translation: audio in, translated text out
+
+The earlier benchmarks measured speech recognition and translation apart. The `e2e` command of
+`tests/Kanal.AsrBenchmark` measures the whole chain. It takes one audio clip and returns the
+translated text in the other three room languages.
+
+What the command does:
+
+- **Audio.** The set `meeting-11labs`: 12 meeting sentences in zh, de, pl and en, in 3 ElevenLabs
+  voices. That is 144 clips and 16.3 min. The command makes no new audio.
+- **Room.** Every route runs in the auto room (zh, de, pl, en), as ADR 0061 requires. The targets of
+  a clip are the other three languages. A missing translation scores chrF 0.
+- **References.** The 12 sentences are parallel in the four languages. The reference of sentence i
+  in language T is the T version of sentence i. These texts are the references of the MT benchmark
+  (PR #267). A unit test checks that the part numbers match in all four languages.
+- **Feed.** 20 ms frames at real-time pace, as the real-time phase does. Local routes get 4 s of
+  silence after each clip. Gladia gets 1 s.
+- **Providers.** The product `GladiaAsrProvider` with translation on, the product
+  `NemotronAsrProvider` (560 ms), the sherpa-onnx offline engine of the tool for Qwen3-ASR 0.6B, and
+  the product `LlamaSharpMtProvider` with Hy-MT2 1.8B on the CPU. The command changes no product code.
+- **MT input.** The tool mirrors `MeetingSession`. It puts every transcript event into a `RoomState`.
+  It translates each final on its own, into the room languages without the source language. It sends
+  `RecentFinals(8)` as context. In this base, `MtPrompt.Build` takes only the text and the target, so
+  `LlamaSharpMtProvider` ignores the context. The context cannot change any output here.
+- **Gladia.** Route A and route B share the same 144 Gladia sessions of the first run. The tool sent
+  18.7 min of audio. A second pass of 12 clips (1.2 min) checked the latency of route B on a quiet
+  machine. The total is 19.9 min. The second pass is in a separate run file and a separate report.
+  It did not replace any row of the 144 clips. The tool makes no new Gladia call.
+- **Quiet machine.** The tool measures the CPU use of all other processes every 2 s. A clip starts
+  only when other processes use less than 3.0 logical CPUs. The local routes and route B1 run a clip
+  again if the load passes the limit during the clip. After 3 attempts, the last run stays and carries
+  an attempt count above 1. Route `gladia` never runs a clip again, because each run costs money; it
+  only waits and records the load. The report shows the mean and maximum load per route and the
+  number of repeated clips.
+- **Metrics.** chrF against the reference (the algorithm of the MT benchmark, with unit tests). Part
+  numbers of the reference that the output keeps, strict and loose. Latency from the end of speech
+  to the last translated text of the clip, for clips where all three targets have text. CER (zh) or
+  WER (de, pl, en) of the transcript, numbers normalised. The figure for several languages is the mean
+  of the language rates. The tool also prints finals per clip, the share of finals with the right
+  language label, and the mean transcript length.
+- **Scale.** The chrF of this benchmark and the chrF of the MT benchmark are not on one scale. This
+  benchmark scores 48 spoken sources from four languages, with recognition errors. The MT benchmark
+  scores 12 written sentences from zh, de and pl.
+
+Run it:
+
+1. Fetch the clips once: `fetch --sets meeting-11labs`. The tool never calls ElevenLabs for a clip on disk.
+2. Run the local routes: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- e2e --routes nemotron,qwen3 --run <id> --out <folder>`.
+   Options `--run` and `--out` are required. The report reads only the run files `e2e-runs-<id>-*.json`
+   and the files of `--include`. Route `gladia` calls the paid API, so name it on purpose.
+   Route `gladia-mt --gladia-runs <file>` replays the saved Gladia sessions with fresh MT.
+3. Read `kanal-e2e-<id>.md` and `.json` in the folder. Option `--clips <n>` takes the first n clips of each language.
+   Option `--only <clip ids>` runs whole clip ids again. The new runs replace the earlier ones and carry a re-run mark.
+
+Result (2026-10-18, AMD Ryzen 9 PRO 8945HS, 16 logical CPUs, MT on the CPU, Windows). Run files and
+reports: `%LocalAppData%\Kanal\asr-bench\reports\e2e-run2\`.
+
+| Route | chrF | Part numbers strict | Part numbers loose | Latency p50 s | Latency p95 s | ASR error % |
+|---|---:|---:|---:|---:|---:|---:|
+| A. Gladia, one session with translation | 54.5 | 71/288 | 159/288 | 1.98 | 2.78 | 17.0 |
+| B. Gladia transcript, then Hy-MT2 1.8B | 45.8 | 72/288 | 159/288 | 5.56 (contended) | 9.25 (contended) | 17.0 |
+| B1. Replay of B on the 74 clips with one Gladia final | 47.6 | 24/81 | 48/81 | 3.10 | 3.95 | 9.9 |
+| C. Nemotron 560 ms, then Hy-MT2 1.8B (the product chain) | 38.5 | 10/288 | 23/288 | 4.88 | 5.99 | 28.2 |
+| D. Qwen3-ASR 0.6B, then Hy-MT2 1.8B | 45.1 | 49/288 | 107/288 | 4.29 | 5.85 | 17.9 |
+
+Notes on the table:
+
+- Route C and route D ran again in full on a quiet machine, with the context above. Other load: C mean
+  0.25 and maximum 0.94 logical CPUs; D mean 0.26 and maximum 1.14. No clip passed the limit, and no clip ran again.
+- Route B latency is contended. The first Gladia run overlapped a diarization benchmark of another
+  session (python, 7.85 logical CPUs). The saved sessions hold the text and the time of each final only
+  for the 74 clips with one final. Route B1 replays those clips with the saved Gladia text and final
+  time of the first run and a fresh MT time (other load: mean 0.34, maximum 1.50). The Gladia final
+  time still comes from the loaded run. The effect is probably small, because that time depends
+  mostly on the network and on the Gladia servers, not on the local CPU. The 70 clips with several finals cannot be
+  replayed. The 12-clip sample of the second Gladia pass gave route B a p50 of 3.12 s and a p95 of 4.23 s.
+- Route A: all 144 clips have text for all three targets, checked on the saved clip totals. The saved
+  sessions hold no per-final translations, so the check per final is not possible for this run. The
+  tool now applies that check to new runs. Route C: 2 clips (zh-10-george, zh-10-lily) miss a target.
+  They score chrF 0 for it and have no latency.
+
+chrF by source language (the rows hold 36 clips each; B1 holds 21, 16, 17 and 20):
+
+| Route | zh | de | pl | en |
+|---|---:|---:|---:|---:|
+| A | 41.8 | 60.6 | 55.7 | 59.8 |
+| B | 38.9 | 48.6 | 44.4 | 51.4 |
+| B1 | 38.3 | 54.4 | 46.8 | 52.7 |
+| C | 30.8 | 41.4 | 40.4 | 41.3 |
+| D | 45.2 | 49.5 | 38.8 | 46.6 |
+
+Latency parts, p50 (ASR final, then translation): B1 0.80 s and 2.21 s; C 2.13 s and 2.65 s; D 1.74 s and 2.57 s.
+
+Findings:
+
+1. **On these 12 sentences, Gladia translates its own text better than Hy-MT2.** Route A beats route B
+   by 8.7 chrF points. The report table "chrF by number of finals" shows the split. On the 74 clips with one Gladia
+   final, A scores 56.6, B 47.8 and the replay B1 47.6. On the 70 clips with several finals, A scores
+   52.2 and B 43.8. The gap is about the same in both
+   groups, so text fragments do not explain it. This is one run with synthetic voices.
+2. **Qwen3-ASR gives the better local text.** Route D beats the product chain C by 6.6 chrF points.
+   The ASR error is 17.9 % against 28.2 %. Route D keeps 107 loose part numbers; route C keeps 23.
+   Nemotron writes numbers and part numbers as words ("PB zwei neun eins"). Its transcripts are
+   longer: 78.2 characters on average, against 70.2 for Qwen3-ASR and 68.8 for Gladia.
+3. **Part numbers are the weak point of every route.** The best routes (A and B) keep 159 of 288
+   loosely and at most 72 strictly. The voices read a code letter by letter. The recogniser then writes the code with
+   spaces, words or errors.
+4. **Route D is faster than route C, because its final comes sooner.** The p50 is 4.29 s against
+   4.88 s. The MT part is equal (2.57 s and 2.65 s). The ASR final comes 1.74 s after the end of
+   speech for D and 2.13 s for C. The final time of D comes from the Silero VAD of the tool
+   (500 ms of silence). A product Qwen3 provider can differ. Route A answers in 1.98 s. MT on the CPU
+   is 54 % to 71 % of the p50 latency of the local routes (C 54 %, D 60 %, B1 71 %). The GPU change (#270) is open.
+5. **The auto room finds the language.** 98.6 % to 100 % of the finals carry the language of the
+   clip on all routes. Gladia gives 1.74 finals per clip. Nemotron gives 1.00 and Qwen3-ASR 1.01.
+
+Limits:
+
+- One run per route. The Hy-MT2 sampler uses a temperature of 0.2, so a second run differs a little.
+- The voices are synthetic and read part numbers letter by letter. Real speech can differ.
+- MT runs on the CPU only. Hy-MT2 gets one prompt per target language. The batched prompt of PR #276 is not in this base.
+- Route B has no clean latency for the 70 clips with several finals.
+
+### Transcription benchmark: ASCEND code-switching set
+
+Kanal never restricts the recognition language. The auto room (zh/de/pl/en) is therefore the result
+that counts. The forced room is a diagnostic only.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Set `ascend`.** The set holds the test split of ASCEND (Lovenia et al. 2022, Hugging Face
+  `CAiRE/ASCEND`, CC-BY-SA-4.0) at revision `737e9800ae31be9932ba8464c80366559bd28424`. It is a
+  default set. The fetch reads the dataset server, not the Parquet files, and downloads only the
+  chosen clips (14 MB). The repository holds no audio and no transcript.
+- **Clip pick.** 60 `mixed`, 15 `zh` and 15 `en` clips of 3–20 s. Clips with an `[UNK]` tag are out.
+  The pick spreads evenly over the speaker and session groups. The test split has 2 speakers in 4
+  sessions, so the groups are few. The mixed clips last 299 s in total.
+- **MER.** The mixed error rate is the edit distance over tokens. Each Chinese character is one
+  token. Each Latin word is one token. The tool reads traditional characters as simplified ones.
+  The report holds two values: the raw MER and the MER with number normalisation of both texts.
+  The table below shows both.
+- **English kept.** The rate of the English reference words that the hypothesis spells as the same
+  Latin word. A word counts once per occurrence. The rule leaves out fillers ("um", "uh", "hmm")
+  and spelled letters ("i s m"). The rate applies to `mixed` clips only.
+- **Rooms.** Auto room: zh/de/pl/en. Forced room: `zh` for `mixed` and `zh` clips, `en` for `en` clips.
+  Cohere Transcribe has the forced room only. Gladia has the auto room only.
+- **Run.**
+  1. Fetch the clips: `... -- fetch --sets ascend`.
+  2. Run the engines: `... -- --sets ascend --phases accuracy --model <ids>`.
+  3. Score saved results again: `... -- rescore <report.json>... --out <folder>`.
+
+  The Gladia run retries a clip up to three times and stops a clip after 2 minutes.
+  In the result below, Gladia returned no text for 1 `zh` clip. No Gladia clip failed.
+  The report files stay outside the repository, in `%LocalAppData%/Kanal/asr-bench/reports/ascend-run2/`.
+
+Result on 2026-10-18 (AMD Ryzen 9 PRO 8945HS, CPU, 4 threads). MER is in %. "MER" is the raw
+value. "MER num." is the MER with number normalisation of both texts. English kept has 150 words.
+Auto room first, because it counts.
+
+| Engine | Room | `mixed` MER (60 clips) | `mixed` MER num. | English kept % | `zh` MER (15) | `en` MER (15) | Empty `mixed` clips |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-ASR 0.6B | auto | 12.3 | 12.2 | 73.3 | 8.3 | 30.5 | 0 |
+| Whisper turbo | auto | 19.6 | 19.4 | 72.7 | 26.1 | 31.9 | 0 |
+| Qwen3-ASR 1.7B | auto | 23.1 | 23.1 | 76.0 | 19.6 | 27.7 | 1 |
+| Gladia | auto | 22.8 | 22.5 | 68.7 | 27.8 | 29.8 | 0 |
+| Nemotron 560 ms | auto | 25.3 | 25.4 | 36.0 | 16.5 | 38.3 | 1 |
+| Qwen3-ASR 0.6B | forced | 12.0 | 12.0 | 73.3 | 8.7 | 27.0 | 0 |
+| Qwen3-ASR 1.7B | forced | 14.5 | 14.5 | 75.3 | 19.1 | 24.8 | 0 |
+| Whisper turbo | forced | 23.6 | 23.4 | 54.7 | 25.7 | 31.9 | 0 |
+| Cohere Transcribe | forced | 25.6 | 25.4 | 30.7 | 18.7 | 25.5 | 0 |
+| Nemotron 560 ms | forced | 28.1 | 28.2 | 4.7 | 15.7 | 36.9 | 3 |
+
+The engines ran twice on the same clips. The scores of the local engines did not change between the runs.
+The Gladia scores did: the first run gave 24.9 % `mixed` MER and 1 empty `mixed` clip. The cloud result varies.
+
+Findings:
+
+1. In the auto room, Qwen3-ASR 0.6B has the lowest `mixed` MER (12.3 %). Whisper turbo is second (19.6 %).
+2. Qwen3-ASR 1.7B loses 8.6 points in the auto room (23.1 % against 14.5 % forced). It gives empty or very short texts on some clips. The 0.6B model has no such gap.
+3. Four engines keep 69 to 76 % of the English words: the Qwen3 models, Whisper turbo and Gladia. The gaps among them are about 10 words of 150. They are inside the noise that finding 5 describes. Nemotron keeps 36 %.
+4. A forced `zh` room does not help every engine. It raises the MER of Whisper turbo (+4.0) and Nemotron (+2.8). It also lowers the English kept rate: Whisper turbo from 73 % to 55 %, Nemotron from 36 % to 5 %.
+5. The numbers are rough. The MER references keep fillers ("um", "嗯": 15 in the 60 mixed clips) and spelled letters ("i s m"). The English kept rate leaves them out. The sample has 2 speakers. A gap of a few points is not reliable. Whisper turbo looped on one clip (45 errors on 22 reference tokens, forced room).
+
+### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
+
+The benchmark of 2026-10-17 gave error rates that were not usable. It had three causes.
+Numbers written as words counted as errors. The meeting clips were synthetic Piper speech. Each
+language had only 4 meeting sentences. This change addresses all three causes. It also adds the
+cloud baseline and three more local models.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Gladia engine.** `--model gladia` streams each clip through the product `GladiaAsrProvider`
+  (translation off) at real-time pace, with 1 s of trailing silence. The product sends Gladia no
+  room languages, so Gladia has only the auto room. Gladia is opt-in, because it is a paid API.
+  The key comes from `GLADIA_API_KEY` (process, then User, then Machine on Windows).
+- **English.** Every set except `aishell4` has English. The auto room is zh/de/pl/en.
+- **Number-normalised scores.** `Numbers.Normalize` turns spelled-out cardinals, decimals and
+  percentages into digits in the hypothesis and in the reference (zh 两千 → 2000, de fünftausend →
+  5000, pl dwa tysiące → 2000, en five thousand → 5000). The report shows the raw score and the
+  normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
+  ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
+  stay text. A run like 十分 is still converted, on both sides alike.
+  A bare 百 or 千 at the start of a run is read as 100 or 1000, so 百度 becomes 100度 and 百分比
+  becomes 100分比. Both sides change alike. A real inverse text normaliser would remove this limit.
+  A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
+  (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
+  stays two numbers. None of the 498 reference texts uses a plain space as a separator.
+- **More candidates.** Whisper large-v3, Cohere Transcribe 03-2026 and Qwen3-ASR 1.7B (community
+  export, pinned revision). Cohere Transcribe needs the clip language, so it has no auto room.
+  The licence of the 1.7B export is Apache-2.0 in the
+  [model card](https://huggingface.co/thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8/blob/69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5/README.md)
+  at the pinned revision. The repository has no separate licence file.
+- **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. A plain `fetch`
+  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name gives exit code 2.
+  A failed set, for example with no `ffmpeg`, gives exit code 1. Each set pins a revision or a dataset version.
+  No audio is committed.
+
+| Set | Languages | Clips | Source | Licence |
+|---|---|---:|---|---|
+| `fleurs` | zh de pl en | 20 each | FLEURS test, `google/fleurs` | CC-BY-4.0 |
+| `meeting-piper` | zh de pl en | 12 each | the 12 MT benchmark sentences (4 originals, 8 translations), Piper voices | – |
+| `meeting-11labs` | zh de pl en | 36 each | the same sentences, ElevenLabs `eleven_multilingual_v2`, voices Alice (f), Lily (f), George (m) | – |
+| `voxpopuli` | de pl en | 25 each | VoxPopuli test, `facebook/voxpopuli` at 719aaef | CC0; raw audio: European Parliament |
+| `ami` | en | 25 | AMI test meeting EN2002a, single far-field microphone | CC-BY-4.0 |
+| `aishell4` | zh | 26 | AISHELL-4 test, sessions L_R003S01C02 and L_R004S01C01, channel 0 of the far-field array | CC-BY-SA-4.0 (openslr.org/111) |
+| `commonvoice` | zh de pl en | 25 each | Common Voice Scripted Speech 27.0 test, Mozilla Data Collective | CC0-1.0 |
+
+AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment. The
+AISHELL-4 fetch reads the start of each FLAC file and decodes it with `ffmpeg` (on `PATH`). Common
+Voice needs `MDC_API_KEY` and the accepted dataset terms. The archive lists `test.tsv` before the
+clips, so the fetch reads only the start of the stream (cap 2 GB). ElevenLabs needs
+`ELEVENLABS_API_KEY`. It sent 9,630 characters once; a clip on disk is never requested again.
+
+Run it:
+
+1. Fetch FLEURS and the meeting sets: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --sets fleurs,meeting-piper,meeting-11labs`.
+   FLEURS gets the default 20 clips per language.
+2. Fetch the other sets: `... -- fetch --clips 25 --sets voxpopuli,ami,aishell4,commonvoice`.
+3. Fetch the models: `... -- fetch --candidates all --no-clips`.
+4. Run: `... -- --model nemotron-3.5-asr-560ms-int8,qwen3-asr-0.6b-int8,gladia`. `--note <text>`
+   adds a line to the report.
+
+#### Results of 2026-10-18
+
+The machine is an AMD Ryzen 9 PRO 8945HS on CPU, 4 threads per model. The runs are:
+
+1. Accuracy phase: all sets, all models except Whisper large-v3.
+2. Whisper large-v3: 5 clips per set and language, a small sample. It ran at the same time as the
+   Gladia part of the accuracy phase. The CPU was shared, so its RTF is too high.
+3. Speed phases (real time, streams, threads): alone on the machine.
+
+The Nemotron 560 ms forced room on FLEURS and on meeting-piper zh/de/pl ran next to the processes of
+another benchmark. Only the RTF of these 7 rows is not valid. The 160 ms model is not in this run.
+PR #284 has its numbers.
+
+Error rate in %, number-normalised, auto room (zh/de/pl/en). CER for zh, WER for de/pl/en. Cohere
+and Qwen3-ASR 1.7B show the forced room (see the findings). The raw scores are in the report.
+
+| Set | Lang | Nemotron 560 ms | Whisper turbo | Whisper large-v3 (5 clips) | Qwen3-ASR 0.6B | Qwen3-ASR 1.7B (forced) | Cohere (forced) | Gladia |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fleurs | zh | 20.5 | 32.8 | 31.8 | 5.5 | 6.1 | 28.5 | 9.0 |
+| fleurs | de | 10.7 | 6.9 | 0.9 | 9.6 | 7.1 | 8.0 | 6.0 |
+| fleurs | pl | 21.2 | 13.2 | 18.9 | 50.5 | 36.6 | 18.8 | 12.3 |
+| fleurs | en | 17.0 | 8.2 | 7.7 | 13.9 | 8.6 | 9.1 | 11.1 |
+| commonvoice | zh | 45.0 | 44.8 | 30.7 | 9.2 | 6.8 | 31.2 | 16.8 |
+| commonvoice | de | 11.6 | 22.0 | 28.0 | 17.1 | 10.4 | 14.6 | 6.1 |
+| commonvoice | pl | 24.0 | 17.5 | 11.8 | 46.2 | 35.1 | 18.1 | 6.4 |
+| commonvoice | en | 32.6 | 13.0 | 0.0 | 13.0 | 11.9 | 10.4 | 10.4 |
+| voxpopuli | de | 15.4 | 15.4 | 9.5 | 18.8 | 13.3 | 7.4 | 11.1 |
+| voxpopuli | pl | 35.5 | 37.7 | 16.0 | 40.0 | 27.5 | 16.2 | 33.5 |
+| voxpopuli | en | 10.2 | 28.9 | 4.2 | 8.2 | 7.6 | 6.6 | 25.1 |
+| meeting-11labs | zh | 38.3 | 39.7 | 36.8 | 15.9 | 15.1 | 37.0 | 25.6 |
+| meeting-11labs | de | 21.8 | 13.5 | 11.9 | 11.6 | 17.5 | 11.0 | 14.9 |
+| meeting-11labs | pl | 33.3 | 12.1 | 15.6 | 32.0 | 31.1 | 17.9 | 17.2 |
+| meeting-11labs | en | 19.7 | 7.5 | 7.2 | 13.1 | 10.4 | 8.4 | 10.9 |
+| meeting-piper | zh | 36.0 | 43.8 | 46.4 | 19.1 | 16.6 | 41.0 | 24.0 |
+| meeting-piper | de | 28.2 | 11.8 | 15.7 | 23.5 | 15.9 | 9.4 | 17.1 |
+| meeting-piper | pl | 27.5 | 11.4 | 17.8 | 47.0 | 47.7 | 21.5 | 20.1 |
+| meeting-piper | en | 9.1 | 6.5 | 7.8 | 8.6 | 7.5 | 4.3 | 9.7 |
+| ami | en | 20.2 | 27.1 | 22.6 | 24.6 | 25.9 | 21.7 | 52.1 |
+| aishell4 | zh | 33.2 | 83.2 | 68.0 | 55.5 | 85.2 | 56.2 | 66.6 |
+
+The engine run used the normaliser of commit 80805cb. Later normaliser fixes can change the
+number-normalised column slightly. The raw column is not affected.
+
+Speed (speed phases; RTF of the accuracy phase, offline feed):
+
+| Model | RTF offline | RTF 4 streams (mean) | Final after speech end p50/p95 s | First partial p50 s | Peak working set MB |
+|---|---:|---:|---:|---:|---:|
+| Nemotron 560 ms | 0.17 | 0.31 | 2.34/3.76 | 0.95 | 1088 |
+| Whisper turbo | 0.31 | 0.71 | 3.42/5.44 | 8.91 | 2885 |
+| Whisper large-v3 | 1.48–1.53 (the CPU was shared) | – | – | – | – |
+| Qwen3-ASR 0.6B | 0.19 | 0.30 | 2.19/3.42 | 8.02 | 2687 |
+| Qwen3-ASR 1.7B | 0.34 | 0.67 | 3.62/5.51 | 9.07 | 4069 |
+| Cohere Transcribe | 0.14 | 0.26 | 1.78/2.95 | 7.65 | 3780 |
+| Gladia | real-time pace | – | 1.01/2.09 | 0.81 | 390 |
+
+Offline models give no partials. Their "first partial" is the first final.
+
+Findings:
+
+- **Number normalisation removes a large part of the meeting errors.** Nemotron meeting-piper: en
+  33.3 → 9.1, pl 50.3 → 27.5, zh 45.1 → 36.0. On FLEURS, Common Voice and VoxPopuli the change is
+  small, because these sets spell few numbers.
+- **No local model is best on every language.** Qwen3-ASR is best on zh (FLEURS 5.5, Common Voice
+  9.2, meeting 15–19) and weak on pl (32–50). Whisper and Cohere are good on de/pl/en and weak on zh.
+  Nemotron is in the middle, but it is the only streaming model with real partials.
+- **sherpa-onnx 1.13.8 drops Chinese characters** from Whisper and Cohere (k2-fsa/sherpa-onnx#3964,
+  fixed in #3965 after 1.13.8). Their zh CER shows the bug, not the model. No configuration
+  removes it. Test again with the next sherpa-onnx release.
+- **Gladia picks a wrong language** on accented or far-field speech, because the product sends no
+  room languages. On AMI it wrote Welsh for 6 of 25 English clips (WER 52.1). On VoxPopuli it wrote
+  Slovene, German or English for some pl and en clips. On AISHELL-4 it gave no text for 14 of 26
+  clips. On clean speech Gladia is the most accurate engine (Common Voice de/pl 6.1/6.4).
+  ADR 0061 (PR #291) decides that the product sends no room languages to Gladia. It accepts these errors.
+- **Gladia gives the fastest finals** (p50 1.01 s after speech end against 2.34 s for Nemotron).
+- **The Gladia session does not end** when the session closes during the reconnect wait.
+  `GladiaAsrSession.ReceiveLoopAsync` awaits the backoff delay in its `catch`, so the cancel escapes
+  and the event stream never completes. The benchmark works around it. The product bug needs its
+  own ticket. The server closed 122 of 498 sessions after `stop_recording`, before the session
+  close. These clips lost no text.
+- **Cohere Transcribe needs the clip language.** It has no auto mode, so a mixed room cannot use it
+  as it is.
+- **The Qwen3-ASR 1.7B community export leaks a header** ("language Chinese<asr_text>") into the
+  auto-room text of 103 of 498 clips. The auto-room scores of 1.7B in the report are not valid.
+  The benchmark now removes the header. In the forced room, 1.7B scores about the same as 0.6B on
+  zh. On pl it scores better (FLEURS pl 36.6 against 44.3).
+- **Whisper large-v3 is not real-time** on this CPU (RTF about 1.5). Its sample is too small for a
+  ranking.
+- **AISHELL-4 is hard for every engine** (33–85 %). Nemotron is best there (33.2), with no empty
+  text. Far-field conversational Chinese is the closest set to the real meeting room.
+- **`TranscriptLanguage.Guess` works on English.** It labels 92–100 % of the English finals
+  correctly on FLEURS and the meeting sets. It is lower on Common Voice, VoxPopuli and AMI (63–96 %),
+  where the text is short or in a wrong language.
+- **Part numbers survive badly** (loose, meeting-11labs, of 96): Gladia 53, Whisper turbo 52,
+  Cohere 50, Qwen3-ASR 0.6B 34, Nemotron 4.
+
+Cost: Gladia streamed about 1.25 h of audio, about EUR 0.85. ElevenLabs synthesised 9,630
+characters once, plus about 20 characters to find usable voices.
+
+### TranscriptLanguage labels by script before the room prior
+
+- **Done.** This closes the ADR 0061 open item about the `TranscriptLanguage.Guess` room prior, for two cases. Issue #295.
+- **Script first.** Hangul gives `ko`. Kana gives `ja`. Han characters without kana give `zh`. The room does not change these labels. Before, Han text in a room without `zh` gave the first Latin room language, for example `de`. Before, it gave `ja` only in a room that contained `ja`.
+- **Latin text.** A room without a Latin language now accepts the best-scoring Latin language at one signal. If none scores, the label is `en`. Before, the label was `room[0]`, for example `zh`. The `zh` column showed the English text without a translation, and MT got the wrong source language.
+- **Unchanged.** A room with a Latin language keeps the old scores and the outside-room threshold. Cyrillic keeps its room check. Issue #297 tracks the Cyrillic fix.
+- **Needs PR #294.** `NemotronAsrProvider` forces the language when a room has one language, so `Guess` does not run there. English in a Chinese-only room is translated only when PR #294 removes that forcing and every final goes through `Guess`.
+
+### Nemotron never gets a fixed language
+
+- **Bug.** `StartAsync` passed the room language to the model as the prompt language when the room had one language. Each final skipped `TranscriptLanguage.Guess` and took the room language as its label.
+- **Fix.** `StartAsync` always starts the stream with `auto`. Each final takes its label from `TranscriptLanguage.Guess`. The `forced` path and `PromptLanguage` (the zh to zh-CN and ja to ja-JP mapping) are removed. Nothing else used them.
+- **Closed item.** This closes the ADR 0061 open item for `NemotronAsrProvider`. See issue #293 and PR #294.
+- **Open item.** The room prior in `TranscriptLanguage.Guess` stays. ADR 0061 tracks it.
+
+### Automatic recognition language (ADR 0061)
+
+Transcription never limits the recognition language. Room languages set only the columns, the
+dropdown and the translation targets. Speakers mix zh with en, de or pl. Before the meeting,
+nobody knows which languages they will speak. The rule: the recognition language comes only from
+the system's own judgement, never from a human setting.
+
+- **Gladia** keeps `code_switching` and sends no `languages`. The code already does this.
+- **Benchmarks** (PR #285) choose models by the auto room scores. A forced room is only for diagnosis.
+- **Open item:** `NemotronAsrProvider` conflicts with this rule in two places. For a one-language
+  room, `StartAsync` forces the prompt language. Also, `_forced ?? TranscriptLanguage.Guess(…)`
+  skips the language guess. A separate ticket removes both.
+- **Open item:** `TranscriptLanguage.Guess` uses the room languages as a prior for the label. A
+  Latin language outside the room needs a score of 4 or more. Chinese text in a room without zh
+  becomes ja. The fallback is the first room language. This changes the label, not the recognition.
+  A separate ticket decides whether to keep it.
+
+### Gladia session does not reconnect after a deliberate stop
+
+- **Bug.** `DisposeAsync` sends `stop_recording` and closes the socket. The receive loop still waits in `ReceiveAsync`. When the server ends the connection, the loop catches a `WebSocketException`. It emits the non-fatal error "Connection lost, reconnecting" and starts a backoff.
+- **How it showed.** `MeetingSession.DisposeAsync` disposes the ASR session while `PumpAsync` still reads `Events`. The false error reached `ErrorOccurred` and the operator after every meeting. The ASR benchmark (PR #285) logged it after every session.
+- **Fix.** `DisposeAsync` sets the `volatile` flag `_stopping` before it sends `stop_recording`. The filter `catch (WebSocketException) when (_stopping)` ends the loop without an error and without a reconnect. A server Close frame still ends the loop through the `Close` branch and emits `Ended`.
+- **Test seam.** `HangUpOnFirstWriteStream` returns EOF after the first write (`stop_recording`). It holds the next write (the close frame) for 500 ms. Without the hold, `DisposeAsync` cancelled the loop before the loop saw the EOF on Windows and macOS. The red test then passed on those systems. With the hold, the red test failed on every OS.
+
+### Gladia session closes its event stream on every exit
+
+- **Bug.** `GladiaAsrSession.Events` never completed when `DisposeAsync` cancelled the session during the reconnect backoff. A reader that reads `Events` to the end then waits forever.
+- **How it showed.** The ASR benchmark (PR #285) hung on close. It reads `Events` to the end without a token.
+- **No operator impact.** `MeetingSession` reads `Events` with a token. It cancels that token after it disposes the session. Only `tools/Kanal.Doctor` reads without a token.
+- **Fix.** `ConnectAsync` runs the receive loop inside `try/finally { _events.Writer.TryComplete(); }`. One place covers every exit: normal end, cancellation in the backoff or in `_sendLock.WaitAsync`, and any other exception.
+- **Test seam.** An internal constructor takes a `Func<CancellationToken, Task<WebSocket>>` that opens the socket. The test uses `WebSocket.CreateFromStream` over an empty `MemoryStream`. Its first receive throws `WebSocketException`.
+- **Closed item.** The session reported "Connection lost, reconnecting" after a deliberate `stop_recording`. PR #288 fixed this. See "Gladia session does not reconnect after a deliberate stop" above.
+
+---
+
+## 2026-10-17
+
+### Local transcription benchmark
+
+`tests/Kanal.AsrBenchmark` measures the local transcription models on this machine. It does not run
+in CI, because it needs the model files, the test audio and the local hardware. CI runs its scoring
+tests (`AsrBenchmarkScoringTests`).
+
+Every clip goes through the session of `NemotronAsrProvider` in 20 ms frames, as from the capture
+layer. The benchmark builds the recognizer itself, so that the thread count and the execution
+provider can change. A parity check runs the product provider on the meeting clips: 12 of 12 texts
+were identical. Offline models get Silero VAD segments (500 ms minimum silence). A segment's text is
+a final. Offline models give no partials.
+
+It measures, per model and execution provider:
+
+- the load time, the working set after the load, the peak working set and the peak minus the working
+  set before the load;
+- CER (zh) and WER (de, pl) for a room of the clip's language and for a zh/de/pl room, also over
+  the clips whose reference has no digit;
+- the share of finals that `TranscriptLanguage.Guess` labels correctly in the zh/de/pl room;
+- how many part numbers (`KB-4471`, `X5CrNi18-10`, `IP67`) survive: strict (verbatim) and loose
+  (case and separators ignored);
+- the real-time factor (RTF) with the audio fed as fast as possible. RTF is the session wall time
+  divided by the audio fed. For Nemotron the audio fed includes 2 s of silence padding per clip;
+- with real-time pace: the decode time per chunk, the time from the speech end to the final, and
+  the time from the speech onset to the first partial;
+- 1, 2 and 4 concurrent sessions on one recognizer;
+- 1, 2, 4 and 8 threads for the default model.
+
+Test audio:
+
+- FLEURS test split (`google/fleurs`, CC-BY-4.0), the first 20 clips per language at a pinned
+  revision. `fetch` reads the start of each test archive as a stream, about 42 MB.
+- The 12 meeting sentences of the translation benchmark. `fetch` synthesises them locally with
+  Piper voices through sherpa-onnx (zh huayan, de thorsten, pl gosia). No text leaves the machine.
+  Windows has no local German or Polish SAPI voice; Piper covers all three languages on every OS.
+
+Run it from the repo root:
+
+1. Fetch the audio and the default model, once:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch
+   ```
+
+2. Optional: fetch the three candidate models (2.7 GB) and the Silero VAD:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --candidates all --no-clips
+   ```
+
+3. Run the benchmark:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.AsrBenchmark -- --provider cpu --streams 1,2,4 --threads 1,2,4,8
+   ```
+
+Options: `--provider cpu,cuda,coreml`, `--model <id,...>`, `--phases accuracy,realtime,streams,threads`,
+`--clips N` (clips per set and language), `--rt-clips N`, `--burn N` (busy background threads),
+`--data <folder>` (default `LocalApplicationData/Kanal/asr-bench`), `--models <folder>` (default:
+the Kanal models folder), `--out <folder>`. The run writes `kanal-asr-benchmark-<os>-<time>.md` and a
+`.json` file with one flat row per number.
+
+The NuGet runtime of sherpa-onnx 1.13.8 is CPU only on win-x64. A child process detects the fallback
+and the report names it. For CUDA:
+
+1. Download `sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2`
+   (478 MB) from the sherpa-onnx release. Download `nvidia-cudnn-cu13` 9.27 (436 MB wheel) from PyPI.
+2. Put the DLLs from the archive's `lib` folder and the wheel's `nvidia/cudnn/bin` into one folder.
+   The CUDA 13 toolkit supplies cuBLAS and the runtime through `PATH`.
+3. Build with `dotnet build -c Release -p:SherpaNative=<folder> tests/Kanal.AsrBenchmark`. Then run
+   with `--no-build --provider cuda`.
+
+Results on a Ryzen 9 PRO 8945HS (8 cores, 16 threads), Windows 11, 2026-10-17:
+
+| Model | Load s | Peak MB (process) | zh CER | de WER | pl WER | RTF | Final after speech end p50/p95 s (n=9) | 4 streams mean RTF (offline feed) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Nemotron 560 ms (default) | 2.2 | 958 | 22.3 | 12.0 | 22.5 | 0.18 | 2.67/3.74 | 0.32 |
+| Nemotron 160 ms | 2.1 | 962 | 25.2 | 14.2 | 24.9 | 0.53 | 2.16/2.62 | 1.26 |
+| Whisper large-v3-turbo | 2.5 | 2744 | 33.0 | 6.9 | 13.5 | 0.25 | 2.50/3.13 | 0.63 |
+| Qwen3-ASR 0.6B | 3.7 | 2804 | 7.9 | 9.6 | 50.5 | 0.20 | 1.88/2.64 | 0.30 |
+
+CPU, 4 threads, zh/de/pl room, 20 FLEURS clips per language. Two limits of these recorded numbers:
+the Nemotron RTF includes 2 s of silence padding per clip, so it is higher than the true RTF; and
+"Peak MB" is the working set of the whole process, not of one model. The benchmark code now divides
+by the audio fed, and it reports the peak minus the baseline before the load. The follow-up PR
+re-measures the full matrix. It adds English, a Gladia cloud baseline and number-normalised scoring.
+The real-time columns come from 9 clips, so p95 is the maximum. Offline models give their first text
+only at the segment end: 6.7–7.3 s after the speech onset (p50). Nemotron 560 ms gives its first
+partial 0.84 s after the onset. The loose part-number counts below were recorded before the
+word-boundary fix. The old check could match across word boundaries. The follow-up PR re-measures
+them. Whisper's strict count is 1 of 4 in German and Polish: 1 of 2 in German, 0 of 2 in Polish.
+
+Apple M4 (second session, same benchmark): CPU 4 threads RTF 0.08; CoreML about 45 % slower (RTF 0.12).
+4 threads is best (8 threads: RTF 0.118). FLEURS zh CER 21.1, de WER 11.6, pl WER 20.0.
+
+CUDA (RTX 3000 Ada laptop, partial run, 8 FLEURS clips per language): Nemotron 560 ms loads in 4.9 s.
+RTF is 0.578 forced and 0.448 auto, against 0.18 on the CPU. 1/2/4 streams give a mean RTF of
+0.434/0.450/0.590. The real-time decode p95 is 229 ms (CPU: 91 ms). Nemotron 160 ms reached RTF 1.283;
+the run stopped there. CUDA is slower than the CPU here. The cause is not measured. Probably the
+CUDA provider does not run the quantized int8 operators. They fall back to the CPU. The tensors
+move between the devices for each chunk.
+
+Findings:
+
+- **Nemotron writes numbers as words.** "KB-4471" becomes "KB cztery tysiące czterysta siedemdziesiąt
+  jeden"; "M10" becomes "M zehn". No part number survived, also with the loose check (0 of 8).
+  Whisper kept 4 of 4 in German and Polish (loose). FLEURS references hold digits, so this probably
+  costs Nemotron WER points there too. The recorded numbers do not separate the two faults. The
+  benchmark now also scores the clips without digits; the follow-up re-run gives that number.
+- **Nemotron emits Thai letters on Chinese.** 3 of 24 zh clips contain runs of "อ" where a foreign
+  name was spoken (both rooms).
+- **Whisper drops Chinese characters** ("摩尔多瓦的首都" → "多的首都"). Its zh CER of 33 is too high
+  for this model. The cause is not investigated; the sherpa-onnx Whisper token decoding is a suspect.
+- **Qwen3-ASR 0.6B is weak on Polish** (WER 44–51) but best on Chinese (CER 7.9).
+- **The 160 ms chunk does not pay.** It is 3× slower than 560 ms, and it is less accurate. The final
+  comes only 0.5 s earlier, because the endpoint rules dominate.
+- **The final comes 2.7 s after the speech end** (p50), not 1.6 s. The rule counts blank frames, and
+  the last chunk must fill first.
+- **Run-to-run variance is about 25 %.** The same 6 clips at 4 threads gave RTF 0.178 and 0.228 in
+  one run. Other applications ran on the machine.
+
+Recommendations (no product change in this PR):
+
+- Keep `NumThreads = clamp(ProcessorCount / 2, 1, 4)`. 4 threads was best on both machines; 8 threads
+  gave no gain over 4 (RTF 0.260 against 0.228 here, inside the run-to-run variance).
+- Keep the 560 ms model and the CPU provider. Do not ship CUDA for transcription.
+- Add inverse text normalisation (number words to digits) or a code-aware post-pass before the
+  translation stage. Part numbers are the meeting's key content.
+- Filter Thai-script runs from Nemotron output in a zh/de/pl room.
+- Re-test Whisper large-v3-turbo after the Chinese character loss is explained. It is the only
+  candidate that keeps part numbers, but it has no partials and its process peaked at 2.7 GB working
+  set.
+
+---
+
+## 2026-10-14
+
+### The ruler magnifies like a Dock
+
+Issue #273. The first version of the hover effect had 5 steps around the hovered tick, with no
+animation, and all ticks had the same thickness and brightness.
+
+- **Pointer, not tick.** `TranscriptRulerViewModel.PointerAt(y)` takes the pointer position in the
+  strip. Each tick gets a weight of its distance `d` (in DIP) to the pointer. The curve is
+  `exp(-(|d|/18)^1.3)`. An exponent of 2 gives a Gaussian. An exponent of 1 gives an exponential.
+  The value 1.3 leans to the exponential: a sharper peak and a heavier tail. The next tick keeps
+  67% of the rise, where a Gaussian keeps 78%. A tick four ticks away keeps 8%, where a Gaussian
+  keeps 2%. The weight is 1 at the pointer. The spread is the 18 DIP in the formula. A tick more
+  than 4 spreads (72 DIP) away has weight 0. The hovered row no longer decides the tick under the
+  pointer, so the curve moves between two ticks without a jump. `Hover(tick)` now only drives the
+  preview card.
+- **Three values per tick.** `Reach` (length), `Thickness` and `Glow` (opacity) are each a blend
+  from the resting value to the peak by the weight. Rest: 10, 1, 0.55. On screen: 16, 2, 0.9.
+  Peak: 40, 3.5, 1. A tick on screen is never weaker than its on-screen value. `Reach` and
+  `Thickness` travel in one value, `TickShape`. One pointer move notifies each tick once.
+- **Skew while the pointer moves.** The view model keeps a skew between -1 and 1 from the pointer
+  speed. The speed that gives a full skew is 350 DIP/s. A filter with a time constant of 90 ms
+  smooths the skew. On the side the pointer moves towards, the spread shrinks to 60% of 18 DIP at a
+  full skew. On the side the pointer left, it grows to 240%. The tick under the pointer has weight 1
+  at any skew. A pointer that stops thus gives the even shape in about 0.3 s.
+  - `Relax()` pulls the skew to 0 only when the pointer has been still for 50 ms. A frame between
+    two pointer events must not pull a moving pointer's skew down, or the skew would depend on
+    where the frames fall between the events.
+  - The speed and the decay use two time stamps. A move after the last one by less than 1 ms gives
+    no speed. A pointer that leaves the strip resets the skew.
+  - A move of 10 DIP/s counts as slow: the skew is 0.03 and the two sides differ by 0.7 DIP.
+  - The tests give the view model a `TimeProvider` they control.
+- **Drawn values, no transition.** Each tick has target values (`Shape`, `Glow`) and drawn values
+  (`DrawnShape`, `DrawnGlow`). The view draws the drawn values. `Relax()` moves them towards the
+  targets with an exponential filter. The time constant is 15 ms to grow and 60 ms to shrink, so a
+  tick grows fast and eases back. The filter does not depend on the event rate. A XAML transition
+  does: each pointer event restarts it. A recording with transitions showed the bump 100 DIP behind
+  a fast pointer, with the tick under the pointer still at its resting length.
+  - The ruler raises `NeedsFrame` whenever it is settling. The view then calls
+    `TopLevel.RequestAnimationFrame`, and each frame calls `Relax()` on both rulers. The frames
+    stop when no tick is settling. A timer would run when nothing needs drawing, and it would keep
+    the view alive.
+  - A tick whose on-screen state changes is drawn at once. The rest of the bump keeps easing, so a
+    new sentence or a scroll does not make it jump.
+- **Drawing.** A tick is a fixed 28 x 3.5 rectangle (`TickWidth`, `TickHeight`). Its length and
+  thickness are a scale transform (`TickScale`) from `DrawnShape`, so a frame never starts a layout
+  pass. The peak of 40 DIP is wider than the 30 DIP column. The scale draws outside the layout
+  box, 5 DIP on each side. The `ItemsControl` of the ruler clips by default, and it cut the peak to
+  30 DIP in a render of the whole window. It has `ClipToBounds="False"` now, and a test checks that
+  no ancestor of a tick clips. The view sends the pointer position (`PointerMoved`) and the exit
+  (`PointerExited`).
+- **Contrast trade-off.** The operator asked for dim resting ticks. The ruler sits only on Sheet.
+  There a resting tick has 1.9–2.3:1 contrast, below the 3:1 of `ui-design.md`. The design
+  document now records this as the one exception. On-screen ticks reach 3.1–4.1:1 and the tick
+  under the pointer 3.5:1 or more.
+- **Known limit.** The ruler that is not shown keeps its last pointer position. This matters only
+  if the shown ruler switches by keyboard while the pointer rests on the strip. The next pointer
+  move or leave corrects it.
+- **Tests.** `TranscriptRulerTests` cover the resting values, the peak at the pointer, the
+  symmetric fall-off, no jump between two ticks, far ticks at rest, leave, the on-screen floor,
+  resize, one notification for each tick, the skew in both directions, a slow move, the settling,
+  the reset, the drawn values (grow, shrink, settle, leave, a fast move), no jump on a new
+  sentence or a scroll, the frame request, and a steady speed reading. `ColumnScrollWiringTests`
+  cover the pointer in the real view, the animation frames, and the clipping.
+
+### Recommended badge on the Translation tab
+
+The model row shows a *Recommended* pill next to the name of the first `LocalModelCatalog` entry.
+
+- **No catalog field.** `ModelItemViewModel.IsRecommended` is true when the row id equals
+  `LocalModelCatalog.Models[0].Id`. The catalog already states the rule: the first entry is the
+  recommended default. A second source of truth could drift from the row order.
+- **Translation rows only.** The *None* row and the transcription (ASR) rows never show the pill.
+  Only the `LocalModelInfo` constructor sets `IsRecommended`. The ASR list has no recommendation.
+- **Colours.** The pill uses `BrandWash` for the fill and `Brand` for the text. Both exist in the Light
+  and Dark variants, so no new resource is needed.
+- **Text.** The key `settings.model.recommended` exists in en, zh, de and pl.
+
+### Hy-MT2 1.8B is the recommended local translation model
+
+`LocalModelCatalog` has a new first entry: `hy-mt2-1.8b` (Tencent Hy-MT2 1.8B, Q4_K_M, 1133080448
+bytes, Apache-2.0). The first entry is the recommended model. The other three entries stay.
+
+- **Measured.** The test used the production prompt on 12 zh/de/pl meeting sentences, 2 targets each.
+  chrF: Hy-MT2 55.5, Qwen3.5 2B 42.6, Qwen3.5 4B 57.3. All 12 part numbers stayed correct.
+  Latency per sentence (2 targets) on a Vulkan GPU: Hy-MT2 1.19 s, Qwen3.5 2B 2.05 s, Qwen3.5 4B
+  3.76 s. On an idle CPU: 2.49 s, 2.93 s, 5.96 s.
+- **No reasoning prefill.** `AssistantPrefill` is null. A Qwen-style `<think>` prefill lowered chrF
+  from 55.5 to 48.0.
+- **Runtime.** The architecture is `hunyuan-dense`. It runs on LLamaSharp 0.27.0 without a change.
+- **No change for existing users.** `ActiveTranslationModelId` null means *None* (cloud
+  translation), not the first catalog entry. An existing id still resolves by `Find`. Only the row
+  order in Settings and the *recommended* position change. A new install does not select Hy-MT2
+  by itself.
+- **Not added: HY-MT1.5.** The Tencent HY Community License excludes the EU, the UK and South Korea.
+  Hy-MT2 uses plain Apache-2.0.
+- **Licence list.** `OpenSourceNotices` lists software packages only, not models. The model row in
+  Settings shows the licence of each model, so Hy-MT2 needs no extra entry there.
+
+### Cloud translation with DeepL (ADR 0060)
+
+*Local · Cloud* runs when a DeepL key exists. `DeepLMtProvider` is a new `IMtProvider` in
+`Kanal.Providers.DeepL`. The orchestrator is unchanged. Only `PipelinePlanner` chooses the vendor.
+
+- **The planner resolves the key.** Local transcription with cloud translation needs a stored key
+  or the `DEEPL_API_KEY` variable. Without a key the mode row says *no cloud translation key — add
+  one in Settings*. The row names no vendor. *Cloud · Cloud* is unchanged: Gladia translates
+  inside its own session and ignores the DeepL key.
+- **Settings holds the key.** The *Translation* tab has one masked field. The key is stored in
+  `settings.json` as an `ApiKeyEntry` with provider `deepl`, like the Gladia keys.
+- **One request per target language.** The requests run in parallel. Recent finals go in DeepL's
+  `context` parameter. DeepL does not bill that parameter. A key that ends in `:fx` uses
+  `api-free.deepl.com`. Other keys use `api.deepl.com`.
+- **Codes.** zh is `ZH-HANS` as target and `ZH` as source. en is `EN-GB` as target and `EN` as source.
+  A language outside DeepL's target list is skipped, and the other languages still translate.
+- **Errors.** `MtProviderException` carries a code. 456 maps to *quota used up*. 403 maps to *key not
+  accepted*. 429, every 5xx, a timeout and a network error map to *service unavailable*
+  (`mt.unavailable`). `AsrEvent.Error.Code` carries the code to the host. The host shows a message in
+  the operator's language. A 400 keeps the English message.
+- **One warning per meeting for 403 and 456.** After the first 403 or 456, the provider sends no
+  more requests and returns no translations. The planner builds a new provider for the next meeting.
+  A timeout or a 5xx does not latch: the next line tries again.
+- **One shared `HttpClient`.** Every DeepL provider uses one static client with a 15 s timeout.
+- **Not built:** formality setting, glossary, usage and cost display, a second vendor.
+
+### Keypoints
+
+The tab "Points and decisions" and the menu item "Pin to Points" are now **Keypoints** and **Pin to Keypoints**.
+
+- **Names.** English "Keypoints", Chinese "要点", German "Kernpunkte", Polish "Kluczowe punkty".
+- **Strings only.** The i18n keys and the C# identifiers keep their names (`assistant.tab.points`, `PointsTab`, `PinToPoints`).
+- **Item kinds.** The item labels POINT, PROPOSAL and DECISION stay. They name the kind of one item, not the tab.
+### Bubble menu
+
+The transcript menu now opens on a right-click anywhere on a bubble.
+
+- **Target.** The bubble border carries the shared `UtteranceMenu`. The border has a transparent background, so the padding and the header receive the click.
+- **Text.** On a line, the menu uses the selection or the whole line, as before. On the bubble, it uses `BubbleViewModel.Text`: the translation in a translation column, the source in the ORIGINAL column.
+- **One menu.** A line handles the context request first and marks it handled. The bubble menu does not open then.
+- **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
+  Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
+
+### All target languages in one batch
+
+Before, `LlamaSharpMtProvider` translated the target languages one after the other. Each call also
+made a new llama.cpp context through `StatelessExecutor`. Now:
+
+- The provider sends all target prompts in one call to `ITextGenerator.GenerateAsync(prompts)`.
+- `LlamaCppBackend` decodes them as parallel sequences in one `BatchedExecutor`.
+- The executor stays alive between calls, so a call no longer makes a new context.
+- `BatchedExecutor` never reuses a sequence id. llama.cpp rejects an id at or above `SeqMax` for
+  recurrent and hybrid models such as Qwen3.5, and at or above 256 for the others. The backend makes
+  a new executor before `SeqMax` ids are used. This is right for both kinds of model.
+- `SeqMax` is 8: two calls with 4 targets, and a new context about every 4 sentences.
+- A hybrid model allocates `SeqMax` recurrent cells for the whole life of the executor. This is an
+  estimate from the model configs, not a measurement: about 310 MiB at 16 cells for Qwen3.5 2B and
+  about 800 MiB for 4B. At 8 cells it is about half. Hy-MT2 and Gemma 3 cost almost nothing.
+- The benchmark is the regression check for the id budget. It makes more than 8 calls on Qwen3.5.
+  Before the fix, the third call failed with `NoKvSlot`.
+
+Measured with Vulkan on an RTX 3000 Ada Laptop GPU, one sentence in flight (seconds per sentence):
+
+| Model | 2 targets before → after | 3 targets before → after | 4 in flight utt/s before → after |
+|---|---:|---:|---:|
+| Hy-MT2 1.8B | 1.26 → 0.39 | 1.90 → 0.45 | 0.81 → 2.22 |
+| Qwen3.5 2B | 1.26 → 0.41 | 1.79 → 0.56 | 0.80 → 2.25 |
+| Qwen3.5 4B | 2.02 → 0.95 | 3.15 → 1.21 | 0.49 → 1.11 |
+
+The chrF stays the same within the run-to-run noise (±1.5). The run used `SeqMax` 16.
+
+### Local translation on the GPU
+
+Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
+CPU, and `GpuLayerCount = 999` had no effect. Now:
+
+- `LLamaSharp.Backend.Vulkan` is always in. It needs only the GPU driver and works with NVIDIA, AMD
+  and Intel GPUs. It adds about 20 MB to the MSI download and 65 MB to the install folder.
+- Apple silicon uses Metal. The osx-arm64 build in `LLamaSharp.Backend.Cpu` already contains it.
+- `LLamaSharp.Backend.Cuda12` is optional (`-p:KanalCuda=true`). It adds about 600 MB and needs the
+  CUDA 12 toolkit, so it is not in the installer.
+- LLamaSharp selects the library: CUDA, then Vulkan, then CPU. It falls back when a library does not
+  load. `LlamaAcceleration` reads the loaded library and `llama_supports_gpu_offload()`, and logs
+  the result as `Accelerator`.
+- `KANAL_ACCELERATOR=cpu|vulkan|cuda` forces one library. With `cpu`, no layer goes to the GPU.
+
+Limits:
+
+- LLamaSharp tries Vulkan only when `vulkaninfo --summary` runs. On Linux this needs `vulkan-tools`.
+- LLamaSharp 0.27 `DryRun` always returns null libraries. Do not use it to detect the backend.
+
+### Local translation benchmark
+
+`tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
+because it needs the model files and the local hardware.
+
+It sends 12 meeting sentences (4 each in zh, de and pl) through the production path:
+`LlamaSharpMtProvider` → `LlamaSharpTextGenerator` → llama.cpp. Each sentence goes to the two other
+languages. The report gives, per model:
+
+- the load time of the weights;
+- the mean sentence chrF against the reference translations in `Corpus.cs`;
+- how many translations keep every part number (`KB-4471`, `X5CrNi18-10`, `IP67`) verbatim;
+- script leaks (CJK in a de/pl output, no CJK in a zh output) and empty outputs;
+- for N sentences in flight, the average and p95 latency per sentence and the throughput;
+- the latency per sentence for 1, 2 and 3 target languages, with one sentence in flight.
+
+Two different kinds of load:
+
+- **Target languages.** Each sentence goes to every other meeting language. The provider decodes
+  all targets of a sentence in one batch. On a GPU, 3 targets take little more time than 1. The
+  corpus has English references too. They serve the 3-target latency sweep, where the third target
+  is English. The benchmark does not score English output. The quality columns use the two meeting
+  targets only.
+- **Sentences in flight.** N streams copy a meeting where a new final arrives while earlier finals
+  still translate. Each stream sends its next sentence when the previous one is done, so the model
+  is always busy. The generator runs one request at a time. Thus the latency with N sentences in
+  flight is about N × the latency with one, and the throughput (utt/s) is the real capacity number.
+  The quality columns use only the first stream of the first level.
+
+Run it:
+
+1. Download the models in Kanal Settings, or download other GGUF files.
+2. Run the benchmark from the repo root:
+
+   ```bash
+   dotnet run -c Release --project tests/Kanal.Benchmark -- --gguf D:/models/Hy-MT2-1.8B-Q4_K_M.gguf --streams 1,2,4
+   ```
+
+Options:
+
+- `--models <folder>`: the folder with the catalog models. The default is `%APPDATA%/Kanal/models`.
+- `--gguf <file>`: an extra model. Repeat it for more models.
+- `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
+- `--streams 1,2,4`: the levels of sentences in flight.
+- `-p:KanalCuda=true` (before `--`): add the CUDA 12 backend. Vulkan and Metal are always in.
+- `KANAL_ACCELERATOR=cpu` (environment): force the CPU, to compare it with the GPU.
+
+The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
+
+Smaller candidates to measure (HF API, 2026-10-14):
+
+| Model | GGUF file | Size | Licence | Note |
+|---|---|---:|---|---|
+| Hy-MT2 1.8B | `tencent/Hy-MT2-1.8B-GGUF` · `Hy-MT2-1.8B-Q4_K_M.gguf` | 1.13 GB | Apache-2.0 | Dedicated MT model, zh/de/pl. Newer than the llama.cpp in LLamaSharp 0.27.0: check that it loads. |
+| HY-MT1.5 1.8B | `tencent/HY-MT1.5-1.8B-GGUF` · `HY-MT1.5-1.8B-Q4_K_M.gguf` | 1.13 GB | check LICENSE | Same architecture (`hunyuan-dense`), older GGUF. |
+| Qwen3.5 0.8B | `unsloth/Qwen3.5-0.8B-GGUF` · `Qwen3.5-0.8B-Q4_K_M.gguf` | 0.53 GB | Apache-2.0 | No reasoning by default. Speed floor; Polish expected weak. |
+| Qwen3 1.7B | `unsloth/Qwen3-1.7B-GGUF` · `Qwen3-1.7B-Q4_K_M.gguf` | 1.11 GB | Apache-2.0 | Reasoning model: use `--gguf-nothink`. |
+
+Rejected: LFM2.5 1.2B, SmolLM3 3B and Llama 3.2 1B do not support Polish. TranslateGemma has no model
+below 4B. Gemma 4 E2B and Gemma 3n E2B are over 2.5 GB.
+
+## 2026-10-13
+
+### Post-meeting speaker separation ([#108](https://github.com/TONiiV/Kanal/issues/108), ADR 0055 slice 3)
+
+The sidebar menu of a recorded meeting has *Re-identify speakers*. It runs sherpa-onnx `OfflineSpeakerDiarization` on `audio.wav` and gives each final utterance a new tag.
+
+- **Runtime.** The new project `Kanal.Providers.LocalDiarization` references `org.k2fsa.sherpa.onnx` 1.13.8. This is the package and version of PR #181. `SherpaSpeakerDiarizer` is the only class that touches the native library.
+- **Models.** One default pair, no picker ([#179](https://github.com/TONiiV/Kanal/issues/179)). The first run downloads both files through `ModelDownloadManager` and checks SHA-256.
+  - Segmentation: pyannote segmentation 3.0, MIT, 5,992,913 bytes. The GitHub release has only a `.tar.bz2`, and the BCL has no bzip2. The catalog now takes the plain `model.onnx` from Hugging Face, pinned to commit `9403a69`. This closes open item 1 of the slice-2 entry below.
+  - Embedding: 3D-Speaker CAM++ zh/en advanced, Apache-2.0, 28,281,164 bytes, from the GitHub release. Slice 6 ([#111](https://github.com/TONiiV/Kanal/issues/111)) replaces it after zh/de/pl measurements.
+- **Mapping.** Each utterance takes the diarized speaker with the largest total time overlap. Tags are `D01`, `D02`… in the order that people first speak. An utterance that no turn covers keeps its original tag. The stored view gives each tag a palette colour by first appearance, as before.
+- **Timing.** The ASR clock and the recording both start on the first accepted frame. Both skip a pause. So `TStartMs` is the offset into `audio.wav`. A Gladia reconnect restarts the ASR clock but not the recording. Utterances after a reconnect can map to the wrong turn.
+- **Non-destructive write.** `transcript.jsonl` is never rewritten. The result goes to `speakers.json` beside it: a map from utterance id to new tag. `StoredTranscript.Utterances` applies the map. Delete `speakers.json` to get the original tags back.
+- **Why not `Speaker.MergedFrom`.** ADR 0055 decision 4 keeps the original tag through `MergedFrom`. That works for a merge of many tags into one. Gladia gives one tag, `S01`, for the whole meeting. Separation splits that one tag into many speakers. `MergedFrom` cannot express a split, so a per-utterance sidecar keeps the original instead.
+- **Speaker count.** *Re-identify speakers* is a submenu. *Not sure* is the first item, then 2 to 8 people. A number goes to `NumClusters`. *Not sure* passes no count, and clustering then uses the threshold 0.8 (`SherpaSpeakerDiarizer.Clustering`). The count input in the Speakers tab stays in [#110](https://github.com/TONiiV/Kanal/issues/110).
+- **Why 0.8 and *Not sure* first.** The first real test had 3 people. The library default threshold 0.5 gave 47 tags. The diarization benchmark ([#111](https://github.com/TONiiV/Kanal/issues/111), PR #286) then measured both paths:
+  - Without a count, 0.8 gave the lowest DER: 13.5 % on 62 synthetic meetings and 8.1 % on the scripted 6-speaker meeting, against 23.3 % and 28.9 % at 0.5.
+  - With a count, sherpa often returned fewer clusters than asked (17 of 62 meetings). Two similar voices merge, and the operator cannot split them. The real 3-person meeting with count 3 got 2 tags.
+  - A false extra speaker costs one merge; a false merge cannot be undone. So *Not sure* is the default choice.
+  - The real recording still got 17 tags at 0.8. A real room is harder than TTS audio.
+- **Memory (PM decision, 2026-10-13).** The run reads the whole recording into one `float[]`: about 230 MB per hour, plus the PCM bytes. There is no chunking yet, and this is accepted for now. Chunking would also split the global clustering. The native call is synchronous and runs on a worker thread. It has no cancel; the run is manual, so the operator skips it by not starting it.
+- **Start during a run (PM decision, 2026-10-13).** The operator can start a meeting while a run is active. Start is not blocked.
+- **Model check.** sherpa-onnx 1.13.8 does not check the native handle and aborts on a model it cannot open. `SherpaSpeakerDiarizer` checks before the native call. A missing model file throws. On Windows, a model path with non-ASCII characters also throws, because the library marshals the path as ANSI. The row then shows the *failed* status line, and the host keeps running.
+- **Exports.** A `.kl` bundle carries `speakers.json`, and import accepts it. The bundle's `transcript.md` and the Markdown export of the just-stopped meeting use the new tags. `transcript.jsonl` keeps the original tags.
+
+Open items:
+
+1. Names typed by hand are not stored with a meeting yet, so decision 5 has nothing to protect. The speaker tab PR owns this.
+2. On Windows, a user name with non-ASCII characters (for example `Łukasz`) gets a clear *failed* message, not a result. A later fix copies the models to an ASCII path or uses a UTF-8 sherpa-onnx API.
+3. Hugging Face and GitHub release downloads can be blocked in mainland China.
+4. The speaker tab of the just-stopped meeting still lists the live tags.
+
+### The ruler shows the screen and pages through the transcript
+
+Issue #268. The reference is the message navigator of a chat app.
+
+- **Colour stays.** A tick keeps the colour of its speaker. The emphasis comes from length and
+  thickness, not from opacity. Thus every tick stays at 3:1 or more (`ui-design.md`).
+- **In view.** The view reports the utterance ids of the bubbles on screen to
+  `TranscriptRulerViewModel.SetVisible`. Their ticks get `IsInView`: reach 16 and height 3. This
+  replaces the "newest sentence" emphasis (`IsCurrent`). At the live edge the emphasis is at the bottom.
+- **On load.** A column reports its visible rows when it loads. Without this, a room that opens
+  with sentences in it shows no emphasis and no arrows until the first scroll.
+- **Reference column.** The leftmost shown column decides what is on screen. Rows in other
+  languages have other heights, so one column must decide. The arrows use the same column.
+- **Dock magnification.** `Reach` is a view-model value. The hovered tick reaches 28, the next
+  ticks 21 and 15. A tick never gets shorter than its in-view reach.
+- **One centre line.** The ticks and the arrows share the centre line of the ruler column. A
+  tick grows from that line to both sides. The down arrow follows the last tick
+  (`TrackLength`), with the same gap as the up arrow above the first tick.
+- **Arrows.** `PageUpCommand` brings the last sentence above the screen to the bottom of the
+  screen. `PageDownCommand` brings the first sentence below the screen to the top. A sentence cut
+  by the edge of the screen counts as not seen, so the arrow lands on it. The view reports the
+  whole rows next to the visible rows. When no row is whole, two cut sentences are the targets.
+  One lone cut sentence is taller than the screen; the arrow then steps past it. A page jump does
+  not mark a jump target.
+- **Order.** The page targets follow tick order, and a tick is added when its sentence becomes
+  final. The current providers finalise sentences in the order they start. A provider that
+  finalises out of order can make an arrow skip a sentence. Then insert ticks by start time.
+- **No reflow.** A disabled arrow keeps its space and hides only its glyph. The strip height does
+  not change when an arrow turns on or off.
+- **Tests.** `TranscriptRulerTests` (in view, reach, page targets, arrow state) and
+  `ColumnScrollWiringTests` (scrolling marks the ticks; the arrows page without a skip).
+
+### Pin to Points
+
+The transcript menu has a third item, **Pin to Points**. It adds the line to the Points tab.
+
+- **Core.** `MeetingInsights.Pin(utteranceId, text)` records a confirmed `Point` in the topic
+  `PinnedTopic`. The utterance is the source. A second pin of a pinned utterance returns null. A
+  dismissed (unpinned) pin allows a new pin. An analyst point on the same utterance does not block it.
+- **Host authority, text only.** Pins live in `MeetingInsights` in memory on the host, like analyst
+  points. They do not reach the relay, the room snapshot or the meeting record.
+  **Open decision:** saving pins in the meeting record changes the record schema. A human must decide this.
+- **Panel.** `AssistantViewModel.Pin` refreshes the list. A pinned item shows "PINNED", the speaker
+  and the time of the utterance, and the pinned text. Its cross button unpins. The list shows
+  without a connected analyst when at least one point exists. `ShowNoAnalystNote` hides then.
+- **Menu.** `ColumnViewModel` takes a pin handler. A browsed transcript passes none, so the item is disabled.
+  The item gets the same `CommandParameter` as the copy items: the selection of the clicked line, or the whole line.
+  The pin keeps that text.
+- **Final lines only.** `CanPin` needs a final line (`!IsPartial`) with its translation (`!AwaitingTranslation`).
+  The pin text never updates, so a partial line or a "…" placeholder cannot be pinned.
+- **Reserved topic.** `MeetingInsights.Record` refuses the topic `PinnedTopic`. The topic alone marks a pin.
+- **Language switch.** `MainViewModel` calls `Assistant.Refresh()`, so the pinned labels change language.
+- **Not here.** "Ask the agent" waits for the meeting agent PR (#248).
+- **Tests.** `PinnedPointTests` (Core) and `PinToPointsTests` (UI).
+
+### Selectable transcript lines
+
+The translation line and the source line of every utterance are selectable text.
+
+- **`SelectableTextBlock`.** Both lines use it in `MeetingRoomView`. The styles keep the same fonts,
+  sizes, line heights and muted partial colour. Selection stays inside one line. It does not cross utterances.
+- **One shared menu.** The `UtteranceMenu` resource is a `MenuFlyout`. It replaces the default menu of the
+  control. A new item is one `MenuItem` in the resource plus one command on `BubbleViewModel`.
+- **Menu text.** The `Opening` handler of the flyout reads the clicked line from `FlyoutBase.Target`.
+  It gives the selection of that line, or the whole line, to every item as `CommandParameter`.
+  A new item needs no code for this.
+- **Copy.** It copies the text of the menu. **Copy with speaker and time** writes
+  `[hh:mm:ss] Speaker: text` with the same text. The time is `TStartMs` of the utterance.
+- **Keys.** The control itself handles Ctrl+C and Ctrl+A.
+- **Clipboard seam.** `MainWindow` sets `MainViewModel.WriteClipboard`. Columns pass it to bubbles.
+  Tests use a fake.
+- **Tests.** `TranscriptCopyTests`: the text of the menu on the translation line and on the source line,
+  the speaker-and-time format, the menu items, and Ctrl+A.
+
+### Download ring in the Settings model rows
+
+A Settings model row that downloads shows the same ring as the status bar.
+
+- **One ring control.** `DownloadIndicatorView` has a `Bare` property. With `Bare="True"`, the pill
+  never shows its text. The row uses it in the place of the Download button, 28 DIP, with the model icon.
+- **One view model.** `ModelItemViewModel.Download` is a `DownloadItemViewModel` for the row.
+  The row ring and the tray ring share `RingSweep`, `CancelCommand` and the icon name.
+- **One progress text.** `ModelItemViewModel.ProgressLabel` ("42% · 286 / 682 MB") feeds the tray
+  summary and the row status text. The row error text still replaces it after a failure.
+- **Removed:** the Cancel button of the row, and the `settings.model.cancel` and
+  `settings.model.downloading` strings.
+- **Tests.** `DownloadTrayTests`: row and tray say the same progress, the row keeps its failure
+  message, the row ring has the tray icon and cancels the row.
+- **Centred glyph.** The ring grid sets `UseLayoutRounding="False"`. At 150% scale, layout rounding moved
+  the glyph 1 px up and left of the ring centre. Pixel position has no test; the fix is checked by eye.
+
+### Download indicator in the status bar
+
+A running model download shows at the right end of the main window status bar. Design reference:
+`design/download-indicator-demo.html`.
+
+- **`DownloadTray` feeds the indicators.** It watches `IsDownloading` on every `ModelRows` row except the None translation row.
+  A row that starts downloading adds a `DownloadItemViewModel`. A row that stops downloading sets
+  the item to Done, Cancelled or Failed, and a `TimeProvider` timer removes it after 3 s, 2 s or 8 s.
+  A diarization row joins with one more `Watch(row)` call. Its icon name comes from `ModelItemViewModel.Download`.
+- **Collapsed:** 28 DIP circle. A progress ring surrounds the model icon (`transcript`, `translate`).
+- **Pointer or keyboard focus:** the ring stays at the right end. Its centre turns into a cross.
+  The pill grows to the left and shows "name · 42% · 286 / 682 MB". The cross cancels the row,
+  like Cancel in Settings. The expansion snaps; it has no width animation.
+- **Done, cancelled, failed:** green ring with a tick, grey ring with a dash, red ring with "!".
+  A failed item shows the reason on hover. The row shows its Download button again in Settings.
+- **Settings open:** the indicator stays visible. Settings is modal, so it only shows progress.
+- **New brush `Done`** (Light and Dark) in `App.axaml` and the colour table of `ui-design.md`.
+- **Tests.** `DownloadTrayTests` use a manual `TimeProvider`: item appears, summary text, cancel
+  through the indicator, the three end states and their auto-hide, restart replaces the item.
+
+### Downloads survive the Settings window
+
+Closing Settings no longer cancels a model download.
+
+- **`ModelRows` owns the model rows.** It holds the translation and transcription
+  `ModelItemViewModel` rows, with the download state, progress and cancellation token of each.
+  `MainViewModel` creates it and exposes it as `ModelRows`, so it lives as long as the application.
+  The sidebar passes it to each `SettingsViewModel`. A reopened window shows the same row
+  instances: live progress, a working Cancel, and no second Download button.
+- **The mode list follows a finished download.** `MainViewModel` watches `IsDownloaded` on every
+  row. When it turns true, `MainViewModel` calls `RefreshPipelineStatus()`. The local modes and
+  "Generate title" become available without opening Settings again.
+- **Explicit Cancel and app exit still cancel.** `MainViewModel.Dispose()` calls
+  `ModelRows.CancelAll()`.
+- **`CancelDownloads` is now `OnWindowClosed`.** It stops the microphone test, the device
+  listener and the language subscription. It no longer touches downloads.
+- **Tests.** `SettingsViewModelDownloadTests`: closing keeps the download running, reopening shows
+  the same row and progress, and `Dispose` cancels. `TranslationStatusTests`: a finished download
+  makes the mode available. Tests that build `SettingsViewModel` without rows get their own rows.
+
+### One transcription model
+
+`AsrModelCatalog` ships one chunk size: 560 ms. The 160 ms and 1120 ms packages can return if measurements ask for them.
+Settings shows one row without the selector. The licence note uses the muted `Ink3` brush. A saved 160 ms or 1120 ms id gives the default.
+
+### Project icon chooser (PR #251)
+
+Choosing an icon in Project settings did nothing. The icon now changes.
+
+Cause, proven by CI run 38342718637: the glyph button had a `Command` bound through `$parent[Window]`.
+That binding resolved while the flyout was open. The test asserted a non-null `Command` before the click.
+The click still left `Glyph` null. Avalonia raises `Click` before it reads `Command`.
+The `Click` handler called `Hide()`. `Hide()` removed the popup from the logical tree and unbound `Command`.
+No command ran.
+
+Fix: `OnGlyphClick` runs `ChooseGlyphCommand`, then hides the flyout. Do not restore the `Command` binding.
+Test: `ClickingAGlyphInTheFlyoutChoosesItAndSaveStoresIt`.
+
+### Local transcription runs (ADR 0053, slice C-5)
+
+`PipelinePlanner` resolves `StageKind.Local` transcription to `NemotronAsrProvider`. *Local · Local*
+is available when a transcription model and a translation model are downloaded. *Local · Cloud*
+stays blocked. Its only reason now is the missing standalone cloud translator. `reason.localasr`
+is removed. *Resolved on 2026-10-14: DeepL is the standalone cloud translator (ADR 0060).*
+
+- **No model chosen means the recommended model.** Settings shows the 560 ms model as selected, so
+  the planner uses it too. The mode row says "not downloaded" until every part is on disk.
+- **A saved model id that the catalog no longer lists is the recommended model.** The planner does
+  not report an unknown model. A saved 160 ms or 1120 ms id therefore works after the catalog drops
+  those models. The two "unknown transcription model" strings are removed.
+- **Warm-up covers both stages.** Start loads the transcription model, then the translation model.
+  Each load has its own status line. A failed load of either model stops the Start.
+
+
+### The ruler draws one tick per sentence
+
+Part of #103.
+
+- The transcript ruler draws one tick for each final utterance. Partial utterances get no tick. The tick uses the colour of its speaker.
+- A tick no longer stands for a speaker turn. The speaker-turn grouping, the 72-slot fold and the grey `TickMixedColor` are deleted.
+- The pitch is 9 px while all ticks fit at 9 px. When they no longer fit, the real height of the strip is shared equally between all ticks. This happens at about 70 ticks in the default window. The view reports that height after each layout. The rows never add up to more than the strip, so the newest tick stays visible, also in a small window. A one-hour meeting fits without a scroll, and the ticks may touch.
+- When the ticks share the strip, a new sentence moves every earlier tick up a little. This is the price of keeping each sentence reachable. A row covers the strip between two neighbours, so a click always lands on the nearest tick.
+
+### Nemotron provider (ADR 0053, slice C-4)
+
+`NemotronAsrProvider` runs Nemotron 3.5 ASR Streaming through sherpa-onnx 1.13.8 in process. No mode
+resolves to it yet. Slice C-5 connects it to `PipelinePlanner`.
+
+Measured on the real model: 560 ms int8, CPU, 4 threads, Apple M4. The test fed 20 ms frames, as the
+capture layer does. Load takes 0.7–1.6 s. The real-time factor is about 0.09: 28.6 s of zh/de audio
+took 2.3 s. The provider runs on CPU only. Polish is not measured, because this Mac has no Polish
+voice for a test clip.
+
+`doctor asr <wav> [modelsDir]` downloads the default model if needed, transcribes the WAV and prints
+a Markdown report. `local-asr-windows.yml` runs the Core tests and `doctor asr` on a hosted Windows
+runner for every PR that touches the provider. The workflow posts the report as a PR comment. That
+runner has no NVIDIA GPU, so CUDA stays unverified until a GPU machine runs `doctor asr`.
+
+Four things the ADR did not anticipate, all found by running the model:
+
+- **The model does not report the language it heard.** The language is an input (a prompt id).
+  `auto` is the id for decoding without one. So `Caps.AutoLanguageDetect` is `false`.
+  sherpa-onnx filters `<de-DE>`-style tokens out of the result. A patched build recorded the raw
+  token sequence and showed no such token in any frame. That test used `auto`, `de-DE` and `zh-CN`
+  on seven synthesised de/en/zh utterances. So upstream has nothing to expose. A room of one
+  language forces that language (`zh` → `zh-CN`, `ja` → `ja-JP`). Any other room decodes with
+  `auto`. `TranscriptLanguage` then reads the source language back from the text. It checks the
+  script first. Then it checks distinctive letters and stopwords in every Latin language it knows.
+  A room language wins a tie. A language outside the room needs two signals (a score of 4). It was correct on every test sentence. A short Latin sentence with no
+  signal falls to the room's first Latin language. 2026-10-14: the check first counted only the
+  room's languages. An English sentence in a zh/de/pl room was labelled Polish, because "to" is a
+  Polish stopword.
+- **The first second of a stream is lost.** Speech that starts at sample 0 disappeared ("Alles hat
+  ein Ende." gone; with 300 ms of lead-in, "Alice hat ein Ende"). The stream is primed with one
+  second of silence when it is created. Priming again after an endpoint reset made things worse:
+  the padding counts as trailing silence and fired the next endpoint mid-sentence.
+- **Endpointing counts blank frames, not silence.** A stretch the model cannot transcribe — a
+  spoken part number — produces blanks, and with sherpa's 1.2 s rule a German sentence was cut at
+  "für K X", losing the number and the start of the rest. Rules are 2.4 s (nothing heard) and 1.6 s
+  (after speech), 20 s maximum; 1.6 s kept every test sentence whole. A final therefore lands
+  ≈1.6 s after the speaker stops, and translation starts then.
+- **Partial numbers.** On synthesised speech the model still loses digits: German "KX-4402" came
+  out as "Kx", Chinese as "KX47402". These are TTS clips, not a meeting; the stage-3 acceptance run
+  against Gladia on real speech decides whether this is good enough.
+
+Every sentence has one speaker label (`S01`) until diarization lands (#13).
+
+### Accent themes
+
+Ticket #192 of the Appearance spec (#187). ADR 0057 defines the rules.
+
+1. The Appearance tab shows five theme cards after the colour scheme cards. Each card shows two
+   orbs: the light and the dark `Brand` of the theme. A click applies the theme at once. The id
+   goes to `settings.json`. An unknown id gives Kanal indigo.
+2. `AccentThemes` holds the five themes. A theme sets `Brand`, `BrandHover`, `BrandPressed`,
+   `BrandWash`, `OnBrand` and the seven `AccentRamp*` colours, in Light and in Dark.
+3. `Appearance.Apply(AccentTheme)` writes these keys into both theme dictionaries. It also writes
+   the twelve glyph keys of check box, radio button and switch, because they repeat `OnBrand`.
+   Then it copies the ramp of the current variant into the root `SystemAccentColor*` keys.
+4. Tests run every theme in both variants. `OnBrand` on `Brand` and `BrandHover` reaches 4.5:1.
+   `Brand` reaches 4.5:1 on `Sheet` and 3:1 on `Paper`. The check glyphs reach 3:1 on
+   `SystemAccentColor`. The glyph test now lists the indeterminate pointer-over and pressed keys.
+5. A test compares every theme dictionary key before and after a theme change. Only the brand
+   family may change. The theme never touches `Sheet`, `Paper`, `Ink*`, `Rule*`, `BrandAccent`,
+   record, hold, alarm, warning, speaker and close-button colours.
+6. A headless render of each theme in both variants shows that a checked box and the settings
+   tab marker use the `Brand` of the theme.
+
+### Settings lists the transcription models (ADR 0053, slice C-3)
+
+Settings → Transcription → Local models now lists the three Nemotron 3.5 packages from
+`AsrModelCatalog` with the same row the translation list uses: pick, download with progress,
+cancel, delete, and the OpenMDW-1.1 review note.
+
+- **One row view model for both lists.** `TranslationModelItemViewModel` became
+  `ModelItemViewModel` and holds a list of parts: one GGUF for translation, encoder + decoder +
+  joiner + tokens for transcription. Readiness is "every part on disk".
+- **A resumed download fetches only the missing parts.** A cancelled download keeps the parts that
+  are finished. `ModelDownloadManager.DownloadAsync` skips every part already on disk. Delete shows
+  when any part is on disk, so the operator can free a partial download.
+- **No "None" row for transcription.** The translation list needs one because the cloud modes use
+  no local model. A local transcription model only matters to the local modes, so nothing chosen
+  means the recommended one (560 ms), and the mode row says "not downloaded" until it is. Save
+  writes null for `ActiveTranscriptionModelId` when the 560 ms row is selected, so the default
+  follows later catalog changes.
+- **Two radio groups.** Avalonia scopes `GroupName` to the window, so the shared row template takes
+  its group name from the view model.
+
+### Speaker tag management
+
+Part of #110. This slice does not depend on a diarization model.
+
+- The Speakers tab in `SidePanelView.axaml` is always present. With no speaker it shows `assistant.nospeakers`, bound to `MainViewModel.ShowNoSpeakersNote`. `HasSpeakers` is gone. The tab lists the live room's speakers, also while the operator browses a stored meeting.
+- Each row shows the tag, the utterance count, an inline name box, eight colour swatches and a "merge into" list.
+- The free-text "from tag, into tag" box and the `MergeSpeakersCommand` are gone. The list holds the other canonical speakers. A merged speaker leaves the list. The target row shows `⊇` and the merged tags.
+- `RoomState.SetSpeakerColour` accepts only a colour from `RoomState.Palette`. `MeetingSession.SetSpeakerColour` sends a `speaker.upsert`. The wire already carries `Color`, so the protocol and `web/index.html` stay as they are.
+- A stored meeting keeps no colour (see `RoomState.Palette`). A colour choice does not survive reopening the meeting.
+- Un-merge is not part of this slice. `RoomState` has no support for it.
+- `Utterance.SpeakerConfidence` stays hidden (ADR 0055 decision 20).
+
+### Speaker names follow the colour scheme
+
+Ticket #240 of the Appearance spec (#187).
+
+- `SpeakerTones.Name` replaces `SpeakerTones.OnLight`. It is a multi-value converter. It takes the speaker colour and the `ActualThemeVariant` of the name TextBlock.
+- In Dark, a name uses 30% of the dark ink `#F6F1E8`. In Light, it uses 30% of the light ink `#252B3B`.
+- A scheme change repaints the names that are already shown. This includes System following the operating system. The palette names need no view-model code; the fallback colour is re-resolved by `MainViewModel.OnThemeVariantChanged`.
+- The Dark fallback `SpeakerFallbackColor` `#9AA8B3` gives the name tone `#B5BDC3`: 8.93:1 on the dark sheet and 7.72:1 on the dark paper.
+- The design docs list the speaker colours. ADR 0057 names the icon purple `#6A5FB0`.
+
+### Icon follows the colour scheme
+
+Ticket #193 of the Appearance spec (#187).
+
+- `App.axaml` holds `BrandMark` (a `Bitmap`) and `BrandIcon` (a `WindowIcon`) in the Light and the
+  Dark theme dictionary. Light points to `kanal-splash-mark.png` and `kanal.ico`. Dark points to the
+  `-dark` files.
+- Every window binds `Icon` to `BrandIcon` through one `:is(Window)` style in `App.axaml`. The splash, the sidebar header, the
+  Version section of Settings and the meeting-room start hint bind `Image.Source` to `BrandMark`.
+  Each `DynamicResource` follows the effective theme variant, so no code reacts to a scheme change.
+- The icon of the exe, the installer and the macOS bundle stays the light version.
+
+### App language saves on pick
+
+Ticket #206.
+
+- The app language saves to `settings.json` when the operator picks it.
+  `SettingsStore.SaveAppLanguage` writes only the language, like the colour scheme.
+- "Save & Close" writes the same value. A failed save writes a warning to the log.
+
+---
+
+## 2026-10-12
+
+### Store files are written atomically
+
+This is ticket #225 of spec #209.
+
+1. `RecordFile.Write` writes `<file>.tmp` in the same folder and flushes it to disk.
+2. `File.Move(tmp, file, overwrite: true)` then replaces the target in one step.
+3. All three store files use this path: `workspaces.json`, `kanal-workspace.json` and `meeting.json`.
+4. A crash during a save leaves the old file whole. A concurrent scan never reads a part of a file.
+5. On Windows, the move fails while a reader holds the target open. The store makes at most 10 attempts,
+   with 50 ms between them. `RecordFile` logs each of the first 9 failures as a Warning line.
+   The last failure goes to the caller, which logs it and reports `Unwritable`.
+6. A left-over `.tmp` file is not an issue in the listing. The next write replaces it.
+   `DeleteWorkspace` also deletes a left-over `kanal-workspace.json.tmp`, so an empty folder goes.
+7. The read of each store file did not change.
+8. A meeting folder without access reported `RecordMissing`, because `File.Exists` answers false
+   on denied access. `ReadFolder` now lists the folder first. When that list fails, it reports
+   `Unreadable` and logs the exception. Recovery refuses an `Unreadable` folder, so it moves nothing.
+
+### The fast-source-clock capture test no longer times out
+
+`ASourceClockRunningFastNeverOverwritesUnreadAudio` timed out in `ManualClock.StepAsync` in about
+1 run in 4 under CPU load. The production code is correct. The test harness caused the fault.
+
+1. `SendNumberedChunksAsync` advanced the manual clock without a wait for the drainer. The test
+   moves 180 s of clock time in 1 to 2 s of wall time.
+2. Under load, the drainer fell more than `ConsumerStallLimit` (60 s, 3000 frames) behind the clock.
+   The output channel filled, and the mixer faulted with `consumer_stalled`. This is the correct
+   behaviour for a consumer that stalls.
+3. After the fault, the mixer arms no timer. The next `StepAsync` waited for a timer and timed out.
+4. Now `SendNumberedChunksAsync` waits until the drainer is at most 1 s of frames behind the clock
+   before each step. `Drainer.ReachAsync` waits on a signal from each drained frame, not on a
+   polling loop. `FinishAsync` uses the same wait.
+
+The fix also covers `ASourceClockRunningSlowLosesNoSamplesOverMinutes`, which uses the same
+harness. Before: 8 failures in 30 runs under load. After: 0 failures in 90 runs, 60 of them under
+load.
+
+## 2026-10-11
+
+### Resolve buttons in the Issues section (#213, part of spec #209)
+
+Each row of the Issues section in project settings now has its action. Kanal does the repair. The
+operator does not edit files.
+
+1. The causes name the kinds of #210 and #211. A damaged record, a folder without a record, a copied
+   folder and a damaged row of the project list each have their own sentence. The subject of a
+   meeting issue is now the meeting folder. The key `workspace.issues.unreadable` is removed.
+   An `Unreadable` meeting folder (an I/O error on `meeting.json`) gets the cause
+   `workspace.issues.unreachable` and no button: the record may be healthy. For the same reason it
+   uses the warning colour, not the alarm colour, in the banner and in the drop-down mark. So does a
+   `meetings` folder that cannot be listed. A project list that cannot be read stays in the alarm
+   colour: `ProjectIssueViewModel.For` decides the colour together with the cause.
+2. `ProjectIssueViewModel.Action` selects the action from the kind:
+
+   | Kind | Button | Core call |
+   |---|---|---|
+   | `RecordMissing`, `RecordDamaged` | Resolve | `RecoverMeeting` |
+   | `Misfiled` | Resolve | `ReidentifyMeeting` |
+   | `FolderMissing` (project folder) | Choose folder… / Remove from list | `RelocateWorkspace` / `ForgetWorkspace` |
+   | `FolderMissing` (`meetings`) | Resolve | `CreateMeetingsFolder` |
+   | `RegistryRowDamaged` | Resolve | `DropBrokenRegistryRows` |
+   | `UnsupportedVersion` | none | none |
+   | `Unreadable` (meeting folder) | none | none |
+
+3. The base title of a recovered meeting is "Recovered meeting yyyy-MM-dd HH:mm" in the interface
+   language. The time is the rebuilt start time of the meeting, in the operator's time zone.
+   `WorkspaceStore.RecoverMeeting` now takes `Func<DateTimeOffset, string> titleFor` in place of a
+   base title. Core calls it after the rebuild with the start time, refuses a blank result, and
+   then applies `FreeTitle`. This changes the API that #210 added.
+4. After each action, `ReloadIssues` calls `Refresh` on the sidebar. The meeting list, the banner and
+   the project marks update. The settings window then merges the new issue list into its rows:
+   - A row with an outcome stays, so the operator can read the outcome. When its issue is not in
+     the new list, the row loses its buttons, and its commands do nothing.
+   - A row without an outcome that is not in the new list goes away.
+   - A new issue is added at the end.
+5. The outcome shows in one line in the row. A refusal shows its reason in the alarm colour. The
+   reason is mapped from the `StoreProblemKind`. A reason without its own sentence gets the
+   generic sentence, and the log gets the detail.
+6. "Choose folder…" uses a folder picker in the settings window (`ChooseProjectFolder`), owned by
+   that window. "Remove from list" opens the remove dialog with only "Remove from list" and "Keep
+   it" (`RemoveProjectWindow` with `listOnly`). It then follows the existing remove flow: the window
+   closes and the sidebar reloads. A refused removal also reloads the issue list.
+7. After a relocation, an icon file of the project points to the new folder. Without this, Save
+   refused the old icon path.
+8. Spec decision 14: no action is offered for the project that records. The sidebar keeps the
+   project of `RecordingMeetingId` (`_recordingProjectId`). The project switcher stays open while
+   a meeting records, so this is not always the selected project. A note in the Issues section
+   says why the buttons are missing. "Remove from list" also follows the existing rule: no project
+   leaves the list while any meeting records.
+
+### The Windows installer shows Kanal artwork
+
+The msi showed the WiX default bitmaps: a red CD on a dark red panel. Now the welcome, finish and
+maintenance pages show the silver app icon tile and its colours: silver, charcoal and purple.
+
+- `Kanal.wxs` sets `WixUIDialogBmp` and `WixUIBannerBmp`. `PackMsi` passes `-d WindowsDir`.
+- `design/installer-art/compose.py` builds both bitmaps from `panel-art.png` and
+  `design/icon/kanal-tile-light.png`. It maps the indigo and apricot of the generated art to the tile
+  colours. When the icon changes, run the script again.
+- `WindowsInstallerBitmapTests` fails when a bitmap has a size other than the one WixUI draws.
+
+### Icons on the settings tabs
+
+1. Each of the seven settings tabs shows an icon left of its name. The icon takes the tab colour:
+   Ink3 at rest, Ink2 on hover, Brand when selected.
+2. Section headings get no icon, in Settings and in the project settings window (owner decision,
+   2026-10-11).
+3. New glyphs in `Assets/Icons`: `sliders`, `appearance`, `transcript`, `translate`, `summary`.
+   Audio input reuses `microphone`; Workspace reuses `folder`.
+
+### Silver app icon
+
+Ticket #190 of the Appearance spec (#187). The operator chose candidate A (voice-teams) on
+2026-10-11, after first choosing B (satin).
+
+- The app icon is a silver satin tile with a textured K. The upper stroke is silver-grey. The lower
+  "reply" stroke is a muted purple. The purple is `#6A5FB0` satin in Light. In Dark it is mixed
+  30% toward white.
+- `design/icon/kanal-tile-light.png` and `kanal-tile-dark.png` are the 1024 px sources. The Python
+  script that made them needed numpy and Pillow, so the repository does not keep it.
+- `design/kanal-icon.py` derives the host assets from these two PNGs with the Python standard
+  library only. `design/kanal-icon.png` still feeds the favicon and the brand logo of the
+  mobile caption page. Both pages are unchanged.
+- The light version builds `kanal.ico`, `design/kanal.icns` and the iconset. The exe, the msi
+  and the dmg use it. It stays readable on a light and on a dark taskbar.
+- The dark version builds `kanal-dark.ico`. Ticket #193 loads it as the window icon in Dark.
+- The splash mark is the K on transparency, not the full tile. It keeps the layout of the old
+  mark. The packager copies the stroke shape of `kanal-icon.png`. It paints each stroke with the
+  mean colour of that stroke in the tile, weighted by alpha. `kanal-splash-mark.png` is for a
+  light sheet. `kanal-splash-mark-dark.png` is for a dark sheet. A test holds every tone at 3:1
+  contrast or more on the Sheet and Paper colours of its scheme.
+- The splash mark is also the in-app logo. The sidebar, the Version section of the settings and
+  the start hint of the meeting room show it. They change from indigo and apricot to the new mark.
+  Ticket #193 must switch all four `Image` sources with the colour scheme.
+- The small ICO frames use the packager box downsample. The satin grain averages out, so the
+  16 px frame stays clean.
+- `design/kanal-icon-1024.png` is gone. Nothing used it. `design/icon/kanal-tile-light.png`
+  is the 1024 px master.
+- Until #193 lands, the host shows the light marks in Dark too.
+
+### Dark colour scheme and the Appearance tab
+
+Ticket #191 of the Appearance spec (#187). ADR 0057 is now accepted.
+
+1. The settings window has an **Appearance** tab, second after General. It shows three cards:
+   System, Light and Dark. Each card draws a small window in XAML. The System card shows a light
+   half and a dark half. A click applies the scheme at once and saves it in `settings.json`.
+2. `App.axaml` has a `Dark` theme dictionary with the same keys as `Light`. A test holds the two
+   key sets equal. The values come from the mobile page dark tokens. For keys that the mobile page
+   lacks, hover and pressed move away from the sheet, and washes mix the colour into the sheet:
+   - `BrandHover` `#CDD3FF` and `BrandPressed` `#E0E4FF` move away from the sheet, as in Light.
+   - `OnBrand` `#181C28` is the dark sheet, so text on a light brand fill stays dark.
+   - `Record` `#EF6A60`, `Hold` `#E3AE3C`, `RecordWash` `#4A2528` and `HoldWash` `#433820` keep
+     their meaning, with values for a dark sheet.
+   - `CloseHover` stays `#C42B1C`. The new `OnCloseHover` is white in both variants.
+   - `SpeakerFallbackColor` `#9AA8B3` gives 6.0:1 on the dark paper. `TickMixedColor` is `#7E8A99`.
+   - `AlarmWash` is the mobile `--alarm-wash` `#1E1416`. `Warning` `#D9A53A` and `WarningWash`
+     `#3A3020` stay apart from `Hold` and `HoldWash`.
+3. `Appearance` sets `Application.RequestedThemeVariant`. For System it reads the platform colour
+   values and follows `ColorValuesChanged` live. The app applies the saved scheme before the
+   splash window opens.
+4. FluentTheme reads `SystemAccentColor*` only from the root dictionary. `Appearance` copies the
+   `AccentRamp*` colours of the current variant into these root keys. The base accent equals
+   `Brand` in both variants. A headless render confirms it: a checked box and the settings tab
+   marker draw `#414B83` in Light and `#B9C2FF` in Dark.
+5. `ThemeColours` still returns hex strings. `MainViewModel` repaints the fallback speaker colour
+   and the ruler ticks when the variant changes.
+6. Contrast tests check `Ink`, `Ink2`, `Ink3`, `Alarm` and `SpeakerFallbackColor` on `Sheet`
+   and `Paper`, and `OnBrand` on `Brand`. Every pair reaches 4.5:1 in both variants.
+7. Both dictionaries also set FluentTheme keys. FluentTheme draws check, radio and switch glyphs
+   in `White`, which gives 1.7:1 on the Dark brand fill. The glyph keys use the `OnBrand` value.
+   A test requires 3:1 against `SystemAccentColor` in both variants.
+8. The disabled `ComboBox` keys keep the FluentTheme values in Light, so Light looks the same.
+   Dark uses `RuleFaint` fill, `Rule` border and `Ink3` text. The mode box is disabled during
+   every meeting.
+
+Done in #240: the speaker names use the dark text tone in Dark (see 2026-10-13).
+
+### Meeting problem kinds and recovery in the store (#210, spec #209)
+
+This is core work only. The UI follows in other tickets.
+The logic is in `MeetingRecords`. `WorkspaceStore` delegates `RecoverMeeting` and `ReidentifyMeeting` to it.
+
+1. `StoreProblemKind` has three new kinds for meeting folders: `RecordMissing`, `RecordDamaged` and
+   `Misfiled`. `ListMeetings` reports them. The subject is the meeting folder, never the `meeting.json` path.
+   Only content gives `RecordDamaged`: a JSON parse failure, an empty file, missing fields, or a `meeting.json` that is a folder. A read that fails
+   on access or I/O (a sharing violation, no permission, an offline cloud file) gives `Unreadable`, with the
+   meeting folder as subject. `RecoverMeeting` and `ReidentifyMeeting` refuse an `Unreadable` folder and
+   change nothing, because the record may be healthy.
+   `StoreRefusal` shows `RecordMissing` and `RecordDamaged` with the sentence for `Unreadable`.
+   `Misfiled` has its own sentence, `workspace.refused.misfiled`, in en, zh, de and pl.
+2. `WorkspaceStore.RecoverMeeting(workspaceId, folder, titleFor)` rebuilds `meeting.json` from
+   `transcript.jsonl`. It returns the record, or the path of the set-aside folder, or a problem.
+3. `RecoverMeeting` accepts only a direct subfolder of `meetings` with kind `RecordMissing` or
+   `RecordDamaged`. It refuses a healthy, misfiled or unsupported-version record.
+4. Rebuild rules:
+   - The id is the folder name.
+   - The languages are the source and translation languages in the transcript, in order of first use.
+     Codes that differ only in case count once, with the first spelling.
+     The code `und` (unknown language) is left out.
+   - The end time is the newest write time of `transcript.jsonl` and `audio.wav`.
+   - The start time is the end time minus the span of the utterance times. The created time equals the start time.
+   - The title is `FreeTitle` of `titleFor(start time)`. A blank title is refused before anything moves.
+5. Kanal renames a damaged `meeting.json` to `meeting.json.damaged` first. A taken name gets
+   `.damaged.2`, `.damaged.3` and so on.
+6. Kanal moves the folder to `<project>/kanal-set-aside/<folder name>` when the folder name is not a valid
+   id, or when the transcript holds no readable utterance or no language. A name clash gets `-2`, `-3`.
+7. `WorkspaceStore.ReidentifyMeeting(workspaceId, folder)` writes the folder name into a misfiled record.
+   The record gets a unique title from `FreeTitle`, for example "Tooling review 2".
+   It returns a `RecoverResult`, like `RecoverMeeting`.
+   When the folder name is not a valid id (a copy named `<id> - Copy` or `<id> copy`), Kanal moves the
+   folder to `kanal-set-aside` with the same rules as in item 6. The original meeting stays listed.
+8. No operation deletes a file. Tests compare the file contents before and after.
+
+Open items:
+
+1. The creation time of a file is not used, because copies change it.
+2. The start time is later than the real start by the silence before the first utterance.
+3. With `audio.wav`, the end time is the time the recording stopped. The start time is then also
+   later by the silence after the last utterance, and the duration is shorter by the same amount.
+4. A copy that does not keep write times (`cp` without `-p`, some archive tools and sync clients)
+   gives the copy time as end time. The start time is then wrong by the same offset.
+5. `ReidentifyMeeting` has no check for an id that is already listed. A listed id always equals its own
+   folder name, so a second folder cannot hold it.
+
+### Speaker palette readable on light and dark sheets
+
+The old speaker palette had six colours below 3:1 on the dark sheet `#181C28`. Speaker names are small text, so they need 4.5:1.
+No single colour reaches 4.5:1 on both a light and a dark sheet. The palette therefore serves graphics, and names use a text tone.
+
+- `RoomState.Palette` has eight new colours. Each reaches 3:1 on the light sheet `#FFFCF7`, the light paper `#F5F0E6`, the dark sheet `#181C28` and the dark paper `#222838`.
+  The rules, bars, dots and ticks use the palette colour.
+- `SpeakerTone.Text` makes the text tone: it mixes 30% of the ink colour into the speaker colour in sRGB. Ink is `#252B3B` on a light sheet and `#F6F1E8` on a dark sheet.
+  The tone reaches 4.5:1 on the sheet and the paper of its variant. The host binds the speaker names through `SpeakerTones.Name`, which follows the colour scheme (#240).
+  The mobile page uses `color-mix(in srgb, var(--speaker), var(--ink) 30%)` for `.rec__who`. `SpeakerPaletteTests` checks both rules.
+- No colour is red or amber, so none looks like the record, hold or alarm colour. No colour is grey, so a grey always means "no speaker".
+- A saved meeting stores no speaker colour. A reopened meeting derives its colours from the palette, in order of first appearance. The operator accepts that old meetings show the new colours.
+- The mobile fallback for an unknown speaker is now `#74808C`, because `#4C5C68` reached only 2.46:1 on the dark sheet.
+- Done later: the host fallbacks `#4C5C68` (speaker) and `#7C8A93` (ruler tick) stayed as they were. `#4C5C68` fails 3:1 on the dark sheet. Issue #191 handled the fallbacks. The dark text tone for the host names landed in #240.
+
+### Background scan of the other projects (#222, part of spec #209)
+
+The project drop-down marks need the issues of every project. The host used to list all meetings of
+all projects on the UI thread. A slow network share froze the window at app start and after each
+refresh. The scan of the other projects now runs on a background task.
+
+1. `Refresh` lists the current project on the UI thread, as before. Its banner does not wait.
+2. `Refresh` marks a project whose root is missing at once, from the project listing. It does not
+   scan that project.
+3. `ScanOthersAsync` lists the meetings of the other projects through the `offUiThread` seam. The
+   seam has the same shape as the seam of `MainViewModel`. The default runs the work in place.
+   `MainViewModel` passes `Task.Run` in the application. The scan returns the store problems only.
+   The UI thread builds the issue rows and the marks when the scan ends.
+4. Each `Refresh` raises `_scanGeneration`. A scan that ends after a newer `Refresh` is discarded.
+5. Until the scan ends, the marks of the last scan stay. The marks do not flicker on a refresh.
+6. A failed scan is logged. The marks stay as they were.
+7. `MainViewModel` has its own parameter `scanOffUiThread`. The existing `offUiThread` holds the
+   transcript reads, and tests count its calls.
+
+### Issues banner and Issues section (#212, part of spec #209)
+
+The sidebar note `workspace.problems` ("有 N 条记录无法读取。") is gone. Listing issues now show in a
+banner and in project settings. The issues are read-only. Ticket #213 adds the Resolve buttons.
+
+1. `ProjectIssueViewModel` holds one issue: the `StoreProblem`, its cause sentence and `IsAlarm`.
+   `ProjectIssueViewModel.For` picks the cause from the kind and the location. An unknown kind gets
+   the generic cause, so the kinds of #210 and #211 fall through safely.
+2. Each issue belongs to a project. A missing project folder belongs to that project. A meeting
+   problem belongs to the project that was listed. A damaged row of `workspaces.json` belongs to
+   the current project.
+3. `Refresh` lists the meetings of every project, not only the current one. This gives the warning
+   mark in the project drop-down. A project whose root is already reported missing is not listed
+   again: on an offline share, each lookup waits for the timeout. The issues are de-duplicated with
+   `Distinct()` and logged once per listing. Ticket #222 moved this scan off the UI thread.
+4. The banner sits above the settings gear. It shows the count of the current project only. The
+   alarm colour (`Alarm`, `AlarmWash`) shows when any issue is not a missing folder. The warning
+   colour (`Warning`, `WarningWash`) shows otherwise. These three keys are new in the `Light`
+   dictionary. Issue UI does not use the transport resources `Record*` and `Hold*`. `Warning` gives
+   3.8:1 on `WarningWash` and 4.6:1 on `Sheet`.
+5. The drop-down mark uses the same two states. `ProjectIssueStates` maps each project id with
+   issues to "has an alarm issue".
+6. "Details" opens the project settings of the current project. The window scrolls to the Issues
+   section. The settings window now scrolls. Its maximum height is 720 DIP, reduced on open to the
+   screen work area less 48 DIP for the title bar.
+7. The cause sentences do not tell the operator to edit files. The path is selectable text. For a
+   `meeting.json` subject, the row shows the meeting folder (`Location`). `Subject` stays the file.
+8. A `workspaces.json` that cannot be read at all gives no projects, so "Details" cannot open. Its
+   cause ("Kanal cannot read the project list.") and path then also show in `ProblemNote`.
+9. `ProblemNote` stays for the messages of other actions: import, open folder, title taken.
+
+Style note: a style without a class or pseudo-class loses to an App style with one, for example
+`Path.glyph` or `Button.ghost`. The new selectors therefore carry the class, for example
+`Path.glyph#IssuesIcon`.
+
+### Store: relocate a project, create a missing meetings folder, drop a damaged list row
+
+This is the core part of spec #209 (ticket #211). No UI uses it yet.
+
+1. `WorkspaceStore.RelocateWorkspace(id, newRootPath)` points an existing row to a new folder.
+   The store keeps the path canonical, as `CreateWorkspace` does. The name in the list stays.
+2. The new folder must exist. A missing folder gives `FolderMissing`.
+3. A `kanal-workspace.json` in the new folder must hold this project's id. Another id gives
+   `NotThisWorkspace`. An unreadable marker gives `Unreadable`. In both cases nothing is written.
+4. A folder without a marker gets a marker for this project. A matching marker stays as it is.
+5. A folder that another row uses is refused with `Invalid`. One folder still holds one row.
+6. `RelocateWorkspace` refuses while the folder of the row still exists and differs from the new one.
+   This is the "two folders, one identity" rule of `Register`: the copy is only a copy while the
+   listed folder is there. The refusal is `Invalid`. Nothing is written. `RelocateWorkspace` does not
+   copy meetings.
+   A new folder without a marker also gets an empty `meetings` folder, as `CreateWorkspace` does.
+7. `WorkspaceStore.CreateMeetingsFolder(id)` creates an empty `meetings` folder. It does nothing
+   when the folder exists. A missing project folder gives `FolderMissing`. A file named `meetings`
+   gives `Unwritable`, and the file stays.
+8. `WorkspaceStore.DropBrokenRegistryRows()` removes the rows of `workspaces.json` that miss
+   fields. Every complete row stays unchanged. The call writes nothing when no row is damaged.
+   A list that cannot be parsed at all stays refused, as `ForgetWorkspace` refuses it.
+9. `ListWorkspaces` reports a damaged row with the new kind `RegistryRowDamaged`. It was
+   `Unreadable`. The host does not read this kind yet.
+10. `ReadRegistry` turns a `null` element of the list into an incomplete row. `ListWorkspaces` then
+    reports it as `RegistryRowDamaged`, and `DropBrokenRegistryRows` removes it. Before, a `null`
+    element crashed every operation.
+11. `WorkspaceStore` holds `RelocateWorkspace` and `CreateMeetingsFolder`, because they touch the
+    marker file and the project folder. `WorkspaceRegistry.DropBroken` removes the damaged rows.
+    `WorkspaceRegistry.Read` maps a `null` row.
+12. None of the three operations deletes or moves a file in a project folder.
+
+### Start-up logs why the default project is missing
+
+Kanal creates the default project `Kanal` at start-up. The result of `EnsureWorkspace` was dropped.
+When the default folder was a file, nothing named the cause. Core logs a failure only when it
+catches an exception: `Unwritable`, and `Unreadable` for a registry file that does not parse. Core
+does not log a refusal such as `Invalid`.
+
+- `MainViewModel.OpenStore(registryPath, defaultFolder)` now logs the returned problem. The level
+  is Warning. The line has the kind, path and English detail.
+- The log category is `workspaces`. This is the category of `WorkspaceStore`, which logs the
+  `Unwritable` failures of the same call. Host view models use `workspace`, but none of them owns
+  this call. A failure that Core already logs gives one more line here. Kanal accepts this, because
+  the call runs once at start-up.
+- `Bootstrapped()` calls `OpenStore` with the production paths. Tests call `OpenStore` with a
+  temporary folder, so they never write into the Documents folder.
+
+### `WorkspaceStore` split into small internal classes
+
+This is a refactor. The behaviour and the public API of `WorkspaceStore` do not change.
+`WorkspaceStore` went from 802 lines to 241 lines. It now validates the workspace operations,
+writes the workspace marker file `kanal-workspace.json`, and delegates the rest.
+
+| Class | Responsibility |
+|---|---|
+| `WorkspaceRegistry` | Reads and writes the workspace list. Finds a workspace. Refuses a second row for one folder or one id. |
+| `MeetingRecords` | Lists, creates, saves, renames and deletes the meeting records of a workspace. Finds a free meeting title. |
+| `WorkspaceIcons` | Checks, copies and deletes the project icon files `kanal-icon<ext>`. |
+| `RecordFile` | Reads and writes one versioned JSON record. Refuses an unknown schema version or a record with missing fields. |
+| `StorePaths` | Path rules: safe folder names and file names, artefact paths, path comparison, link resolution. |
+| `StoreProblems` | Builds the `StoreProblem` values that more than one class uses. It never logs. |
+| `StoredRegistry`, `StoredRegistryEntry`, `StoredWorkspace`, `StoredMeeting` | The JSON shapes on disk. |
+
+All new classes are `internal`. `Kanal.Core` now gives `Kanal.Core.UnitTests` access to its
+internal types. `StorePathsTests` tests the path rules directly.
+
+`MeetingBundle` and `MeetingRecords` now use the shared `StoreProblems` methods for an unreadable file,
+an unwritable path and a bad meeting id.
+
+The caller decides whether to log a problem, not `StoreProblems` (owner decision, 2026-10-11). A
+`StoreProblem` does not carry the exception, so the code that catches the exception logs it, with
+its stack trace, before it returns the problem. `StoreProblems` only builds values.
+
+### The Windows msi shows its dialogs and replaces the installed version
+
+The msi had no user interface and, for a same-version msi, no upgrade path. Now it shows the
+`WixUI_Minimal` dialogs: welcome page with the MIT licence, install, finish. A second run of the
+msi shows Repair and Remove. The install stays per-user, with no install-directory dialog.
+
+- `Kanal.wxs` uses `ui:WixUI` with `WixUILicenseRtf`. `installers/windows/License.rtf` is the licence text.
+  `WindowsLicenseRtfTests` fails when the text differs from `LICENSE`. Edit both files together.
+- `MajorUpgrade` has `AllowSameVersionUpgrades="yes"`. WiX 5 writes a new random `ProductCode` in every
+  build, so two builds of one version are two products with one `UpgradeCode`. The newer install
+  removes the older one. The ICE61 warning appears only in `wix msi validate`. `wix build` does not run
+  it, so nothing is suppressed.
+- `PackMsi` runs `dotnet wix extension add WixToolset.UI.wixext/5.0.2` only when the cache folder is
+  missing, and passes `-ext`. The cache is the git-ignored `.wix/` folder in the repository root. The
+  first build needs network access once. The extension version equals the `wix` tool version.
+
+### A refused action shows a sentence in the interface language
+
+A refused store action showed the English `Detail` text from Core in the sidebar. It showed a
+generic sentence in the project settings. The operators read Chinese, German and Polish.
+
+1. `StoreRefusal.Report` in `Kanal.Host/Localization` turns a `StoreProblem` into one localized
+   sentence and logs `{Kind} on {Subject}: {Detail}` as a warning. The sidebar and the project
+   settings both call it. Neither view model keeps its own mapping.
+2. Each `StoreProblemKind` has one sentence. The new keys are `workspace.refused.<kind>`. The
+   existing keys keep `TitleTaken`, `TooLarge`, `WrongType` and `NotThisWorkspace`.
+3. Four kinds name the subject: `FolderMissing`, `Unreadable`, `Unwritable` and
+   `UnsupportedVersion`. `Invalid` and `NotFound` do not. Their subject is an id or a glyph that
+   means nothing to the operator.
+4. `Invalid` has one sentence for all its causes: a blank name, a path that is a file, a folder that
+   another project already uses. The code does not match on the English `Detail`.
+5. Two callers choose their own sentence. The project settings give `workspace.icon.missing` for
+   `NotFound` on the chosen image. The bundle import gives `workspace.import.unreadable` for
+   `Unreadable` on the chosen bundle file: the operator cannot repair a bundle, so the sentence
+   says to ask for a new export. An `Unreadable` on another file, for example the project list,
+   keeps the general sentence.
+6. The English `Detail` goes only to the log. The key `workspace.settings.failed` is gone. The key
+   `workspace.refused.other` replaces it for a kind that has no sentence yet.
+
+The old count note (`workspace.problems`) does not change. Ticket #212 owns it.
+
+### The first release is 1.0.0
+
+No tag and no GitHub Release exist yet. The version `1.0.1` named a successor to nothing.
+
+1. `Kanal.Host.csproj` `<Version>` is `1.0.0`. The newest `CHANGELOG.md` heading is `## 1.0.0`, still
+   without a date. `ChangelogTests` keeps the two equal.
+2. The example tags in `installers/release.sh`, `docs/design/installers.md` and
+   `docs/release/macos-alpha-rollout.md` are plain versions: `v1.0.0`, then `v1.0.1`.
+3. No pre-release or nightly channel: every release is a plain `x.y.z` version (owner decision,
+   2026-10-11).
+4. PR #125 ("release-1.0.0") is closed. Its release steps used the removed `workflow_dispatch` gear
+   (see 2026-10-07). The release PR rewrites the README limitations.
+
+Open item: ADR 0056 requires the update check and the minimum supported version in the host before
+the first `v1.0.0` tag. That work is not done. Do not publish the first release before it merges.
+
+### Host colours move to the Light theme dictionary
+
+This is a prefactor for the Appearance feature (#187). The host looks the same as before.
+Headless renders of the main window and of all six settings tabs are pixel-identical.
+
+- `App.axaml` holds every app colour brush in `ThemeDictionaries` under the `Light` key.
+  Every colour reference in the views is a `DynamicResource`. A test scans the views for a
+  `StaticResource` colour key.
+- `SystemAccentColor*` stays in the root dictionary. In a theme dictionary, FluentTheme ignores
+  it and draws its own default blue.
+- `ThemeColours` reads the speaker fallback colour and the mixed-speaker tick colour from the
+  theme resources. The unused `BubbleViewModel.TextColor` and `RuleColor` are gone.
+- `RoomState.Palette` and the flag colours stay as they were. Ticket #189 covers the palette.
+
+---
+
 ## 2026-10-10
+
+### Project settings
+
+A project (a `Workspace` in the code) now has its own settings window. A gear button on each row
+of the project list opens it. The gear does not change the selected project.
+
+1. `ProjectSettingsWindow` holds three sections: name, project icon, and a danger zone. Name and
+   icon changes apply only on Save. Closing the window discards them.
+2. The icon is one of eight built-in icons (`ProjectIcons.Glyphs`) or an image file. The store
+   copies an image into the project root as `kanal-icon<ext>` and deletes any older copy. It
+   deletes only `kanal-icon<ext>` for the allowed extensions. It refuses a file over 2 MB or with
+   an extension other than png, jpg, jpeg, ico, bmp or webp. It treats a link to the existing
+   copy as the same file. The window explains every refusal in the language of the interface.
+3. `kanal-workspace.json` and the registry row both carry `iconGlyph` and `iconFile`, the same way
+   they carry `name`. A file without these fields reads as the default folder icon. An unknown
+   or unsafe value also reads as the default.
+4. Remove opens `RemoveProjectWindow`. The filled button keeps the project and is the default.
+   "Remove from list" calls `ForgetWorkspace` and keeps every file. "Delete meeting files" calls
+   `DeleteWorkspace`.
+5. `DeleteWorkspace` deletes only what Kanal wrote: the `meetings` folder, `kanal-workspace.json`
+   and `kanal-icon<ext>`. It first reads `kanal-workspace.json` and refuses when the file is
+   missing or holds another `Id`. It removes the root folder only when the folder is then empty.
+   The operator picked that folder, and it can hold other files.
+6. Kanal refuses removal while any meeting is recording. The Remove button is disabled and says why.
+7. `WorkspaceSidebarViewModel.Refresh` no longer reloads the meetings when the project list drops
+   its selection during the rebuild. Before, a rename through Refresh closed the meeting that was open.
+8. `WorkspaceSidebarView` now calls the generated `InitializeComponent`. With
+   `AvaloniaXamlLoader.Load`, the named fields such as `WorkspacePicker` and `MeetingList` stayed
+   null.
+9. The Rename item in the menu of a meeting row did not run its `Click` handler. The item has no
+   `Command` now. The handler starts the rename and moves the cursor to the name field.
+10. `ProjectSettingsViewModel.Save` applies the icon first and renames second. A refused icon
+    leaves the name unchanged.
+11. Operator feedback on the PR: the danger button reads "Remove project" in full. The icon reset
+    is a text button, "Use default icon", in the icon button row. It shows only for an icon that is
+    not the default. The title of `RemoveProjectWindow` is 19 px, larger than the question (15.5 px).
 
 ### No gap beside a collapsed sidebar
 
@@ -236,6 +1914,12 @@ resolved to `Stretch`, so the `TextBlock` filled the padded area and drew its te
 - Out of scope: the mode picker rows. The row without a description keeps the height of its
   neighbours by design.
 
+### Capture modes renamed, menu shows names only
+
+"In the room" is now "Offline meeting" (de "Präsenzbesprechung", pl "Spotkanie stacjonarne"). The
+capture-mode menu shows the icon and the name only. The headphones guidance stays in the dismissible
+band under the toolbar. The key ids and `IsInRoom` keep their names.
+
 ### macOS window buttons centred in the header and enlarged
 
 Avalonia ignores `ExtendClientAreaTitleBarHeightHint` for the macOS title bar view. The view stays
@@ -411,6 +2095,32 @@ its preservation rules are specified as implementation work after design approva
 
 ## 2026-10-03
 
+### Switching the microphone while recording
+
+The microphone menu stays enabled while a meeting is live (`CanChooseDevice`); the capture-profile
+menu stays locked (`CanChooseAudio`). A pick updates the active microphone id and
+restarts capture the way pause/resume does — release, then reopen — so the transcription session,
+the relay and the saved WAV carry on; in an online meeting the computer audio is reopened with it. A
+pick while paused only updates the id and resume opens it. The attestation records the profile, not
+the device, so consent is unaffected.
+
+- **Only the operator's pick moves capture.** `RefreshDevices` re-selects by id or falls back to
+  the list head, and clearing a bound ComboBox nulls its selection; neither may switch a live
+  capture. Refreshes are fenced with `_refreshingDevices` and null picks are ignored, so a lost
+  active microphone still stops an online meeting with `device_unavailable` instead of silently
+  moving to whatever is first in the list.
+- **Live, the menu shows the device in use or none.** A ComboBox raises nothing when the item it
+  already shows is picked again, so a refresh that fell back to the list head made that device
+  unpickable — after an in-room unplug (the room stays live with no audio) or on a meeting started on
+  the default device. While live, `RefreshDevices` selects by the active id and shows none when it is
+  gone; on Stop an empty selection falls back to the list head again.
+- **A switch restores the live status line.** An in-room fault writes *audio failed* into the status;
+  a switch that brings audio back puts back the status the room opened with (`_liveStatus`, which
+  keeps the *not saved* and relay-warning suffixes).
+- This supersedes the 2026-10-02 consent bullet's "used for … the capture" for the microphone only;
+  the profile is still what consent covers. ADR 0050 carries the matching amendment.
+- Selectors stay locked from Start until the room is live, as before.
+
 ### Online meeting audio: capture all computer audio, no output selector ([ADR 0050](adr/0050-native-online-meeting-audio.md) amendment)
 
 An end-to-end test on macOS heard the remote side only when the meeting app played to the device Kanal
@@ -571,6 +2281,66 @@ Local needs the same key plus a downloaded model, and both local-transcription m
 Without a key the row states the missing key, which is the operator's next step. The empty-state
 line "Demo needs no key." is dropped in all four languages, and `.vscode/launch.json`'s demo target
 sets `KANAL_ENV=development`.
+
+### Start says it is connecting, connects in parallel, and names the meeting first
+
+Operator report (Cloud/Cloud): after the consent dialog the app sat for about five seconds with
+nothing on screen; was it loading a local model or naming the meeting? Neither. Cloud/Cloud plans no
+local model, so there was no warm-up and no titler. The room id is stamped right after consent
+(`RoomIds.New`, one-second resolution) and "Room … open" landed 4.2–5.7 s later in Cloud/Cloud and
+1.9–3.3 s later in Demo (log of 2026-09-23). In that window Start awaited, one after the other: the
+gateway room creation (`GatewayRelayPublisher.CreateRoomAsync`), on a restart the `room.moved`
+publish on the previous channel, the Gladia session (HTTP init + WebSocket), then the `room.config`
+and `room.transcribing` publishes. `IsStarting` was only set around model warm-up, and the record,
+and with it the name, was opened only after all of that.
+
+- **Starting phase.** `IsStarting` is true from consent until the room opens or the start is
+  abandoned, so the stop mark's spinner shows, and the status line reads "Connecting…" (the
+  model-loading line while a model warms up). One cancellation token reaches warm-up, relay
+  creation (`CreateRoomAsync`'s HttpClient) and the transcriber's connect. Stop during this phase
+  only cancels it; the start tears itself down once it sees the cancellation, rather than Stop
+  disposing providers under a connect still in flight.
+- **Parallel.** Relay room creation starts right after consent, before warm-up, as a task. The
+  session is handed a `PendingRelay`, an `IRelayPublisher` whose publishes wait for that task, so
+  `MeetingSession.StartAsync` connects the transcriber while the relay room is still being created
+  and its first publish (`room.config`) waits for the relay. Chosen over letting `MeetingSession`
+  accept its relay later: its contract (one relay from construction; config, then transcribing,
+  then the pump) is unchanged, and the ordering guarantee stays inside it. The room now opens after
+  the slower of relay and transcriber instead of their sum. A relay failure still resolves to the
+  null publisher with a warning, so the QR goes and transcription does not. `room.moved` on the
+  previous channel is now sent once the new session has started, so a failed restart no longer
+  redirects phones to a room that never opened.
+- **Name first: the record opens at consent (option a).** This is what ADR 0054 decision 2
+  words, and it supersedes the 2026-09-12 note that kept the record at room open. The default name
+  is on screen in the heading and the sidebar at once and is the same string the record holds: one
+  `_utcNow()`, one write. A start that fails or is abandoned hands the record back through
+  `WorkspaceSidebarViewModel.DiscardRecord`. A record created for the start is deleted; a reused
+  blank record is saved back as it was (`StartedAt` null, its old title), so the binding rule
+  still reuses it; the selection returns to where it was. "Cancel or failure leaves nothing behind"
+  holds. Option (b), a heading-only preview with the record written at room open, was rejected.
+  While an ended record is selected, the heading and body show that record, so a preview would need
+  its own override of `MeetingTitle` and would still leave the sidebar without a row. The row carries
+  its Recording mark from consent, which also keeps it from being deleted mid-start.
+- **Log.** `relay`: "Relay room created in N ms." (or the failure, with its elapsed time). `room`:
+  "Transcriber <id> connected in N ms." (from `MeetingSession.StartAsync`). The "Room … open" line
+  now ends with "N ms after Start", counted from consent.
+- The `RelayPublisherFactory` test seam now returns a `Task` and gets the start token, so a test
+  can hold relay creation open and cancel it.
+- Review fixes (2026-10-05):
+  - The room-open step reads the current record before it sets `AudioPath`. A rename typed while
+    the room connects is kept. Before, the step saved the copy from consent and wrote the default
+    name back.
+  - `StartAsync` clears `IsStarting` in a `finally` block. An exception after consent, or during
+    the teardown in `AbandonStartAsync`, no longer leaves Start disabled.
+  - `room.moved` is the commit point of a restart. The start checks for cancellation before it
+    sends `room.moved`. After `room.moved` is sent, the new room opens. A Stop pressed during the
+    publish then stops the new room normally, so the phones that moved get `room.closed`.
+  - `DiscardRecord` deletes the record from its own workspace (`WorkspaceId`), not from the
+    selected workspace. A workspace switch during the start no longer leaves a record behind.
+
+Open: a gateway that hangs still holds the room for up to its 15 s HttpClient timeout, because
+`room.config` waits for the relay. The fix would be to open the room on the transcriber alone and
+let publishes queue behind the relay. Not done here.
 
 ## 2026-09-15
 
@@ -822,7 +2592,7 @@ serial phases, and records the decisions that shape the first release:
   CHANGELOG date land in the release PR, not here.
 - **The cut line.** Track A (meeting records) ships complete: the five green slices merge and the
   two missing ones — consent before a record is created (#98) and the migration bundle (#100) — are
-  built first. #90, #118 and #94 wait for their tracks.
+  built first. #90, #127 and #94 wait for their tracks.
 - **Hide what has no second state.** The Speakers tab has one speaker to rename until Track B lands;
   the online capture profile records the microphone only until Track D lands. Both are hidden or
   disabled rather than shown and explained.
@@ -1166,6 +2936,80 @@ The binding rule from decision 3 had to land here rather than in slice 2, becaus
 something to bind to: an untouched record (`StartedAt` null) is written into, anything else gets a
 new record beside it. What slice 2 changes is the moment it fires — the consent dialog's "confirm
 and start" — not the rule.
+
+### The diarization catalog and its licence gate ([#107](https://github.com/TONiiV/Kanal/issues/107), [PR #127](https://github.com/TONiiV/Kanal/pull/127))
+
+Speaker attribution needs two models. The segmentation model finds where the speaker changes. The embedding model decides whether two segments have the same voice.
+
+`DiarizationModelCatalog` lists pyannote segmentation 3.0 as the segmentation model. It lists four embedding candidates: 3D-Speaker CAM++, 3D-Speaker ERes2Net base, WeSpeaker CN-Celeb ResNet34 and NeMo TitaNet small.
+
+[ADR 0055](adr/0055-speaker-attribution.md) decision 16 sets the default embedding model. Measured DER on Chinese, German and Polish decides it, not parameter count. The catalog therefore offers candidates and does not rank them.
+
+Sizes come from the GitHub releases API. We recomputed every SHA-256 from the downloaded file on 2026-09-08. The four embedding hashes also match the upstream `checksum.txt`.
+
+**The licence gate is a constructor.** sherpa-onnx publishes Rev's Reverb diarization models in the same GitHub release as the segmentation model. Section 3.2 of the Rev licence forbids use in a commercial activity. The DiariZen weights are CC-BY-NC-4.0. NLLB and Seamless also have non-commercial licences.
+
+A review checklist depends on attention. A constructor does not. `ModelLicense` records whether it permits commercial use. `DiarizationModelInfo` rejects a licence that does not. The two banned licences exist as named values only, so a test can prove the rejection. If someone lists Reverb, the catalog throws on first use and the test suite fails.
+
+**Readiness never throws.** `DiarizationModelCatalog.Readiness` reads the disk. It returns `Ready` when both a segmentation model and an embedding model are present. It returns `NotDownloaded` for an unset choice, an unknown id or two models of the same role.
+
+The catalog reports only *not downloaded* and *ready*, as [PR #126](https://github.com/TONiiV/Kanal/pull/126) does for the transcription catalog. The disk decides these two states. `DiarizationModelDownload` owns *downloading* and *failed* for one file. This follows [ADR 0053](adr/0053-local-transcription-model-and-runtime.md) decision 5. The post-meeting pass needs only "both files on disk".
+
+`DiarizationModelDownload` holds the state of one file. A 404 or a hash mismatch ends in `Failed`, with the message on the object. It never throws. The host has no reason to show a dialog over a running meeting.
+
+Headless tests start a demo meeting with an empty models directory. The transcript arrives. No mode status mentions a speaker model.
+
+[Issue #107](https://github.com/TONiiV/Kanal/issues/107) asked the shared downloader to accept a full URL. That work already existed. `IDownloadableFile` has had a full `DownloadUrl` since the downloader became shared. `LocalModelInfo` builds the HuggingFace path for its own entries. The diarization records build a GitHub releases URL. The download needs no token. No repository is gated. A test asserts that the downloader receives the URL unchanged.
+
+The embedding release tag is `speaker-recongition-models` upstream. A test pins this spelling. The correct spelling gives a 404 for every embedding URL, and the error shows only at download time.
+
+Three items are open.
+
+1. The segmentation asset is a `.tar.bz2` that holds `model.onnx` and `model.int8.onnx`. The BCL has no bzip2. Unpacking needs a new dependency, so it ships with the slice that loads the model. Until then, `Ready` means that the verified archive is on disk.
+2. [ADR 0055](adr/0055-speaker-attribution.md) decision 14 puts the diarization models in the Settings catalog. This PR adds Core types only. [Issue #179](https://github.com/TONiiV/Kanal/issues/179) owns the Settings work. [Issue #180](https://github.com/TONiiV/Kanal/issues/180) owns the duplicate download state machine in `TranslationModelItemViewModel`. That issue also covers a race in `DiarizationModelDownload.Cancel`, which can touch a disposed token source.
+3. A licence check before release. The weights are Apache-2.0, but the training data is separate. WeSpeaker trained on VoxCeleb and CN-Celeb, and both datasets tend towards research use. Check them once before a public release ([issue #107](https://github.com/TONiiV/Kanal/issues/107)).
+
+No operator can reach these models yet, so this PR adds no CHANGELOG entry.
+
+### The transcription catalog, and what a model turned out to be ([#72](https://github.com/TONiiV/Kanal/issues/72))
+
+`AsrModelCatalog` lists Nemotron 3.5 ASR Streaming 0.6B in sherpa-onnx transducer format. It has
+three models, one for each chunk size: 560 ms (default), 160 ms (lower latency) and 1120 ms
+(higher accuracy).
+
+The three models differ only in the encoder file. The decoder, the joiner and the token table are
+byte-identical in all three. For this reason, chunk size is a catalog entry and not a setting on
+one model. A new chunk size means a new encoder, which is a new download.
+
+The catalog omits 80 ms and 320 ms. Both are published. No measurement asks for latency below 160 ms.
+The 320 ms size sits between sizes the operator can already pick. One more catalog entry adds either size.
+
+We read the sizes and hashes from the HF API on 2026-09-08. The exception is `tokens.txt`: it is
+not an LFS object, so we computed its hash from the downloaded file.
+
+Two facts follow from the four-file format:
+
+**Local file names carry the model id.** All three models publish a file named
+`encoder.int8.onnx`, and one models directory holds them all. `AsrModelFile` therefore keeps the
+local name and the remote name apart. A test checks that local names stay unique across the
+catalog. Without that test, a collision shows up as a model that loads and transcribes badly, not
+as an error.
+
+**Progress is weighted by bytes.** The encoder is 96% of a model. A progress bar that counts files
+would stay at 25% for 600 MB and then jump to done. `ModelDownloadManager` has new overloads that
+take a list of files: `IsDownloaded`, `MissingParts`, `Delete` and `DownloadAsync`. The download
+overload skips files that are already on disk and counts their bytes as done. It forwards progress
+through a synchronous relay, because `Progress<double>` can deliver reports out of order.
+
+Readiness in this slice is what the disk shows: all files present, or not. The states
+*downloading* and *failed* exist only while a download runs, so the view model of the Settings
+*Transcription* section owns them (C-3).
+
+`AppSettings.ActiveTranscriptionModelId` holds the choice. Null keeps transcription on the cloud
+provider, the same as `ActiveTranslationModelId` does for translation. Both catalogs now build the
+HuggingFace URL and the size label with one function each.
+
+The operator cannot reach any of this yet, so there is no CHANGELOG entry.
 
 ### One downloader, not two ([#72](https://github.com/TONiiV/Kanal/issues/72))
 
@@ -3100,10 +4944,9 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
   — the first then died at `File.Move` after however many gigabytes had transferred (on Windows
   the delete itself failed with a sharing violation and masked the original error). Each call now
   streams into its own `<file>.<guid>.part` and only removes the one it created; `Delete` sweeps
-  any leftovers. The reachable trigger is fixed too: `SettingsWindow.OnClosed` cancels outstanding
-  downloads, since MainWindow builds a fresh window and view model each time Settings opens, and a
-  download left running behind a closed dialog was invisible, uncancellable, and collided with the
-  Download button the next dialog offered.
+  any leftovers. The reachable trigger was fixed too: `SettingsWindow.OnClosed` cancelled outstanding
+  downloads. That rule is replaced: a download now survives the window (see "Downloads survive the
+  Settings window", 2026-10-13).
 
 - **`MtOutputCleaner` mangled two quoted spans.** A quote at each end is not the same as a quoted
   line: `"ISO 7599" gilt auch für "KX-4402"` came out as `ISO 7599" gilt auch für "KX-4402`,
@@ -3135,8 +4978,8 @@ the only deliberate file write is `Kanal.Doctor mic`'s `mic-check.wav` diagnosti
 - [x] **Operator control over the language columns** — selection capped at four with the reason
       stated where it bites, and columns reorderable by drag (Alt+←/→ as the keyboard route),
       order host-local (#15).
-- [ ] Standalone cloud `IMtProvider` (DeepL / Google / an LLM API reusing `MtPrompt`) — the
-      second blocker on `local · cloud`, buildable independently of the local ASR work.
+- [x] Standalone cloud `IMtProvider` — DeepL first, other vendors later behind the same interface
+      (ADR 0060). `local · cloud` runs when a DeepL key exists.
 - [ ] Local ASR (`WhisperCppAsrProvider` via Whisper.net, VAD + LocalAgreement streaming) — after MT.
 - [ ] Measure Gladia translation latency precisely once an API key is configured
       (`Kanal.Doctor -- gladia <wav>` dumps timestamped raw JSON).

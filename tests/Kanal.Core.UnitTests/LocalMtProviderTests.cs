@@ -193,11 +193,11 @@ public class LlamaSharpTextGeneratorTests
         var generator = new LlamaSharpTextGenerator("qwen.gguf", backend);
 
         var generating = generator.GenerateAsync("prompt", CancellationToken.None);
-        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-        var disposing = Task.Run(generator.Dispose);
+        var disposing = Task.Run(generator.Dispose, TestContext.Current.CancellationToken);
 
-        var finishedEarly = await Task.WhenAny(disposing, Task.Delay(250)) == disposing;
+        var finishedEarly = await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken)) == disposing;
         Assert.False(finishedEarly, "Dispose returned while a decode was still running.");
         Assert.False(backend.FreedUnderARunningDecode, "the weights were freed under a live decode.");
         Assert.False(backend.Freed);
@@ -205,8 +205,8 @@ public class LlamaSharpTextGeneratorTests
         backend.Resume();
 
         // the decode completes normally — no ObjectDisposedException out of the released gate
-        Assert.Equal("Wsporniki KX-4402.", await generating.WaitAsync(TimeSpan.FromSeconds(10)));
-        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("Wsporniki KX-4402.", await generating.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.True(backend.Freed);
         Assert.False(backend.FreedUnderARunningDecode);
     }
@@ -234,15 +234,15 @@ public class LlamaSharpTextGeneratorTests
 
         var translating = provider.TranslateAsync(
             "这批支架。", "zh", ["pl"], Array.Empty<Utterance>(), CancellationToken.None);
-        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10));
+        await backend.Started.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         var disposing = provider.DisposeAsync().AsTask();
-        Assert.False(await Task.WhenAny(disposing, Task.Delay(250)) == disposing);
+        Assert.False(await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken)) == disposing);
         Assert.False(backend.FreedUnderARunningDecode);
 
         backend.Resume();
-        var result = await translating.WaitAsync(TimeSpan.FromSeconds(10));
-        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await translating.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         Assert.Equal("Wsporniki KX-4402.", result["pl"]);
         Assert.True(backend.Freed);
@@ -308,6 +308,49 @@ public class LlamaSharpTextGeneratorTests
     }
 }
 
+public class LlamaSharpTextGeneratorBatchTests
+{
+    private sealed class BatchBackend : ILlamaBackend
+    {
+        public List<int> Batches { get; } = new();
+        public int Loads;
+
+        public Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct)
+        {
+            Loads++;
+            return Task.CompletedTask;
+        }
+
+        public Task<string> InferAsync(string prompt, CancellationToken ct) =>
+            throw new InvalidOperationException("a batch must reach the backend as one call");
+
+        public Task<IReadOnlyList<string>> InferAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+        {
+            Batches.Add(prompts.Count);
+            return Task.FromResult<IReadOnlyList<string>>(prompts.Select(p => p.ToUpperInvariant()).ToList());
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    [Fact]
+    public async Task ABatchReachesTheBackendAsOneCallInPromptOrder()
+    {
+        var backend = new BatchBackend();
+        using var generator = new LlamaSharpTextGenerator("m.gguf", backend);
+
+        var outputs = await generator.GenerateAsync(["a", "b", "c"], CancellationToken.None);
+        var single = await generator.GenerateAsync("d", CancellationToken.None);
+
+        Assert.Equal(["A", "B", "C"], outputs);
+        Assert.Equal("D", single);
+        Assert.Equal([3, 1], backend.Batches);
+        Assert.Equal(1, backend.Loads);
+    }
+}
+
 public class LlamaSharpMtProviderTests
 {
     private sealed class FakeTextGenerator : ITextGenerator
@@ -315,15 +358,37 @@ public class LlamaSharpMtProviderTests
         public List<string> Prompts { get; } = new();
         public Func<string, string> Respond { get; set; } = p => "out";
 
+        public List<int> BatchSizes { get; } = new();
+
         public Task<string> GenerateAsync(string prompt, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             Prompts.Add(prompt);
             return Task.FromResult(Respond(prompt));
         }
+
+        public async Task<IReadOnlyList<string>> GenerateAsync(IReadOnlyList<string> prompts, CancellationToken ct)
+        {
+            BatchSizes.Add(prompts.Count);
+            var outputs = new List<string>();
+            foreach (var prompt in prompts)
+                outputs.Add(await GenerateAsync(prompt, ct));
+            return outputs;
+        }
     }
 
     private static readonly IReadOnlyList<Utterance> NoContext = Array.Empty<Utterance>();
+
+    [Fact]
+    public async Task SendsEveryTargetLanguageInOneBatch()
+    {
+        var generator = new FakeTextGenerator();
+        var provider = new LlamaSharpMtProvider(generator);
+
+        await provider.TranslateAsync("这批支架。", "zh", ["de", "zh", "pl", "en"], NoContext, CancellationToken.None);
+
+        Assert.Equal([3], generator.BatchSizes);
+    }
 
     [Fact]
     public async Task TranslatesIntoEveryTargetLanguage()
@@ -412,16 +477,18 @@ public class LlamaSharpMtProviderTests
     [Fact]
     public async Task NoTargetsToTranslateIsNotAFailure()
     {
-        var provider = new LlamaSharpMtProvider(new FakeTextGenerator());
+        var generator = new FakeTextGenerator();
+        var provider = new LlamaSharpMtProvider(generator);
 
         var result = await provider.TranslateAsync(
             "text", "zh", ["zh"], NoContext, CancellationToken.None);
 
         Assert.Empty(result);
+        Assert.Empty(generator.BatchSizes);
     }
 
     [Fact]
-    public async Task CancellationStopsTheLoop()
+    public async Task CancellationThrowsBeforeTheGeneratorRuns()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();

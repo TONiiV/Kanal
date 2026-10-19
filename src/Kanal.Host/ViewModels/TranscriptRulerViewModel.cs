@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Kanal.Core.Models;
 
 namespace Kanal.Host.ViewModels;
@@ -13,6 +13,12 @@ public enum RulerTickKind
     // Nothing produces Topic until the semantic layer (#103) lands; it reconciles into this
     // same tick list rather than a second strip.
     Topic,
+}
+
+public enum PageDirection
+{
+    Up,
+    Down,
 }
 
 public partial class RulerTickViewModel : ViewModelBase
@@ -27,7 +33,7 @@ public partial class RulerTickViewModel : ViewModelBase
     private string _speakerName = "";
 
     [ObservableProperty]
-    private string _speakerColor = "#4C5C68";
+    private string _speakerColor = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
@@ -38,38 +44,95 @@ public partial class RulerTickViewModel : ViewModelBase
     private string _timeLabel = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FoldBadge))]
-    private int _turns = 1;
+    private double _pitch = TranscriptRulerViewModel.MaxPitch;
 
     [ObservableProperty]
-    private int _utterances;
+    private bool _isInView;
 
     [ObservableProperty]
-    private bool _isCurrent;
+    [NotifyPropertyChangedFor(nameof(Reach), nameof(Thickness))]
+    private TickShape _shape = new(TranscriptRulerViewModel.RestReach, TranscriptRulerViewModel.RestThickness);
 
-    public string FoldBadge => Turns > 1 ? $"×{Turns}" : "";
+    [ObservableProperty]
+    private double _glow = TranscriptRulerViewModel.RestGlow;
+
+    [ObservableProperty]
+    private TickShape _drawnShape = new(TranscriptRulerViewModel.RestReach, TranscriptRulerViewModel.RestThickness);
+
+    [ObservableProperty]
+    private double _drawnGlow = TranscriptRulerViewModel.RestGlow;
+
+    internal bool DrawnInView { get; set; }
+
+    public double Reach => Shape.Reach;
+
+    public double Thickness => Shape.Thickness;
 
     public string AccessibleName => $"{TimeLabel} · {SpeakerName} · {Preview}";
 }
 
+public readonly record struct TickShape(double Reach, double Thickness);
+
 public sealed partial class TranscriptRulerViewModel : ViewModelBase
 {
-    public const int Slots = 72;
-    public const double Pitch = 9;
+    public const double MaxPitch = 9;
+    public const double DefaultStripHeight = 648;
     public const double CardHeight = 96;
+    public const double RestReach = 10;
+    public const double InViewReach = 16;
+    public const double PeakReach = 40;
+    public const double TickWidth = 28;
+    public const double TickHeight = 3.5;
+    public const double RestThickness = 1;
+    public const double InViewThickness = 2;
+    public const double PeakThickness = 3.5;
+    public const double RestGlow = 0.55;
+    public const double InViewGlow = 0.9;
+
+    private const double FocusSpread = 18;
+    private const double FocusShape = 1.3;
+    private const double SkewSpeed = 350;
+    private const double SkewTime = 0.09;
+    private const double SkewFloor = 0.005;
+    private const double LeadShrink = 0.4;
+    private const double TrailGrow = 1.4;
+    private const double MinStep = 0.001;
+    private const double StillAfter = 0.05;
+    private const double DrawAttack = 0.015;
+    private const double DrawRelease = 0.06;
+    private const double DrawStepCap = 0.1;
+    private const double ShapeEpsilon = 0.02;
+    private const double GlowEpsilon = 0.002;
 
     private const int PreviewLimit = 88;
 
     private readonly Func<string, (string Tag, string Name, string Color)> _resolve;
-    private readonly List<Segment> _segments = new();
-    private readonly Dictionary<string, Segment> _anchors = new();
-    private readonly HashSet<string> _seen = new();
+    private readonly Dictionary<string, Entry> _entries = new();
     private long? _originMs;
+    private readonly TimeProvider _time;
+    private double? _pointerY;
+    private double? _lastY;
+    private long _moveStamp;
+    private long _skewStamp;
+    private long _stepStamp;
+    private int _unsettled;
+    private double _skew;
+    private HashSet<string> _visible = new();
+    private HashSet<string>? _whole;
+    private int _pageUpTarget = -1;
+    private int _pageDownTarget = -1;
 
-    public TranscriptRulerViewModel(Func<string, (string Tag, string Name, string Color)> resolve) =>
+    public TranscriptRulerViewModel(
+        Func<string, (string Tag, string Name, string Color)> resolve, TimeProvider? time = null)
+    {
         _resolve = resolve;
+        _time = time ?? TimeProvider.System;
+        _stepStamp = _time.GetTimestamp();
+    }
 
     public ObservableCollection<RulerTickViewModel> Ticks { get; } = new();
+
+    public double StripHeight { get; private set; } = DefaultStripHeight;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPreviewOpen))]
@@ -78,56 +141,154 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
     [ObservableProperty]
     private double _previewTop;
 
+    [ObservableProperty]
+    private double _trackLength;
+
     public bool IsPreviewOpen => HoveredTick is not null;
 
     public event Action<string>? JumpRequested;
 
+    public event Action<string, PageDirection>? PageRequested;
+
+    public event Action? NeedsFrame;
+
+    public bool CanPageUp => _pageUpTarget >= 0;
+
+    public bool CanPageDown => _pageDownTarget >= 0;
+
     public void Observe(Utterance u)
     {
+        if (_entries.TryGetValue(u.Id, out var entry))
+        {
+            entry.SpeakerTag = u.SpeakerTag;
+            entry.Tick.Preview = Shorten(u.SrcText);
+            entry.Tick.TimeLabel = Offset(u.TStartMs - _originMs.GetValueOrDefault());
+            Write(entry);
+            return;
+        }
+
+        if (u.State != UtteranceState.Final)
+            return;
+
         _originMs ??= u.TStartMs;
-
-        if (_anchors.TryGetValue(u.Id, out var anchored))
+        var tick = new RulerTickViewModel
         {
-            anchored.Preview = Shorten(u.SrcText);
-            anchored.StartMs = u.TStartMs;
-            if (anchored.Utterances == 1)
-                anchored.SpeakerTag = u.SpeakerTag;
-            Sync();
-            return;
+            AnchorUtteranceId = u.Id,
+            Preview = Shorten(u.SrcText),
+            TimeLabel = Offset(u.TStartMs - _originMs.Value),
+        };
+        var added = new Entry { SpeakerTag = u.SpeakerTag, Tick = tick };
+        _entries[u.Id] = added;
+        Write(added);
+        Ticks.Add(tick);
+        Layout();
+        MarkInView();
+    }
+
+    public void Reresolve()
+    {
+        foreach (var entry in _entries.Values)
+            Write(entry);
+    }
+
+    public void SetStripHeight(double height)
+    {
+        StripHeight = Math.Max(0, height);
+        if (Ticks.Count > 0)
+            Layout();
+    }
+
+    public void SetVisible(IEnumerable<string> utteranceIds, IEnumerable<string>? whole = null)
+    {
+        _visible = new HashSet<string>(utteranceIds);
+        _whole = whole is null ? null : new HashSet<string>(whole);
+        MarkInView();
+    }
+
+    public bool IsSkewed => Math.Abs(_skew) > SkewFloor;
+
+    public bool IsSettling => IsSkewed || _unsettled > 0;
+
+    public void PointerAt(double? y)
+    {
+        _pointerY = y;
+        if (y is null)
+        {
+            _skew = 0;
+            _lastY = null;
         }
-
-        // A translation upserts an utterance the room moved on from turns ago; only a first
-        // sighting may open a turn, or every late arrival forks the ruler.
-        if (!_seen.Add(u.Id))
+        else if (_lastY is { } last)
         {
-            Sync();
-            return;
-        }
-
-        var canonical = _resolve(u.SpeakerTag).Tag;
-        var last = _segments.Count > 0 ? _segments[^1] : null;
-        if (last is not null && _resolve(last.SpeakerTag).Tag == canonical)
-        {
-            last.Utterances++;
+            var seconds = Seconds(_moveStamp);
+            if (seconds >= MinStep)
+            {
+                Follow((y.Value - last) / seconds / SkewSpeed);
+                _lastY = y;
+                _moveStamp = _time.GetTimestamp();
+            }
         }
         else
         {
-            var segment = new Segment
-            {
-                SpeakerTag = u.SpeakerTag,
-                AnchorId = u.Id,
-                StartMs = u.TStartMs,
-                Preview = Shorten(u.SrcText),
-                Utterances = 1,
-            };
-            _segments.Add(segment);
-            _anchors[u.Id] = segment;
+            _lastY = y;
+            _moveStamp = _skewStamp = _time.GetTimestamp();
         }
 
-        Sync();
+        Magnify();
     }
 
-    public void Reresolve() => Sync();
+    public void Relax()
+    {
+        if (_pointerY is not null && IsSkewed && Seconds(_moveStamp) > StillAfter)
+        {
+            Follow(0);
+            Magnify();
+        }
+
+        Draw();
+    }
+
+    private void Draw()
+    {
+        var now = _time.GetTimestamp();
+        var seconds = Math.Min((now - _stepStamp) / (double)_time.TimestampFrequency, DrawStepCap);
+        _stepStamp = now;
+        if (_unsettled == 0 || seconds <= 0)
+            return;
+
+        var unsettled = 0;
+        foreach (var tick in Ticks)
+        {
+            var shape = tick.Shape;
+            var drawn = tick.DrawnShape;
+            var growing = shape.Reach > drawn.Reach || shape.Thickness > drawn.Thickness;
+            var amount = 1 - Math.Exp(-seconds / (growing ? DrawAttack : DrawRelease));
+            var next = new TickShape(
+                Lerp(drawn.Reach, shape.Reach, amount), Lerp(drawn.Thickness, shape.Thickness, amount));
+            if (Math.Abs(next.Reach - shape.Reach) < ShapeEpsilon && Math.Abs(next.Thickness - shape.Thickness) < ShapeEpsilon)
+                next = shape;
+            var glow = Lerp(tick.DrawnGlow, tick.Glow, amount);
+            if (Math.Abs(glow - tick.Glow) < GlowEpsilon)
+                glow = tick.Glow;
+
+            tick.DrawnShape = next;
+            tick.DrawnGlow = glow;
+            if (next != shape || glow != tick.Glow)
+                unsettled++;
+        }
+
+        _unsettled = unsettled;
+    }
+
+    private double Seconds(long since) => (_time.GetTimestamp() - since) / (double)_time.TimestampFrequency;
+
+    private void Follow(double target)
+    {
+        var seconds = Seconds(_skewStamp);
+        _skew += (Math.Clamp(target, -1, 1) - _skew) * (1 - Math.Exp(-seconds / SkewTime));
+        if (!IsSkewed)
+            _skew = 0;
+        _skewStamp = _time.GetTimestamp();
+    }
 
     public void Hover(RulerTickViewModel? tick)
     {
@@ -135,100 +296,140 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         if (tick is null)
             return;
 
-        var centre = Ticks.IndexOf(tick) * Pitch + Pitch / 2 - CardHeight / 2;
-        PreviewTop = Math.Clamp(centre, 0, Slots * Pitch - CardHeight);
+        var centre = Ticks.IndexOf(tick) * tick.Pitch + tick.Pitch / 2 - CardHeight / 2;
+        PreviewTop = Math.Clamp(centre, 0, Math.Max(0, StripHeight - CardHeight));
     }
 
     public void Jump(RulerTickViewModel tick) => JumpRequested?.Invoke(tick.AnchorUtteranceId);
 
+    [RelayCommand(CanExecute = nameof(CanPageUp))]
+    private void PageUp()
+    {
+        if (CanPageUp)
+            PageRequested?.Invoke(Ticks[_pageUpTarget].AnchorUtteranceId, PageDirection.Up);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPageDown))]
+    private void PageDown()
+    {
+        if (CanPageDown)
+            PageRequested?.Invoke(Ticks[_pageDownTarget].AnchorUtteranceId, PageDirection.Down);
+    }
+
     public void Clear()
     {
-        _segments.Clear();
-        _anchors.Clear();
-        _seen.Clear();
+        _entries.Clear();
         _originMs = null;
+        _visible = new HashSet<string>();
+        _whole = null;
+        _pointerY = null;
+        _lastY = null;
+        _skew = 0;
+        _unsettled = 0;
         HoveredTick = null;
         Ticks.Clear();
+        TrackLength = 0;
+        MarkInView();
     }
 
-    private void Sync()
+    private void Layout()
     {
-        var turns = Coalesce();
-        var stride = Stride(turns.Count);
+        var pitch = Math.Min(MaxPitch, StripHeight / Ticks.Count);
+        foreach (var tick in Ticks)
+            tick.Pitch = pitch;
+        TrackLength = pitch * Ticks.Count;
+        Magnify();
+    }
 
-        var index = 0;
-        for (var start = 0; start < turns.Count; start += stride, index++)
+    private void MarkInView()
+    {
+        int firstInView = -1, lastInView = -1, firstWhole = -1, lastWhole = -1;
+        for (var i = 0; i < Ticks.Count; i++)
         {
-            var group = turns.GetRange(start, Math.Min(stride, turns.Count - start));
-            var tick = index < Ticks.Count ? Ticks[index] : Add();
-            Write(tick, group);
-            tick.IsCurrent = start + stride >= turns.Count;
-        }
-
-        while (Ticks.Count > index)
-        {
-            if (ReferenceEquals(HoveredTick, Ticks[^1]))
-                HoveredTick = null;
-            Ticks.RemoveAt(Ticks.Count - 1);
-        }
-    }
-
-    private RulerTickViewModel Add()
-    {
-        var tick = new RulerTickViewModel { Kind = RulerTickKind.Speaker };
-        Ticks.Add(tick);
-        return tick;
-    }
-
-    private void Write(RulerTickViewModel tick, List<Turn> group)
-    {
-        var head = group[0];
-        var speakers = group.Select(t => t.Tag).Distinct().ToList();
-
-        tick.AnchorUtteranceId = head.AnchorId;
-        tick.Preview = head.Preview;
-        tick.TimeLabel = Offset(head.StartMs - (_originMs ?? 0));
-        tick.Turns = group.Count;
-        tick.Utterances = group.Sum(t => t.Utterances);
-        tick.SpeakerName = string.Join(", ", speakers.Take(3).Select(t => _resolve(t).Name)) +
-            (speakers.Count > 3 ? $", +{speakers.Count - 3}" : "");
-        // A mark standing for several people's turns identifies nobody, so it spends no hue.
-        tick.SpeakerColor = speakers.Count == 1 ? _resolve(speakers[0]).Color : "#7C8A93";
-    }
-
-    private List<Turn> Coalesce()
-    {
-        var turns = new List<Turn>(_segments.Count);
-        foreach (var segment in _segments)
-        {
-            var tag = _resolve(segment.SpeakerTag).Tag;
-            // Merges are non-destructive, so both tags survive in history; without this the
-            // ruler shows one person handing over to themselves.
-            if (turns.Count > 0 && turns[^1].Tag == tag)
-            {
-                turns[^1].Utterances += segment.Utterances;
+            var id = Ticks[i].AnchorUtteranceId;
+            var inView = _visible.Contains(id);
+            Ticks[i].IsInView = inView;
+            if (!inView)
                 continue;
-            }
 
-            turns.Add(new Turn
+            if (firstInView < 0)
+                firstInView = i;
+            lastInView = i;
+            if (_whole?.Contains(id) ?? true)
             {
-                Tag = tag,
-                AnchorId = segment.AnchorId,
-                StartMs = segment.StartMs,
-                Preview = segment.Preview,
-                Utterances = segment.Utterances,
-            });
+                if (firstWhole < 0)
+                    firstWhole = i;
+                lastWhole = i;
+            }
         }
 
-        return turns;
+        int up, down;
+        if (firstWhole >= 0)
+            (up, down) = (firstWhole - 1, lastWhole + 1);
+        // A lone cut sentence is taller than the screen; landing on it again would never move.
+        else if (firstInView >= 0 && firstInView == lastInView)
+            (up, down) = (firstInView - 1, lastInView + 1);
+        else if (firstInView >= 0)
+            (up, down) = (firstInView, lastInView);
+        else
+            (up, down) = (-1, -1);
+
+        _pageUpTarget = up >= 0 ? up : -1;
+        _pageDownTarget = down >= 0 && down < Ticks.Count ? down : -1;
+
+        Magnify();
+        OnPropertyChanged(nameof(CanPageUp));
+        OnPropertyChanged(nameof(CanPageDown));
+        PageUpCommand.NotifyCanExecuteChanged();
+        PageDownCommand.NotifyCanExecuteChanged();
     }
 
-    private static int Stride(int turns)
+    private void Magnify()
     {
-        var stride = 1;
-        while ((turns + stride - 1) / stride > Slots)
-            stride *= 2;
-        return stride;
+        var unsettled = 0;
+        for (var i = 0; i < Ticks.Count; i++)
+        {
+            var tick = Ticks[i];
+            var onScreen = tick.IsInView;
+            var focus = _pointerY is { } y ? Focus(i * tick.Pitch + tick.Pitch / 2 - y) : 0;
+            tick.Shape = new TickShape(
+                Lerp(onScreen ? InViewReach : RestReach, PeakReach, focus),
+                Lerp(onScreen ? InViewThickness : RestThickness, PeakThickness, focus));
+            tick.Glow = Lerp(onScreen ? InViewGlow : RestGlow, 1, focus);
+            if (onScreen != tick.DrawnInView)
+            {
+                tick.DrawnInView = onScreen;
+                tick.DrawnShape = tick.Shape;
+                tick.DrawnGlow = tick.Glow;
+            }
+            else if (tick.DrawnShape != tick.Shape || tick.DrawnGlow != tick.Glow)
+            {
+                unsettled++;
+            }
+        }
+
+        if (_unsettled == 0 && unsettled > 0)
+            _stepStamp = _time.GetTimestamp();
+        _unsettled = unsettled;
+        if (IsSettling)
+            NeedsFrame?.Invoke();
+    }
+
+    private double Focus(double distance)
+    {
+        var ahead = distance * Math.Sign(_skew) > 0;
+        var spread = FocusSpread * (ahead ? 1 - LeadShrink * Math.Abs(_skew) : 1 + TrailGrow * Math.Abs(_skew));
+        var d = Math.Abs(distance) / spread;
+        return d > 4 ? 0 : Math.Exp(-Math.Pow(d, FocusShape));
+    }
+
+    private static double Lerp(double from, double to, double amount) => from + (to - from) * amount;
+
+    private void Write(Entry entry)
+    {
+        var (_, name, color) = _resolve(entry.SpeakerTag);
+        entry.Tick.SpeakerName = name;
+        entry.Tick.SpeakerColor = color;
     }
 
     private static string Offset(long ms)
@@ -243,21 +444,9 @@ public sealed partial class TranscriptRulerViewModel : ViewModelBase
         return line.Length <= PreviewLimit ? line : line[..PreviewLimit].TrimEnd() + "…";
     }
 
-    private sealed class Segment
+    private sealed class Entry
     {
         public required string SpeakerTag { get; set; }
-        public required string AnchorId { get; init; }
-        public required long StartMs { get; set; }
-        public required string Preview { get; set; }
-        public required int Utterances { get; set; }
-    }
-
-    private sealed class Turn
-    {
-        public required string Tag { get; init; }
-        public required string AnchorId { get; init; }
-        public required long StartMs { get; init; }
-        public required string Preview { get; init; }
-        public required int Utterances { get; set; }
+        public required RulerTickViewModel Tick { get; init; }
     }
 }

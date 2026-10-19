@@ -176,8 +176,8 @@ public class BrowsedRulerTests : IDisposable
         Assert.Empty(vm.BrowsedRuler.Ticks);
     }
 
-    [Fact]
-    public void ABrowsedMeetingHasARulerBuiltFromItsStoredTurns()
+    [AvaloniaFact]
+    public void ABrowsedMeetingHasARulerBuiltFromItsStoredSentences()
     {
         var (vm, _) = Browsing(
             Said("u1", "S1", 0, "de", "Toleranz bei KX-4402"),
@@ -185,13 +185,14 @@ public class BrowsedRulerTests : IDisposable
             Said("u3", "S2", 9000, "zh", "交期确认"));
 
         Assert.True(vm.IsBrowsingRecord);
-        Assert.Equal(["u1", "u3"], vm.ShownRuler.Ticks.Select(t => t.AnchorUtteranceId));
-        Assert.Equal(["0:00", "0:09"], vm.ShownRuler.Ticks.Select(t => t.TimeLabel));
-        Assert.NotEqual(vm.ShownRuler.Ticks[0].SpeakerColor, vm.ShownRuler.Ticks[1].SpeakerColor);
+        Assert.Equal(["u1", "u2", "u3"], vm.ShownRuler.Ticks.Select(t => t.AnchorUtteranceId));
+        Assert.Equal(["0:00", "0:04", "0:09"], vm.ShownRuler.Ticks.Select(t => t.TimeLabel));
+        Assert.Equal(vm.ShownRuler.Ticks[0].SpeakerColor, vm.ShownRuler.Ticks[1].SpeakerColor);
+        Assert.NotEqual(vm.ShownRuler.Ticks[1].SpeakerColor, vm.ShownRuler.Ticks[2].SpeakerColor);
         Assert.Empty(vm.Ruler.Ticks);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void JumpingFromABrowsedTickMarksTheStoredLine()
     {
         var (vm, _) = Browsing(
@@ -205,7 +206,7 @@ public class BrowsedRulerTests : IDisposable
         Assert.NotEmpty(marked);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void LeavingTheBrowsedMeetingGivesTheLiveRulerBack()
     {
         var (vm, _) = Browsing(Said("u1", "S1", 0, "de", "Toleranz bei KX-4402"));

@@ -1,3 +1,4 @@
+using Kanal.Core.Diagnostics;
 using Kanal.Core.Meetings;
 using Kanal.Core.Models;
 using Kanal.Core.Providers;
@@ -57,6 +58,7 @@ public sealed class MeetingSession : IAsyncDisposable
 
     public event Action<AsrEvent.Error>? ErrorOccurred;
     public event Action<string?>? SessionEnded;
+    public event Action? TranslationApplied;
     public event Action<bool>? TranscribingChanged;
 
     /// <summary>
@@ -73,8 +75,10 @@ public sealed class MeetingSession : IAsyncDisposable
             throw new InvalidOperationException("Session already started.");
 
         var config = Room.Config;
+        var started = Environment.TickCount64;
         _session = await _asr.StartAsync(
             new AsrSessionOptions(16_000, config.Languages), ct);
+        Log.Info("room", $"Transcriber {_asr.Id} connected in {Environment.TickCount64 - started} ms.");
         Timeline.AsrClockRestarted();
         Interlocked.Exchange(ref _transcribing, _announceTranscription ? 1 : 0);
         await _relay.PublishAsync(new RoomConfigMessage(config), ct);
@@ -138,6 +142,13 @@ public sealed class MeetingSession : IAsyncDisposable
     public Speaker RenameSpeaker(string tag, string? displayName)
     {
         var speaker = Room.RenameSpeaker(tag, displayName);
+        _ = PublishSafeAsync(new SpeakerUpsert(speaker));
+        return speaker;
+    }
+
+    public Speaker SetSpeakerColour(string tag, string colour)
+    {
+        var speaker = Room.SetSpeakerColour(tag, colour);
         _ = PublishSafeAsync(new SpeakerUpsert(speaker));
         return speaker;
     }
@@ -236,14 +247,19 @@ public sealed class MeetingSession : IAsyncDisposable
 
             var updated = Room.ApplyTranslations(utterance.Id, utterance.Revision, translations);
             if (updated is not null)
+            {
+                if (translations.Count > 0)
+                    TranslationApplied?.Invoke();
                 await PublishSafeAsync(new TranslationUpsert(utterance.Id, utterance.Revision, translations));
+            }
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception ex)
         {
-            ErrorOccurred?.Invoke(new AsrEvent.Error($"Translation failed: {ex.Message}", Fatal: false));
+            ErrorOccurred?.Invoke(new AsrEvent.Error(
+                $"Translation failed: {ex.Message}", Fatal: false, (ex as MtProviderException)?.Code));
         }
     }
 

@@ -5,12 +5,31 @@ namespace Kanal.Core.UnitTests;
 public class LocalModelCatalogTests
 {
     [Fact]
-    public void PreferredModelIsQwen35_4B()
+    public void PreferredModelIsHyMt2()
     {
         var first = LocalModelCatalog.Models[0];
-        Assert.Equal("qwen3.5-4b", first.Id);
+        Assert.Equal("hy-mt2-1.8b", first.Id);
+        Assert.Equal("Hy-MT2 1.8B", first.DisplayName);
+        Assert.Equal("1.8B · Q4_K_M", first.Parameters);
+        Assert.Equal("tencent/Hy-MT2-1.8B-GGUF", first.Repo);
+        Assert.Equal("Hy-MT2-1.8B-Q4_K_M.gguf", first.FileName);
+        Assert.Equal(1_133_080_448, first.SizeBytes);
+        Assert.Equal("dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699", first.Sha256);
         Assert.Equal("Apache-2.0", first.License);
         Assert.Null(first.LicenseNote); // Apache needs no warning
+    }
+
+    [Fact]
+    public void HyMt2CarriesNoPrefill()
+    {
+        Assert.Null(LocalModelCatalog.Find("hy-mt2-1.8b")!.AssistantPrefill);
+    }
+
+    [Fact]
+    public void PreviousModelsStayInTheCatalog()
+    {
+        foreach (var id in new[] { "qwen3.5-4b", "qwen3.5-2b", "gemma-3-4b" })
+            Assert.NotNull(LocalModelCatalog.Find(id));
     }
 
     /// <summary>
@@ -41,7 +60,7 @@ public class LocalModelCatalogTests
     [Fact]
     public void EveryEntryIsComplete()
     {
-        Assert.InRange(LocalModelCatalog.Models.Count, 3, 5);
+        Assert.InRange(LocalModelCatalog.Models.Count, 4, 6);
         foreach (var m in LocalModelCatalog.Models)
         {
             Assert.False(string.IsNullOrWhiteSpace(m.Id));
@@ -72,6 +91,7 @@ public class LocalModelCatalogTests
     public void FindResolvesByIdAndToleratesUnknown()
     {
         Assert.NotNull(LocalModelCatalog.Find("qwen3.5-4b"));
+        Assert.NotNull(LocalModelCatalog.Find("hy-mt2-1.8b"));
         Assert.Null(LocalModelCatalog.Find("no-such-model"));
         Assert.Null(LocalModelCatalog.Find(null));
     }
