@@ -4,6 +4,16 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
 ## 2026-10-18
 
 ### Gladia session does not reconnect after a deliberate stop

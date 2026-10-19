@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A failed meeting export no longer damages an existing `.kl` file. Before, an export to a file name that
+  already existed erased that file first. If the export then failed, for example because the disk was
+  full or an attachment was locked, the old file was lost. Now Kanal keeps the old file until the new
+  file is complete.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB
