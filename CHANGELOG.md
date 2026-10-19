@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Importing a meeting file no longer overwrites a meeting that is already on disk. Before, an import could
+  replace the transcript and the recording in a meeting folder that the sidebar did not list, for example
+  after the meeting record was damaged. Now Kanal refuses the import and shows a message. It does not change
+  any file in that folder. A failed import also no longer leaves a half-filled meeting folder.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

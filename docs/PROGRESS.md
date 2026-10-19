@@ -4,6 +4,20 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### Import never overwrites a meeting folder on disk (issue #236)
+
+- **Bug.** ADR 0054 decision 23 says an import never overwrites. Only the sidebar enforced it. The sidebar asks "skip or save as new" only for a meeting in its list. A meeting folder with a damaged or missing `meeting.json` is not in the list. `MeetingBundle.Import` then wrote over its `transcript.jsonl` and `audio.wav`. These files can be the only copy of a recording.
+- **Second defect.** An extract that failed part way left `meetings/<id>/` with some files and no `meeting.json`.
+- **Fix.** `Import` with `asNewRecord: false` refuses when `meetings/<id>/` exists. The new `StoreProblemKind.FolderTaken` carries the refusal. `StoreRefusal` maps it to `workspace.refused.foldertaken` in en, zh, de and pl.
+- **Staging.** `Import` extracts into `meetings/<id>.importing-<guid>/`. It moves the folder into place only after every entry is extracted. It deletes the staging folder on every exit. `ExtractToFile` no longer uses `overwrite: true`.
+- **Save-as-new.** This path keeps working. The folder of the new record already holds `meeting.json`, so the move puts each extracted entry into that folder.
+- **Rollback.** If the record cannot be saved after the move, `Import` deletes the folder that it created.
+- **Open item.** A crash during an extract leaves the staging folder. The list shows it as a folder without a record.
+
+---
+
 ## 2026-10-18
 
 ### Gladia session does not reconnect after a deliberate stop
