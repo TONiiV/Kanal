@@ -12,7 +12,7 @@ Issue #279, part of spec #278.
 
 - **Problem.** A non-fatal translation error wrote one status-bar line. The next status write replaced it. After `mt.key` or `mt.quota`, the provider sends no more requests. The translation columns stayed empty with no warning on screen.
 - **State.** `MainViewModel.MtWarningCode` holds the `mt.*` code of the last non-fatal error. `Status` does not touch it. A repeated code does not raise `PropertyChanged`, so the bar does not flicker or stack. `HasMtWarning` and `MtWarningText` derive from the code. The text follows the application language.
-- **Clear rules.** `MeetingSession.TranslationApplied` fires when the room accepts a translation. The bar clears on that event. It also clears when the session ends, when the operator stops the meeting, and when a new meeting starts.
+- **Clear rules.** `MeetingSession.TranslationApplied` fires when the room accepts a translation that has text. A locked provider returns an empty result. That result does not clear the bar. The bar clears on that event. It also clears when the session ends, when the operator stops the meeting, and when a new meeting starts.
 - **Stale events.** Each session captures `_mtWarningEpoch`. Stop and session end increase the epoch. A late event from an old session cannot raise a bar after the meeting ended.
 - **Key change.** The translation provider is built at meeting start. A new key takes effect at the next start, and the start clears the bar. No separate "key changed" path exists.
 - **View.** `MtWarningBar` sits under the capture note in `IconBarView`. It uses `Warning` and `WarningWash`, which exist in the Light and Dark variants. The text says "cloud translation" and names no vendor.

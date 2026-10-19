@@ -248,7 +248,8 @@ public sealed class MeetingSession : IAsyncDisposable
             var updated = Room.ApplyTranslations(utterance.Id, utterance.Revision, translations);
             if (updated is not null)
             {
-                TranslationApplied?.Invoke();
+                if (translations.Count > 0)
+                    TranslationApplied?.Invoke();
                 await PublishSafeAsync(new TranslationUpsert(utterance.Id, utterance.Revision, translations));
             }
         }
