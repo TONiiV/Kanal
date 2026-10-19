@@ -1,4 +1,5 @@
 using System.Text;
+using Kanal.Core.Diagnostics;
 using LLama;
 using LLama.Common;
 using LLama.Sampling;
@@ -20,10 +21,12 @@ public sealed class LlamaCppBackend : ILlamaBackend
     public async Task LoadAsync(string modelPath, string? assistantPrefill, CancellationToken ct)
     {
         _assistantPrefill = assistantPrefill;
+        var accelerator = LlamaAcceleration.EnsureConfigured();
+        Log.Info("LocalMt", $"llama.cpp runs on {accelerator}.");
         _params = new ModelParams(modelPath)
         {
             ContextSize = 4096,
-            GpuLayerCount = 999, // offload everything the backend supports (Metal on mac)
+            GpuLayerCount = accelerator == Accelerator.Cpu ? 0 : 999,
         };
         _weights = await LLamaWeights.LoadFromFileAsync(_params, ct);
     }

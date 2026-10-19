@@ -62,7 +62,175 @@ Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the oper
 - **Windows.** No change. Process loopback is bound to no render endpoint, so an output change is expected not to end it. The manual test must confirm this before the Windows part of #152 closes. See "Known risks" in `docs/online-meeting-audio.md`.
 - **Open item.** An invalidated tap with both devices alive is not detected. The listener is untested on hardware. The PR lists the manual tests.
 
+---
+
+### A failed export keeps the existing .kl file (#235)
+
+- **Bug.** `MeetingBundle.Write` opened the target with `FileMode.Create`. This truncated an existing file at once. A later failure left a broken zip in place of the good file.
+- **Fix.** `Write` builds the archive in `<target>.partial`. After the archive is complete, `File.Move(..., overwrite: true)` replaces the target in one step. On failure, `Write` deletes the `.partial` file.
+- **Test seam.** The tests lock an attachment with `FileShare.None`. The export fails after it has started, on every OS.
+
+---
+
 ## 2026-10-18
+
+### Transcription benchmark: Gladia, English, number-normalised scores, more test sets
+
+The benchmark of 2026-10-17 gave error rates that were not usable. It had three causes.
+Numbers written as words counted as errors. The meeting clips were synthetic Piper speech. Each
+language had only 4 meeting sentences. This change addresses all three causes. It also adds the
+cloud baseline and three more local models.
+
+What changed in `tests/Kanal.AsrBenchmark`:
+
+- **Gladia engine.** `--model gladia` streams each clip through the product `GladiaAsrProvider`
+  (translation off) at real-time pace, with 1 s of trailing silence. The product sends Gladia no
+  room languages, so Gladia has only the auto room. Gladia is opt-in, because it is a paid API.
+  The key comes from `GLADIA_API_KEY` (process, then User, then Machine on Windows).
+- **English.** Every set except `aishell4` has English. The auto room is zh/de/pl/en.
+- **Number-normalised scores.** `Numbers.Normalize` turns spelled-out cardinals, decimals and
+  percentages into digits in the hypothesis and in the reference (zh 两千 → 2000, de fünftausend →
+  5000, pl dwa tysiące → 2000, en five thousand → 5000). The report shows the raw score and the
+  normalised score side by side. Limits: no ordinals, no dates, no years read as two numbers
+  ("twenty twenty-six"), no codes read digit by digit. The idioms 万一, 万万 and 千万 before 不, 别, 要 or 得
+  stay text. A run like 十分 is still converted, on both sides alike.
+  A bare 百 or 千 at the start of a run is read as 100 or 1000, so 百度 becomes 100度 and 百分比
+  becomes 100分比. Both sides change alike. A real inverse text normaliser would remove this limit.
+  A thousands separator is a no-break space, a narrow no-break space, or the mark of the language
+  (comma in English, dot in German and Polish). A plain space is never a separator, so "15 300"
+  stays two numbers. None of the 498 reference texts uses a plain space as a separator.
+- **More candidates.** Whisper large-v3, Cohere Transcribe 03-2026 and Qwen3-ASR 1.7B (community
+  export, pinned revision). Cohere Transcribe needs the clip language, so it has no auto room.
+  The licence of the 1.7B export is Apache-2.0 in the
+  [model card](https://huggingface.co/thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8/blob/69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5/README.md)
+  at the pinned revision. The repository has no separate licence file.
+- **Clip sets.** `fetch --sets <name,...>` fetches named sets and keeps the others. A plain `fetch`
+  skips `meeting-11labs` (paid) and `commonvoice` (needs a key). An unknown set name gives exit code 2.
+  A failed set, for example with no `ffmpeg`, gives exit code 1. Each set pins a revision or a dataset version.
+  No audio is committed.
+
+| Set | Languages | Clips | Source | Licence |
+|---|---|---:|---|---|
+| `fleurs` | zh de pl en | 20 each | FLEURS test, `google/fleurs` | CC-BY-4.0 |
+| `meeting-piper` | zh de pl en | 12 each | the 12 MT benchmark sentences (4 originals, 8 translations), Piper voices | – |
+| `meeting-11labs` | zh de pl en | 36 each | the same sentences, ElevenLabs `eleven_multilingual_v2`, voices Alice (f), Lily (f), George (m) | – |
+| `voxpopuli` | de pl en | 25 each | VoxPopuli test, `facebook/voxpopuli` at 719aaef | CC0; raw audio: European Parliament |
+| `ami` | en | 25 | AMI test meeting EN2002a, single far-field microphone | CC-BY-4.0 |
+| `aishell4` | zh | 26 | AISHELL-4 test, sessions L_R003S01C02 and L_R004S01C01, channel 0 of the far-field array | CC-BY-SA-4.0 (openslr.org/111) |
+| `commonvoice` | zh de pl en | 25 each | Common Voice Scripted Speech 27.0 test, Mozilla Data Collective | CC0-1.0 |
+
+AMI and AISHELL-4 clips are single-speaker segments of 3–20 s that overlap no other segment. The
+AISHELL-4 fetch reads the start of each FLAC file and decodes it with `ffmpeg` (on `PATH`). Common
+Voice needs `MDC_API_KEY` and the accepted dataset terms. The archive lists `test.tsv` before the
+clips, so the fetch reads only the start of the stream (cap 2 GB). ElevenLabs needs
+`ELEVENLABS_API_KEY`. It sent 9,630 characters once; a clip on disk is never requested again.
+
+Run it:
+
+1. Fetch FLEURS and the meeting sets: `dotnet run -c Release --project tests/Kanal.AsrBenchmark -- fetch --sets fleurs,meeting-piper,meeting-11labs`.
+   FLEURS gets the default 20 clips per language.
+2. Fetch the other sets: `... -- fetch --clips 25 --sets voxpopuli,ami,aishell4,commonvoice`.
+3. Fetch the models: `... -- fetch --candidates all --no-clips`.
+4. Run: `... -- --model nemotron-3.5-asr-560ms-int8,qwen3-asr-0.6b-int8,gladia`. `--note <text>`
+   adds a line to the report.
+
+#### Results of 2026-10-18
+
+The machine is an AMD Ryzen 9 PRO 8945HS on CPU, 4 threads per model. The runs are:
+
+1. Accuracy phase: all sets, all models except Whisper large-v3.
+2. Whisper large-v3: 5 clips per set and language, a small sample. It ran at the same time as the
+   Gladia part of the accuracy phase. The CPU was shared, so its RTF is too high.
+3. Speed phases (real time, streams, threads): alone on the machine.
+
+The Nemotron 560 ms forced room on FLEURS and on meeting-piper zh/de/pl ran next to the processes of
+another benchmark. Only the RTF of these 7 rows is not valid. The 160 ms model is not in this run.
+PR #284 has its numbers.
+
+Error rate in %, number-normalised, auto room (zh/de/pl/en). CER for zh, WER for de/pl/en. Cohere
+and Qwen3-ASR 1.7B show the forced room (see the findings). The raw scores are in the report.
+
+| Set | Lang | Nemotron 560 ms | Whisper turbo | Whisper large-v3 (5 clips) | Qwen3-ASR 0.6B | Qwen3-ASR 1.7B (forced) | Cohere (forced) | Gladia |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fleurs | zh | 20.5 | 32.8 | 31.8 | 5.5 | 6.1 | 28.5 | 9.0 |
+| fleurs | de | 10.7 | 6.9 | 0.9 | 9.6 | 7.1 | 8.0 | 6.0 |
+| fleurs | pl | 21.2 | 13.2 | 18.9 | 50.5 | 36.6 | 18.8 | 12.3 |
+| fleurs | en | 17.0 | 8.2 | 7.7 | 13.9 | 8.6 | 9.1 | 11.1 |
+| commonvoice | zh | 45.0 | 44.8 | 30.7 | 9.2 | 6.8 | 31.2 | 16.8 |
+| commonvoice | de | 11.6 | 22.0 | 28.0 | 17.1 | 10.4 | 14.6 | 6.1 |
+| commonvoice | pl | 24.0 | 17.5 | 11.8 | 46.2 | 35.1 | 18.1 | 6.4 |
+| commonvoice | en | 32.6 | 13.0 | 0.0 | 13.0 | 11.9 | 10.4 | 10.4 |
+| voxpopuli | de | 15.4 | 15.4 | 9.5 | 18.8 | 13.3 | 7.4 | 11.1 |
+| voxpopuli | pl | 35.5 | 37.7 | 16.0 | 40.0 | 27.5 | 16.2 | 33.5 |
+| voxpopuli | en | 10.2 | 28.9 | 4.2 | 8.2 | 7.6 | 6.6 | 25.1 |
+| meeting-11labs | zh | 38.3 | 39.7 | 36.8 | 15.9 | 15.1 | 37.0 | 25.6 |
+| meeting-11labs | de | 21.8 | 13.5 | 11.9 | 11.6 | 17.5 | 11.0 | 14.9 |
+| meeting-11labs | pl | 33.3 | 12.1 | 15.6 | 32.0 | 31.1 | 17.9 | 17.2 |
+| meeting-11labs | en | 19.7 | 7.5 | 7.2 | 13.1 | 10.4 | 8.4 | 10.9 |
+| meeting-piper | zh | 36.0 | 43.8 | 46.4 | 19.1 | 16.6 | 41.0 | 24.0 |
+| meeting-piper | de | 28.2 | 11.8 | 15.7 | 23.5 | 15.9 | 9.4 | 17.1 |
+| meeting-piper | pl | 27.5 | 11.4 | 17.8 | 47.0 | 47.7 | 21.5 | 20.1 |
+| meeting-piper | en | 9.1 | 6.5 | 7.8 | 8.6 | 7.5 | 4.3 | 9.7 |
+| ami | en | 20.2 | 27.1 | 22.6 | 24.6 | 25.9 | 21.7 | 52.1 |
+| aishell4 | zh | 33.2 | 83.2 | 68.0 | 55.5 | 85.2 | 56.2 | 66.6 |
+
+The engine run used the normaliser of commit 80805cb. Later normaliser fixes can change the
+number-normalised column slightly. The raw column is not affected.
+
+Speed (speed phases; RTF of the accuracy phase, offline feed):
+
+| Model | RTF offline | RTF 4 streams (mean) | Final after speech end p50/p95 s | First partial p50 s | Peak working set MB |
+|---|---:|---:|---:|---:|---:|
+| Nemotron 560 ms | 0.17 | 0.31 | 2.34/3.76 | 0.95 | 1088 |
+| Whisper turbo | 0.31 | 0.71 | 3.42/5.44 | 8.91 | 2885 |
+| Whisper large-v3 | 1.48–1.53 (the CPU was shared) | – | – | – | – |
+| Qwen3-ASR 0.6B | 0.19 | 0.30 | 2.19/3.42 | 8.02 | 2687 |
+| Qwen3-ASR 1.7B | 0.34 | 0.67 | 3.62/5.51 | 9.07 | 4069 |
+| Cohere Transcribe | 0.14 | 0.26 | 1.78/2.95 | 7.65 | 3780 |
+| Gladia | real-time pace | – | 1.01/2.09 | 0.81 | 390 |
+
+Offline models give no partials. Their "first partial" is the first final.
+
+Findings:
+
+- **Number normalisation removes a large part of the meeting errors.** Nemotron meeting-piper: en
+  33.3 → 9.1, pl 50.3 → 27.5, zh 45.1 → 36.0. On FLEURS, Common Voice and VoxPopuli the change is
+  small, because these sets spell few numbers.
+- **No local model is best on every language.** Qwen3-ASR is best on zh (FLEURS 5.5, Common Voice
+  9.2, meeting 15–19) and weak on pl (32–50). Whisper and Cohere are good on de/pl/en and weak on zh.
+  Nemotron is in the middle, but it is the only streaming model with real partials.
+- **sherpa-onnx 1.13.8 drops Chinese characters** from Whisper and Cohere (k2-fsa/sherpa-onnx#3964,
+  fixed in #3965 after 1.13.8). Their zh CER shows the bug, not the model. No configuration
+  removes it. Test again with the next sherpa-onnx release.
+- **Gladia picks a wrong language** on accented or far-field speech, because the product sends no
+  room languages. On AMI it wrote Welsh for 6 of 25 English clips (WER 52.1). On VoxPopuli it wrote
+  Slovene, German or English for some pl and en clips. On AISHELL-4 it gave no text for 14 of 26
+  clips. On clean speech Gladia is the most accurate engine (Common Voice de/pl 6.1/6.4).
+  ADR 0061 (PR #291) decides that the product sends no room languages to Gladia. It accepts these errors.
+- **Gladia gives the fastest finals** (p50 1.01 s after speech end against 2.34 s for Nemotron).
+- **The Gladia session does not end** when the session closes during the reconnect wait.
+  `GladiaAsrSession.ReceiveLoopAsync` awaits the backoff delay in its `catch`, so the cancel escapes
+  and the event stream never completes. The benchmark works around it. The product bug needs its
+  own ticket. The server closed 122 of 498 sessions after `stop_recording`, before the session
+  close. These clips lost no text.
+- **Cohere Transcribe needs the clip language.** It has no auto mode, so a mixed room cannot use it
+  as it is.
+- **The Qwen3-ASR 1.7B community export leaks a header** ("language Chinese<asr_text>") into the
+  auto-room text of 103 of 498 clips. The auto-room scores of 1.7B in the report are not valid.
+  The benchmark now removes the header. In the forced room, 1.7B scores about the same as 0.6B on
+  zh. On pl it scores better (FLEURS pl 36.6 against 44.3).
+- **Whisper large-v3 is not real-time** on this CPU (RTF about 1.5). Its sample is too small for a
+  ranking.
+- **AISHELL-4 is hard for every engine** (33–85 %). Nemotron is best there (33.2), with no empty
+  text. Far-field conversational Chinese is the closest set to the real meeting room.
+- **`TranscriptLanguage.Guess` works on English.** It labels 92–100 % of the English finals
+  correctly on FLEURS and the meeting sets. It is lower on Common Voice, VoxPopuli and AMI (63–96 %),
+  where the text is short or in a wrong language.
+- **Part numbers survive badly** (loose, meeting-11labs, of 96): Gladia 53, Whisper turbo 52,
+  Cohere 50, Qwen3-ASR 0.6B 34, Nemotron 4.
+
+Cost: Gladia streamed about 1.25 h of audio, about EUR 0.85. ElevenLabs synthesised 9,630
+characters once, plus about 20 characters to find usable voices.
 
 ### TranscriptLanguage labels by script before the room prior
 
@@ -393,6 +561,26 @@ The transcript menu now opens on a right-click anywhere on a bubble.
 - **Pin item.** Headless tests open the menu on a final, translated bubble: first open, reopen, a move between bubbles and a Demo session. Pin is enabled each time.
   Pin stays disabled for a partial line, a line that waits for its translation, and a browsed transcript (no pin handler).
 
+### Local translation on the GPU
+
+Before, Kanal referenced only `LLamaSharp.Backend.Cpu`. On Windows and Linux every layer ran on the
+CPU, and `GpuLayerCount = 999` had no effect. Now:
+
+- `LLamaSharp.Backend.Vulkan` is always in. It needs only the GPU driver and works with NVIDIA, AMD
+  and Intel GPUs. It adds about 20 MB to the MSI download and 65 MB to the install folder.
+- Apple silicon uses Metal. The osx-arm64 build in `LLamaSharp.Backend.Cpu` already contains it.
+- `LLamaSharp.Backend.Cuda12` is optional (`-p:KanalCuda=true`). It adds about 600 MB and needs the
+  CUDA 12 toolkit, so it is not in the installer.
+- LLamaSharp selects the library: CUDA, then Vulkan, then CPU. It falls back when a library does not
+  load. `LlamaAcceleration` reads the loaded library and `llama_supports_gpu_offload()`, and logs
+  the result as `Accelerator`.
+- `KANAL_ACCELERATOR=cpu|vulkan|cuda` forces one library. With `cpu`, no layer goes to the GPU.
+
+Limits:
+
+- LLamaSharp tries Vulkan only when `vulkaninfo --summary` runs. On Linux this needs `vulkan-tools`.
+- LLamaSharp 0.27 `DryRun` always returns null libraries. Do not use it to detect the backend.
+
 ### Local translation benchmark
 
 `tests/Kanal.Benchmark` measures the local translation models on this machine. It does not run in CI,
@@ -437,7 +625,8 @@ Options:
 - `--gguf <file>`: an extra model. Repeat it for more models.
 - `--gguf-nothink <file>`: an extra Qwen3 reasoning model. The benchmark skips its reasoning turn.
 - `--streams 1,2,4`: the levels of sentences in flight.
-- `-p:LlamaBackend=Cuda12` or `-p:LlamaBackend=Vulkan` (before `--`): add a GPU backend.
+- `-p:KanalCuda=true` (before `--`): add the CUDA 12 backend. Vulkan and Metal are always in.
+- `KANAL_ACCELERATOR=cpu` (environment): force the CPU, to compare it with the GPU.
 
 The report goes to `kanal-benchmark-<timestamp>.md` in the current folder.
 

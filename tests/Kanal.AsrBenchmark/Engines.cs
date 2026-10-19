@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Channels;
 using Kanal.Core.Models;
+using Kanal.Core.Providers;
+using Kanal.Providers.Gladia;
 using Kanal.Providers.LocalAsr;
 using SherpaOnnx;
 
@@ -11,16 +14,33 @@ internal sealed record BenchModel(
     string Id,
     string Kind,
     double ChunkSeconds,
-    IReadOnlyDictionary<string, string> Files);
+    IReadOnlyDictionary<string, string> Files)
+{
+    public bool Cloud => Kind == "gladia";
+}
 
 [ExcludeFromCodeCoverage]
 internal abstract class Engine : IDisposable
 {
     public virtual double PaddingSeconds => 0;
 
+    public virtual bool NeedsLanguage => false;
+
+    public virtual IAsrProvider Provider(List<double> decodeMs) => new NemotronAsrProvider(lang => Open(lang, decodeMs));
+
     public abstract IRecognizerStream Open(string language, List<double> decodeMs);
 
     public abstract void Dispose();
+
+    public static string Key(string name)
+    {
+        var key = Environment.GetEnvironmentVariable(name)
+                  ?? (OperatingSystem.IsWindows()
+                      ? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User)
+                        ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine)
+                      : null);
+        return string.IsNullOrWhiteSpace(key) ? throw new InvalidOperationException($"{name} is not set.") : key.Trim();
+    }
 
     public static int DefaultThreads => Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
 
@@ -42,6 +62,13 @@ internal abstract class Engine : IDisposable
         ("qwen3-asr-0.6b-int8", "qwen3", 0, "csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
             ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx",
              "tokenizer/merges.txt", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"]),
+        ("qwen3-asr-1.7b-int8", "qwen3", 0, "thieunv-asilla/sherpa-onnx-qwen3-asr-1.7B-int8@69eb686fd94a4a865bb5340a3d6ac0d7f1fec0d5",
+            ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx",
+             "tokenizer/merges.txt", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"]),
+        ("whisper-large-v3-int8", "whisper", 0, "csukuangfj/sherpa-onnx-whisper-large-v3",
+            ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"]),
+        ("cohere-transcribe-int8", "cohere", 0, "csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
+            ["encoder.int8.onnx", "encoder.int8.onnx.data", "decoder.int8.onnx", "tokens.txt"]),
     ];
 
     private const string VadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
@@ -58,7 +85,8 @@ internal abstract class Engine : IDisposable
         await DownloadAsync(http, VadUrl, Path.Combine(data, "models", "silero_vad.onnx"));
         foreach (var (id, _, _, repo, files) in Candidates.Where(c => ids.Contains(c.Id) || ids.Contains("all")))
         foreach (var file in files)
-            await DownloadAsync(http, $"https://huggingface.co/{repo}/resolve/main/{file}", Path.Combine(data, "models", id, file));
+            await DownloadAsync(http, $"https://huggingface.co/{(repo.Contains('@') ? repo.Replace("@", "/resolve/") : repo + "/resolve/main")}/{file}",
+                Path.Combine(data, "models", id, file));
     }
 
     private static async Task DownloadAsync(HttpClient http, string url, string path)
@@ -73,9 +101,12 @@ internal abstract class Engine : IDisposable
         File.Move(path + ".part", path, overwrite: true);
     }
 
+    public static BenchModel Gladia { get; } = new("gladia", "gladia", 0, new Dictionary<string, string>());
+
     public static Engine Load(BenchModel model, string provider, int threads, string data) => model.Kind switch
     {
         "nemotron" => new NemotronEngine(model, provider, threads),
+        "gladia" => new GladiaEngine(),
         _ => new OfflineEngine(model, provider, threads, Path.Combine(data, "models", "silero_vad.onnx")),
     };
 }
@@ -107,6 +138,12 @@ internal sealed class OfflineEngine : Engine
             _config.ModelConfig.Whisper.Decoder = files.Values.Single(f => f.EndsWith("decoder.int8.onnx"));
             _config.ModelConfig.Tokens = files.Values.Single(f => f.EndsWith("tokens.txt"));
         }
+        else if (model.Kind == "cohere")
+        {
+            _config.ModelConfig.CohereTranscribe.Encoder = files["encoder.int8.onnx"];
+            _config.ModelConfig.CohereTranscribe.Decoder = files["decoder.int8.onnx"];
+            _config.ModelConfig.Tokens = files["tokens.txt"];
+        }
         else
         {
             _config.ModelConfig.Qwen3Asr.ConvFrontend = files["conv_frontend.onnx"];
@@ -123,6 +160,8 @@ internal sealed class OfflineEngine : Engine
         _vad.SileroVad.MaxSpeechDuration = 20;
     }
 
+    public override bool NeedsLanguage => _model.Kind == "cohere";
+
     public override IRecognizerStream Open(string language, List<double> decodeMs) => new Stream(this, language, decodeMs);
 
     public override void Dispose() => _recognizer.Dispose();
@@ -130,7 +169,11 @@ internal sealed class OfflineEngine : Engine
     private string Recognize(float[] samples, string language)
     {
         using var stream = _recognizer.CreateStream();
-        if (_model.Kind == "whisper")
+        if (_model.Kind == "cohere")
+        {
+            stream.SetOption("language", language[..2]);
+        }
+        else if (_model.Kind == "whisper")
         {
             // Whisper reads the language from the recognizer config, not from the stream.
             var code = language == "auto" ? "" : language[..2];
@@ -144,12 +187,13 @@ internal sealed class OfflineEngine : Engine
         }
         else if (language != "auto")
         {
-            stream.SetOption("language", language[..2] switch { "zh" => "Chinese", "de" => "German", "pl" => "Polish", var l => l });
+            stream.SetOption("language", language[..2] switch { "zh" => "Chinese", "de" => "German", "pl" => "Polish", "en" => "English", var l => l });
         }
 
         stream.AcceptWaveform(Corpus.Rate, samples);
         _recognizer.Decode(stream);
-        return stream.Result.Text.Trim();
+        var text = stream.Result.Text;
+        return Scoring.StripAsrHeader(text);
     }
 
     [ExcludeFromCodeCoverage]
@@ -270,5 +314,90 @@ internal sealed class NemotronEngine : Engine
         }
 
         public void Dispose() => _stream.Dispose();
+    }
+}
+
+// The product sends no room languages to Gladia (GladiaAsrProvider.BuildInitBody), so every room is the auto room.
+[ExcludeFromCodeCoverage]
+internal sealed class GladiaEngine : Engine
+{
+    private readonly GladiaAsrProvider _provider;
+
+    public GladiaEngine()
+    {
+        _provider = new GladiaAsrProvider(new GladiaOptions { ApiKey = Key("GLADIA_API_KEY"), EnableTranslation = false });
+    }
+
+    public override double PaddingSeconds => 1;
+
+    public override IAsrProvider Provider(List<double> decodeMs) => new Settled(_provider);
+
+    public override IRecognizerStream Open(string language, List<double> decodeMs) => throw new NotSupportedException();
+
+    public override void Dispose() => _provider.Dispose();
+
+    // GladiaAsrSession.DisposeAsync closes the socket right after stop_recording, so this waits for the last final first.
+    [ExcludeFromCodeCoverage]
+    private sealed class Settled(GladiaAsrProvider inner) : IAsrProvider
+    {
+        public string Id => inner.Id;
+
+        public AsrCapabilities Caps => inner.Caps;
+
+        public async Task<IAsrSession> StartAsync(AsrSessionOptions options, CancellationToken ct) =>
+            new Session(await inner.StartAsync(options, ct));
+    }
+
+    [ExcludeFromCodeCoverage]
+    private sealed class Session : IAsrSession
+    {
+        private readonly IAsrSession _inner;
+        private readonly Channel<AsrEvent> _events = Channel.CreateUnbounded<AsrEvent>();
+        private readonly Task _pump;
+        private long _last = Stopwatch.GetTimestamp();
+        private volatile bool _partial;
+
+        public Session(IAsrSession inner)
+        {
+            _inner = inner;
+            _pump = Task.Run(async () =>
+            {
+                await foreach (var e in inner.Events)
+                {
+                    if (e is AsrEvent.Transcript t)
+                    {
+                        _partial = !t.IsFinal;
+                        Interlocked.Exchange(ref _last, Stopwatch.GetTimestamp());
+                    }
+
+                    _events.Writer.TryWrite(e);
+                }
+
+                _events.Writer.TryComplete();
+            });
+        }
+
+        public IAsyncEnumerable<AsrEvent> Events => _events.Reader.ReadAllAsync();
+
+        public ValueTask PushAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken ct = default) => _inner.PushAudioAsync(pcm16, ct);
+
+        public async ValueTask DisposeAsync()
+        {
+            var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10;
+            while (Stopwatch.GetTimestamp() < deadline
+                   && (_partial || Stopwatch.GetElapsedTime(Interlocked.Read(ref _last)) < TimeSpan.FromSeconds(1.5)))
+                await Task.Delay(100);
+            try
+            {
+                await _inner.DisposeAsync();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            // A close during the reconnect backoff leaves the inner event stream open for good.
+            _events.Writer.TryComplete();
+            await Task.WhenAny(_pump, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
     }
 }
