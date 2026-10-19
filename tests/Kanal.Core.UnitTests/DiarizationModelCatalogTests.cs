@@ -46,9 +46,9 @@ public class DiarizationModelCatalogTests
     }
 
     [Fact]
-    public void EveryDownloadUrlIsAWholeGitHubReleaseUrl()
+    public void EveryEmbeddingUrlIsAWholeGitHubReleaseUrl()
     {
-        foreach (var m in DiarizationModelCatalog.Models)
+        foreach (var m in DiarizationModelCatalog.Embeddings)
         {
             Assert.StartsWith("https://github.com/k2-fsa/sherpa-onnx/releases/download/", m.DownloadUrl);
             Assert.EndsWith(m.FileName, m.DownloadUrl);
@@ -57,17 +57,24 @@ public class DiarizationModelCatalogTests
     }
 
     [Fact]
-    public void SegmentationIsThePyannoteArchiveVerifiedAgainstTheRelease()
+    public void SegmentationIsAPlainOnnxFilePinnedToAHuggingFaceCommit()
     {
         var m = DiarizationModelCatalog.Segmentation[0];
 
-        Assert.Equal("sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", m.FileName);
-        Assert.Equal(6_958_444, m.SizeBytes);
-        Assert.Equal("24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488", m.Sha256);
+        Assert.Equal("pyannote-segmentation-3-0.onnx", m.FileName);
+        Assert.Equal(5_992_913, m.SizeBytes);
+        Assert.Equal("220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079", m.Sha256);
         Assert.Equal("MIT", m.License.Name);
         Assert.Equal(
-            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+            "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/9403a6902bb58e3d5ae8c7e77c3422de279db2e0/model.onnx",
             m.DownloadUrl);
+    }
+
+    [Fact]
+    public void TheDefaultPairIsOneSegmentationAndOneEmbeddingModel()
+    {
+        Assert.Equal(DiarizationModelRole.Segmentation, DiarizationModelCatalog.DefaultSegmentation.Role);
+        Assert.Equal(DiarizationModelRole.Embedding, DiarizationModelCatalog.DefaultEmbedding.Role);
     }
 
     [Theory]
@@ -140,7 +147,7 @@ public class DiarizationModelCatalogTests
     [Fact]
     public void SizeLabelIsHumanReadable()
     {
-        Assert.Equal("6.6 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
+        Assert.Equal("5.7 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
         Assert.Equal("38.4 MB", DiarizationModelCatalog.Find("titanet-small")!.SizeLabel);
     }
 
@@ -151,7 +158,7 @@ public class DiarizationModelCatalogTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
-            Assert.Equal("6.6 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
+            Assert.Equal("5.7 MB", DiarizationModelCatalog.Segmentation[0].SizeLabel);
         }
         finally
         {

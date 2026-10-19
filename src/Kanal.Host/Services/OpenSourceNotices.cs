@@ -38,5 +38,7 @@ public static class OpenSourceNotices
             ["LLamaSharp", "LLamaSharp.Backend.Cpu"]),
         new("llama.cpp", "MIT", "https://github.com/ggml-org/llama.cpp", []),
         new("OpenCC", "Apache-2.0", "https://github.com/BYVoid/OpenCC", []),
+        new("sherpa-onnx", "Apache-2.0", "https://github.com/k2-fsa/sherpa-onnx", ["org.k2fsa.sherpa.onnx"]),
+        new("ONNX Runtime", "MIT", "https://github.com/microsoft/onnxruntime", []),
     ];
 }
