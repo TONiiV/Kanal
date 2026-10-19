@@ -126,6 +126,17 @@ public class GlossaryEditorTests : IDisposable
     }
 
     [Fact]
+    public void AnAddedEmptyRowWritesNoFile()
+    {
+        var settings = Settings();
+
+        settings.AddTermCommand.Execute(null);
+        settings.SaveCommand.Execute(null);
+
+        Assert.False(File.Exists(GlossaryFile));
+    }
+
+    [Fact]
     public void ADamagedGlossaryIsReportedAndLockedAndTheRestStillSaves()
     {
         File.WriteAllText(GlossaryFile, "{ not json");
