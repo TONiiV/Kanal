@@ -38,13 +38,16 @@ public sealed class LlamaSharpTextGenerator : ITextGenerator, IWarmupProvider, I
         _backend = backend;
     }
 
-    public async Task<string> GenerateAsync(string prompt, CancellationToken ct)
+    public async Task<string> GenerateAsync(string prompt, CancellationToken ct) =>
+        (await GenerateAsync([prompt], ct))[0];
+
+    public async Task<IReadOnlyList<string>> GenerateAsync(IReadOnlyList<string> prompts, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
         {
             await EnsureLoadedUnderGateAsync(ct);
-            return await _backend.InferAsync(prompt, ct);
+            return await _backend.InferAsync(prompts, ct);
         }
         finally
         {
