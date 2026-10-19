@@ -14,6 +14,7 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 - **Staging.** `Import` extracts into `meetings/<id>.importing-<guid>/`. It moves the folder into place only after every entry is extracted. It deletes the staging folder on every exit. `ExtractToFile` no longer uses `overwrite: true`.
 - **Save-as-new.** This path keeps working. The folder of the new record already holds `meeting.json`, so the move puts each extracted entry into that folder.
 - **Rollback.** If the record cannot be saved after the move, `Import` deletes the folder that it created.
+- **Race.** Without save-as-new, `Import` moves the staging folder with `Directory.Move` only. The move fails when a folder appeared since the check. `Import` never merges into that folder and never deletes it. Only save-as-new merges.
 - **Open item.** A crash during an extract leaves the staging folder. The list shows it as a folder without a record.
 
 ---

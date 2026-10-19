@@ -150,7 +150,10 @@ public static class MeetingBundle
                 entry.ExtractToFile(target);
             }
 
-            MoveIntoPlace(staging, folder);
+            if (asNewRecord)
+                MergeInto(staging, folder);
+            else
+                MoveIntoPlace(staging, folder);
         }
         catch (Exception ex)
         {
@@ -173,8 +176,10 @@ public static class MeetingBundle
         return saved;
     }
 
-    // Directory.Move fails when the target exists, so a folder that appeared since the check is not overwritten.
-    internal static void MoveIntoPlace(string staging, string folder)
+    // Directory.Move fails when the target exists, so a folder that appeared since the check is never merged into or deleted.
+    internal static void MoveIntoPlace(string staging, string folder) => Directory.Move(staging, folder);
+
+    private static void MergeInto(string staging, string folder)
     {
         if (!Directory.Exists(folder))
         {
