@@ -27,6 +27,7 @@ internal static class TestViewModels
         IMeetingTitler? titler = null,
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
+        Func<Task>? yieldToUi = null,
         bool development = true,
         ModelDownloadManager? downloads = null,
         Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
@@ -48,6 +49,7 @@ internal static class TestViewModels
             titler: titler,
             titlerFactory: titlerFactory,
             offUiThread: offUiThread,
+            yieldToUi: yieldToUi,
             captureFactory: () => new SilentCapture(),
             systemCaptureFactory: () => null,
             development: development,

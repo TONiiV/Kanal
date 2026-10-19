@@ -99,6 +99,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Func<LocalModelInfo, IMeetingTitler> _makeTitler;
     private readonly Func<string, string, ISpeakerDiarizer> _makeDiarizer;
     private readonly Func<Action, Task> _offUiThread;
+    private readonly Func<Task>? _yieldToUi;
     private string? _titleOnRecord;
 
     public ModelRows ModelRows { get; }
@@ -110,6 +111,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             offUiThread: work => Task.Run(work),
             scanOffUiThread: work => Task.Run(work),
+            yieldToUi: YieldToInput,
             development: string.Equals(
                 SettingsStore.ReadEnvAllScopes("KANAL_ENV"), "development", StringComparison.OrdinalIgnoreCase))
     {
@@ -137,6 +139,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<LocalModelInfo, IMeetingTitler>? titlerFactory = null,
         Func<Action, Task>? offUiThread = null,
         Func<Action, Task>? scanOffUiThread = null,
+        Func<Task>? yieldToUi = null,
         Func<ISystemAudioCaptureService?>? systemCaptureFactory = null,
         TimeProvider? signalClock = null,
         bool development = false,
@@ -144,6 +147,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
     {
         _titler = titler;
+        _yieldToUi = yieldToUi;
         _makeDiarizer = diarizerFactory ?? ((segmentation, embedding) =>
             new SherpaSpeakerDiarizer(segmentation, embedding));
         Speakers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowNoSpeakersNote));
@@ -207,7 +211,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (shown == _shownMeeting)
                 return;
             if (shown.Id != _shownMeeting.Id)
+            {
+                MarkRetiring();
                 FocusedLanguage = null;
+            }
+
             _shownMeeting = shown;
             RefreshBody();
         };
@@ -404,10 +412,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ColumnViewModel> Columns { get; } = new();
 
     private readonly ObservableCollection<ColumnViewModel> _stored = new();
+    private readonly HashSet<ColumnViewModel> _retiring = new();
     private (string? Id, string? TranscriptPath) _shownMeeting;
     private int _bodyVersion;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowStartHint))]
+    [NotifyPropertyChangedFor(nameof(ShowNoStoredTranscript))]
     private bool _isLoadingRecord;
 
     public WorkspaceSidebarViewModel Sidebar { get; }
@@ -999,7 +1010,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        foreach (var column in Columns.Concat(_stored))
+        foreach (var column in Columns.Concat(_stored).Where(c => !_retiring.Contains(c)))
         {
             var onScreen = shown.Contains(column);
             column.IsFocused = onScreen && column.Language == FocusedLanguage;
@@ -1023,19 +1034,37 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public string RecordingBannerText => L.Format(
         "browse.recording", Sidebar.TitleOf(Sidebar.RecordingMeetingId) ?? L["meeting.untitled"]);
 
-    public bool ShowStartHint => !HasColumns && !IsBrowsingRecord;
+    public bool ShowStartHint => !HasColumns && !IsBrowsingRecord && !IsLoadingRecord;
 
     public bool ShowNoStoredTranscript => !HasColumns && IsBrowsingRecord && !IsLoadingRecord;
 
     [RelayCommand]
     private void ReturnToActiveMeeting() => Sidebar.Select(Sidebar.RecordingMeetingId ?? _sessionRecordId);
 
+    private void MarkRetiring()
+    {
+        if (_yieldToUi is null)
+            return;
+
+        foreach (var column in _stored)
+            _retiring.Add(column);
+    }
+
     private async void RefreshBody()
     {
         var version = ++_bodyVersion;
-        _stored.Clear();
-        BrowsedRuler.Clear();
+        MarkRetiring();
         var record = IsBrowsingRecord ? Sidebar.SelectedMeeting?.Record : null;
+        var leaving = _yieldToUi is not null && _stored.Count > 0;
+        IsLoadingRecord = record is not null || leaving;
+        if (leaving)
+            NotifyChrome();
+        if (!await RetireStoredAsync(version) || version != _bodyVersion)
+            return;
+
+        _stored.Clear();
+        _retiring.Clear();
+        BrowsedRuler.Clear();
         IsLoadingRecord = record is not null;
         NotifyBody();
         if (record is null)
@@ -1051,13 +1080,94 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (version != _bodyVersion)
             return;
 
+        _storedColours = StoredTranscript.ColoursByTag(utterances);
+        var pending = columns.Select(column => column.Detach()).ToList();
         foreach (var column in columns)
             _stored.Add(column);
-        _storedColours = StoredTranscript.ColoursByTag(utterances);
-        foreach (var utterance in utterances)
-            BrowsedRuler.Observe(utterance);
+        BrowsedRuler.Reserve(utterances.Count);
         IsLoadingRecord = false;
         NotifyBody();
+
+        await FillBodyAsync(version, columns, pending, utterances);
+    }
+
+    private const int FirstRetireRows = 10;
+    private const int MaxRetireRows = 150;
+
+    // Hiding the old columns first costs as much as it saves: IsVisible passes to every control inside.
+    private async Task<bool> RetireStoredAsync(int version)
+    {
+        if (_stored.Count == 0 || _yieldToUi is null)
+            return true;
+
+        var rows = FirstRetireRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        while (_stored.Any(column => column.Bubbles.Count > 0))
+        {
+            foreach (var column in _stored)
+                for (var n = Math.Min(rows, column.Bubbles.Count); n > 0; n--)
+                    column.Bubbles.RemoveAt(column.Bubbles.Count - 1);
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return false;
+
+            rows = NextSliceRows(rows, cycle.Elapsed.TotalMilliseconds, MaxRetireRows);
+            cycle.Restart();
+        }
+
+        return true;
+    }
+
+    public static Task YieldToInput() =>
+        Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background).GetTask();
+
+    private static int NextSliceRows(int rows, double tookMs, int max) =>
+        Math.Clamp((int)Math.Ceiling(rows * Math.Min(2, SliceCycleMs / Math.Max(1, tookMs))), 1, max);
+
+    private const int FirstSliceRows = 3;
+    private const int MaxSliceRows = 60;
+    private const double SliceCycleMs = 30;
+
+    private async Task FillBodyAsync(
+        int version, IReadOnlyList<ColumnViewModel> columns,
+        IReadOnlyList<IReadOnlyList<BubbleViewModel>> bubbles, IReadOnlyList<Utterance> utterances)
+    {
+        var rows = _yieldToUi is null ? int.MaxValue : FirstSliceRows;
+        var cycle = System.Diagnostics.Stopwatch.StartNew();
+        for (var next = 0; next < utterances.Count;)
+        {
+            for (var end = (int)Math.Min(utterances.Count, (long)next + rows); next < end; next++)
+            {
+                for (var c = 0; c < columns.Count; c++)
+                    columns[c].Bubbles.Add(bubbles[c][next]);
+                BrowsedRuler.Observe(utterances[next]);
+            }
+
+            if (next >= utterances.Count || _yieldToUi is null)
+                break;
+
+            await _yieldToUi();
+            if (version != _bodyVersion)
+                return;
+
+            rows = NextSliceRows(rows, cycle.Elapsed.TotalMilliseconds, MaxSliceRows);
+            cycle.Restart();
+        }
+
+        BrowsedRuler.Release();
+    }
+
+    private void NotifyChrome()
+    {
+        OnPropertyChanged(nameof(IsViewingAnotherRecord));
+        OnPropertyChanged(nameof(IsTitleReadOnly));
+        OnPropertyChanged(nameof(ShowRecordingBanner));
+        OnPropertyChanged(nameof(RecordingBannerText));
+        OnPropertyChanged(nameof(MeetingTitle));
+        OnPropertyChanged(nameof(CanNameMeeting));
+        OnPropertyChanged(nameof(CanRegenerateTitle));
+        RegenerateTitleCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyBody()
@@ -1066,16 +1176,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ShownRuler));
         OnPropertyChanged(nameof(HasColumns));
         OnPropertyChanged(nameof(IsBrowsingRecord));
-        OnPropertyChanged(nameof(IsViewingAnotherRecord));
-        OnPropertyChanged(nameof(IsTitleReadOnly));
         OnPropertyChanged(nameof(ShowStartHint));
         OnPropertyChanged(nameof(ShowNoStoredTranscript));
-        OnPropertyChanged(nameof(ShowRecordingBanner));
-        OnPropertyChanged(nameof(RecordingBannerText));
-        OnPropertyChanged(nameof(MeetingTitle));
-        OnPropertyChanged(nameof(CanNameMeeting));
-        OnPropertyChanged(nameof(CanRegenerateTitle));
-        RegenerateTitleCommand.NotifyCanExecuteChanged();
+        NotifyChrome();
         ApplyFocus();
     }
 
@@ -1337,6 +1440,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // two can never disagree about how many columns a room has
         foreach (var lang in languages.Take(MaxLanguages))
             Columns.Add(new ColumnViewModel(lang, CopyToClipboard, PinToPoints));
+        MarkRetiring();
         FocusedLanguage = null;
 
         var asr = plan.Asr!;

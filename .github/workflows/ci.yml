@@ -56,7 +56,12 @@ jobs:
         run: dotnet test tests/Kanal.Core.UnitTests/Kanal.Core.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
 
       - name: UI view-model unit tests
-        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "Category!=Metric" --logger "console;verbosity=normal" --collect "XPlat Code Coverage" --results-directory coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=true
+
+      - name: Meeting switch responsiveness (prints the METRIC lines)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: dotnet test tests/Kanal.UI.UnitTests/Kanal.UI.UnitTests.csproj --configuration Release --no-build --filter "Category=Metric" --logger "console;verbosity=detailed"
 
       - uses: actions/upload-artifact@v4
         with:

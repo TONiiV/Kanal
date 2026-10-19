@@ -481,6 +481,47 @@ Recommendations (no product change in this PR):
 
 ## 2026-10-14
 
+### Opening a long meeting no longer freezes the window
+
+The window blocked for seconds when the operator opened a meeting with a long transcript. The video showed the
+text "Loading the transcript…", a busy cursor and a dropdown that did not answer.
+
+- **Cause.** The read and the parse already ran on a worker thread (5 to 50 ms for 1200 sentences). The
+  freeze was after that. The UI thread made and laid out every bubble in one piece: 1200 sentences in 3 columns
+  are 3600 bubbles at about 10 ms each, so 30 to 40 s. The same in reverse: taking the old columns out cost
+  1.6 to 2.3 s. The ruler was not the cause (about 15 ms), but its layout was quadratic, and it is fixed too.
+- **Fix.** `MainViewModel.RefreshBody` shows the column heads at once and adds the rows in slices. A slice is
+  sized from the time of the last cycle, layout included, so a slow machine gets smaller slices. The old
+  columns leave in slices before the new ones come. The ruler reserves its final count, so a new tick sets
+  only its own pitch. A new selection ends the slices of the old one.
+- **Not hiding the old columns.** `IsVisible` passes to every control inside. Hiding 3600 bubbles was itself a
+  270 ms stop on all three platforms.
+- **Test seam.** `MainViewModel` takes `yieldToUi`. The application passes `YieldToInput`. Tests pass nothing,
+  so a transcript is complete right after the read, as before.
+- **Guard.** `MeetingSwitchResponsivenessTests` opens and leaves a 1200-sentence meeting in the headless
+  window. An Input-priority job stands for a click, and the test fails if one waits more than 500 ms. A CI step
+  prints the numbers.
+
+| Longest wait of one click, 1200 sentences × 3 languages | Before | After |
+|---|---|---|
+| Windows, open a long meeting | 39 076 ms | 157 ms |
+| Windows, leave a long meeting | 2 152 ms | 219 ms |
+| macOS, open (180 ms in an earlier run, 416 ms in the last) | 38 880 ms | 180 to 416 ms |
+| Linux, open (an earlier commit of this change) | 34 634 ms | 131 ms |
+
+All three platforms pass the 500 ms limit in the last CI run. The CI step only prints the numbers: a shared runner can be slow, so the step does not fail the run. `LongTranscriptSliceTests` is the guard that always runs.
+
+- **Leaving is slower to finish.** The new meeting shows only after the old columns are empty. In three CI runs the time from the click to the new meeting was 3.1 to 4.5 s on Linux, 6.3 to 7.8 s on Windows and 4.5 to 18 s on macOS (the 18 s came from one run; the other two gave 4.5 s). The test posts a layout pass every 4 ms, which starves the slices, so these numbers are too high. Time it on a real machine before you accept this.
+- **The old meeting is hidden at once.** While it leaves, `IsLoadingRecord` is true, the text "Loading the transcript…" shows, and the body and the ruler have opacity 0 (class `loading` in `MeetingRoomView.axaml`). The same holds when the operator goes back to the live meeting. It is opacity and not `IsVisible`, because `IsVisible` passes to every control inside.
+- **Open.** The whole transcript takes longer to appear than before, because the work is the same and it now
+  shares the thread with input. The test numbers for this are not real: the test posts a layout pass every 4 ms,
+  which starves the slices. Time it on a real machine.
+- **Measured, not used.** In the headless window a font stack of 7 names cost 3 to 5 times more per bubble than
+  the default font. The headless font manager finds every name, so a filter could not be shown to work. The
+  stack is unchanged.
+- **Next step, a bigger one.** Virtualize the bubbles, so the cost does not grow with the length. It needs
+  `ColumnScrollSync` to align columns by index, because it now reads the containers of every row.
+
 ### The ruler magnifies like a Dock
 
 Issue #273. The first version of the hover effect had 5 steps around the hovered tick, with no
