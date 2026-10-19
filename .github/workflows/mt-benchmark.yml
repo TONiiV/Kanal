@@ -1,0 +1,64 @@
+name: MT benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner. Standard macOS runners have no GPU acceleration; xlarge M1 runners do (billed).
+        type: choice
+        options: [macos-latest, macos-latest-xlarge]
+        default: macos-latest
+      accelerator:
+        description: KANAL_ACCELERATOR value
+        type: choice
+        options: [auto, cpu]
+        default: cpu
+      streams:
+        description: Levels of sentences in flight, comma-separated
+        default: '1'
+
+jobs:
+  benchmark:
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      STREAMS: ${{ inputs.streams || '1' }}
+      KANAL_ACCELERATOR: ${{ (inputs.accelerator || 'cpu') == 'cpu' && 'cpu' || '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/models
+          key: mt-benchmark-models-v1
+
+      - name: Download models
+        run: |
+          mkdir -p "$RUNNER_TEMP/models"
+          cd "$RUNNER_TEMP/models"
+          while read -r repo file; do
+            [ -f "$file" ] || curl -fsSL -o "$file" "https://huggingface.co/$repo/resolve/main/$file"
+          done <<'EOF'
+          unsloth/Qwen3.5-2B-GGUF Qwen3.5-2B-Q4_K_M.gguf
+          tencent/Hy-MT2-1.8B-GGUF Hy-MT2-1.8B-Q4_K_M.gguf
+          EOF
+          ls -l
+
+      - name: Run benchmark
+        run: |
+          M="$RUNNER_TEMP/models"
+          dotnet run -c Release --project tests/Kanal.Benchmark -- --models "$M" --streams "$STREAMS"
+          cat kanal-benchmark-*.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mt-benchmark-${{ inputs.runner || 'macos-latest' }}
+          path: kanal-benchmark-*.md

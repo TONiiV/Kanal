@@ -50,6 +50,10 @@ The first release. Everything below is what Kanal does on the day it ships.
   The names change in Chinese, English, German and Polish.
 - Right-click anywhere on a transcript bubble to open the menu. Before, the menu opened only on the text lines.
   A right-click on the bubble header or the empty space gives the main line of the bubble to the menu.
+- Local translation now runs on the graphics card when the computer has one. Kanal uses Vulkan on
+  Windows (NVIDIA, AMD and Intel) and Metal on Apple silicon Macs. On Linux, install `vulkan-tools`
+  to use Vulkan. Without a usable graphics card, Kanal uses the processor as before. To force the
+  processor, set `KANAL_ACCELERATOR=cpu`.
 - With local transcription, a sentence in a language outside the meeting's languages now shows its
   own language and is translated into every meeting language. Before, an English sentence in a
   Chinese, German and Polish meeting showed as PL and was not translated into Polish.
