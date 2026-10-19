@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using Kanal.Core.Models;
 using Kanal.Core.Room;
 using Kanal.Core.Workspaces;
+using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 
 namespace Kanal.UI.UnitTests;
@@ -201,26 +202,64 @@ public class LongTranscriptSliceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void TheLoadingStateStaysOnWhileTheOldMeetingLeavesBeforeTheLiveMeeting()
+    public void TheLiveMeetingShowsAtOnceWithoutTheLoadingState()
     {
         var (store, first, _) = TwoLongMeetings();
         var yields = new HeldYields();
         var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
         Open(vm, first);
         yields.ReleaseAll();
+        var loadingSeen = false;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsLoadingRecord) && vm.IsLoadingRecord)
+                loadingSeen = true;
+        };
 
         vm.Sidebar.SelectedMeeting = null;
 
-        Assert.True(vm.IsLoadingRecord);
-        Assert.False(vm.ShowStartHint);
-        while (yields.Count > 0)
+        Assert.False(vm.IsLoadingRecord);
+        Assert.False(loadingSeen);
+        Assert.True(vm.ShowStartHint);
+        Assert.Same(vm.Columns, vm.ShownColumns);
+        Assert.Equal(0, yields.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task ReturningToTheMeetingBeingRecordedShowsItsTranscriptAtOnce()
+    {
+        var (store, first, _) = TwoLongMeetings();
+        var yields = new HeldYields();
+        var vm = TestViewModels.Hermetic(workspaces: () => store, yieldToUi: yields.Hold);
+        vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
+        await vm.StartCommand.ExecuteAsync(null);
+        var deadline = Environment.TickCount64 + 15_000;
+        while (!vm.Columns.Any(c => c.Bubbles.Count > 0) && Environment.TickCount64 < deadline)
         {
-            Assert.True(vm.IsLoadingRecord);
-            yields.Release();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
         }
 
+        Assert.Contains(vm.Columns, c => c.Bubbles.Count > 0);
+        Open(vm, first);
+        yields.ReleaseAll();
         Assert.False(vm.IsLoadingRecord);
-        Assert.True(vm.ShowStartHint);
+        var loadingSeen = false;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsLoadingRecord) && vm.IsLoadingRecord)
+                loadingSeen = true;
+        };
+
+        vm.ReturnToActiveMeetingCommand.Execute(null);
+
+        Assert.False(vm.IsLoadingRecord);
+        Assert.False(loadingSeen);
+        Assert.Same(vm.Columns, vm.ShownColumns);
+        Assert.Contains(vm.ShownColumns, c => c.Bubbles.Count > 0);
+        Assert.Equal(0, yields.Count);
+
+        await vm.StopCommand.ExecuteAsync(null);
     }
 
     [AvaloniaFact]
@@ -290,10 +329,8 @@ public class LongTranscriptSliceTests : IDisposable
         vm.Columns.Add(live);
         live.GetOrAdd("live1").Text = "now";
 
-        Assert.All(old, column => Assert.InRange(column.Bubbles.Count, 1, Rows - 1));
         yields.ReleaseAll();
 
-        Assert.All(old, column => Assert.Empty(column.Bubbles));
         Assert.Equal([live], vm.ShownColumns);
         Assert.Single(live.Bubbles);
         Assert.False(vm.IsLoadingRecord);
