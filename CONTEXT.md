@@ -31,6 +31,10 @@ _Avoid_: Relay device credential
 The page a participant opens on their phone to read captions from a Kanal session.
 _Avoid_: Relay backend
 
+**Room language**:
+A language that a meeting shows and translates into. The host shows one column for each room language. The mobile page offers them in a dropdown. A room language never limits which language transcription may recognise.
+_Avoid_: Recognition language, source language
+
 **App update**:
 A newer release of the desktop host. Models, the mobile caption page and the relay are updated separately and are not app updates.
 _Avoid_: OTA (too broad), model download

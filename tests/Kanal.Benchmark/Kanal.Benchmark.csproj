@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LlamaBackend Condition="'$(LlamaBackend)' == ''">Cpu</LlamaBackend>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Kanal.Providers.LocalMt\Kanal.Providers.LocalMt.csproj" />
+  </ItemGroup>
+
+  <!-- LLamaSharp picks the GPU backend at load time when its package is present and the driver is found. -->
+  <ItemGroup Condition="'$(LlamaBackend)' == 'Cuda12'">
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.27.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LlamaBackend)' == 'Vulkan'">
+    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.27.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="LlamaBackend" Value="$(LlamaBackend)" />
+    <InternalsVisibleTo Include="Kanal.Core.UnitTests" />
+  </ItemGroup>
+
+</Project>
