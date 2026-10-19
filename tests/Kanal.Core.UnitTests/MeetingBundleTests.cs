@@ -233,5 +233,5 @@ public class MeetingBundleTests : IDisposable
 
     private static IReadOnlyList<string> Names(string bundle) =>
         [.. Directory.GetFiles(Path.GetDirectoryName(bundle)!, Path.GetFileNameWithoutExtension(bundle) + "*")
-            .Select(Path.GetFileName).Order()!];
+            .Select(f => Path.GetFileName(f)).Order()];
 }
