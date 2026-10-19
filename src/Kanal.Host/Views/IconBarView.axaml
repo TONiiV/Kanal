@@ -310,5 +310,20 @@
                 </Button>
             </Grid>
         </Border>
+        <Border x:Name="MtWarningBar" IsVisible="{Binding HasMtWarning}"
+                Background="{DynamicResource WarningWash}" BorderBrush="{DynamicResource Warning}"
+                BorderThickness="0,0,0,1" Padding="28,5,20,5">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Path Classes="glyph" Data="{c:Icon warning}" Width="15" Height="15"
+                      Fill="{DynamicResource Warning}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" x:Name="MtWarningText" Text="{Binding MtWarningText}"
+                           FontSize="12" Foreground="{DynamicResource Ink}" TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="2" x:Name="MtWarningSettings" Classes="ghost"
+                        Content="{l:T mt.warning.settings}" Command="{Binding OpenTranslationSettingsCommand}"
+                        Foreground="{DynamicResource Brand}" FontWeight="SemiBold" Padding="8,4"
+                        AutomationProperties.Name="{l:T mt.warning.settings}" />
+            </Grid>
+        </Border>
     </StackPanel>
 </UserControl>

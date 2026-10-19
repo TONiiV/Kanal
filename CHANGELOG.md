@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A warning bar now appears under the toolbar when cloud translation fails during a meeting. The bar
+  states the reason and has an *Open settings* button for the Translation tab. Before, a later status
+  message replaced the warning. The bar stays until one translation succeeds or the meeting ends.
 - On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
   permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
   after about 30 seconds. The status line now tells you to allow the permission.
