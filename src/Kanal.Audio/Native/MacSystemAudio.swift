@@ -121,6 +121,21 @@ public func kanalSystemAudioStopWithCompletion(
     handle.stop { completion(sendableContext.value) }
 }
 
+// Private TCC SPI, as in AudioCap: Apple has no public call for this permission. Returns 0 unknown, 1 authorized, 2 denied.
+@_cdecl("kanal_audio_capture_authorization")
+public func kanalAudioCaptureAuthorization() -> Int32 {
+    typealias Preflight = @convention(c) (CFString, CFDictionary?) -> Int32
+    guard let handle = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW),
+          let symbol = dlsym(handle, "TCCAccessPreflight")
+    else { return 0 }
+    let preflight = unsafeBitCast(symbol, to: Preflight.self)
+    switch preflight("kTCCServiceAudioCapture" as CFString, nil) {
+    case 0: return 1
+    case 1: return 2
+    default: return 0
+    }
+}
+
 @available(macOS 14.2, *)
 private final class CoreAudioTapSession: @unchecked Sendable, SystemAudioSession {
     private let frame: FrameCallback

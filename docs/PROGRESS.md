@@ -4,6 +4,18 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ---
 
+## 2026-10-19
+
+### An online meeting stops when macOS denies system audio
+
+- **Bug (#151).** With the system-audio permission denied, the Core Audio tap raises no error. The meeting ran on without remote speech. The silent-source hint came after about 30 s.
+- **Signal.** The private function `TCCAccessPreflight("kTCCServiceAudioCapture")` gives the TCC state. Zero buffers alone are not enough, because the computer can be silent. See "System-audio permission on macOS 14.2+" in `docs/online-meeting-audio.md`.
+- **Rule.** `MacSystemAudioCapture` asks TCC when a tap buffer holds only zeros, at most once per second. Only "denied" ends the capture with `permission_denied`. The meeting then stops through `StopAfterAudioFaultAsync` with the localized reason.
+- **Test seam.** `IMacSystemAudioNative.AudioCaptureAuthorization` returns the TCC state. `FakeMacNative` sets it and the buffer content.
+- **Open item.** No real Mac has run this. The operator must run the manual test in the PR.
+
+---
+
 ## 2026-10-18
 
 ### Gladia session does not reconnect after a deliberate stop

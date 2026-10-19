@@ -145,6 +145,8 @@ Everything here needs real hardware and a second person. None of it is covered b
 | Signed bundle: system-audio permission **allow** → capture works | — | NOT YET VERIFIED |
 | Signed bundle: permission **deny** → `permission_denied`, actionable message, no crash | — | NOT YET VERIFIED |
 | Signed bundle: permission **revoked** while Kanal runs → a visible stop or refusal, no crash | — | NOT YET VERIFIED |
+| macOS 14.2+: with the permission denied, the meeting stops within a few seconds of Start and shows the localized reason, with no 30 s wait (see "System-audio permission on macOS 14.2+") | — | NOT YET VERIFIED |
+| macOS 14.2+: with the permission denied and the computer silent, nothing else changes: a quiet start never stops the meeting (see the same section) | — | NOT YET VERIFIED |
 | A notification sound with Do Not Disturb off appears in the transcript input (documents the limitation) | NOT YET VERIFIED | NOT YET VERIFIED |
 | macOS 14.2+: the output that was the default at Start disappears mid-meeting → computer audio keeps arriving, or a visible stop, not endless padded silence (see known risks) | — | NOT YET VERIFIED |
 | Windows 10 2004+: process loopback captures every app's audio but not Kanal's own (see known risks) | NOT YET VERIFIED | — |
@@ -172,6 +174,35 @@ hardware; they are follow-ups, not handled in this release.
 - **Process loopback (Windows).** Computer audio is captured with WASAPI process loopback excluding
   Kanal's own process tree (Windows 10 2004, build 19041, or later), at 44.1 kHz 16-bit stereo, then
   downmixed and resampled. It compiles but has not been run on Windows.
+
+## System-audio permission on macOS 14.2+
+
+With the permission denied, the Core Audio tap raises no error. `AudioHardwareCreateProcessTap`,
+`AudioHardwareCreateAggregateDevice` and `AudioDeviceStart` all return `noErr`, and the IOProc
+delivers buffers that hold only zeros. Silence from the computer gives the same buffers, so zeros
+alone never stop a meeting.
+
+The signal is the TCC state of the service `kTCCServiceAudioCapture`. Apple has no public call for
+it. The private function `TCCAccessPreflight` in `TCC.framework` returns it without a prompt. Kanal
+loads it with `dlopen`/`dlsym` (`kanal_audio_capture_authorization` in `MacSystemAudio.swift`).
+Return value 0 means authorized, 1 means denied, anything else means unknown. If the framework or
+the symbol is missing, the result is unknown and Kanal behaves as before.
+
+The rule in `MacSystemAudioCapture`: a buffer of zeros makes the bridge ask TCC, at most once per
+second. Only the answer "denied" ends the capture with `permission_denied`. The same rule covers a
+denial at Start and a revocation while Kanal runs. A denied answer while sound arrives does nothing.
+
+Sources:
+
+- [AudioCap](https://github.com/insidegui/AudioCap) (Guilherme Rambo): "There's no public API to request audio recording permission or to check if the permission". `AudioRecordingPermission.swift` calls `TCCAccessPreflight("kTCCServiceAudioCapture")` and reads 0 as authorized and 1 as denied.
+- [2000 buffers of nothing](https://dev.to/nickdelv/2000-buffers-of-nothing-3i8): every Core Audio call returns `noErr` while TCC denies access. The only signal in the audio path is zero buffers.
+- [Apple Developer Forums 825780](https://developer.apple.com/forums/thread/825780): the tap can also deliver zeros while sound plays, with no property to tell it apart. No answer from Apple.
+
+Open risks, all needing a real Mac:
+
+- The numeric values (0 and 1) come from AudioCap, not from an Apple header. No test here ran them.
+- The function is private. A later macOS may remove or change it. The bridge then falls back to the 30 s silent-source hint.
+- A revocation may make macOS quit Kanal before the check runs.
 
 ## Limitations
 

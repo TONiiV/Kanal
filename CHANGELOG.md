@@ -14,6 +14,9 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- On macOS 14.2 or later, an Online meeting now stops at once when you deny the system-audio
+  permission to Kanal. Before, the meeting kept running without remote speech, and a hint appeared
+  after about 30 seconds. The status line now tells you to allow the permission.
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

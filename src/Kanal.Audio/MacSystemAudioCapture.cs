@@ -11,6 +11,11 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
     // A session that outlives its stop keeps calling these thunks; leaking them beats a call into freed memory.
     private static readonly List<object> Leaked = [];
 
+    private const string PermissionAdvice =
+        " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal.";
+
+    private const long AuthorizationCheckIntervalMs = 1000;
+
     private readonly IMacSystemAudioNative _native;
     private readonly TimeSpan _stopTimeout;
 
@@ -41,6 +46,8 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
         });
         LinearResampler? resampler = null;
         var resamplerInputRate = 0;
+        var nextAuthorizationCheck = 0L;
+        var authorizationCheckRunning = 0;
 
         MacSystemAudioFrameCallback onFrame = (data, byteCount, sampleRate, _) =>
         {
@@ -50,6 +57,28 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
                     return;
                 var bytes = new byte[byteCount];
                 Marshal.Copy(data, bytes, 0, byteCount);
+                if (Backend == SystemAudioBackend.CoreAudioProcessTap
+                    && !bytes.AsSpan().ContainsAnyExcept((byte)0)
+                    && Environment.TickCount64 >= Volatile.Read(ref nextAuthorizationCheck)
+                    && Interlocked.Exchange(ref authorizationCheckRunning, 1) == 0)
+                {
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            if (_native.AudioCaptureAuthorization() == MacAudioCaptureAuthorization.Denied)
+                                frames.Writer.TryComplete(new AudioCaptureException(
+                                    AudioCaptureFault.PermissionDenied,
+                                    "Computer audio capture stopped: macOS has denied system audio recording to Kanal." +
+                                    PermissionAdvice));
+                        }
+                        finally
+                        {
+                            Volatile.Write(ref nextAuthorizationCheck, Environment.TickCount64 + AuthorizationCheckIntervalMs);
+                            Volatile.Write(ref authorizationCheckRunning, 0);
+                        }
+                    });
+                }
                 if (sampleRate == AudioCaptureFormat.SampleRateHz)
                 {
                     frames.Writer.TryWrite(bytes);
@@ -78,7 +107,7 @@ public sealed class MacSystemAudioCapture : ISystemAudioCaptureService
             var detail = Marshal.PtrToStringUTF8(message) ?? "unknown native error";
             var denied = IsPermissionFailure(detail);
             var advice = denied
-                ? " Check System Settings > Privacy & Security > Screen & System Audio Recording, then restart Kanal."
+                ? PermissionAdvice
                 : " Start again; if it keeps failing, restart Kanal.";
             frames.Writer.TryComplete(new AudioCaptureException(
                 denied ? AudioCaptureFault.PermissionDenied : AudioCaptureFault.SourceFailed,
