@@ -125,6 +125,7 @@
   "error.mt.quota": "Limit tłumaczenia w chmurze został wyczerpany. Wiersze nie są tłumaczone.",
   "error.mt.key": "Klucz tłumaczenia w chmurze nie jest akceptowany. Sprawdź go w Ustawieniach.",
   "error.mt.unavailable": "Usługa tłumaczenia w chmurze nie odpowiedziała. Niektóre wiersze nie są przetłumaczone.",
+  "mt.warning.settings": "Otwórz ustawienia",
   "status.nothingtoexport": "Nie ma czego eksportować.",
   "status.exportcancelled": "Eksport anulowany.",
   "status.exported": "Wyeksportowano do {0}",

@@ -14,6 +14,10 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- A warning bar now appears under the toolbar when cloud translation fails during a meeting. The bar
+  states the reason and has an *Open settings* button for the Translation tab. Before, a later status
+  message replaced the warning. The bar stays until one translation succeeds or the meeting ends.
+
 - When you end a meeting with cloud transcription, Kanal no longer reports "Connection lost,
   reconnecting". Before, Kanal reported this error after every meeting and tried to connect again.
 - The Translation tab now lists Hy-MT2 1.8B first, as the recommended local model. It is 1.1 GB

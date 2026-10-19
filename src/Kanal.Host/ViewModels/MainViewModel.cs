@@ -289,6 +289,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(PauseLabel));
             OnPropertyChanged(nameof(PauseTip));
             OnPropertyChanged(nameof(StopTip));
+            OnPropertyChanged(nameof(MtWarningText));
             OnPropertyChanged(nameof(CaptureProfileGuidance));
             OnPropertyChanged(nameof(CaptureTip));
             RefreshAudioSourceStatus();
@@ -808,16 +809,27 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _status = Localizer.Instance["status.idle"];
 
-    public string? MtWarningCode => null;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMtWarning))]
+    [NotifyPropertyChangedFor(nameof(MtWarningText))]
+    private string? _mtWarningCode;
 
-    public bool HasMtWarning => false;
+    private int _mtWarningEpoch;
 
-    public string MtWarningText => "";
+    public bool HasMtWarning => MtWarningCode is not null;
+
+    public string MtWarningText => MtWarningCode is null ? "" : L["error." + MtWarningCode];
 
     public Func<Task>? ShowTranslationSettings { get; set; }
 
     [RelayCommand]
-    private Task OpenTranslationSettings() => Task.CompletedTask;
+    private Task OpenTranslationSettings() => ShowTranslationSettings?.Invoke() ?? Task.CompletedTask;
+
+    private void ClearMtWarning()
+    {
+        _mtWarningEpoch++;
+        MtWarningCode = null;
+    }
 
     /// <summary>Where the selected mode transcribes, named before Start rather than guessed.</summary>
     [ObservableProperty]
@@ -1337,19 +1349,35 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         session.Room.UtteranceUpserted += u => Dispatcher.UIThread.Post(() => ApplyUtterance(u));
         session.Room.SpeakerUpserted += s => Dispatcher.UIThread.Post(() => ApplySpeaker(s));
+        ClearMtWarning();
+        var epoch = _mtWarningEpoch;
         session.ErrorOccurred += e =>
         {
             Log.Write(
                 e.Fatal ? LogLevel.Error : LogLevel.Warning, RoomLog, Bounded(e.Message), error: null);
             Dispatcher.UIThread.Post(() =>
+            {
+                if (!e.Fatal && e.Code?.StartsWith("mt.", StringComparison.Ordinal) == true && epoch == _mtWarningEpoch)
+                    MtWarningCode = e.Code;
                 Status = L.Format(
-                    e.Fatal ? "status.fatal" : "status.warning", e.Code is null ? e.Message : L["error." + e.Code]));
+                    e.Fatal ? "status.fatal" : "status.warning", e.Code is null ? e.Message : L["error." + e.Code]);
+            });
         };
+        session.TranslationApplied += () =>
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (epoch == _mtWarningEpoch)
+                    MtWarningCode = null;
+            });
         session.SessionEnded += reason =>
         {
             Log.Info(RoomLog, $"Session ended: {Bounded(reason ?? "no reason given")}.");
             Dispatcher.UIThread.Post(() =>
-                Status = L.Format("status.sessionended", reason ?? L["status.done"]));
+            {
+                if (epoch == _mtWarningEpoch)
+                    ClearMtWarning();
+                Status = L.Format("status.sessionended", reason ?? L["status.done"]);
+            });
         };
         session.TranscribingChanged += transcribing =>
             Dispatcher.UIThread.Post(() => IsTranscribing = transcribing);
@@ -1501,6 +1529,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             JoinError = "";
             IsRunning = false;
             IsTranscribing = false;
+            ClearMtWarning();
             Sidebar.RecordingMeetingId = null;
             IsPaused = false;
             _activeOnline = false;

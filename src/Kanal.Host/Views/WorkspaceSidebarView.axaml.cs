@@ -30,6 +30,7 @@ public partial class WorkspaceSidebarView : UserControl
             vm.Sidebar.ConfirmExportBundle = ConfirmExportBundleAsync;
             vm.Sidebar.ChooseImportChoice = ChooseImportChoiceAsync;
             vm.Sidebar.ShowProjectSettings = ShowProjectSettingsAsync;
+            vm.ShowTranslationSettings = () => ShowSettingsAsync(SettingsViewModel.TranslationTab);
         };
     }
 
@@ -73,13 +74,15 @@ public partial class WorkspaceSidebarView : UserControl
     private void OnRowEditorLostFocus(object? sender, RoutedEventArgs e) =>
         ((sender as Control)?.DataContext as MeetingItemViewModel)?.CommitRenameCommand.Execute(null);
 
-    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e) => await ShowSettingsAsync(0);
+
+    private async Task ShowSettingsAsync(int tab)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
             return;
 
         var vm = DataContext as MainViewModel;
-        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows)).ShowDialog(owner);
+        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows) { SelectedTab = tab }).ShowDialog(owner);
         vm?.RefreshPipelineStatus();
     }
 

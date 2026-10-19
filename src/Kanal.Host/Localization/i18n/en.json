@@ -125,6 +125,7 @@
   "error.mt.quota": "The cloud translation quota is used up. Lines are not translated.",
   "error.mt.key": "The cloud translation key is not accepted. Check it in Settings.",
   "error.mt.unavailable": "The cloud translation service did not answer. Some lines are not translated.",
+  "mt.warning.settings": "Open settings",
   "status.nothingtoexport": "Nothing to export.",
   "status.exportcancelled": "Export cancelled.",
   "status.exported": "Exported to {0}",
