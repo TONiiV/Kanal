@@ -6,6 +6,17 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 ## 2026-10-19
 
+### Glossary T2: editor in the project settings window
+
+Spec #302. Stacked on T1 (#307).
+
+- **Place.** The project settings window is where the operator already manages a project. The glossary section is after the project icon.
+- **Rows.** One text box per language (zh, de, pl, en), the "Keep" check box (do not translate) and a remove button. **Add term** adds an empty row.
+- **Save.** The existing Save & Close button saves the glossary with the name and the icon. Save writes no file when the glossary did not change.
+- **Refusals.** A damaged glossary file shows the refusal text and locks the editor. The name and the icon still save. A refused glossary save keeps the window open.
+- **Width.** The window is 640 px wide (was 520 px), so that a Polish term fits in a cell.
+- **Open.** The glossary has no effect on a meeting yet. T3 (#303) feeds it into the local chain first, then into Gladia.
+
 ### Glossary T1: per-project storage
 
 Spec #302 (PRD v0.4 F-2, first version). Operator decisions 2026-10-19: the operator creates and edits the glossary by hand, with no machine translation of terms. The glossary works fully offline.
