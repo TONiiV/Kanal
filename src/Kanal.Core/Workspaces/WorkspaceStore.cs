@@ -8,6 +8,7 @@ public sealed class WorkspaceStore
     public const string WorkspaceFileName = "kanal-workspace.json";
     public const string MeetingFileName = MeetingRecords.FileName;
     public const string AudioFileName = "audio.wav";
+    public const string GlossaryFileName = "kanal-glossary.json";
     public const string MeetingsFolderName = MeetingRecords.MeetingsFolderName;
     public const string IconFileStem = WorkspaceIcons.FileStem;
     public const long MaxIconBytes = WorkspaceIcons.MaxBytes;
@@ -295,6 +296,11 @@ public sealed class WorkspaceStore
 
     public RecoverResult ReidentifyMeeting(string workspaceId, string folder) =>
         meetings.Reidentify(workspaceId, folder);
+
+    public GlossaryResult ReadGlossary(string workspaceId) => throw new NotImplementedException();
+
+    public StoreProblem? SaveGlossary(string workspaceId, IReadOnlyList<GlossaryEntry> entries) =>
+        throw new NotImplementedException();
 
     public string? MeetingFolder(string workspaceId, string meetingId) =>
         meetings.FolderOf(workspaceId, meetingId).Folder;
