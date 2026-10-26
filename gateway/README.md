@@ -191,8 +191,21 @@ place.
 | `POST ?action=create` | device token | `{roomId, verificationKey}` → host + invite tickets |
 | `POST ?action=publish` | host ticket | forward one `relay.signed` envelope to the room |
 | `GET ?action=stream` | reader ticket in `Sec-WebSocket-Protocol: kanal, ticket.<t>` | receive `gateway.session`, then `{type:"relay", payload}` frames — the room's replay buffer first, if it has one |
+| `GET ?action=update` | none | update manifest `{latest, minimumSupported, notes, downloadUrl}` from the `KANAL_*` vars below; 404 when the version vars are missing or not `x.y.z`; cached for 1 h |
 | `POST ?action=activate` | activation code | one-time exchange for a device credential; code expires 24 h after minting, 10 attempts / 10 min / address (IPv6: per /64) |
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
+
+`POST ?action=create` also reads the `X-Kanal-Version` header. A host below `KANAL_MIN_SUPPORTED_VERSION` gets
+`426` with `{error, minimumSupported}` before the device token is checked. A missing header counts as `0.0.0`.
+
+The update manifest comes from these `[vars]` in `wrangler.toml`. Change them, then run `npx wrangler deploy`.
+
+| Var | Meaning |
+|---|---|
+| `KANAL_LATEST_VERSION` | newest release, `x.y.z` |
+| `KANAL_MIN_SUPPORTED_VERSION` | oldest host that may create a room, `x.y.z`. Keep `0.0.0` until operators run 1.0.0 |
+| `KANAL_RELEASE_NOTES` | one or two lines for the operator. Empty gives `null` |
+| `KANAL_DOWNLOAD_URL` | download page. Empty gives `null` |
 
 The gateway never sees cleartext credentials at rest (codes and device tokens are stored as
 SHA-256 hashes) and never inspects caption content — envelopes are signed by the host's P-256

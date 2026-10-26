@@ -25,7 +25,13 @@ const MANIFEST_VARS: UpdateVars = {
 };
 
 function withVars(vars: UpdateVars, overrides: Record<string, unknown> = {}): Env {
-  return { ...env, ...vars, ...overrides } as unknown as Env;
+  const cleared = {
+    KANAL_LATEST_VERSION: undefined,
+    KANAL_MIN_SUPPORTED_VERSION: undefined,
+    KANAL_RELEASE_NOTES: undefined,
+    KANAL_DOWNLOAD_URL: undefined,
+  };
+  return { ...env, ...cleared, ...vars, ...overrides } as unknown as Env;
 }
 
 function getUpdate(vars: UpdateVars, query = "") {
