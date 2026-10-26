@@ -22,8 +22,8 @@ the mobile client.
 
 > Kanal is under active development. The scripted demo needs no API key and is ready to explore
 > once `KANAL_ENV=development` is set.
-> Live meetings currently require cloud transcription. Read [Current limitations and
-> roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
+> Live meetings run with cloud transcription (Gladia) or with local transcription on the laptop.
+> Read [Current limitations and roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
 
 ## Why Kanal
 
@@ -109,7 +109,7 @@ and explain what is missing.
 | Demo — scripted | Scripted | Scripted, or the selected downloaded local model | Nothing | Offered only with `KANAL_ENV=development`; no keys needed |
 | Cloud transcription · cloud translation | Gladia live | Gladia live | Audio | Available with a Gladia key |
 | Cloud transcription · local translation | Gladia live | Selected local GGUF model | Audio | Available with a Gladia key and downloaded model |
-| Local transcription · cloud translation | Selected local Nemotron 3.5 model | Standalone cloud MT not implemented | Text only | Unavailable |
+| Local transcription · cloud translation | Selected local Nemotron 3.5 model | DeepL | Text only | Available with the model downloaded and a DeepL key |
 | Local transcription · local translation | Selected local Nemotron 3.5 model | Selected local GGUF model | Nothing | Available with both models downloaded |
 
 When started from the production UI, every mode publishes text and room state through the mobile
@@ -251,7 +251,9 @@ question before starting a broad change.
 ## Current limitations and roadmap
 
 - Live microphone capture is available on Windows and macOS, but not Linux.
-- Local transcription has no speaker separation yet: every sentence carries one speaker label.
+- Live transcription does not separate speakers: every sentence carries one speaker label.
+  *Re-identify speakers* separates them on the laptop after the meeting. It needs the meeting's
+  audio recording.
 - Local-to-cloud mode needs a DeepL API key in Settings. DeepL is the only standalone cloud
   text-translation provider today.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.
@@ -263,7 +265,9 @@ question before starting a broad change.
   live microphone modes and must be disclosed to participants.
 - Chinese↔Polish terminology quality on real meeting material remains the primary go/no-go
   validation gate.
-- Packaged installers and signed releases are not available yet.
+- Installers come from the GitHub Releases page: a signed and notarised dmg for Apple silicon
+  Macs and an unsigned msi for Windows. Windows SmartScreen warns about the msi. There is no Intel
+  Mac build.
 
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.
