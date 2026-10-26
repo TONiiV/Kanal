@@ -82,7 +82,7 @@ public partial class WorkspaceSidebarView : UserControl
             return;
 
         var vm = DataContext as MainViewModel;
-        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows) { SelectedTab = tab }).ShowDialog(owner);
+        await new SettingsWindow(new SettingsViewModel(vm?.ModelRows, vm?.Updates) { SelectedTab = tab }).ShowDialog(owner);
         vm?.RefreshPipelineStatus();
     }
 

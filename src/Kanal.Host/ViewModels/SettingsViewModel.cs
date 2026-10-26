@@ -103,14 +103,15 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private int _selectedTab;
 
-    public SettingsViewModel(ModelRows? modelRows = null)
+    public SettingsViewModel(ModelRows? modelRows = null, UpdateViewModel? updates = null)
         : this(
             SettingsStore.Load(),
             deviceWatcherFactory: AudioCaptureFactory.TryCreateDeviceWatcher,
             saveColourScheme: SettingsStore.SaveColourScheme,
             saveAccentTheme: SettingsStore.SaveAccentTheme,
             saveAppLanguage: SettingsStore.SaveAppLanguage,
-            modelRows: modelRows)
+            modelRows: modelRows,
+            updates: updates)
     {
     }
 
@@ -138,8 +139,10 @@ public partial class SettingsViewModel : ViewModelBase
         Action<ColourScheme>? saveColourScheme = null,
         Action<string>? saveAppLanguage = null,
         Action<string>? saveAccentTheme = null,
-        ModelRows? modelRows = null)
+        ModelRows? modelRows = null,
+        UpdateViewModel? updates = null)
     {
+        Updates = updates ?? UpdateViewModel.CreateProduction();
         _saveAppLanguage = saveAppLanguage ?? (_ => { });
         _saveColourScheme = saveColourScheme ?? (_ => { });
         _saveAccentTheme = saveAccentTheme ?? (_ => { });
@@ -611,6 +614,8 @@ public partial class SettingsViewModel : ViewModelBase
             Log.Warning("settings", $"Could not open {SettingsStore.LogsPath}.", ex);
         }
     }
+
+    public UpdateViewModel Updates { get; }
 
     public string VersionLabel => Localizer.Instance.Format("settings.about.version", AppVersion.Current);
 

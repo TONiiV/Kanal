@@ -81,6 +81,7 @@ public class RelaySecurityTests
             "host-bootstrap-token-with-32-bytes",
             "room-capability",
             "verification-key",
+            "1.0.0",
             http,
             TestContext.Current.CancellationToken);
         using var key = RelaySigningKey.Create();
@@ -116,6 +117,7 @@ public class RelaySecurityTests
                 "host-bootstrap-token-with-32-bytes",
                 "room-capability",
                 "verification-key",
+                "1.0.0",
                 http,
                 TestContext.Current.CancellationToken));
     }

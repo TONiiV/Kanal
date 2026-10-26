@@ -103,6 +103,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public ModelRows ModelRows { get; }
 
+    public UpdateViewModel Updates { get; }
+
+    public string? StartBlockedReason => null;
+
     public DownloadTray DownloadTray { get; }
 
     public MainViewModel()
@@ -141,8 +145,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         TimeProvider? signalClock = null,
         bool development = false,
         PipelinePlanner.KeyResolver? resolveTranslationKey = null,
-        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
+        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null,
+        UpdateViewModel? updates = null)
     {
+        Updates = updates ?? UpdateViewModel.CreateProduction();
+        Updates.IsMeetingRunning = () => IsRunning || IsStarting;
         _titler = titler;
         _makeDiarizer = diarizerFactory ?? ((segmentation, embedding) =>
             new SherpaSpeakerDiarizer(segmentation, embedding));
@@ -1819,6 +1826,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             settings.HostToken!,
             roomId,
             signingKey.VerificationKey,
+            AppVersion.Current,
             ct: ct);
         return new RelayConnection(
             new SignedRelayPublisher(room.Publisher, signingKey),

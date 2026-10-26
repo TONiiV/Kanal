@@ -34,6 +34,7 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
         string deviceToken,
         string roomId,
         string verificationKey,
+        string hostVersion,
         HttpClient? http = null,
         CancellationToken ct = default)
     {
@@ -41,6 +42,7 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceToken);
         ArgumentException.ThrowIfNullOrWhiteSpace(roomId);
         ArgumentException.ThrowIfNullOrWhiteSpace(verificationKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostVersion);
         if (Encoding.UTF8.GetByteCount(deviceToken) < 32)
             throw new ArgumentException(
                 "Relay host token must contain at least 32 bytes.",

@@ -4,6 +4,7 @@ using Kanal.Core.Workspaces;
 using Kanal.Host.Services;
 using Kanal.Host.ViewModels;
 using Kanal.Core.Models;
+using Kanal.Core.Updates;
 using Kanal.Providers.LocalMt;
 
 namespace Kanal.UI.UnitTests;
@@ -29,7 +30,8 @@ internal static class TestViewModels
         Func<Action, Task>? offUiThread = null,
         bool development = true,
         ModelDownloadManager? downloads = null,
-        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null)
+        Func<string, string, ISpeakerDiarizer>? diarizerFactory = null,
+        UpdateViewModel? updates = null)
     {
         var resolved = settings ?? new AppSettings();
         var dir = modelsDir ?? EmptyModelsDir();
@@ -51,7 +53,8 @@ internal static class TestViewModels
             captureFactory: () => new SilentCapture(),
             systemCaptureFactory: () => null,
             development: development,
-            diarizerFactory: diarizerFactory)
+            diarizerFactory: diarizerFactory,
+            updates: updates ?? OfflineUpdates())
         {
             RelayEnabled = false,
         };
@@ -71,9 +74,23 @@ internal static class TestViewModels
         }
     }
 
-    internal static MainViewModel Demo(AppSettings? settings = null, string? modelsDir = null)
+    internal static UpdateViewModel OfflineUpdates() =>
+        new(
+            new UpdateChecker(
+                new HttpClient(new NotFoundHandler()), new Uri("https://update.example.test/?action=update")),
+            "1.0.0");
+
+    private sealed class NotFoundHandler : HttpMessageHandler
     {
-        var vm = Hermetic(settings, modelsDir);
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+    }
+
+    internal static MainViewModel Demo(
+        AppSettings? settings = null, string? modelsDir = null, UpdateViewModel? updates = null)
+    {
+        var vm = Hermetic(settings, modelsDir, updates: updates);
         vm.SelectedMode = vm.Modes.First(o => o.Mode.Id == PipelineModeId.Demo);
         return vm;
     }
