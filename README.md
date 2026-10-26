@@ -22,8 +22,8 @@ the mobile client.
 
 > Kanal is under active development. The scripted demo needs no API key and is ready to explore
 > once `KANAL_ENV=development` is set.
-> Live meetings currently require cloud transcription. Read [Current limitations and
-> roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
+> Live meetings run with cloud transcription (Gladia) or with local transcription on the laptop.
+> Read [Current limitations and roadmap](#current-limitations-and-roadmap) before relying on Kanal in a meeting.
 
 ## Why Kanal
 
@@ -251,7 +251,8 @@ question before starting a broad change.
 ## Current limitations and roadmap
 
 - Live microphone capture is available on Windows and macOS, but not Linux.
-- Local transcription has no speaker separation yet: every sentence carries one speaker label.
+- Live transcription does not separate speakers: every sentence carries one speaker label.
+  *Re-identify speakers* separates them on the laptop after the meeting.
 - Local-to-cloud mode needs a DeepL API key in Settings. DeepL is the only standalone cloud
   text-translation provider today.
 - The host is intentionally limited to four selected languages; each phone displays one at a time.
@@ -263,7 +264,8 @@ question before starting a broad change.
   live microphone modes and must be disclosed to participants.
 - Chinese↔Polish terminology quality on real meeting material remains the primary go/no-go
   validation gate.
-- Packaged installers and signed releases are not available yet.
+- Installers come from the GitHub Releases page: a signed and notarised dmg for Apple silicon
+  Macs and an msi for Windows. There is no Intel Mac build.
 
 Detailed status, benchmarks, and the next implementation steps are tracked in
 [`docs/PROGRESS.md`](docs/PROGRESS.md), rather than duplicated here.
