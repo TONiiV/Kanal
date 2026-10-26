@@ -196,7 +196,7 @@ place.
 | `POST ?action=admin.code` / `admin.revoke`, `GET ?action=admin.devices` | admin token | device lifecycle |
 
 `POST ?action=create` also reads the `X-Kanal-Version` header. A host below `KANAL_MIN_SUPPORTED_VERSION` gets
-`426` with `{error, minimumSupported}` before the device token is checked. A missing header counts as `0.0.0`.
+`426` with `{error, minimumSupported}` before the device token is checked. A missing or unparseable header counts as `0.0.0`.
 
 The update manifest comes from these `[vars]` in `wrangler.toml`. Change them, then run `npx wrangler deploy`.
 

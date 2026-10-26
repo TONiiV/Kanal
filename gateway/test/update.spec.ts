@@ -89,8 +89,11 @@ describe("update manifest", () => {
     });
   });
 
-  it("needs no authentication", async () => {
-    const response = await getUpdate(MANIFEST_VARS);
+  it("ignores an invalid bearer token", async () => {
+    const response = await worker.fetch(
+      new Request(`${GW}?action=update`, { headers: { Authorization: "Bearer not-a-real-token" } }),
+      withVars(MANIFEST_VARS),
+    );
     expect(response.status).toBe(200);
   });
 
