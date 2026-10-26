@@ -16,6 +16,13 @@ compatibility_date = "2025-10-01"
 [vars]
 KANAL_ALLOWED_ORIGIN = "https://toniiv.github.io"
 
+# Update manifest (ADR 0056). Keep the minimum at 0.0.0 until operators run 1.0.0: hosts built
+# before the update check send no X-Kanal-Version header, so a higher minimum locks them out.
+KANAL_LATEST_VERSION = "1.0.0"
+KANAL_MIN_SUPPORTED_VERSION = "0.0.0"
+KANAL_RELEASE_NOTES = ""
+KANAL_DOWNLOAD_URL = "https://github.com/TONiiV/Kanal/releases/latest"
+
 [[durable_objects.bindings]]
 name = "ROOMS"
 class_name = "RoomRelay"

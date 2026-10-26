@@ -14,6 +14,10 @@ import { DurableObject } from "cloudflare:workers";
  * Wire protocol (must match `GatewayRelayPublisher.cs` and `web/index.html`):
  *   POST ?action=create   Bearer <device token>   {roomId, verificationKey}
  *                         -> {hostTicket, inviteTicket, expiresAt}
+ *                         426 {error, minimumSupported} when X-Kanal-Version is below
+ *                         KANAL_MIN_SUPPORTED_VERSION; checked before the device token
+ *   GET  ?action=update   no auth -> {latest, minimumSupported, notes, downloadUrl}
+ *                         404 when the version vars are missing or not x.y.z
  *   POST ?action=publish  Bearer <host ticket>    {payload: <relay.signed envelope>}
  *   GET  ?action=stream   WebSocket upgrade, subprotocols "kanal, ticket.<reader ticket>"
  *                         -> "kanal", then {type:"gateway.session"|"relay", ...}
@@ -35,6 +39,10 @@ export interface Env {
   KANAL_TICKET_SECRET: string;
   KANAL_ADMIN_TOKEN: string;
   KANAL_ALLOWED_ORIGIN?: string;
+  KANAL_LATEST_VERSION?: string;
+  KANAL_MIN_SUPPORTED_VERSION?: string;
+  KANAL_RELEASE_NOTES?: string;
+  KANAL_DOWNLOAD_URL?: string;
 }
 
 const encoder = new TextEncoder();
@@ -180,10 +188,15 @@ function bearer(request: Request): string {
   return request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
 }
 
-function response(body: unknown, status = 200, origin?: string | null): Response {
+function response(
+  body: unknown,
+  status = 200,
+  origin?: string | null,
+  cacheControl = "no-store",
+): Response {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
+    "Cache-Control": cacheControl,
   });
   if (origin) {
     headers.set("Access-Control-Allow-Origin", origin);
@@ -333,7 +346,55 @@ async function listDevices(request: Request, env: Env): Promise<Response> {
   return response({ devices: await registry(env).listDevices() });
 }
 
+type Version = readonly [number, number, number];
+
+function parseVersion(text: string | null | undefined): Version | null {
+  const match = /^(\d{1,9})\.(\d{1,9})\.(\d{1,9})$/.exec(text ?? "");
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+function compareVersions(left: Version, right: Version): number {
+  for (let part = 0; part < 3; part++) {
+    if (left[part] !== right[part]) return left[part] < right[part] ? -1 : 1;
+  }
+  return 0;
+}
+
+function updateManifest(env: Env, origin?: string | null): Response {
+  if (!parseVersion(env.KANAL_LATEST_VERSION) || !parseVersion(env.KANAL_MIN_SUPPORTED_VERSION)) {
+    return response({ error: "Not found" }, 404, origin);
+  }
+  return response(
+    {
+      latest: env.KANAL_LATEST_VERSION,
+      minimumSupported: env.KANAL_MIN_SUPPORTED_VERSION,
+      notes: env.KANAL_RELEASE_NOTES || null,
+      downloadUrl: env.KANAL_DOWNLOAD_URL || null,
+    },
+    200,
+    origin,
+    "public, max-age=3600",
+  );
+}
+
+function refuseOldHost(request: Request, env: Env): Response | null {
+  const minimum = parseVersion(env.KANAL_MIN_SUPPORTED_VERSION);
+  if (!minimum) return null;
+  const host = parseVersion(request.headers.get("X-Kanal-Version")) ?? [0, 0, 0];
+  if (compareVersions(host, minimum) >= 0) return null;
+  return response(
+    {
+      error: "This Kanal version is no longer supported. Install the new version.",
+      minimumSupported: env.KANAL_MIN_SUPPORTED_VERSION,
+    },
+    426,
+  );
+}
+
 async function createRoom(request: Request, env: Env): Promise<Response> {
+  const tooOld = refuseOldHost(request, env);
+  if (tooOld) return tooOld;
+
   const deviceId = await registry(env).deviceIdFor(await sha256Hex(bearer(request)));
   if (!deviceId) return response({ error: "Unauthorized" }, 401);
 
@@ -434,6 +495,7 @@ export default {
       if (action === "create" && request.method === "POST") return await createRoom(request, env);
       if (action === "publish" && request.method === "POST") return await publish(request, env);
       if (action === "stream") return await stream(request, env);
+      if (action === "update" && request.method === "GET") return updateManifest(env, origin);
       if (action === "activate" && request.method === "POST") {
         return await activateDevice(request, env);
       }

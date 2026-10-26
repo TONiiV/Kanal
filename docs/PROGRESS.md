@@ -17,7 +17,18 @@ Issue #310, ADR 0056. This work must merge before the `v1.0.0` tag.
 - **Start gate.** `MainViewModel.CanStart` is false while the version is `Unsupported`. `StartBlockedReason` shows the reason in `IconBarView`. A meeting that already runs is not stopped. A failed check keeps the last known update icon, but it opens the gate: the relay enforces the minimum version.
 - **Relay.** `GatewayRelayPublisher.CreateRoomAsync` sends `X-Kanal-Version`. A `426` answer throws `RelayVersionRejectedException`. The room then opens without a QR code and `JoinError` says the version is too old.
 - **View.** The sidebar settings row holds an update icon at its right end. The icon uses the Brand colour, or the Alarm colour when the version is unsupported. The tooltip and the screen-reader name give "New version x.y.z". The icon opens Settings. The Version block in Settings shows status, notes, a download link or "contact the maintainer", and the button. The link opens through Avalonia's `Launcher.LaunchUriAsync`. Only HTTPS links open.
-- **Open item.** The Worker slice (`?action=update`, and the `426` check on `create`) is a separate ticket. Until it is deployed, the host gets a 404 and shows nothing.
+- **Worker slice.** Issue #311 adds `?action=update` and the `426` check on `create` (next section). Until the Worker is deployed, the host gets a 404 and shows nothing.
+
+### Worker update manifest and version gate
+
+Issue #311, ADR 0056.
+
+- **Manifest.** `GET ?action=update` needs no authentication. It returns `latest`, `minimumSupported`, `notes` and `downloadUrl` from the `[vars]` in `gateway/wrangler.toml`. An empty `notes` or `downloadUrl` gives `null`. The answer carries `Cache-Control: public, max-age=3600`. The Worker ignores the `version` and `platform` parameters and does not log them.
+- **No information.** When `KANAL_LATEST_VERSION` or `KANAL_MIN_SUPPORTED_VERSION` is missing or not `x.y.z`, the route gives 404. The host treats 404 as "no information". When `KANAL_MIN_SUPPORTED_VERSION` is missing or not `x.y.z`, `create` skips the version check.
+- **Version gate.** `POST ?action=create` reads `X-Kanal-Version`. A missing or unparseable header counts as `0.0.0`. A version below `KANAL_MIN_SUPPORTED_VERSION` gets `426` with `{error, minimumSupported}`. The check runs before the device-token lookup, so it makes no Durable Object call. Each part compares as a number: `1.10.0` is newer than `1.9.0`.
+- **Shipped values.** Latest is `1.0.0`. The minimum is `0.0.0` on purpose. Hosts built before #312 send no header. A higher minimum would lock them out when the Worker deploys.
+- **Deploy step.** The maintainer runs `npx wrangler deploy` in `gateway/`. Deploy before the first real host call. Until then the host gets 404 and shows nothing.
+- **Open item.** At release time, the maintainer sets `KANAL_LATEST_VERSION` to the new version. After the operators install 1.0.0, the maintainer raises `KANAL_MIN_SUPPORTED_VERSION` and runs `npx wrangler deploy` again.
 
 ---
 
