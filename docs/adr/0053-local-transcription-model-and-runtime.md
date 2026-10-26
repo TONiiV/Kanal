@@ -9,6 +9,8 @@
 > speaker will use. `NemotronAsrProvider` still sends the room language for a one-language room.
 > [ADR 0061](0061-automatic-recognition-language.md) records this as an open item. The "Language
 > conditioning" item below is superseded.
+>
+> Resolved by #294: `NemotronAsrProvider` now always passes `auto`.
 
 ## Context
 
