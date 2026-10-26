@@ -246,7 +246,7 @@
   "update.download": "Herunterladen",
   "update.contact": "Die neue Version erhalten Sie bei der Betreuerin oder dem Betreuer.",
   "update.check": "Nach Updates suchen",
-  "reason.versiontooold": "diese Version ist zu alt — Version {0} installieren",
+  "reason.versiontooold": "Diese Version ist zu alt. Installieren Sie Version {0}.",
   "relay.versiontooold": "Diese Version von Kanal ist zu alt, um einen Raum zu öffnen. Installieren Sie die neue Version.",
   "changelog.title": "Änderungsprotokoll",
   "changelog.empty": "Keine Einträge.",

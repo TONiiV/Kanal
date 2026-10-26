@@ -246,7 +246,7 @@
   "update.download": "下载",
   "update.contact": "如需新版本，请联系维护者。",
   "update.check": "检查更新",
-  "reason.versiontooold": "此版本过旧——请安装 {0} 版",
+  "reason.versiontooold": "此版本过旧。请安装 {0} 版。",
   "relay.versiontooold": "此版本过旧，无法创建房间。请安装新版本。",
   "changelog.title": "更新日志",
   "changelog.empty": "暂无记录。",

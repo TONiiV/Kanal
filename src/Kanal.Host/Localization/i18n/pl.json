@@ -246,7 +246,7 @@
   "update.download": "Pobierz",
   "update.contact": "Nową wersję otrzymasz od opiekuna programu.",
   "update.check": "Sprawdź aktualizacje",
-  "reason.versiontooold": "ta wersja jest zbyt stara — zainstaluj wersję {0}",
+  "reason.versiontooold": "Ta wersja jest zbyt stara. Zainstaluj wersję {0}.",
   "relay.versiontooold": "Ta wersja Kanal jest zbyt stara, aby otworzyć pokój. Zainstaluj nową wersję.",
   "changelog.title": "Dziennik zmian",
   "changelog.empty": "Brak wpisów.",

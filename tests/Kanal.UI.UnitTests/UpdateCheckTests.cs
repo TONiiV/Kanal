@@ -140,7 +140,7 @@ public class UpdateCheckTests
         Assert.Equal(UpdateStatus.Unsupported, vm.Updates.Status);
         Assert.True(vm.Updates.IsUnsupported);
         Assert.False(vm.StartCommand.CanExecute(null));
-        Assert.Equal("this version is too old — install version 1.1.0", vm.StartBlockedReason);
+        Assert.Equal("This version is too old. Install version 1.1.0.", vm.StartBlockedReason);
         Assert.Equal(vm.StartBlockedReason, vm.Updates.UnsupportedReason);
         Assert.True(vm.Updates.ShowNotice);
     }
@@ -308,7 +308,7 @@ public class UpdateCheckTests
 
         await vm.StopCommand.ExecuteAsync(null);
         Assert.False(vm.StartCommand.CanExecute(null));
-        Assert.Equal("this version is too old — install version 1.1.0", vm.StartBlockedReason);
+        Assert.Equal("This version is too old. Install version 1.1.0.", vm.StartBlockedReason);
     }
 
     [AvaloniaFact]

@@ -246,7 +246,7 @@
   "update.download": "Download",
   "update.contact": "To get the new version, contact the maintainer.",
   "update.check": "Check for updates",
-  "reason.versiontooold": "this version is too old — install version {0}",
+  "reason.versiontooold": "This version is too old. Install version {0}.",
   "relay.versiontooold": "This version of Kanal is too old to open a room. Install the new version.",
   "changelog.title": "Changelog",
   "changelog.empty": "No entries.",
