@@ -217,7 +217,7 @@
                                 HorizontalAlignment="Left" Click="OnChangelogClick" />
 
                         <StackPanel Margin="0,18,0,0" Spacing="6">
-                            <TextBlock x:Name="UpdateStatus" Text="{Binding Updates.StatusText}"
+                            <TextBlock x:Name="UpdateStatusText" Text="{Binding Updates.StatusText}"
                                        IsVisible="{Binding Updates.HasStatus}" FontSize="12.5"
                                        FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock x:Name="UpdateNotes" Text="{Binding Updates.Notes}"
