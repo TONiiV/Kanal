@@ -57,6 +57,7 @@ offline.
 | Joined-phone cache | The mobile client stores the current room transcript and state in browser `localStorage` so it can render before a reconnect snapshot arrives. |
 | Local recording | Live microphone modes record a WAV file by default in the configured audio folder. Recording pauses with the room and can be disabled in Settings. Kanal never publishes the WAV file. |
 | API keys and preferences | Gladia keys selected in the UI are stored as plain JSON in the platform application-data directory. The relay host token is supplied only through the operator machine's runtime environment. |
+| Update check | At launch and every 24 hours, never during a meeting, Kanal requests the update manifest from the gateway Worker. The request carries the Kanal version and the platform name only. A new version shows in the sidebar. A version below the minimum supported version cannot start a meeting. No setting turns the check off. |
 | Local translation models | Downloaded from the model catalog to the platform application-data directory and loaded in-process with llama.cpp. Model files and generated translations stay on the host, apart from captions sent to the relay. |
 
 Kanal ships without a backing-store URL or bundled API key. The relay is a self-contained
@@ -144,6 +145,7 @@ Environment variables override connection defaults:
 | `KANAL_RELAY_URL` | Public HTTPS endpoint of the deployed `kanal-relay` Worker |
 | `KANAL_RELAY_HOST_TOKEN` | This desktop's device credential, obtained once with an activation code; runtime only, never part of a build or QR |
 | `KANAL_WEB_URL` | Base URL of the static mobile client placed in the join QR code |
+| `KANAL_UPDATE_URL` | Overrides the update manifest address. For tests only. |
 | `KANAL_ENV` | `development` adds **Demo — scripted** to the mode list; any other value, or none, leaves it out |
 
 The relay remains disabled rather than silently using a public fallback when either relay variable

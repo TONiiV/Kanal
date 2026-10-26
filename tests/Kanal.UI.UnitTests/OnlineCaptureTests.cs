@@ -812,7 +812,8 @@ public class OnlineCaptureTests
                 workspaces: () => new WorkspaceStore(Path.Combine(dir, "workspaces.json")),
                 systemCaptureFactory: () => Computer,
                 signalClock: Clock,
-                development: true)
+                development: true,
+                updates: TestViewModels.OfflineUpdates())
             {
                 RelayEnabled = true,
                 RelayPublisherFactory = (_, _) => Task.FromResult<IRelayPublisher>(Relay),

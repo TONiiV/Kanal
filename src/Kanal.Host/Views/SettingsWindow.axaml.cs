@@ -74,6 +74,18 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void OnUpdateDownloadClick(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as SettingsViewModel)?.Updates.DownloadUrl is not { Scheme: "https" } link)
+            return;
+
+        Guarded("Opening the download page", async () =>
+        {
+            if (!await Launcher.LaunchUriAsync(link))
+                Log.Warning(SettingsLog, $"{link} could not be opened.");
+        });
+    }
+
     private bool _changelogOpen;
 
     private void OnChangelogClick(object? sender, RoutedEventArgs e) =>

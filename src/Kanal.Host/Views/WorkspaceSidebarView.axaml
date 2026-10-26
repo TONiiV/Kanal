@@ -70,6 +70,12 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Padding" Value="8,4" />
         </Style>
+        <Style Selector="Button#UpdateNotice Path.glyph">
+            <Setter Property="Fill" Value="{DynamicResource Brand}" />
+        </Style>
+        <Style Selector="Button#UpdateNotice.alarm Path.glyph">
+            <Setter Property="Fill" Value="{DynamicResource Alarm}" />
+        </Style>
         <Style Selector="Button#ProjectSettings Path.glyph">
             <Setter Property="Fill" Value="{DynamicResource Ink3}" />
         </Style>
@@ -99,15 +105,23 @@
                 </DockPanel>
             </Border>
 
-            <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Rule}" BorderThickness="0,1,0,0"
-                    Margin="16,0" Padding="0,10">
-                <Button x:Name="Settings" Classes="ghost icon" Click="OnSettingsClick"
-                        HorizontalAlignment="Left"
+            <Grid DockPanel.Dock="Bottom" Margin="16,0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                <Border Grid.ColumnSpan="2" Height="1" Background="{DynamicResource Rule}" />
+                <Button x:Name="Settings" Grid.Row="1" Classes="ghost icon" Click="OnSettingsClick"
+                        Margin="0,10" HorizontalAlignment="Left"
                         ToolTip.Tip="{l:T settings.tip}"
                         AutomationProperties.Name="{l:T settings.tip}">
                     <Path Classes="glyph" Data="{c:Icon settings}" Width="18" Height="18" />
                 </Button>
-            </Border>
+                <Button x:Name="UpdateNotice" Grid.Row="1" Grid.Column="1" Classes="ghost icon"
+                        Classes.alarm="{Binding Updates.IsUnsupported}"
+                        Click="OnSettingsClick" Margin="0,10" HorizontalAlignment="Right"
+                        IsVisible="{Binding Updates.ShowNotice}"
+                        ToolTip.Tip="{Binding Updates.NoticeText}"
+                        AutomationProperties.Name="{Binding Updates.NoticeText}">
+                    <Path Classes="glyph" Data="{c:Icon update}" Width="18" Height="18" />
+                </Button>
+            </Grid>
 
             <Border DockPanel.Dock="Bottom" x:Name="IssuesBanner" Classes.alarm="{Binding Sidebar.IssuesAreAlarm}"
                     IsVisible="{Binding Sidebar.HasIssues}"
