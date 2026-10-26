@@ -16,8 +16,8 @@ The update check (#312) and the Worker manifest (#313) are on `main`. Nothing in
   2. Open `https://kanal-relay.toniiv.workers.dev/?action=update`. It must return `latest` 1.0.0 and `minimumSupported` 0.0.0.
   3. On the Releases page, create the tag `v1.0.0` on the merge commit of this PR and click Publish. `release.yml` builds the signed dmg and the msi.
   4. Do the clean-Mac checklist in `docs/release/macos-alpha-rollout.md` before you tell the testers.
-  5. After the operators install 1.0.0, set `KANAL_MIN_SUPPORTED_VERSION` to 1.0.0 and deploy again.
-- **Date.** If the release slips past 2026-10-26, change the heading date in the same PR as the slip.
+  5. After the operators install 1.0.0, set `KANAL_MIN_SUPPORTED_VERSION` to 1.0.0 in `gateway/wrangler.toml`. Then deploy again.
+- **Date.** The heading date must be the release date. If you publish after 2026-10-26, change the date first.
 
 ### Host update check and minimum supported version
 
