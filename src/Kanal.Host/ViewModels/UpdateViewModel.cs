@@ -13,7 +13,7 @@ public sealed partial class UpdateViewModel : ViewModelBase
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromHours(1);
 
-    private readonly UpdateChecker _checker;
+    private readonly UpdateChecker? _checker;
     private readonly string _currentVersion;
     private readonly UpdateSchedule _schedule;
     private UpdateResult _result = UpdateResult.Unknown;
@@ -21,11 +21,14 @@ public sealed partial class UpdateViewModel : ViewModelBase
     private bool _manualCheckFailed;
     private DispatcherTimer? _timer;
 
-    public UpdateViewModel(UpdateChecker checker, string currentVersion, TimeProvider? clock = null)
+    public UpdateViewModel(UpdateChecker? checker, string currentVersion, TimeProvider? clock = null)
     {
         _checker = checker;
         _currentVersion = currentVersion;
         _schedule = new UpdateSchedule(clock ?? TimeProvider.System);
+        if (checker is null)
+            return;
+
         Localizer.Instance.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is Localizer.IndexerName)
@@ -100,6 +103,9 @@ public sealed partial class UpdateViewModel : ViewModelBase
         ? Localizer.Instance.Format("reason.versiontooold", Manifest!.Latest)
         : null;
 
+    // The Localizer event is static and never unsubscribed, so an inert instance must not subscribe.
+    public static UpdateViewModel CreateInert() => new(null, "0.0.0");
+
     public static UpdateViewModel CreateProduction()
     {
         var url = SettingsStore.ReadEnvAllScopes("KANAL_UPDATE_URL") ?? UpdateChecker.ProductionUrl;
@@ -125,7 +131,9 @@ public sealed partial class UpdateViewModel : ViewModelBase
     public Task CheckIfDueAsync() =>
         IsChecking || !_schedule.IsDue(IsMeetingRunning()) ? Task.CompletedTask : RunCheckAsync(manual: false);
 
-    private bool CanCheckNow() => !IsChecking;
+    private bool CanCheckNow() => !IsChecking && !IsMeetingRunning();
+
+    public void NotifyMeetingStateChanged() => CheckNowCommand.NotifyCanExecuteChanged();
 
     [RelayCommand(CanExecute = nameof(CanCheckNow))]
     private Task CheckNowAsync() => RunCheckAsync(manual: true);
@@ -137,14 +145,18 @@ public sealed partial class UpdateViewModel : ViewModelBase
         UpdateResult result;
         try
         {
-            result = await _checker.CheckAsync(_currentVersion, UpdatePlatform.Current);
+            result = _checker is null
+                ? UpdateResult.Unknown
+                : await _checker.CheckAsync(_currentVersion, UpdatePlatform.Current);
         }
         catch (Exception)
         {
             result = UpdateResult.Unknown;
         }
 
-        _result = result;
+        _result = result.Status != UpdateStatus.Unknown ? result
+            : _result.Status == UpdateStatus.Unsupported ? _result with { Status = UpdateStatus.UpdateAvailable }
+            : _result;
         _manualCheckFailed = manual && result.Status == UpdateStatus.Unknown;
         IsChecking = false;
         NotifyResult();

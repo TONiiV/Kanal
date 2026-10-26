@@ -1238,11 +1238,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Sidebar.RoomBusy = IsRunning || IsStarting;
         OnPropertyChanged(nameof(CanChooseAudio));
         OnPropertyChanged(nameof(ShowStartBlockedReason));
+        Updates.NotifyMeetingStateChanged();
     }
 
     partial void OnIsStartingChanged(bool value)
     {
         Sidebar.RoomBusy = IsRunning || IsStarting;
+        Updates.NotifyMeetingStateChanged();
     }
 
     private bool CanStop() => (IsRunning || IsStarting) && !IsStopping;

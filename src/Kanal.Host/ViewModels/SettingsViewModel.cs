@@ -142,7 +142,7 @@ public partial class SettingsViewModel : ViewModelBase
         ModelRows? modelRows = null,
         UpdateViewModel? updates = null)
     {
-        Updates = updates ?? UpdateViewModel.CreateProduction();
+        Updates = updates ?? UpdateViewModel.CreateInert();
         _saveAppLanguage = saveAppLanguage ?? (_ => { });
         _saveColourScheme = saveColourScheme ?? (_ => { });
         _saveAccentTheme = saveAccentTheme ?? (_ => { });

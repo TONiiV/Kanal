@@ -10,13 +10,13 @@ Living log. Update in the same PR as the work it describes. Newest section on to
 
 Issue #310, ADR 0056. This work must merge before the `v1.0.0` tag.
 
-- **Core.** `Kanal.Core/Updates` holds `ReleaseVersion` (`x.y.z` only), `UpdateManifest`, `UpdatePolicy`, `UpdateChecker` and `UpdateSchedule`. It has no Avalonia types. The policy gives `Unknown`, `UpToDate`, `UpdateAvailable` or `Unsupported`. `Unknown` is the default. Every failure gives `Unknown`: offline, blocked, a non-200 answer, timeout, bad JSON, bad version string.
+- **Core.** `Kanal.Core/Updates` holds `ReleaseVersion` (`x.y.z` only), `UpdateManifest`, `UpdatePolicy`, `UpdateChecker` and `UpdateSchedule`. It has no Avalonia types. The policy gives `Unknown`, `UpToDate`, `UpdateAvailable` or `Unsupported`. `Unknown` is the default. Every failure gives `Unknown`: offline, blocked, a non-200 answer, timeout, bad JSON, bad version string, invalid charset, endpoint that is not HTTP. Only a cancel from the caller passes through.
 - **Manifest.** The checker sends `GET ?action=update&version=<x.y.z>&platform=<windows|macos|linux>` and nothing else. The parser drops a `downloadUrl` that is not HTTPS.
 - **Schedule.** `UpdateViewModel.Start` runs one check at app start. A timer then asks `UpdateSchedule.IsDue` every hour. A check is due when 24 hours have passed. It is never due while a meeting runs. `StopAsync` asks again at its end, so a check that fell due during the meeting runs after Stop.
-- **Manual check.** The *Check for updates* button ignores the schedule and works during a meeting. Only a manual check that fails shows a message.
-- **Start gate.** `MainViewModel.CanStart` is false while the version is `Unsupported`. `StartBlockedReason` shows the reason in `IconBarView`. A meeting that already runs is not stopped.
+- **Manual check.** The *Check for updates* button ignores the schedule. It is disabled while a meeting runs (ADR 0056). Only a manual check that fails shows a message.
+- **Start gate.** `MainViewModel.CanStart` is false while the version is `Unsupported`. `StartBlockedReason` shows the reason in `IconBarView`. A meeting that already runs is not stopped. A failed check keeps the last known "New version" notice, but it opens the gate: the relay enforces the minimum version.
 - **Relay.** `GatewayRelayPublisher.CreateRoomAsync` sends `X-Kanal-Version`. A `426` answer throws `RelayVersionRejectedException`. The room then opens without a QR code and `JoinError` says the version is too old.
-- **View.** The sidebar settings row holds the notice at its right end. It opens Settings. The Version block in Settings shows status, notes, a download link or "contact the maintainer", and the button. The link opens through `SystemLinks.Open`.
+- **View.** The sidebar settings row holds the notice at its right end. It opens Settings. The Version block in Settings shows status, notes, a download link or "contact the maintainer", and the button. The link opens through Avalonia's `Launcher.LaunchUriAsync`. Only HTTPS links open.
 - **Open item.** The Worker slice (`?action=update`, and the `426` check on `create`) is a separate ticket. Until it is deployed, the host gets a 404 and shows nothing.
 
 ---

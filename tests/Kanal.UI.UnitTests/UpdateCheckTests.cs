@@ -183,6 +183,86 @@ public class UpdateCheckTests
     }
 
     [AvaloniaFact]
+    public async Task AFailedLaterCheckKeepsTheNewVersionNotice()
+    {
+        var clock = new ManualClock();
+        var server = new ScriptedServer();
+        server.Answer("1.0.1", "1.0.0");
+        var vm = TestViewModels.Demo(updates: Updates(server, clock: clock));
+        await vm.Updates.CheckIfDueAsync();
+
+        server.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        clock.Advance(TimeSpan.FromHours(25));
+        await vm.Updates.CheckIfDueAsync();
+
+        Assert.Equal(2, server.Requests);
+        Assert.True(vm.Updates.ShowNotice);
+        Assert.Equal("New version 1.0.1", vm.Updates.NoticeText);
+        Assert.Equal("Version 1.0.1 is available.", vm.Updates.StatusText);
+
+        await vm.Updates.CheckNowCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Updates.ShowNotice);
+        Assert.Equal("Kanal could not check for updates.", vm.Updates.StatusText);
+    }
+
+    [AvaloniaFact]
+    public async Task AFailedCheckReopensStartAndKeepsTheNoticeWhenTheVersionWasTooOld()
+    {
+        var server = new ScriptedServer();
+        server.Answer("1.1.0", "1.1.0");
+        var vm = TestViewModels.Demo(updates: Updates(server));
+        await vm.Updates.CheckNowCommand.ExecuteAsync(null);
+        Assert.False(vm.StartCommand.CanExecute(null));
+
+        server.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        await vm.Updates.CheckNowCommand.ExecuteAsync(null);
+
+        Assert.False(vm.Updates.IsUnsupported);
+        Assert.True(vm.StartCommand.CanExecute(null));
+        Assert.Null(vm.StartBlockedReason);
+        Assert.True(vm.Updates.ShowNotice);
+        Assert.Equal("New version 1.1.0", vm.Updates.NoticeText);
+    }
+
+    [AvaloniaFact]
+    public async Task TheCheckButtonIsDisabledWhileAMeetingRuns()
+    {
+        var server = new ScriptedServer();
+        server.Answer("1.0.0", "1.0.0");
+        var vm = TestViewModels.Demo(updates: Updates(server));
+        Assert.True(vm.Updates.CheckNowCommand.CanExecute(null));
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.Updates.CheckNowCommand.CanExecute(null));
+
+        await vm.StopCommand.ExecuteAsync(null);
+        await WaitForAsync(() => vm.Updates.CheckNowCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public async Task StartSendsOneLaunchCheckAndASecondStartSendsNothing()
+    {
+        var clock = new ManualClock();
+        var server = new ScriptedServer();
+        server.Answer("1.0.0", "1.0.0");
+        var updates = Updates(server, clock: clock);
+
+        updates.Start();
+        await WaitForAsync(() => server.Requests == 1 && !updates.IsChecking);
+
+        clock.Advance(TimeSpan.FromHours(25));
+        updates.Start();
+        await Task.Delay(100);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, server.Requests);
+        Assert.False(updates.IsChecking);
+    }
+
+    [AvaloniaFact]
     public async Task ACheckThatIsNotDueSendsNothing()
     {
         var clock = new ManualClock();

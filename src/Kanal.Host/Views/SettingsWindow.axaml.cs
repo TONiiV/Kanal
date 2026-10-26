@@ -76,17 +76,14 @@ public partial class SettingsWindow : Window
 
     private void OnUpdateDownloadClick(object? sender, RoutedEventArgs e)
     {
-        if ((DataContext as SettingsViewModel)?.Updates.DownloadUrl is not { } link)
+        if ((DataContext as SettingsViewModel)?.Updates.DownloadUrl is not { Scheme: "https" } link)
             return;
 
-        try
+        Guarded("Opening the download page", async () =>
         {
-            SystemLinks.Open(link);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(SettingsLog, $"{link} could not be opened.", ex);
-        }
+            if (!await Launcher.LaunchUriAsync(link))
+                Log.Warning(SettingsLog, $"{link} could not be opened.");
+        });
     }
 
     private bool _changelogOpen;

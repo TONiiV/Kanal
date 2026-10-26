@@ -27,11 +27,7 @@ public sealed class UpdateChecker(HttpClient http, Uri endpoint, TimeSpan? timeo
                 ? new UpdateResult(UpdatePolicy.Evaluate(current, manifest), manifest)
                 : UpdateResult.Unknown;
         }
-        catch (HttpRequestException)
-        {
-            return UpdateResult.Unknown;
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             return UpdateResult.Unknown;
         }

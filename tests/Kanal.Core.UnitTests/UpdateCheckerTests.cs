@@ -130,6 +130,33 @@ public class UpdateCheckerTests
         Assert.Equal(UpdateStatus.Unknown, result.Status);
     }
 
+    [Fact]
+    public async Task AnAnswerWithAnInvalidCharsetMeansUnknown()
+    {
+        var (result, _) = await CheckAsync(_ =>
+        {
+            var content = new StringContent(Manifest("9.0.0", "9.0.0"));
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain")
+            {
+                CharSet = "not-a-charset",
+            };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        });
+
+        Assert.Equal(UpdateStatus.Unknown, result.Status);
+        Assert.Null(result.Manifest);
+    }
+
+    [Fact]
+    public async Task AnEndpointThatIsNotHttpMeansUnknown()
+    {
+        using var http = new HttpClient();
+        var result = await new UpdateChecker(http, new Uri("ftp://relay.example.test/?action=update"))
+            .CheckAsync("1.0.0", "windows", TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateStatus.Unknown, result.Status);
+    }
+
     [Theory]
     [InlineData("not json")]
     [InlineData("")]
