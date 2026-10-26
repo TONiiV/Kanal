@@ -288,6 +288,12 @@
             </DockPanel>
         </Border>
 
+        <Border x:Name="StartBlockedNote" IsVisible="{Binding ShowStartBlockedReason}"
+                BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
+                Background="{DynamicResource Paper}" Padding="28,9">
+            <TextBlock Text="{Binding StartBlockedReason}" FontSize="10.5" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Alarm}" TextWrapping="Wrap" />
+        </Border>
         <Border IsVisible="{Binding ShowCaptureNote}"
                 BorderBrush="{DynamicResource Rule}" BorderThickness="0,0,0,1"
                 Background="{DynamicResource Paper}" Padding="28,9">

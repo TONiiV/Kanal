@@ -2,10 +2,10 @@ namespace Kanal.Core.Updates;
 
 public enum UpdateStatus
 {
+    Unknown,
     UpToDate,
     UpdateAvailable,
     Unsupported,
-    Unknown,
 }
 
 public sealed record UpdateResult(UpdateStatus Status, UpdateManifest? Manifest)

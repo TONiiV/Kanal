@@ -105,7 +105,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public UpdateViewModel Updates { get; }
 
-    public string? StartBlockedReason => null;
+    public string? StartBlockedReason => Updates.UnsupportedReason;
+
+    public bool ShowStartBlockedReason => StartBlockedReason is not null && !IsRunning;
 
     public DownloadTray DownloadTray { get; }
 
@@ -150,6 +152,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         Updates = updates ?? UpdateViewModel.CreateProduction();
         Updates.IsMeetingRunning = () => IsRunning || IsStarting;
+        Updates.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not (nameof(UpdateViewModel.IsUnsupported) or nameof(UpdateViewModel.UnsupportedReason)))
+                return;
+
+            OnPropertyChanged(nameof(StartBlockedReason));
+            OnPropertyChanged(nameof(ShowStartBlockedReason));
+            StartCommand.NotifyCanExecuteChanged();
+        };
         _titler = titler;
         _makeDiarizer = diarizerFactory ?? ((segmentation, embedding) =>
             new SherpaSpeakerDiarizer(segmentation, embedding));
@@ -1219,13 +1230,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     // dialog that asks for it (ADR 0054, decision 26).
     private bool CanStart() =>
         !IsRunning && !IsStopping && !IsOpening && Sidebar.NamingMeetingId is null &&
-        (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
+        !Updates.IsUnsupported && (!NeedsMicrophone || SelectedCaptureProfile.IsAvailable);
 
     // Stop is offered while a model is still loading: pressing it then aborts the load.
     partial void OnIsRunningChanged(bool value)
     {
         Sidebar.RoomBusy = IsRunning || IsStarting;
         OnPropertyChanged(nameof(CanChooseAudio));
+        OnPropertyChanged(nameof(ShowStartBlockedReason));
     }
 
     partial void OnIsStartingChanged(bool value)
@@ -1629,6 +1641,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // with Start and Stop both greyed out cannot be recovered without a restart
             IsStopping = false;
         }
+
+        _ = Updates.CheckIfDueAsync();
     }
 
     /// <summary>
@@ -1759,7 +1773,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 new SignedRelayPublisher(new NullRelayPublisher(), signingKey),
                 null,
                 null,
-                ex.Message);
+                ex is RelayVersionRejectedException ? L["relay.versiontooold"] : ex.Message);
         }
     }
 

@@ -14,6 +14,11 @@ newest heading has to match the version the build reports, and a test holds the 
 
 The first release. Everything below is what Kanal does on the day it ships.
 
+- Kanal now checks for a new version at launch and every 24 hours. It never checks during a meeting.
+  A new version shows as "New version x.y.z" next to the Settings button. The Version block in
+  Settings shows the same status and has a *Check for updates* button. When a version is too old,
+  Kanal disables Start and gives the reason. A meeting that already runs continues to the end.
+  When Kanal cannot reach the server, it works as before.
 - A warning bar now appears under the toolbar when cloud translation fails during a meeting. The bar
   states the reason and has an *Open settings* button for the Translation tab. Before, a later status
   message replaced the warning. The bar stays until one translation succeeds or the meeting ends.

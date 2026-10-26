@@ -34,14 +34,16 @@ public partial class App : Application
             // device watcher. The splash covers real startup work; there is no artificial delay.
             splash.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
             {
+                var viewModel = new MainViewModel();
                 var main = new MainWindow
                 {
-                    DataContext = new MainViewModel(),
+                    DataContext = viewModel,
                 };
 
                 desktop.MainWindow = main;
                 main.Show();
                 splash.Close();
+                viewModel.Updates.Start();
             }, DispatcherPriority.Background);
         }
 

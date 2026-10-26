@@ -54,7 +54,8 @@ public class DeviceHotplugTests
             () => new ModelDownloadManager(dir),
             SettingsStore.ResolveStoredGladiaKey,
             () => source,
-            () => watcher)
+            () => watcher,
+            updates: TestViewModels.OfflineUpdates())
         {
             RelayEnabled = false,
         };

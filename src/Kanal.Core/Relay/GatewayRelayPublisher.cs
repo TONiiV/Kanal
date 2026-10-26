@@ -59,9 +59,13 @@ public sealed class GatewayRelayPublisher : IRelayPublisher
                 Content = JsonContent.Create(new { roomId, verificationKey }),
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", deviceToken);
+            request.Headers.Add("X-Kanal-Version", hostVersion);
 
             using var response = await http.SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.UpgradeRequired)
+                throw new RelayVersionRejectedException(
+                    $"Relay refused version {hostVersion} (426): {body}");
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException(
                     $"Relay room creation failed ({(int)response.StatusCode}): {body}");

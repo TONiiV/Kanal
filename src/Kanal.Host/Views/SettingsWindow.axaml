@@ -216,6 +216,25 @@
                         <Button x:Name="Changelog" Content="{l:T settings.about.changelog}"
                                 HorizontalAlignment="Left" Click="OnChangelogClick" />
 
+                        <StackPanel Margin="0,18,0,0" Spacing="6">
+                            <TextBlock x:Name="UpdateStatus" Text="{Binding Updates.StatusText}"
+                                       IsVisible="{Binding Updates.HasStatus}" FontSize="12.5"
+                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock x:Name="UpdateNotes" Text="{Binding Updates.Notes}"
+                                       IsVisible="{Binding Updates.ShowNotes}" FontSize="11.5"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource Ink3}" />
+                            <TextBlock x:Name="UpdateContact" Text="{l:T update.contact}"
+                                       IsVisible="{Binding Updates.ShowContactMaintainer}" FontSize="11.5"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource Ink3}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="CheckForUpdates" Content="{l:T update.check}"
+                                        Command="{Binding Updates.CheckNowCommand}" />
+                                <Button x:Name="UpdateDownload" Content="{l:T update.download}"
+                                        IsVisible="{Binding Updates.ShowDownloadLink}"
+                                        Click="OnUpdateDownloadClick" />
+                            </StackPanel>
+                        </StackPanel>
+
                         <TextBlock Text="{l:T settings.licenses.heading}" Classes="label" Margin="0,28,0,0" />
                         <Border Classes="rule" />
                         <TextBlock Text="{Binding LicenseNote}" FontSize="11.5" TextWrapping="Wrap"
